@@ -1,0 +1,41 @@
+name: AI Media Buyer
+
+# ── This is the automation. GitHub runs it on their servers on a schedule. ──
+# You do not run anything. Your laptop can be off. Nobody has to be online.
+on:
+  schedule:
+    # GitHub cron is UTC only. Egypt is UTC+3 in summer, so 06:00 UTC = 9AM Cairo.
+    # (In winter it lands at 8AM Cairo. Change to "0 7 * * *" if you prefer 9AM year round.)
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}   # lets you also trigger it by hand from the Actions tab
+
+permissions:
+  contents: write         # so it can commit data.json + state.json back
+
+concurrency:
+  group: media-buyer
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the media buyer
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: python analyze.py --daily
+
+      - name: Commit dashboard data + alert state
+        run: |
+          git config user.name "ai-media-buyer"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/data.json docs/state.json || true
+          git commit -m "auto: update $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
+          git push || echo "nothing to push"

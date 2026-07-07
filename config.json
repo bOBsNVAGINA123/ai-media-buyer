@@ -1,0 +1,32 @@
+{
+  "timezone": "Africa/Cairo",
+
+  "accounts": {
+    "mode": "auto",
+    "_comment": "auto = analyze every ACTIVE ad account the token can see (new spending accounts get picked up automatically). Switch to manual to restrict to the include list.",
+    "include": [
+      { "id": "336343742536460",  "name": "Ourkids EGP", "currency": "EGP" },
+      { "id": "2619321185136291", "name": "Playmore 26 EGP Clean", "currency": "EGP" },
+      { "id": "652528128810469",  "name": "Ourkids Basic", "currency": "EGP" },
+      { "id": "1397910036891062", "name": "Ourkids EGP alt", "currency": "EGP" },
+      { "id": "1268624288045194", "name": "Decohome", "currency": "EGP" },
+      { "id": "1456670305318182", "name": "PLAYMORE EGP 26", "currency": "EGP" }
+    ]
+  },
+
+  "thresholds": {
+    "winner_min_spend": 1500,
+    "winner_min_purchases": 5,
+    "roas_target": 2.0,
+    "fatigue_freq_increase": 30,
+    "fatigue_ctr_drop": 20
+  },
+
+  "slack": {
+    "mention_user_id": "U082VCLRZ6E",
+    "channels": {
+      "growth": "C0BFN4UGYKY",
+      "actions": "C0BFN4PLT2A"
+    }
+  }
+}

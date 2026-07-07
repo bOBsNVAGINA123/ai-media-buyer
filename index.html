@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AI Media Buyer — Growth Operator</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141925;--panel2:#1b2130;--line:#232b3d;--txt:#e7ecf5;--muted:#8a94a7;--accent:#4f8cff;
+    --scale:#1f9d55;--aud:#3aa0d1;--under:#7a839a;--fat:#e0a416;--bad:#e04f5f;--perf:#4f8cff;--watch:#c0562f;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  h1{font-size:18px;margin:0}h1 span{color:var(--accent)}
+  .meta{color:var(--muted);font-size:12px}
+  .wrap{padding:20px 24px;max-width:1600px;margin:0 auto}
+  .acct{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:26px;overflow:hidden}
+  .head{padding:16px 18px;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  .head .nm{font-weight:600;font-size:15px}
+  .kpi b{font-size:15px}.kpi small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .cards{display:flex;gap:14px;flex-wrap:wrap;padding:14px 18px}
+  .card{flex:1;min-width:280px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#0f1420}
+  .card.off{border-color:#5a2731}.card.opp{border-color:#1f5a3a}
+  .card h4{margin:0 0 6px;font-size:13px}.card p{margin:4px 0;color:var(--muted);font-size:12px;line-height:1.5}
+  .note{padding:6px 18px 2px;color:var(--fat);font-size:12px}
+  .section{padding:12px 18px 4px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:1240px}
+  th,td{padding:8px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;white-space:normal;position:sticky;left:0;background:var(--panel);min-width:210px}
+  thead th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-size:11px;text-transform:uppercase;z-index:2}
+  tbody tr:hover td{background:#101623}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+  .SCALE{background:var(--scale);color:#fff}.AUDIENCE{background:var(--aud);color:#04121a}.UNDERFUNDED{background:var(--under);color:#04121a}
+  .FATIGUE{background:var(--fat);color:#04121a}.BAD{background:var(--bad);color:#fff}.PERFORMS{background:var(--perf);color:#fff}.WATCH{background:var(--watch);color:#fff}.STEADY{background:#39415a;color:#fff}
+  .seg{color:var(--muted);font-size:11px}
+  .diag{max-width:460px;white-space:normal;text-align:left;color:var(--muted);font-size:12px;line-height:1.45}
+  .better{color:var(--scale)}.worse{color:var(--bad)}
+  .bench{display:flex;gap:8px;flex-wrap:wrap;padding:4px 18px 12px}
+  .pill{background:#20283a;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:11px;color:var(--muted)}
+  .sample{background:#3a2a10;color:#f0c25a;border:1px solid #6a4d14;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:16px}
+  .legend{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>AI <span>Growth Operator</span> — Meta</h1>
+    <div class="legend" style="margin-top:6px">
+      <span class="tag SCALE">SCALE</span><span class="tag PERFORMS">PERFORMS</span><span class="tag WATCH">WATCH</span>
+      <span class="tag BAD">BAD</span><span class="tag FATIGUE">FATIGUE</span><span class="tag AUDIENCE">AUDIENCE-ASSISTED</span><span class="tag UNDERFUNDED">UNDERFUNDED</span>
+    </div>
+  </div>
+  <div class="meta" id="stamp"></div>
+</header>
+<div class="wrap" id="root"><div class="meta">Loading…</div></div>
+<script>
+const mny=(v,c)=>v==null?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:0})+(c?" "+c:"");
+const nm=(v,d=2)=>v==null?"—":Number(v).toFixed(d);
+const tagClass=l=>({"SCALE OPPORTUNITY":"SCALE","AUDIENCE-ASSISTED":"AUDIENCE","UNDERFUNDED":"UNDERFUNDED","CREATIVE FATIGUE":"FATIGUE","BAD CREATIVE":"BAD","PERFORMS":"PERFORMS","WATCH":"WATCH"}[l]||"STEADY");
+function cpaCell(c){
+  if(c.cpa==null) return "—";
+  if(!c.seg_cpa_med) return mny(c.cpa);
+  const gap=Math.round((c.cpa-c.seg_cpa_med)/c.seg_cpa_med*100);
+  const cls=gap<=0?"better":"worse";
+  return `${mny(c.cpa)}<br><span class="seg ${cls}">${gap>0?"+":""}${gap}% vs ${c.seg_cpa_med} med</span>`;
+}
+function render(d){
+  document.getElementById("stamp").textContent="Updated "+(d.generated_at||"").replace("T"," ").slice(0,16)+" · "+(d.timezone||"");
+  const root=document.getElementById("root");let h="";
+  if(d.sample) h+=`<div class="sample">⚠️ Sample data. Fills with your real Meta numbers on the next GitHub Actions run.</div>`;
+  (d.accounts||[]).forEach(a=>{
+    const c=a.account.currency||"",s=a.summary||{};
+    h+=`<div class="acct"><div class="head">
+      <div class="nm">${a.account.name} <span class="meta">(${c})</span></div>
+      <div class="kpi"><b>${mny(s.spend,c)}</b><small>Spend 7d</small></div>
+      <div class="kpi"><b>${nm(s.roas)}</b><small>Blended ROAS</small></div>
+      <div class="kpi"><b>${nm(s.cold_roas)}</b><small>Cold ROAS</small></div>
+      <div class="kpi"><b>${mny(s.cpa,c)}</b><small>Blended CPA</small></div>
+      <div class="kpi"><b>${s.cat_pct}%</b><small>Catalogue spend</small></div>
+    </div>`;
+    if(s.cat_pct>=15) h+=`<div class="note">⚠️ Catalogue is ${s.cat_pct}% of spend and lifts blended ROAS. Judge new creatives against Cold ROAS ${nm(s.cold_roas)}, not blended.</div>`;
+    // benchmark pills
+    const b=a.benchmarks||{};
+    h+=`<div class="bench">`+Object.keys(b).map(k=>`<span class="pill">${k}: median CPA ${b[k].cpa_med} · ROAS ${b[k].roas_med} · n${b[k].n}</span>`).join("")+`</div>`;
+    // offender + opportunity cards
+    const off=(a.creatives||[]).find(x=>x.ad_name===s.offender), opp=(a.creatives||[]).find(x=>x.ad_name===s.opportunity);
+    h+=`<div class="cards">`;
+    if(opp) h+=`<div class="card opp"><h4>🚀 Biggest Opportunity — ${opp.ad_name}</h4><p>${opp.why||""}</p><p>Action: scale 20–30%, build 5 iterations.</p></div>`;
+    if(off) h+=`<div class="card off"><h4>🚨 Biggest Offender — ${off.ad_name}</h4><p>${off.why||""}</p><p>Est. wasted ~${mny(off.waste,c)} this week. Action: cut 30–40%.</p></div>`;
+    h+=`</div>`;
+    h+=`<div class="section">Creative Leaderboard</div><div class="scroll"><table><thead><tr>
+      <th>Creative</th><th>Type</th><th>Aud</th><th>Label</th><th>Spend</th><th>CPA vs segment</th><th>ROAS</th><th>AOV</th>
+      <th>CTR</th><th>Out CTR</th><th>Freq</th><th>Hook</th><th>Hold</th><th style="text-align:left">Diagnosis</th></tr></thead><tbody>`;
+    (a.creatives||[]).forEach(x=>{
+      h+=`<tr><td>${x.ad_name}<br><span class="seg">${x.campaign||""}</span></td>
+        <td>${x.type}</td><td>${x.aud}</td>
+        <td><span class="tag ${tagClass(x.label)}">${(x.label||"").replace(" OPPORTUNITY","").replace(" CREATIVE","")}</span></td>
+        <td>${mny(x.spend,c)}</td><td>${cpaCell(x)}</td><td>${nm(x.roas)}</td><td>${mny(x.aov,c)}</td>
+        <td>${nm(x.ctr,1)}%</td><td>${nm(x.octr,1)}%</td><td>${nm(x.freq,1)}</td>
+        <td>${x.type==='VIDEO'?nm(x.hook,0)+'%':'—'}</td><td>${x.type==='VIDEO'?nm(x.hold,0)+'%':'—'}</td>
+        <td class="diag">${x.why||""}</td></tr>`;
+    });
+    h+=`</tbody></table></div></div>`;
+  });
+  root.innerHTML=h||`<div class="meta">No accounts with spend.</div>`;
+}
+fetch("data.json?v="+Date.now()).then(r=>r.json()).then(render).catch(e=>{document.getElementById("root").innerHTML='<div class="meta">Could not load data.json — '+e+'</div>';});
+</script>
+</body>
+</html>
