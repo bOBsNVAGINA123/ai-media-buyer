@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-07T18:33:23.007065+03:00",
+  "generated_at": "2026-07-07T18:50:47.068993+03:00",
   "timezone": "Africa/Cairo",
   "sample": false,
   "accounts": [
@@ -10,7 +10,7 @@
         "currency": "EGP"
       },
       "summary": {
-        "spend": 205611,
+        "spend": 205612,
         "revenue": 1241513,
         "purchases": 1088,
         "roas": 6.04,
@@ -19,6 +19,14 @@
         "cold_roas": 5.64
       },
       "benchmarks": {
+        "COLD/VIDEO": {
+          "cpa_med": 272.93,
+          "cpa_mean": 274.08,
+          "roas_med": 5.25,
+          "hook_med": 75.5,
+          "hold_med": 8.5,
+          "n": 21
+        },
         "COLD/IMAGE": {
           "cpa_med": 282.76,
           "cpa_mean": 373.54,
@@ -27,13 +35,13 @@
           "hold_med": 0.05,
           "n": 10
         },
-        "COLD/VIDEO": {
-          "cpa_med": 272.93,
-          "cpa_mean": 274.08,
-          "roas_med": 5.25,
-          "hook_med": 75.5,
-          "hold_med": 8.5,
-          "n": 21
+        "WARM/IMAGE": {
+          "cpa_med": 290.4,
+          "cpa_mean": 255.37,
+          "roas_med": 3.37,
+          "hook_med": 51.8,
+          "hold_med": 1.2,
+          "n": 3
         },
         "WARM/VIDEO": {
           "cpa_med": 520.27,
@@ -50,14 +58,6 @@
           "hook_med": 0.55,
           "hold_med": 0.0,
           "n": 10
-        },
-        "WARM/IMAGE": {
-          "cpa_med": 290.4,
-          "cpa_mean": 255.37,
-          "roas_med": 3.37,
-          "hook_med": 51.8,
-          "hold_med": 1.2,
-          "n": 3
         }
       },
       "creatives": [
@@ -67,8 +67,8 @@
           "campaign": "SHAFI NEW ABO  CREATIVE TESTING",
           "aud": "COLD",
           "type": "IMAGE",
-          "spend": 16173.9,
-          "impr": 285182,
+          "spend": 16173.98,
+          "impr": 285183,
           "reach": 127041,
           "freq": 2.24,
           "cpm": 56.71,
@@ -77,16 +77,16 @@
           "purch": 131.0,
           "rev": 67807.91,
           "lc": 12169.0,
-          "cpa": 123.46,
+          "cpa": 123.47,
           "roas": 4.19,
           "aov": 517.62,
           "cvr": 1.08,
           "hook": 0.2,
           "hold": 0.0,
           "label": "SCALE OPPORTUNITY",
-          "why": "Cold image. CPA 123.46 is 56% below the COLD/IMAGE median of 282.76. ROAS 4.19. Frequency 2.24 healthy. Real creative winner, the audience is not inflating it.",
+          "why": "Cold image. CPA 123.47 is 56% below the COLD/IMAGE median of 282.76. ROAS 4.19. Frequency 2.24 healthy. Real creative winner, the audience is not inflating it.",
           "waste": 0,
-          "scale_score": 9112
+          "scale_score": 9111
         },
         {
           "ad_id": "120244605819130621",
@@ -229,8 +229,8 @@
           "campaign": "SHAFI CATALOGUE  RETARGETING WITH PROMOCODE",
           "aud": "WARM",
           "type": "CATALOGUE",
-          "spend": 8751.77,
-          "impr": 121263,
+          "spend": 8751.83,
+          "impr": 121264,
           "reach": 50338,
           "freq": 2.41,
           "cpm": 72.17,
@@ -283,8 +283,8 @@
           "campaign": "SHAFI NEW ABO  CREATIVE TESTING",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 7721.75,
-          "impr": 132765,
+          "spend": 7721.78,
+          "impr": 132767,
           "reach": 81418,
           "freq": 1.63,
           "cpm": 58.16,
@@ -310,8 +310,8 @@
           "campaign": "SHAFI NEW ABO  CREATIVE TESTING",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 7125.68,
-          "impr": 213171,
+          "spend": 7125.73,
+          "impr": 213173,
           "reach": 86834,
           "freq": 2.45,
           "cpm": 33.43,
@@ -499,8 +499,8 @@
           "campaign": "SHAFI NEW ABO  CREATIVE TESTING",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 3539.51,
-          "impr": 87721,
+          "spend": 3539.54,
+          "impr": 87722,
           "reach": 45780,
           "freq": 1.92,
           "cpm": 40.35,
@@ -509,14 +509,14 @@
           "purch": 5.0,
           "rev": 8320.0,
           "lc": 1550.0,
-          "cpa": 707.9,
+          "cpa": 707.91,
           "roas": 2.35,
           "aov": 1664.0,
           "cvr": 0.32,
           "hook": 64.4,
           "hold": 2.2,
           "label": "BAD CREATIVE",
-          "why": "Cold video. CPA 707.9 is +159% vs the COLD/VIDEO median of 272.93 on real spend. CTR is healthy, the cost is in conversion, not the click.",
+          "why": "Cold video. CPA 707.91 is +159% vs the COLD/VIDEO median of 272.93 on real spend. CTR is healthy, the cost is in conversion, not the click.",
           "waste": 2175,
           "scale_score": 0
         },
@@ -3362,8 +3362,8 @@
         "campaign": "SHAFI NEW ABO  CREATIVE TESTING",
         "aud": "COLD",
         "type": "IMAGE",
-        "spend": 16173.9,
-        "impr": 285182,
+        "spend": 16173.98,
+        "impr": 285183,
         "reach": 127041,
         "freq": 2.24,
         "cpm": 56.71,
@@ -3372,16 +3372,16 @@
         "purch": 131.0,
         "rev": 67807.91,
         "lc": 12169.0,
-        "cpa": 123.46,
+        "cpa": 123.47,
         "roas": 4.19,
         "aov": 517.62,
         "cvr": 1.08,
         "hook": 0.2,
         "hold": 0.0,
         "label": "SCALE OPPORTUNITY",
-        "why": "Cold image. CPA 123.46 is 56% below the COLD/IMAGE median of 282.76. ROAS 4.19. Frequency 2.24 healthy. Real creative winner, the audience is not inflating it.",
+        "why": "Cold image. CPA 123.47 is 56% below the COLD/IMAGE median of 282.76. ROAS 4.19. Frequency 2.24 healthy. Real creative winner, the audience is not inflating it.",
         "waste": 0,
-        "scale_score": 9112
+        "scale_score": 9111
       }
     },
     {
