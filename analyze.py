@@ -636,6 +636,14 @@ def msg_launches(acct, creatives, prev_ids, acc_roas=None, acc_cpmr=None, acc_cv
 def adref(c):
     return "%s (ROAS %s, CPA %s, CVR %s%%, CPMR %s%s)" % (
         nm(c), c["roas"], money(c["cpa"]), c["cvr"], money(c["cpmr"]), cpmrword(c))
+# agreed BSD bands (from the Meta Ads Playbook in the vault)
+def hook_band(h): return "good" if h >= 20 else ("average" if h >= 12 else "bad")
+def hold_band(h): return "good" if h >= 35 else ("average" if h >= 22 else "bad")
+def freq_ceiling(c):
+    # DPA/catalogue read on a higher ceiling: bench 2.5, fatigue 3.0. Everything else: cold ceiling 2.0.
+    return 3.0 if c.get("type") == "CATALOGUE" else 2.0
+def is_saturating(c):
+    return c["aud"] == "COLD" and c.get("significant") and c["freq"] > freq_ceiling(c)
 
 def msg_advisor(A):
     """A weekly strategic brief: read the numbers, then tell Shavi exactly what to do and why."""
@@ -656,18 +664,23 @@ def msg_advisor(A):
     fatiguing = [c for c in rows if c["label"] == "FATIGUE" and c.get("significant")]
     assisted = sorted([c for c in rows if c["aud"] == "WARM" and c["roas"] and c["spend"] >= MIN_SPEND],
                       key=lambda c: c["roas"], reverse=True)[:2]
+    saturating = sorted([c for c in rows if is_saturating(c)], key=lambda c: c["spend"], reverse=True)[:3]
+    videos = [c for c in rows if c["type"] == "VIDEO" and c.get("significant")]
+    top_vid = max(videos, key=lambda c: c["spend"], default=None)
 
     levers = [("CVR", dcvr, True), ("AOV", daov, True), ("CPC", dcpc, False)]
     levers = [x for x in levers if x[1] is not None]
     lever = max(levers, key=lambda x: abs(x[1]))[0] if levers else "CVR"
     fix = {
-        "CVR": ("*Conversion is the lever.* That is a landing page, offer and checkout problem, not media. "
-                "Audit the PDP, the price and shipping presentation, COD friction and social proof. "
+        "CVR": ("*Conversion is the lever.* That is a landing page, offer and checkout problem, not media." + IND +
+                "Audit the PDP, the price and shipping presentation, COD friction and social proof." + IND +
                 "Revenue = Traffic × CVR × AOV, so a CVR fix compounds on every click you already pay for."),
-        "AOV": ("*Order value is the lever.* Pull the offer mechanics: bundles, gift-with-purchase, volume tiers and a higher-price hero. "
+        "AOV": ("*Order value is the lever.* Pull the offer mechanics: bundles, gift-with-purchase, volume tiers and a higher-price hero." + IND +
                 "A higher AOV lifts ROAS without touching CPC or CVR, so it is the cheapest win available."),
-        "CPC": ("*Click cost is the lever.* That is creative and auction. Refresh hooks on the fatiguing ads, add new angles, "
-                "and widen the audience so frequency drops. Cheaper clicks lift ROAS at the same CVR and AOV."),
+        "CPC": ("*Click cost is the lever.* That is creative and auction." + IND +
+                "If hook rate broke, the problem is the first 3 seconds, that is a thumb-stop fix." + IND +
+                "If hook held but Outbound CTR fell, the promise or the click incentive is weak." + IND +
+                "Refresh the fatiguing ads, add new angles, and widen the audience so frequency drops."),
     }[lever]
 
     L = ["%s  :compass:  *%s - STRATEGIC ADVISOR*" % (MENTION, A["account"]["name"].upper()),
@@ -679,7 +692,8 @@ def msg_advisor(A):
              blended, cold,
              (".  Catalogue is %d%% of spend and is propping up the blended number, judge scaling on cold only" % s["cat_pct"]) if s["cat_pct"] >= 20 else ""),
          "The lever that moved performance this week: *%s*.  %s" % (
-             lever, "; ".join("%s %s" % (n, sp(d)) for n, d, _ in levers)),
+             lever, ", ".join("%s %s" % (n, sp(d)) for n, d, _ in levers)),
+         "ROAS here is attributed.  Reconcile against MER and AMER before any big cut, and treat catalogue ROAS as over-attributed.",
          "", BAR, "*WHAT IS WORKING, scale these*"]
     if winners:
         for c in winners: L.append("• %s" % adref(c))
@@ -693,6 +707,23 @@ def msg_advisor(A):
             L.append("• %s%s" % (adref(c), w))
     else:
         L.append("_Nothing is badly bleeding. Guardrails are holding._")
+    # Saturation and creative read, straight from the BSD playbook (cold freq ceiling 2.0, hook/hold bands)
+    L += ["", BAR, "*SATURATION & CREATIVE*"]
+    if saturating:
+        L.append("Cold frequency ceiling is 2.0, over that is saturation not a bad ad.")
+        for c in saturating:
+            L.append("• %s at frequency *%s* on cold." % (nm(c), c["freq"]))
+        L.append("_Signature: ROAS falls while hook and CTR hold and CPM climbs._")
+        L.append("_Fix: pull budget back, let frequency recover toward 2.5, then scale in 15% increments._")
+    else:
+        L.append("Cold frequency is under the 2.0 ceiling, no saturation.  Room to scale.")
+    if top_vid and top_vid["hook"] > 0:
+        L.append("Top video %s: hook %s%% (%s), hold %s%% (%s)." % (
+            nm(top_vid), top_vid["hook"], hook_band(top_vid["hook"]), top_vid["hold"], hold_band(top_vid["hold"])))
+        if hook_band(top_vid["hook"]) == "bad":
+            L.append("_Hook is under 12%, the first 3 seconds are losing people.  Rework the thumb-stop._")
+        elif hold_band(top_vid["hold"]) == "bad":
+            L.append("_Hook lands but hold is under 22%, the body drops them.  Tighten the middle._")
     L += ["", BAR, "*THE MAIN LEVER TO FIX*", fix, "", BAR, "*STRATEGIC MOVES THIS WEEK*"]
     n = 0
     if bleeders and winners:
@@ -700,12 +731,17 @@ def msg_advisor(A):
         n += 1; L.append("%d. *Reallocate.* Pull ~%s from %s and push it into %s.  Same audience pool, better creative economics." % (
             n, money(move), nm(bleeders[0]), nm(winners[0])))
     if winners:
-        n += 1; L.append("%d. *Scale the winner.* Raise %s by 20-30%%.  It has the cheapest reach and the best conversion of the account." % (
-            n, nm(winners[0])))
+        w = winners[0]
+        sat = w["freq"] > freq_ceiling(w)
+        how = "Frequency is %s, already over the 2.0 ceiling, so add budget slowly in 15%% steps and watch CPM." % w["freq"] if sat \
+              else "Frequency is %s, under the 2.0 ceiling, so scale in 15%% increments." % w["freq"]
+        n += 1; L.append("%d. *Scale the winner.* Raise %s.  %s" % (n, nm(w), how))
     if fatiguing:
         names = ", ".join(nm(c) for c in fatiguing[:3])
         n += 1; L.append("%d. *Refresh creative.* %d ad(s) are fatiguing (%s).  New first 3 seconds, keep the concept.  Then launch 3-5 fresh concepts, creative volume is the real lever on CPC." % (
             n, len(fatiguing), names))
+    if saturating and not fatiguing:
+        n += 1; L.append("%d. *Relieve saturation.* Pull budget on the over-frequency ads, let them recover toward 2.5, then re-enter.  Broaden the audience so the same creative reaches fresh people." % n)
     if lever == "AOV" or (s["aov"] and daov is not None and daov < -5):
         n += 1; L.append("%d. *Lift AOV.* Add a bundle or gift-with-purchase and push a higher-price hero.  AOV is %s, every 10%% here is 10%% ROAS for free." % (n, money(s["aov"])))
     if s["cat_pct"] >= 25:
