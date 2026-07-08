@@ -24,8 +24,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(ROOT, "docs")
 STATE_PATH = os.path.join(DOCS, "state.json")
 DATA_PATH = os.path.join(DOCS, "data.json")
-TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
-SLACK_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+TOKEN = os.environ.get("META_ACCESS_TOKEN", "").strip()
+SLACK_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "").strip()
 
 def load_json(p, d):
     try:
