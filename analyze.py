@@ -260,24 +260,24 @@ def agg(ms):
             "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0}
 
 def diagnose(m, p):
-    """Funnel diagnostic: name the single main driver behind the ROAS change."""
+    """Funnel diagnostic. Always names the single biggest driver behind the ROAS change, with the reason."""
     if not p or not p.get("spend"): return "No comparable prior period to diagnose."
-    droas = pct(m["roas"], p["roas"]); dcpmr = pct(m["cpmr"], p["cpmr"]); dctr = pct(m["ctr"], p["ctr"])
-    datc = pct(m["atc_rate"], p["atc_rate"]); dcvr = pct(m["cvr"], p["cvr"])
-    daov = pct(m["aov"] or 0, p["aov"] or 0); dcpa = pct(m["cpa"] or 0, p["cpa"] or 0)
-    if droas is None or abs(droas) < 8:
-        return "Stable. ROAS moved %s, no single funnel stage broke." % sp(droas)
-    if dcpmr is not None and dcpmr > 15 and (dctr is None or dctr > -10):
-        return "*Auction cost.* CPMR %s (reach got pricier) while CTR held %s. This is traffic cost, not the creative. Watch frequency and widen the audience." % (sp(dcpmr), sp(dctr))
-    if dctr is not None and dctr < -15:
-        return "*Creative.* CTR fell %s (CPMR %s). Fewer people click, the hook or angle is tiring. Refresh creative." % (sp(dctr), sp(dcpmr))
-    if datc is not None and datc < -15 and (dctr is None or dctr > -10):
-        return "*Landing page.* Clicks held but ATC%% fell %s. Interest is fine, the page or offer is not converting clicks. Check PDP, price, offer." % sp(datc)
-    if dcvr is not None and dcvr < -15 and (datc is None or datc > -10):
-        return "*Checkout.* Add-to-cart held but CVR fell %s. People add then drop at checkout. Check shipping, payment, price." % sp(dcvr)
-    if daov is not None and daov < -10 and (dcpa is None or abs(dcpa) < 10):
-        return "*Value mix.* Acquisition steady but AOV fell %s, so revenue per order dropped. Push bundles or higher-price heroes." % sp(daov)
-    return "*Mixed.* ROAS %s driven by CPMR %s, CTR %s, ATC%% %s, CVR %s, AOV %s." % (sp(droas), sp(dcpmr), sp(dctr), sp(datc), sp(dcvr), sp(daov))
+    droas = pct(m["roas"], p["roas"])
+    if droas is None or abs(droas) < 6:
+        return "Steady. ROAS held (%s). No funnel stage moved enough to act on." % sp(droas)
+    # candidate drivers, each mapped to the funnel stage it represents
+    C = [("CPMR", pct(m["cpmr"], p["cpmr"]), "reach got %s (auction / audience cost, not the creative). Watch frequency and audience size."),
+         ("CTR", pct(m["ctr"], p["ctr"]), "click rate %s (creative appeal). Refresh hooks and angles."),
+         ("ATC%", pct(m["atc_rate"], p["atc_rate"]), "add-to-cart rate %s (landing page / offer). Check the PDP, price and offer."),
+         ("CVR", pct(m["cvr"], p["cvr"]), "purchase rate %s (checkout). Check shipping, payment and price."),
+         ("AOV", pct(m["aov"] or 0, p["aov"] or 0), "order value %s (revenue per order). Push bundles or pricier heroes.")]
+    C = [(n, d, t) for n, d, t in C if d is not None and abs(d) >= 6]
+    if not C:
+        return "ROAS moved %s but no single metric moved sharply. Likely a spend or mix shift." % sp(droas)
+    n, d, t = max(C, key=lambda x: abs(x[1]))
+    dir_word = "improved" if ((n in ("CTR", "ATC%", "CVR", "AOV") and d > 0) or (n == "CPMR" and d < 0)) else "worsened"
+    reason = t % (sp(d))
+    return "ROAS %s. Main driver: *%s %s* — %s" % (sp(droas), n, sp(d), reason)
 
 def analyze(acct, cur_rows, prev_rows):
     rows = [metric(r) for r in cur_rows]
@@ -337,54 +337,61 @@ def cur(A): return A["account"].get("currency", "")
 def tgt(A):
     t = A.get("best_target")
     return nm(t) if t else "the lowest-CPA cold winner"
-def cmet(c, cc):
-    """Compact full metric line for one creative. Never a lone metric."""
-    return "     ROAS %s · CPA %s %s · CPM %s · CPMR %s · CVR %s%% · ATC %s%% · AOV %s %s" % (
-        c["roas"], money(c["cpa"]), cc, money(c["cpm"]), money(c["cpmr"]), c["cvr"], c["atc_rate"], money(c["aov"]), cc)
-def fatline(c, cc):
+BAR = "━━━━━━━━━━━━━━━━━━"
+def cmet(c):
+    """Two clean metric lines for one creative, revenue included."""
+    return ("     Spend %s · Rev %s · ROAS %s · CPA %s · AOV %s\n"
+            "     CVR %s%% · ATC %s%% · CPMR %s · CPM %s · Freq %s") % (
+        money(c["spend"]), money(c["rev"]), c["roas"], money(c["cpa"]), money(c["aov"]),
+        c["cvr"], c["atc_rate"], money(c["cpmr"]), money(c["cpm"]), c["freq"])
+def gapw(g):
+    return "n/a" if g is None else ("%d%% below" % abs(g) if g <= 0 else "%d%% above" % g)
+def why_scale(c, cold):
+    return "CPA %s is %s its group median of %s, and ROAS %s beats the cold bar of %s. Proven cold winner." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], cold)
+def why_cut(c):
+    return "CPA %s is %s its group median of %s at ROAS %s, wasting about %s this week versus reallocating that spend." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], money(c["waste"]))
+def why_fatigue(c):
     p = c.get("prev") or {}
-    cpm_note = "CPM steady" if (c.get("d_cpm") is not None and abs(c["d_cpm"]) < 12) else "CPM %s" % sp(c.get("d_cpm"))
-    return ("freq %s→%s (%s), Outbound CTR %s%%→%s%% (%s), %s. Users see it more and click less, so it is creative fatigue not auction." %
-            (p.get("freq"), c["freq"], sp(c["d_freq"]), p.get("octr"), c["octr"], sp(c["d_octr"]), cpm_note))
+    cpm = "CPM steady" if (c.get("d_cpm") is not None and abs(c["d_cpm"]) < 12) else "CPM %s" % sp(c.get("d_cpm"))
+    return "Frequency %s→%s (%s) and Outbound CTR %s%%→%s%% (%s), %s. More views, fewer clicks = creative fatigue, not auction." % (
+        p.get("freq"), c["freq"], sp(c["d_freq"]), p.get("octr"), c["octr"], sp(c["d_octr"]), cpm)
+def why_lowroas(c, cold):
+    return "Cheap CPA %s (%s vs group) but ROAS %s is under the cold bar of %s and AOV is only %s. Efficient reach, low value." % (money(c["cpa"]), bw(c["gap"]), c["roas"], cold, money(c["aov"]))
+
+def block(icon, title, name, do, metrics, why):
+    return "\n".join(["%s *%s — %s*   _(%s)_" % (icon, title, name, do), metrics, "     *Why:* %s" % why, ""])
 
 def msg_digest(A):
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
-    L = ["%s  :bar_chart:  *%s — Daily*" % (MENTION, A["account"]["name"]),
-         ":date: *%s → %s*   (vs %s → %s)" % (d1, d2, p1, p2), "",
-         "*BATCH TOTALS (all ads)*",
-         "Spend *%s %s* (%s)  ·  Revenue %s %s  ·  %d purchases" % (money(s["spend"]), cc, sp(s["d_spend"]), money(s["revenue"]), cc, s["purchases"]),
-         "ROAS *%s* (%s)  ·  CPA *%s* (%s)  ·  AOV %s %s" % (s["roas"], sp(s["d_roas"]), money(s["cpa"]), sp(s["d_cpa"]), money(s["aov"]), cc),
-         "CPM %s (%s)  ·  *CPMR %s* (%s)  ·  CVR %s%% (%s)  ·  ATC %s%% (%s)" %
-         (money(s["cpm"]), sp(s["d_cpm"]), money(s["cpmr"]), sp(s["d_cpmr"]), s["cvr"], sp(s["d_cvr"]), s["atc_rate"], sp(s["d_atc"])),
-         "Cold prospecting ROAS *%s* is the bar new creatives must beat." % s["cold_roas"]]
-    if s["cat_pct"] >= 15:
-        L.append("_Catalogue %d%% of spend inflates blended ROAS._" % s["cat_pct"])
-    L += ["", ":mag: *Diagnosis:* %s" % s["diagnosis"], "", "*DO NOW*"]
+    L = ["%s  :bar_chart:  *%s — DAILY*" % (MENTION, A["account"]["name"].upper()),
+         ":date: *%s → %s*   vs   *%s → %s*   (all values in %s)" % (d1, d2, p1, p2, cc), BAR,
+         "*ACCOUNT — all ads*",
+         "Spend *%s* (%s) · Revenue *%s* · %d purchases" % (money(s["spend"]), sp(s["d_spend"]), money(s["revenue"]), s["purchases"]),
+         "ROAS *%s* (%s) · CPA *%s* (%s) · AOV %s" % (s["roas"], sp(s["d_roas"]), money(s["cpa"]), sp(s["d_cpa"]), money(s["aov"])),
+         "CVR %s%% (%s) · ATC %s%% (%s) · CPMR *%s* (%s) · CPM %s (%s)" % (s["cvr"], sp(s["d_cvr"]), s["atc_rate"], sp(s["d_atc"]), money(s["cpmr"]), sp(s["d_cpmr"]), money(s["cpm"]), sp(s["d_cpm"])),
+         "Cold prospecting ROAS *%s* = the bar to beat.%s" % (s["cold_roas"], (" Catalogue %d%% of spend inflates blended ROAS." % s["cat_pct"]) if s["cat_pct"] >= 15 else ""),
+         "", ":mag: *Why ROAS moved:* %s" % s["diagnosis"], BAR, "*DO NOW*", ""]
     did = False
     op = A["opportunity"]
     if op:
-        L.append(":rocket: *Scale* %s  +20-30%%  —  CPA %s (%s), ROAS %s beats cold %s. Fund from the cut below." % (nm(op), money(op["cpa"]), bw(op["gap"]), op["roas"], s["cold_roas"]))
-        L.append(cmet(op, cc)); did = True
+        L.append(block(":rocket:", "SCALE", nm(op), "raise budget 20-30%", cmet(op), why_scale(op, s["cold_roas"]))); did = True
     off = A["offender"]
     if off:
-        L.append(":rotating_light: *Cut* %s  -30-40%%  —  CPA %s (%s), ~%s %s wasted/wk. Move budget to %s." % (nm(off), money(off["cpa"]), bw(off["gap"]), money(off["waste"]), cc, tgt(A)))
-        L.append(cmet(off, cc)); did = True
+        L.append(block(":rotating_light:", "CUT", nm(off), "drop 30-40%%, move budget to %s" % tgt(A), cmet(off), why_cut(off))); did = True
     fat = [c for c in rows if c["label"] == "FATIGUE"]
     if fat:
         c = fat[0]
-        L.append(":recycle: *Refresh* %s  —  fatigue: %s New first 3 seconds." % (nm(c), fatline(c, cc)))
-        L.append(cmet(c, cc)); did = True
-    lowroas = [c for c in rows if c["label"] == "EFFICIENT-LOW-ROAS"]
-    if lowroas:
-        c = lowroas[0]
-        L.append(":test_tube: *Test higher AOV* %s  —  cheap CPA %s but ROAS %s under cold %s. Same hook, pricier product." % (nm(c), money(c["cpa"]), c["roas"], s["cold_roas"]))
-        L.append(cmet(c, cc)); did = True
+        L.append(block(":recycle:", "REFRESH", nm(c), "new first 3 seconds, keep concept", cmet(c), why_fatigue(c))); did = True
+    low = [c for c in rows if c["label"] == "EFFICIENT-LOW-ROAS"]
+    if low:
+        c = low[0]
+        L.append(block(":test_tube:", "TEST HIGHER AOV", nm(c), "same hook, pricier product", cmet(c), why_lowroas(c, s["cold_roas"]))); did = True
     if not did:
-        L.append("_No hard action today. Everything is inside its guardrails._")
+        L.append("_Nothing crossed an action threshold. Everything is inside its guardrails._\n")
     if len(fat) > 1:
-        L += ["", ":chart_with_downwards_trend: *Also fatiguing (%d):* %s" % (len(fat) - 1, ", ".join(nm(c) for c in fat[1:6]))]
-    L += ["", "_Window: last 7 days vs previous 7. Runs 9 AM Cairo daily._"]
+        L.append(":chart_with_downwards_trend: *Also fatiguing (%d):* %s" % (len(fat) - 1, ", ".join(nm(c) for c in fat[1:6])))
+    L += [BAR, "_7-day window vs the previous 7 days. Runs automatically 9 AM Cairo daily._"]
     return "\n".join(L)
 
 
@@ -393,7 +400,7 @@ def prow(r, key):
     spend = f(r.get("spend")); purch = pick(r.get("actions"), PURCH)
     rev = pick(r.get("action_values"), PURCH) or f(r.get("purchase_roas")) * spend
     return {"name": r.get(key, "(unnamed)"), "id": r.get("ad_id") or r.get("adset_id"),
-            "spend": round(spend), "purch": round(purch),
+            "spend": round(spend), "rev": round(rev), "purch": round(purch),
             "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None}
 
 def pareto(rows):
@@ -410,7 +417,7 @@ def pareto(rows):
 
 def linkrow(x, cc, is_ad):
     label = nm({"ad_name": x["name"], "ad_id": x["id"]}) if is_ad else aset_link(x["name"], x["id"])
-    return "   • %s\n        %s %s  ·  ROAS %s  ·  CPA %s %s" % (label, money(x["spend"]), cc, x["roas"], money(x["cpa"]), cc)
+    return "   • %s\n        Spend %s · Rev %s · ROAS %s · CPA %s" % (label, money(x["spend"]), money(x["rev"]), x["roas"], money(x["cpa"]))
 
 def pulse_3day(acct, ad_rows, set_rows, m3, p3m):
     cc = acct.get("currency", "")
