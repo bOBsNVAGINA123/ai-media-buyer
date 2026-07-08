@@ -661,6 +661,9 @@ def msg_advisor(A):
     if not bleeders:
         bleeders = sorted([c for c in rows if c.get("significant") and c["aud"] == "COLD" and c["roas"] and c["roas"] < cold * 0.8],
                           key=lambda c: c["roas"])[:3]
+    # a winner and a bleeder must never be the same ad (no "move from X into X")
+    bleed_ids = {b["ad_id"] for b in bleeders}
+    winners = [w for w in winners if w["ad_id"] not in bleed_ids]
     fatiguing = [c for c in rows if c["label"] == "FATIGUE" and c.get("significant")]
     assisted = sorted([c for c in rows if c["aud"] == "WARM" and c["roas"] and c["spend"] >= MIN_SPEND],
                       key=lambda c: c["roas"], reverse=True)[:2]
