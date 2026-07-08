@@ -203,6 +203,7 @@ def metric(r):
             "roas": round(rev / spend, 2) if spend else 0.0,
             "aov": round(rev / purch, 2) if purch else None,
             "cvr": round(purch / lc * 100, 2) if lc else 0.0,
+            "cpc": round(spend / lc, 2) if lc else 0.0,
             "atc_rate": round(atc / lc * 100, 1) if lc else 0.0,
             "hook": round(v3 / impr * 100, 1) if impr else 0.0,
             "hold": round(p25 / impr * 100, 1) if impr else 0.0}
@@ -252,32 +253,71 @@ def agg(ms):
     spend = sum(c["spend"] for c in ms); rev = sum(c["rev"] for c in ms); purch = sum(c["purch"] for c in ms)
     reach = sum(c["reach"] for c in ms); impr = sum(c["impr"] for c in ms)
     lc = sum(c["lc"] for c in ms); atc = sum(c["atc"] for c in ms)
-    return {"spend": round(spend), "rev": round(rev), "purch": int(purch), "reach": int(reach),
+    return {"spend": round(spend), "rev": round(rev), "purch": int(purch), "reach": int(reach), "lc": round(lc),
             "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None,
             "cpm": round(spend / impr * 1000, 2) if impr else 0, "cpmr": round(spend / reach * 1000, 2) if reach else 0,
             "cvr": round(purch / lc * 100, 2) if lc else 0, "atc_rate": round(atc / lc * 100, 1) if lc else 0,
+            "cpc": round(spend / lc, 2) if lc else 0,
             "aov": round(rev / purch) if purch else None,
             "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0}
 
-def diagnose(m, p):
-    """Funnel diagnostic. Always names the single biggest driver behind the ROAS change, with the reason."""
+def attribute(rows, prev, key):
+    """Which single creative drove the account-level change in `key` the most (in EGP)."""
+    best, bestv = None, 0
+    for c in rows:
+        pc = prev.get(c["ad_id"])
+        if not pc or c["spend"] < 500: continue
+        if key == "cvr":   impact = c["lc"] * (c["cvr"] - pc["cvr"]) / 100 * (c["aov"] or 0)   # revenue EGP
+        elif key == "aov": impact = c["purch"] * ((c["aov"] or 0) - (pc["aov"] or 0))          # revenue EGP
+        elif key == "cpc": impact = -c["lc"] * ((c["cpc"] or 0) - (pc["cpc"] or 0))            # cheaper clicks = +EGP saved
+        else: impact = 0
+        if abs(impact) > abs(bestv): best, bestv = c, impact
+    return best, round(bestv)
+
+def tag(d, up_good):
+    """plain word for a % move; up_good=True means higher is better."""
+    if d is None or abs(d) < 5: return "~flat"
+    good = (d > 0) == up_good
+    return ("up" if d > 0 else "down") + (" (good)" if good else " (drag)")
+
+def diagnose(m, p, rows=None, prev=None, tf=None):
+    """Revenue = Traffic x CVR x AOV, clicks priced by CPC.
+    Report all 3 levers (CPC / CVR / AOV) with % change every time, name which moved, then dig to the ad."""
     if not p or not p.get("spend"): return "No comparable prior period to diagnose."
-    droas = pct(m["roas"], p["roas"])
-    if droas is None or abs(droas) < 6:
-        return "Steady. ROAS held (%s). No funnel stage moved enough to act on." % sp(droas)
-    # candidate drivers, each mapped to the funnel stage it represents
-    C = [("CPMR", pct(m["cpmr"], p["cpmr"]), "reach got %s (auction / audience cost, not the creative). Watch frequency and audience size."),
-         ("CTR", pct(m["ctr"], p["ctr"]), "click rate %s (creative appeal). Refresh hooks and angles."),
-         ("ATC%", pct(m["atc_rate"], p["atc_rate"]), "add-to-cart rate %s (landing page / offer). Check the PDP, price and offer."),
-         ("CVR", pct(m["cvr"], p["cvr"]), "purchase rate %s (checkout). Check shipping, payment and price."),
-         ("AOV", pct(m["aov"] or 0, p["aov"] or 0), "order value %s (revenue per order). Push bundles or pricier heroes.")]
-    C = [(n, d, t) for n, d, t in C if d is not None and abs(d) >= 6]
-    if not C:
-        return "ROAS moved %s but no single metric moved sharply. Likely a spend or mix shift." % sp(droas)
-    n, d, t = max(C, key=lambda x: abs(x[1]))
-    dir_word = "improved" if ((n in ("CTR", "ATC%", "CVR", "AOV") and d > 0) or (n == "CPMR" and d < 0)) else "worsened"
-    reason = t % (sp(d))
-    return "ROAS %s. Main driver: *%s %s* — %s" % (sp(droas), n, sp(d), reason)
+    if tf is None:
+        tf = "%s→%s vs %s→%s" % (DATES["label"][0], DATES["label"][1], DATES["p_label"][0], DATES["p_label"][1])
+    drev = pct(m["rev"], p["rev"]); droas = pct(m["roas"], p["roas"])
+    dcpc = pct(m["cpc"], p["cpc"]); dcvr = pct(m["cvr"], p["cvr"]); daov = pct(m["aov"] or 0, p["aov"] or 0)
+    head = "*%s* · Revenue %s (%s EGP vs %s) · ROAS %s (%s)." % (
+        tf, sp(drev), money(m["rev"]), money(p["rev"]), m["roas"], sp(droas))
+    lines = [
+        "   • CPC: %s → %s EGP (%s, %s)" % (p["cpc"], m["cpc"], sp(dcpc), tag(dcpc, False)),
+        "   • CVR: %s%% → %s%% (%s, %s)" % (p["cvr"], m["cvr"], sp(dcvr), tag(dcvr, True)),
+        "   • AOV: %s → %s EGP (%s, %s)" % (money(p["aov"] or 0), money(m["aov"] or 0), sp(daov), tag(daov, True))]
+    # which single lever moved revenue the most (by |%|)
+    levers = [("CVR", "cvr", dcvr, True, "conversion rate"),
+              ("AOV", "aov", daov, True, "order value"),
+              ("CPC", "cpc", dcpc, False, "click cost")]
+    levers = [x for x in levers if x[2] is not None]
+    if not levers or max(abs(x[2]) for x in levers) < 5:
+        return head + "\n" + "\n".join(lines) + "\n   *Read:* all three held ±flat — revenue steady, nothing to act on."
+    name, key, d, up_good, word = max(levers, key=lambda x: abs(x[2]))
+    prevv, curv = p[key], m[key]
+    if key == "cvr":   egp = round(m["lc"] * (curv - prevv) / 100 * (m["aov"] or 0))
+    elif key == "aov": egp = round(m["purch"] * (curv - prevv))
+    else:              egp = round(-m["lc"] * (curv - prevv))
+    others = " and ".join(n for n, k, *_ in levers if k != key)
+    good = (d > 0) == up_good
+    read = "%s %s %s while %s held — that's ~*%s EGP* and why revenue is %s." % (
+        name, "rose" if d > 0 else "fell", sp(d), others, money(egp), "up" if good else "down")
+    out = [head] + lines + ["   *Read:* " + read]
+    culprit, cimp = attribute(rows, prev, key) if (rows and prev) else (None, 0)
+    if culprit and abs(cimp) > 0:
+        pc = prev.get(culprit["ad_id"], {})
+        u = "%" if key != "aov" else ""
+        out.append("   *Deeper:* biggest single mover was %s — its %s went %s%s→%s%s on %s EGP spend (~%s EGP of the swing)." % (
+            nm(culprit), name, pc.get(key), u, culprit.get(key), u, money(culprit["spend"]), money(cimp)))
+    return "\n".join(out)
 
 def analyze(acct, cur_rows, prev_rows):
     rows = [metric(r) for r in cur_rows]
@@ -306,7 +346,7 @@ def analyze(acct, cur_rows, prev_rows):
                     "d_cpmr": pct(cur_a["cpmr"], prev_a["cpmr"]) if prev_a else None,
                     "d_cvr": pct(cur_a["cvr"], prev_a["cvr"]) if prev_a else None,
                     "d_atc": pct(cur_a["atc_rate"], prev_a["atc_rate"]) if prev_a else None,
-                    "diagnosis": diagnose(cur_a, prev_a)})
+                    "diagnosis": diagnose(cur_a, prev_a, rows, prev)})
     winners = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
     offenders = [c for c in rows if c["waste"] > 0]
     best = max(winners, key=lambda c: c["scale_score"]) if winners else None
@@ -371,7 +411,7 @@ def msg_digest(A):
          "ROAS *%s* (%s) · CPA *%s* (%s) · AOV %s" % (s["roas"], sp(s["d_roas"]), money(s["cpa"]), sp(s["d_cpa"]), money(s["aov"])),
          "CVR %s%% (%s) · ATC %s%% (%s) · CPMR *%s* (%s) · CPM %s (%s)" % (s["cvr"], sp(s["d_cvr"]), s["atc_rate"], sp(s["d_atc"]), money(s["cpmr"]), sp(s["d_cpmr"]), money(s["cpm"]), sp(s["d_cpm"])),
          "Cold prospecting ROAS *%s* = the bar to beat.%s" % (s["cold_roas"], (" Catalogue %d%% of spend inflates blended ROAS." % s["cat_pct"]) if s["cat_pct"] >= 15 else ""),
-         "", ":mag: *Why ROAS moved:* %s" % s["diagnosis"], BAR, "*DO NOW*", ""]
+         "", ":mag: *WHY REVENUE MOVED*  (Revenue = clicks × CVR × AOV)", s["diagnosis"], BAR, "*DO NOW*", ""]
     did = False
     op = A["opportunity"]
     if op:
@@ -438,7 +478,9 @@ def pulse_3day(acct, ad_rows, set_rows, m3, p3m):
                  (m3["roas"], dd("roas"), money(m3["cpa"]), dd("cpa"), money(m3["cpmr"]), dd("cpmr"), money(m3["cpm"]), dd("cpm")))
         L.append("CVR %s%% (%s)  ·  ATC %s%% (%s)  ·  AOV %s %s (%s)" %
                  (m3["cvr"], dd("cvr"), m3["atc_rate"], dd("atc_rate"), money(m3["aov"]), cc, dd("aov")))
-        L.append(":mag: *Diagnosis (3d vs prior 3d):* %s" % diagnose(m3, p3m))
+        tf3 = "%s→%s vs %s→%s" % (DATES["l3"][0], DATES["l3"][1], DATES["p3"][0], DATES["p3"][1])
+        L.append(":mag: *WHY REVENUE MOVED*  (Revenue = clicks × CVR × AOV)")
+        L.append(diagnose(m3, p3m, tf=tf3))
     L += ["",
          ":large_green_circle: *Best adsets*"] + [linkrow(x, cc, False) for x in bset] + \
         ["", ":red_circle: *Worst adsets*"] + [linkrow(x, cc, False) for x in wset] + \
