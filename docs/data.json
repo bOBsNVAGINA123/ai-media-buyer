@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-08T21:03:04.439690+03:00",
+  "generated_at": "2026-07-08T21:17:57.428982+03:00",
   "timezone": "Africa/Cairo",
   "sample": false,
   "accounts": [
@@ -51,33 +51,41 @@
         "d_cpmr": -7.771484256044821,
         "d_cvr": -13.970588235294128,
         "d_atc": 2.7027027027027093,
-        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue -20% (1,152,742 vs 1,440,506 EGP) · Spend -30% · ROAS 5.73 (+15%).\n   • CPC: 2.88 → 2.36 EGP (-18%, down (good))\n   • CVR: 1.36% → 1.17% (-14%, down (drag))\n   • AOV: 1,054 → 1,159 EGP (+10%, up (good))\n   *Read:* *CPC* fell -18% — the biggest of the three, worth ~*44,363 EGP of spend*. That drove ROAS +15%. Revenue -20% because spend -30%.\n   *Deeper:* biggest single mover was *BERCAU WITH BOW* — its CPC went 1.71 EGP→1.31 EGP on 16,058 EGP spend (~4,893 EGP of the swing)."
+        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue -20% (1,152,742 vs 1,440,506 EGP) · Spend -30% · ROAS 5.73 (+15%).\n   • CPC: 2.88 → 2.36 EGP (-18%, down (good))\n   • CVR: 1.36% → 1.17% (-14%, down (drag))\n   • AOV: 1,054 → 1,159 EGP (+10%, up (good))\n   *Read:* *CPC* fell -18% — the biggest of the three, worth ~*44,363 EGP of spend*. That drove ROAS +15%. Revenue -20% because spend -30%.\n   *Deeper:* biggest single mover was *BERCAU WITH BOW* — its CPC went 1.71 EGP→1.31 EGP on 16,058 EGP spend (~11% of the swing)."
       },
       "benchmarks": {
-        "WARM/VIDEO": {
-          "cpa_med": 470.92,
-          "roas_med": 2.21,
-          "hook_med": 63.75,
-          "hold_med": 5.7,
-          "n": 6
-        },
-        "COLD/IMAGE": {
-          "cpa_med": 303.77,
-          "roas_med": 4.01,
-          "hook_med": 0.3,
-          "hold_med": 0.05,
-          "n": 10
-        },
         "WARM/CATALOGUE": {
           "cpa_med": 137.33,
           "roas_med": 6.34,
+          "cpmr_med": 100.42,
+          "cvr_med": 1.25,
           "hook_med": 0.5,
           "hold_med": 0.0,
           "n": 9
         },
+        "COLD/IMAGE": {
+          "cpa_med": 303.77,
+          "roas_med": 4.01,
+          "cpmr_med": 239.93,
+          "cvr_med": 0.76,
+          "hook_med": 0.3,
+          "hold_med": 0.05,
+          "n": 10
+        },
+        "WARM/VIDEO": {
+          "cpa_med": 470.92,
+          "roas_med": 2.21,
+          "cpmr_med": 127.0,
+          "cvr_med": 0.72,
+          "hook_med": 63.75,
+          "hold_med": 5.7,
+          "n": 6
+        },
         "COLD/VIDEO": {
-          "cpa_med": 237.61,
+          "cpa_med": 237.62,
           "roas_med": 5.48,
+          "cpmr_med": 169.49,
+          "cvr_med": 1.78,
           "hook_med": 72.45,
           "hold_med": 8.15,
           "n": 20
@@ -85,6 +93,8 @@
         "WARM/IMAGE": {
           "cpa_med": 244.36,
           "roas_med": 3.37,
+          "cpmr_med": 102.54,
+          "cvr_med": 1.25,
           "hook_med": 50.5,
           "hold_med": 1.2,
           "n": 3
@@ -99,8 +109,8 @@
           "adset_id": "120243057828790621",
           "aud": "COLD",
           "type": "IMAGE",
-          "spend": 16057.74,
-          "impr": 289586,
+          "spend": 16057.75,
+          "impr": 289587,
           "reach": 128278,
           "freq": 2.26,
           "cpm": 55.45,
@@ -130,6 +140,8 @@
           "label": "EFFICIENT-LOW-ROAS",
           "gap": -50,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -17,
+          "cvr_vs_acc": -26,
           "waste": 0,
           "scale_score": 0
         },
@@ -172,6 +184,8 @@
           "label": "PERFORMS",
           "gap": -12,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 116,
+          "cvr_vs_acc": -29,
           "waste": 0,
           "scale_score": 0
         },
@@ -213,7 +227,9 @@
           "d_cpm": -4.926518162491911,
           "label": "BAD CREATIVE",
           "gap": 87,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 22,
+          "cvr_vs_acc": 9,
           "waste": 5756,
           "scale_score": 0
         },
@@ -256,6 +272,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -13,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": 47,
+          "cvr_vs_acc": 7,
           "waste": 0,
           "scale_score": 0
         },
@@ -298,6 +316,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 30,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": 13,
+          "cvr_vs_acc": 21,
           "waste": 0,
           "scale_score": 0
         },
@@ -339,7 +359,9 @@
           "d_cpm": 10.951859033808276,
           "label": "WATCH",
           "gap": 12,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 67,
+          "cvr_vs_acc": 59,
           "waste": 958,
           "scale_score": 0
         },
@@ -382,6 +404,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -11,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": 210,
+          "cvr_vs_acc": 43,
           "waste": 0,
           "scale_score": 0
         },
@@ -424,6 +448,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -19,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": 15,
+          "cvr_vs_acc": 26,
           "waste": 0,
           "scale_score": 0
         },
@@ -465,7 +491,9 @@
           "d_cpm": -24.702108157653534,
           "label": "WATCH",
           "gap": 1,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -45,
+          "cvr_vs_acc": 33,
           "waste": 103,
           "scale_score": 0
         },
@@ -507,7 +535,9 @@
           "d_cpm": -35.589874593590345,
           "label": "PERFORMS",
           "gap": -7,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -40,
+          "cvr_vs_acc": 31,
           "waste": 0,
           "scale_score": 0
         },
@@ -549,9 +579,11 @@
           "d_cpm": -25.03656356643737,
           "label": "SCALE OPPORTUNITY",
           "gap": -47,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 113,
+          "cvr_vs_acc": 235,
           "waste": 0,
-          "scale_score": 3313
+          "scale_score": 653.2
         },
         {
           "ad_id": "120244605673560621",
@@ -592,6 +624,8 @@
           "label": "EFFICIENT-LOW-ROAS",
           "gap": -20,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 66,
+          "cvr_vs_acc": -44,
           "waste": 0,
           "scale_score": 0
         },
@@ -633,7 +667,9 @@
           "d_cpm": -27.43188747909905,
           "label": "BAD CREATIVE",
           "gap": 53,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -10,
+          "cvr_vs_acc": -31,
           "waste": 2132,
           "scale_score": 0
         },
@@ -675,7 +711,9 @@
           "d_cpm": -27.953803665578718,
           "label": "WATCH",
           "gap": 26,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 119,
+          "cvr_vs_acc": 121,
           "waste": 1183,
           "scale_score": 0
         },
@@ -687,8 +725,8 @@
           "adset_id": "120244605673570621",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 4687.86,
-          "impr": 56555,
+          "spend": 4687.97,
+          "impr": 56556,
           "reach": 35442,
           "freq": 1.6,
           "cpm": 82.89,
@@ -699,7 +737,7 @@
           "rev": 25854.8,
           "lc": 1077.0,
           "atc": 121.0,
-          "cpa": 234.39,
+          "cpa": 234.4,
           "roas": 5.52,
           "aov": 1292.74,
           "cvr": 1.86,
@@ -711,13 +749,15 @@
           "vital": true,
           "significant": false,
           "d_roas": 99.27797833935016,
-          "d_cpa": -50.09049677405617,
+          "d_cpa": -50.08836743819602,
           "d_freq": 31.147540983606568,
           "d_octr": -5.940594059405946,
           "d_cpm": -15.916007303712718,
           "label": "PERFORMS",
           "gap": -1,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -13,
+          "cvr_vs_acc": 59,
           "waste": 0,
           "scale_score": 0
         },
@@ -759,7 +799,9 @@
           "d_cpm": -22.73339749759384,
           "label": "BAD CREATIVE",
           "gap": 101,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -47,
+          "cvr_vs_acc": -58,
           "waste": 1915,
           "scale_score": 0
         },
@@ -802,6 +844,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 60,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -43,
+          "cvr_vs_acc": -44,
           "waste": 0,
           "scale_score": 0
         },
@@ -844,6 +888,8 @@
           "label": "FATIGUE",
           "gap": -41,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -57,
+          "cvr_vs_acc": -36,
           "waste": 0,
           "scale_score": 0
         },
@@ -886,6 +932,8 @@
           "label": "WATCH",
           "gap": 4,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 85,
+          "cvr_vs_acc": -50,
           "waste": 130,
           "scale_score": 0
         },
@@ -927,7 +975,9 @@
           "d_cpm": 3.2332898361606555,
           "label": "PERFORMS",
           "gap": -5,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 29,
+          "cvr_vs_acc": -16,
           "waste": 0,
           "scale_score": 0
         },
@@ -970,6 +1020,8 @@
           "label": "WATCH",
           "gap": 4,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 41,
+          "cvr_vs_acc": -42,
           "waste": 75,
           "scale_score": 0
         },
@@ -1012,6 +1064,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 0,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -22,
+          "cvr_vs_acc": 7,
           "waste": 0,
           "scale_score": 0
         },
@@ -1054,6 +1108,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 2,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -29,
+          "cvr_vs_acc": -29,
           "waste": 0,
           "scale_score": 0
         },
@@ -1095,7 +1151,9 @@
           "d_cpm": -2.929364516891082,
           "label": "EFFICIENT-LOW-ROAS",
           "gap": -20,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -58,
+          "cvr_vs_acc": 97,
           "waste": 0,
           "scale_score": 0
         },
@@ -1138,6 +1196,8 @@
           "label": "BAD CREATIVE",
           "gap": 211,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 61,
+          "cvr_vs_acc": -76,
           "waste": 1280,
           "scale_score": 0
         },
@@ -1180,6 +1240,8 @@
           "label": "BAD CREATIVE",
           "gap": 209,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 60,
+          "cvr_vs_acc": -81,
           "waste": 1268,
           "scale_score": 0
         },
@@ -1222,6 +1284,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -2,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -10,
+          "cvr_vs_acc": -41,
           "waste": 0,
           "scale_score": 0
         },
@@ -1263,7 +1327,9 @@
           "d_cpm": -6.686299444481635,
           "label": "WATCH",
           "gap": 11,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 50,
+          "cvr_vs_acc": 119,
           "waste": 177,
           "scale_score": 0
         },
@@ -1305,7 +1371,9 @@
           "d_cpm": -11.695034216529214,
           "label": "BAD CREATIVE",
           "gap": 49,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 7,
+          "cvr_vs_acc": -68,
           "waste": 587,
           "scale_score": 0
         },
@@ -1348,6 +1416,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 275,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -18,
+          "cvr_vs_acc": -89,
           "waste": 0,
           "scale_score": 0
         },
@@ -1389,7 +1459,9 @@
           "d_cpm": -13.283062645011597,
           "label": "PERFORMS",
           "gap": -13,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 29,
+          "cvr_vs_acc": 139,
           "waste": 0,
           "scale_score": 0
         },
@@ -1432,6 +1504,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -33,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -32,
+          "cvr_vs_acc": 15,
           "waste": 0,
           "scale_score": 0
         },
@@ -1474,6 +1548,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -40,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -34,
+          "cvr_vs_acc": 43,
           "waste": 0,
           "scale_score": 0
         },
@@ -1516,6 +1592,8 @@
           "label": "PERFORMS",
           "gap": -4,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -44,
+          "cvr_vs_acc": -23,
           "waste": 0,
           "scale_score": 0
         },
@@ -1557,7 +1635,9 @@
           "d_cpm": -23.227783452502553,
           "label": "PERFORMS",
           "gap": -49,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 17,
+          "cvr_vs_acc": 96,
           "waste": 0,
           "scale_score": 0
         },
@@ -1599,7 +1679,9 @@
           "d_cpm": -24.089334766511406,
           "label": "WATCH",
           "gap": 7,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -32,
+          "cvr_vs_acc": 18,
           "waste": 0,
           "scale_score": 0
         },
@@ -1642,6 +1724,8 @@
           "label": "WATCH",
           "gap": 4,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 57,
+          "cvr_vs_acc": -15,
           "waste": 0,
           "scale_score": 0
         },
@@ -1684,6 +1768,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 61,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -72,
+          "cvr_vs_acc": -37,
           "waste": 0,
           "scale_score": 0
         },
@@ -1726,6 +1812,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -67,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -14,
+          "cvr_vs_acc": 31,
           "waste": 0,
           "scale_score": 0
         },
@@ -1767,7 +1855,9 @@
           "d_cpm": -48.34116371521503,
           "label": "PERFORMS",
           "gap": -51,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -21,
+          "cvr_vs_acc": 168,
           "waste": 0,
           "scale_score": 0
         },
@@ -1809,7 +1899,9 @@
           "d_cpm": 6.754772393538905,
           "label": "PERFORMS",
           "gap": -42,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 6,
+          "cvr_vs_acc": 221,
           "waste": 0,
           "scale_score": 0
         },
@@ -1852,6 +1944,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 21,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -32,
+          "cvr_vs_acc": -16,
           "waste": 0,
           "scale_score": 0
         },
@@ -1894,6 +1988,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 57,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -38,
+          "cvr_vs_acc": -39,
           "waste": 0,
           "scale_score": 0
         },
@@ -1935,7 +2031,9 @@
           "d_cpm": -6.307898586055597,
           "label": "WATCH",
           "gap": 79,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 70,
+          "cvr_vs_acc": -23,
           "waste": 0,
           "scale_score": 0
         },
@@ -1978,6 +2076,8 @@
           "label": "PERFORMS",
           "gap": -8,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 40,
+          "cvr_vs_acc": -27,
           "waste": 0,
           "scale_score": 0
         },
@@ -2020,6 +2120,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 0,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -36,
+          "cvr_vs_acc": -22,
           "waste": 0,
           "scale_score": 0
         },
@@ -2061,7 +2163,9 @@
           "d_cpm": 25.29681139755767,
           "label": "UNDERFUNDED",
           "gap": -7,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 25,
+          "cvr_vs_acc": 45,
           "waste": 0,
           "scale_score": 0
         },
@@ -2104,6 +2208,8 @@
           "label": "UNDERFUNDED",
           "gap": 15,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": 33,
+          "cvr_vs_acc": -47,
           "waste": 0,
           "scale_score": 0
         },
@@ -2145,7 +2251,9 @@
           "d_cpm": -39.28104916662312,
           "label": "UNDERFUNDED",
           "gap": 98,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 26,
+          "cvr_vs_acc": 14,
           "waste": 0,
           "scale_score": 0
         },
@@ -2188,6 +2296,8 @@
           "label": "UNDERFUNDED",
           "gap": 13,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -58,
+          "cvr_vs_acc": -34,
           "waste": 0,
           "scale_score": 0
         },
@@ -2230,6 +2340,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -22,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2271,7 +2383,9 @@
           "d_cpm": 7.85694328024588,
           "label": "UNDERFUNDED",
           "gap": -18,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 78,
+          "cvr_vs_acc": 327,
           "waste": 0,
           "scale_score": 0
         },
@@ -2313,7 +2427,9 @@
           "d_cpm": -43.437204910292735,
           "label": "UNDERFUNDED",
           "gap": -18,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -74,
+          "cvr_vs_acc": 34,
           "waste": 0,
           "scale_score": 0
         },
@@ -2355,7 +2471,9 @@
           "d_cpm": 53.69866739189556,
           "label": "UNDERFUNDED",
           "gap": -46,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -1,
+          "cvr_vs_acc": 44,
           "waste": 0,
           "scale_score": 0
         },
@@ -2397,7 +2515,9 @@
           "d_cpm": -2.6186830015313842,
           "label": "UNDERFUNDED",
           "gap": -24,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -4,
+          "cvr_vs_acc": 222,
           "waste": 0,
           "scale_score": 0
         },
@@ -2440,6 +2560,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": 1,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2481,7 +2603,9 @@
           "d_cpm": 25.217552305128677,
           "label": "UNDERFUNDED",
           "gap": -33,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 31,
+          "cvr_vs_acc": 122,
           "waste": 0,
           "scale_score": 0
         },
@@ -2523,7 +2647,9 @@
           "d_cpm": 28.974212034383957,
           "label": "UNDERFUNDED",
           "gap": -33,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 7,
+          "cvr_vs_acc": 125,
           "waste": 0,
           "scale_score": 0
         },
@@ -2565,7 +2691,9 @@
           "d_cpm": -22.12322274881517,
           "label": "UNDERFUNDED",
           "gap": -39,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -28,
+          "cvr_vs_acc": 171,
           "waste": 0,
           "scale_score": 0
         },
@@ -2607,7 +2735,9 @@
           "d_cpm": null,
           "label": "UNDERFUNDED",
           "gap": 14,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -16,
+          "cvr_vs_acc": 82,
           "waste": 0,
           "scale_score": 0
         },
@@ -2649,7 +2779,9 @@
           "d_cpm": -38.25065274151436,
           "label": "UNDERFUNDED",
           "gap": 12,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -67,
+          "cvr_vs_acc": -43,
           "waste": 0,
           "scale_score": 0
         },
@@ -2692,6 +2824,8 @@
           "label": "PERFORMS",
           "gap": -84,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -43,
+          "cvr_vs_acc": 601,
           "waste": 0,
           "scale_score": 0
         },
@@ -2733,7 +2867,9 @@
           "d_cpm": -45.82968667950289,
           "label": "UNDERFUNDED",
           "gap": -13,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 6,
+          "cvr_vs_acc": 242,
           "waste": 0,
           "scale_score": 0
         },
@@ -2776,6 +2912,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2818,6 +2956,8 @@
           "label": "UNDERFUNDED",
           "gap": 33,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": -70,
+          "cvr_vs_acc": -52,
           "waste": 0,
           "scale_score": 0
         },
@@ -2860,6 +3000,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -46,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2902,6 +3044,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 23,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2943,7 +3087,9 @@
           "d_cpm": null,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -9,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -2986,6 +3132,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 70,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3028,6 +3176,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -56,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3069,7 +3219,9 @@
           "d_cpm": -10.43868539163167,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3112,6 +3264,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 25,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3153,7 +3307,9 @@
           "d_cpm": -5.824781451919418,
           "label": "UNDERFUNDED",
           "gap": -71,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -24,
+          "cvr_vs_acc": 185,
           "waste": 0,
           "scale_score": 0
         },
@@ -3195,7 +3351,9 @@
           "d_cpm": 76.19750535094839,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 77,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3237,7 +3395,9 @@
           "d_cpm": -19.410876132930515,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -4,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3279,7 +3439,9 @@
           "d_cpm": -8.147563622016168,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 10,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3321,7 +3483,9 @@
           "d_cpm": -12.933333333333334,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 39,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3364,6 +3528,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -38,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3406,6 +3572,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 4,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3447,7 +3615,9 @@
           "d_cpm": 1.8251103088648288,
           "label": "UNDERFUNDED",
           "gap": -87,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -13,
+          "cvr_vs_acc": 755,
           "waste": 0,
           "scale_score": 0
         },
@@ -3489,7 +3659,9 @@
           "d_cpm": -18.212168699325478,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3531,7 +3703,9 @@
           "d_cpm": -4.333054859370649,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 24,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3574,6 +3748,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -58,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3616,6 +3792,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 40,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3658,6 +3836,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3699,7 +3879,9 @@
           "d_cpm": -5.129939136315334,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -24,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3742,6 +3924,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": 60,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3783,7 +3967,9 @@
           "d_cpm": -12.851239669421478,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 2,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3825,7 +4011,9 @@
           "d_cpm": 46.50115126639304,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3868,6 +4056,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -76,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3909,7 +4099,9 @@
           "d_cpm": 66.1506574259991,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 90,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3951,7 +4143,9 @@
           "d_cpm": 32.927185174376184,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 20,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -3994,6 +4188,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 244.36,
+          "cpmr_vs_acc": -69,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4036,6 +4232,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -47,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4077,7 +4275,9 @@
           "d_cpm": 126.24144641848203,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 169,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4120,6 +4320,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -72,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4162,6 +4364,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -27,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4204,6 +4408,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -35,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4245,7 +4451,9 @@
           "d_cpm": -55.25005117008938,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": 39,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4288,6 +4496,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4329,7 +4539,9 @@
           "d_cpm": -25.39929879236463,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -23,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4372,6 +4584,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 470.92,
+          "cpmr_vs_acc": -48,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4413,7 +4627,9 @@
           "d_cpm": -35.721222081123486,
           "label": "UNDERFUNDED",
           "gap": -99,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -42,
+          "cvr_vs_acc": 2749,
           "waste": 0,
           "scale_score": 0
         },
@@ -4455,7 +4671,9 @@
           "d_cpm": -36.20781056723803,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -46,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4497,7 +4715,9 @@
           "d_cpm": -22.121612690019834,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -15,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4539,7 +4759,9 @@
           "d_cpm": -6.258254597175668,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -26,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4582,6 +4804,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -79,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4623,7 +4847,9 @@
           "d_cpm": 1.3333333333333335,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -71,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4665,7 +4891,9 @@
           "d_cpm": -87.57608695652173,
           "label": "UNDERFUNDED",
           "gap": null,
-          "seg_cpa_med": 237.61,
+          "seg_cpa_med": 237.62,
+          "cpmr_vs_acc": -74,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4708,6 +4936,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -66,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4750,6 +4980,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -80,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4792,6 +5024,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": -60,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4834,6 +5068,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4876,6 +5112,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4918,6 +5156,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -4960,6 +5200,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5002,6 +5244,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5044,6 +5288,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 303.77,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5086,6 +5332,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5128,6 +5376,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5170,6 +5420,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5212,6 +5464,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 137.33,
+          "cpmr_vs_acc": null,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         }
@@ -5254,7 +5508,9 @@
         "d_cpm": -4.926518162491911,
         "label": "BAD CREATIVE",
         "gap": 87,
-        "seg_cpa_med": 237.61,
+        "seg_cpa_med": 237.62,
+        "cpmr_vs_acc": 22,
+        "cvr_vs_acc": 9,
         "waste": 5756,
         "scale_score": 0
       },
@@ -5296,9 +5552,11 @@
         "d_cpm": -25.03656356643737,
         "label": "SCALE OPPORTUNITY",
         "gap": -47,
-        "seg_cpa_med": 237.61,
+        "seg_cpa_med": 237.62,
+        "cpmr_vs_acc": 113,
+        "cvr_vs_acc": 235,
         "waste": 0,
-        "scale_score": 3313
+        "scale_score": 653.2
       },
       "best_target": {
         "ad_id": "120246899541030621",
@@ -5338,9 +5596,11 @@
         "d_cpm": -25.03656356643737,
         "label": "SCALE OPPORTUNITY",
         "gap": -47,
-        "seg_cpa_med": 237.61,
+        "seg_cpa_med": 237.62,
+        "cpmr_vs_acc": 113,
+        "cvr_vs_acc": 235,
         "waste": 0,
-        "scale_score": 3313
+        "scale_score": 653.2
       }
     },
     {
@@ -5391,26 +5651,32 @@
         "d_cpmr": 8.299182783329737,
         "d_cvr": -5.759162303664915,
         "d_atc": 11.250000000000004,
-        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue +97% (55,738 vs 28,290 EGP) · Spend +137% · ROAS 3.2 (-17%).\n   • CPC: 7.02 → 8.74 EGP (+25%, up (drag))\n   • CVR: 1.91% → 1.8% (-6%, down (drag))\n   • AOV: 1,414 → 1,548 EGP (+9%, up (good))\n   *Read:* *CPC* rose +25% — the biggest of the three, worth ~*-3,431 EGP of spend*. That drove ROAS -17%. Revenue +97% because spend +137%.\n   *Deeper:* biggest single mover was <https://business.facebook.com/adsmanager/manage/ads?act=336343742536460&selected_ad_ids=120254863762130011|Playmore video + catalogue from all audience - Copy> — its CPC went 6.37 EGP→8.34 EGP on 2,728 EGP spend (~-644 EGP of the swing)."
+        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue +97% (55,738 vs 28,290 EGP) · Spend +137% · ROAS 3.2 (-17%).\n   • CPC: 7.02 → 8.74 EGP (+25%, up (drag))\n   • CVR: 1.91% → 1.8% (-6%, down (drag))\n   • AOV: 1,414 → 1,548 EGP (+9%, up (good))\n   *Read:* *CPC* rose +25% — the biggest of the three, worth ~*-3,431 EGP of spend*. That drove ROAS -17%. Revenue +97% because spend +137%.\n   *Deeper:* biggest single mover was <https://business.facebook.com/adsmanager/manage/ads?act=336343742536460&selected_ad_ids=120254863762130011|Playmore video + catalogue from all audience - Copy> — its CPC went 6.37 EGP→8.34 EGP on 2,728 EGP spend (~19% of the swing)."
       },
       "benchmarks": {
-        "WARM/VIDEO": {
-          "cpa_med": 333.1,
-          "roas_med": 4.61,
-          "hook_med": 93.8,
-          "hold_med": 23.1,
-          "n": 3
-        },
         "WARM/CATALOGUE": {
           "cpa_med": 553.15,
           "roas_med": 3.5,
+          "cpmr_med": 542.31,
+          "cvr_med": 1.4,
           "hook_med": 19.1,
           "hold_med": 8.4,
           "n": 2
         },
+        "WARM/VIDEO": {
+          "cpa_med": 333.1,
+          "roas_med": 4.61,
+          "cpmr_med": 339.79,
+          "cvr_med": 1.99,
+          "hook_med": 93.8,
+          "hold_med": 23.1,
+          "n": 3
+        },
         "COLD/IMAGE": {
           "cpa_med": 430.48,
           "roas_med": 5.09,
+          "cpmr_med": 591.08,
+          "cvr_med": 2.44,
           "hook_med": 0.0,
           "hold_med": 0.0,
           "n": 2
@@ -5456,6 +5722,8 @@
           "label": "FATIGUE",
           "gap": -18,
           "seg_cpa_med": 553.15,
+          "cpmr_vs_acc": 17,
+          "cvr_vs_acc": 2,
           "waste": 0,
           "scale_score": 0
         },
@@ -5498,6 +5766,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 0,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -25,
+          "cvr_vs_acc": 23,
           "waste": 0,
           "scale_score": 0
         },
@@ -5540,6 +5810,8 @@
           "label": "WATCH",
           "gap": 9,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": -2,
+          "cvr_vs_acc": 0,
           "waste": 149,
           "scale_score": 0
         },
@@ -5582,6 +5854,8 @@
           "label": "STEADY",
           "gap": null,
           "seg_cpa_med": null,
+          "cpmr_vs_acc": 37,
+          "cvr_vs_acc": 24,
           "waste": 0,
           "scale_score": 0
         },
@@ -5624,6 +5898,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": 18,
           "seg_cpa_med": 553.15,
+          "cpmr_vs_acc": 23,
+          "cvr_vs_acc": -47,
           "waste": 0,
           "scale_score": 0
         },
@@ -5666,6 +5942,8 @@
           "label": "AUDIENCE-ASSISTED",
           "gap": -4,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -29,
+          "cvr_vs_acc": 11,
           "waste": 0,
           "scale_score": 0
         },
@@ -5708,6 +5986,8 @@
           "label": "PERFORMS",
           "gap": -9,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": 64,
+          "cvr_vs_acc": 71,
           "waste": 0,
           "scale_score": 0
         },
@@ -5750,6 +6030,8 @@
           "label": "UNDERFUNDED",
           "gap": 12,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -18,
+          "cvr_vs_acc": 4,
           "waste": 0,
           "scale_score": 0
         },
@@ -5792,6 +6074,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": 78,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5834,6 +6118,8 @@
           "label": "UNDERFUNDED",
           "gap": 44,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 9,
+          "cvr_vs_acc": 142,
           "waste": 0,
           "scale_score": 0
         },
@@ -5876,6 +6162,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": null,
+          "cpmr_vs_acc": -38,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5918,6 +6206,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": 31,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -5960,6 +6250,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": 62,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6002,6 +6294,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -8,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6044,6 +6338,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 430.48,
+          "cpmr_vs_acc": 57,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6086,6 +6382,8 @@
           "label": "UNDERFUNDED",
           "gap": -16,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -45,
+          "cvr_vs_acc": 32,
           "waste": 0,
           "scale_score": 0
         },
@@ -6128,6 +6426,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -34,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6170,6 +6470,8 @@
           "label": "UNDERFUNDED",
           "gap": -67,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -41,
+          "cvr_vs_acc": 594,
           "waste": 0,
           "scale_score": 0
         },
@@ -6212,6 +6514,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": null,
+          "cpmr_vs_acc": 6,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6254,6 +6558,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": null,
+          "cpmr_vs_acc": 21,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6296,6 +6602,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 53,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6338,6 +6646,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 3,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6380,6 +6690,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -15,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6422,6 +6734,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -21,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6464,6 +6778,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 5,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6506,6 +6822,8 @@
           "label": "UNDERFUNDED",
           "gap": -80,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 5,
+          "cvr_vs_acc": 1752,
           "waste": 0,
           "scale_score": 0
         },
@@ -6548,6 +6866,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 23,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6590,6 +6910,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 49,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6632,6 +6954,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -7,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6674,6 +6998,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": 35,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6716,6 +7042,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -25,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6758,6 +7086,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -14,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6800,6 +7130,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -3,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6842,6 +7174,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -40,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6884,6 +7218,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -36,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6926,6 +7262,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -43,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         },
@@ -6968,6 +7306,8 @@
           "label": "UNDERFUNDED",
           "gap": null,
           "seg_cpa_med": 333.1,
+          "cpmr_vs_acc": -81,
+          "cvr_vs_acc": null,
           "waste": 0,
           "scale_score": 0
         }
@@ -7011,50 +7351,54 @@
         "label": "WATCH",
         "gap": 9,
         "seg_cpa_med": 430.48,
+        "cpmr_vs_acc": -2,
+        "cvr_vs_acc": 0,
         "waste": 149,
         "scale_score": 0
       },
       "opportunity": null,
       "best_target": {
-        "ad_id": "120254469312450011",
-        "ad_name": "Sumbunny swimwear s25",
+        "ad_id": "120254390686780011",
+        "ad_name": "Sumbunny S26",
         "campaign": "Partnership ads",
         "adset": "Sumbunny partnership ads",
         "adset_id": "120254390686790011",
         "aud": "COLD",
-        "type": "IMAGE",
-        "spend": 1870.57,
-        "impr": 7140,
-        "reach": 4244,
-        "freq": 1.68,
-        "cpm": 261.98,
-        "cpmr": 440.76,
-        "ctr": 3.49,
-        "octr": 3.11,
-        "purch": 4.0,
-        "rev": 7803.0,
-        "lc": 222.0,
-        "atc": 41.0,
-        "cpa": 467.64,
-        "roas": 4.17,
-        "aov": 1950.75,
-        "cvr": 1.8,
-        "cpc": 8.43,
-        "atc_rate": 18.5,
-        "hook": 0.0,
-        "hold": 0.0,
+        "type": "VIDEO",
+        "spend": 1672.83,
+        "impr": 4715,
+        "reach": 2704,
+        "freq": 1.74,
+        "cpm": 354.79,
+        "cpmr": 618.65,
+        "ctr": 7.02,
+        "octr": 4.71,
+        "purch": 5.0,
+        "rev": 5551.0,
+        "lc": 223.0,
+        "atc": 36.0,
+        "cpa": 334.57,
+        "roas": 3.32,
+        "aov": 1110.2,
+        "cvr": 2.24,
+        "cpc": 7.5,
+        "atc_rate": 16.1,
+        "hook": 88.6,
+        "hold": 9.7,
         "status": "ACTIVE",
         "vital": true,
         "significant": true,
-        "d_roas": null,
-        "d_cpa": null,
-        "d_freq": 26.315789473684198,
-        "d_octr": 2.3026315789473633,
-        "d_cpm": -0.9677175474408415,
-        "label": "WATCH",
-        "gap": 9,
-        "seg_cpa_med": 430.48,
-        "waste": 149,
+        "d_roas": 14.482758620689653,
+        "d_cpa": -40.137770620862405,
+        "d_freq": -3.333333333333336,
+        "d_octr": 2.838427947598251,
+        "d_cpm": 14.70740381506628,
+        "label": "STEADY",
+        "gap": null,
+        "seg_cpa_med": null,
+        "cpmr_vs_acc": 37,
+        "cvr_vs_acc": 24,
+        "waste": 0,
         "scale_score": 0
       }
     }
