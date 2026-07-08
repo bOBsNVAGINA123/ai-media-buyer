@@ -143,7 +143,7 @@ AD_FIELDS = ",".join(["ad_id", "ad_name", "campaign_name", "adset_name", "adset_
     "spend", "impressions", "reach", "frequency", "cpm", "ctr", "inline_link_click_ctr",
     "outbound_clicks_ctr", "actions", "action_values", "video_play_actions",
     "video_p25_watched_actions", "video_p100_watched_actions", "video_thruplay_watched_actions"])
-LITE_FIELDS = "spend,purchase_roas,actions,action_values"
+LITE_FIELDS = "spend,reach,purchase_roas,actions,action_values"
 
 def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
     out, after = [], None
@@ -237,6 +237,7 @@ def benchmarks(rows):
         g = [c for c in rows if "%s/%s" % (c["aud"], c["type"]) == s and c["cpa"] and c["spend"] >= 500]
         if len(g) >= 2:
             B[s] = {"cpa_med": med([c["cpa"] for c in g]), "roas_med": med([c["roas"] for c in g]),
+                    "cpmr_med": med([c["cpmr"] for c in g]), "cvr_med": med([c["cvr"] for c in g]),
                     "hook_med": med([c["hook"] for c in g]), "hold_med": med([c["hold"] for c in g]), "n": len(g)}
     return B
 
@@ -337,8 +338,10 @@ def diagnose(m, p, rows=None, prev=None, tf=None):
     if culprit and abs(cimp) > 0:
         pc = prev.get(culprit["ad_id"], {})
         u = "%" if key == "cvr" else " EGP"
-        out.append("   *Deeper:* biggest single mover was %s — its %s went %s%s→%s%s on %s EGP spend (~%s EGP of the swing)." % (
-            nm(culprit), name, pc.get(key), u, culprit.get(key), u, money(culprit["spend"]), money(cimp)))
+        share = round(cimp / egp * 100) if egp else None
+        sw = ("~%d%% of the swing" % abs(share)) if share is not None else "the single biggest cause"
+        out.append("   *Deeper:* biggest single mover was %s — its %s went %s%s→%s%s on %s EGP spend (%s)." % (
+            nm(culprit), name, pc.get(key), u, culprit.get(key), u, money(culprit["spend"]), sw))
     return "\n".join(out)
 
 def analyze(acct, cur_rows, prev_rows, statuses=None):
@@ -355,13 +358,26 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
     for c in sorted(rows, key=lambda c: c["spend"], reverse=True):
         cum += c["spend"]; c["vital"] = cum <= 0.8 * tot_spend + 0.01
         c["significant"] = c["spend"] >= max(MIN_SPEND, 0.03 * tot_spend)
+    acc_cpmr = agg(rows)["cpmr"] or 1
+    acc_cvr = agg(rows)["cvr"] or 1
     for c in rows:
         c["label"] = label(c, B, prev, cold_roas)
         b = B.get("%s/%s" % (c["aud"], c["type"]))
         c["gap"] = round((c["cpa"] - b["cpa_med"]) / b["cpa_med"] * 100) if (b and c["cpa"]) else None
         c["seg_cpa_med"] = b["cpa_med"] if b else None
+        # CPMR vs the rest of the account (lower = cheaper reach = better)
+        c["cpmr_vs_acc"] = round(pct(c["cpmr"], acc_cpmr)) if c["cpmr"] else None
+        c["cvr_vs_acc"] = round(pct(c["cvr"], acc_cvr)) if c["cvr"] else None
         c["waste"] = round(c["purch"] * (c["cpa"] - b["cpa_med"])) if (c["aud"] == "COLD" and b and c["cpa"] and c["cpa"] > b["cpa_med"] and c["spend"] >= MIN_SPEND) else 0
-        c["scale_score"] = round(c["spend"] * (b["cpa_med"] - c["cpa"]) / b["cpa_med"]) if (c["label"] == "SCALE OPPORTUNITY" and b) else 0
+        # most scalable = best blend of low CPMR, low CPA, high ROAS, high CVR (each vs its benchmark), with real spend behind it
+        if c["label"] == "SCALE OPPORTUNITY" and b:
+            r_roas = c["roas"] / (cold_roas or 1)
+            r_cvr = c["cvr"] / (acc_cvr or 1)
+            r_cpa = (b["cpa_med"] or 1) / (c["cpa"] or 1)
+            r_cpmr = (acc_cpmr or 1) / (c["cpmr"] or 1)
+            c["scale_score"] = round((r_roas + r_cvr + r_cpa + r_cpmr) * (c["spend"] ** 0.5), 1)
+        else:
+            c["scale_score"] = 0
     cur_a = agg(rows); prev_a = agg(list(prev.values())) if prev else None
     cat = sum(c["spend"] for c in rows if c["type"] == "CATALOGUE")
     summary = dict(cur_a)
@@ -378,14 +394,19 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
                     "diagnosis": diagnose(cur_a, prev_a, rows, prev)})
     winners = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
     offenders = [c for c in rows if c["waste"] > 0]
+    offender = max(offenders, key=lambda c: c["waste"]) if offenders else None
     best = max(winners, key=lambda c: c["scale_score"]) if winners else None
-    if not best:
-        cand = [c for c in rows if c["aud"] == "COLD" and c["spend"] >= MIN_SPEND and c["roas"]]
-        best = max(cand, key=lambda c: c["roas"]) if cand else None
+    off_id = offender["ad_id"] if offender else None
+    # the reallocation target must be a DIFFERENT ad than the one being cut
+    if not best or best["ad_id"] == off_id:
+        cand = [c for c in rows if c["aud"] == "COLD" and c["spend"] >= MIN_SPEND and c["roas"]
+                and c["ad_id"] != off_id and c["roas"] >= cold_roas]
+        best = max(cand, key=lambda c: c["roas"]) if cand else best
     return {"account": acct, "summary": summary, "benchmarks": B,
             "creatives": sorted(rows, key=lambda c: c["spend"], reverse=True),
-            "offender": max(offenders, key=lambda c: c["waste"]) if offenders else None,
-            "opportunity": best if winners else None, "best_target": best}
+            "offender": offender,
+            "opportunity": (max(winners, key=lambda c: c["scale_score"]) if winners else None),
+            "best_target": best if (best and best["ad_id"] != off_id) else None}
 
 
 # ----------------------- Slack -----------------------
@@ -407,18 +428,31 @@ def tgt(A):
     t = A.get("best_target")
     return nm(t) if t else "the lowest-CPA cold winner"
 BAR = "━━━━━━━━━━━━━━━━━━"
+def cpmrword(c):
+    """Is this ad's reach cost cheaper or dearer than the rest of the account?"""
+    g = c.get("cpmr_vs_acc")
+    if g is None: return ""
+    if abs(g) < 8: return " (in line with account)"
+    return " (%d%% cheaper reach than account)" % abs(g) if g < 0 else " (%d%% dearer reach than account)" % g
 def cmet(c):
-    """Two clean metric lines for one creative, revenue included."""
+    """Two clean metric lines for one creative, revenue + CPMR verdict included."""
     return ("     Spend %s · Rev %s · ROAS %s · CPA %s · AOV %s\n"
-            "     CVR %s%% · ATC %s%% · CPMR %s · CPM %s · Freq %s") % (
+            "     CVR %s%% · ATC %s%% · *CPMR %s*%s · CPM %s · Freq %s") % (
         money(c["spend"]), money(c["rev"]), c["roas"], money(c["cpa"]), money(c["aov"]),
-        c["cvr"], c["atc_rate"], money(c["cpmr"]), money(c["cpm"]), c["freq"])
+        c["cvr"], c["atc_rate"], money(c["cpmr"]), cpmrword(c), money(c["cpm"]), c["freq"])
 def gapw(g):
     return "n/a" if g is None else ("%d%% below" % abs(g) if g <= 0 else "%d%% above" % g)
 def why_scale(c, cold):
-    return "CPA %s is %s its group median of %s, and ROAS %s beats the cold bar of %s. Proven cold winner." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], cold)
+    cw = cpmrword(c).strip()
+    cw = (" " + cw) if cw else ""
+    return ("Most scalable of the winners. CPA %s (%s group), ROAS %s (beats cold bar %s), CVR %s%%, CPMR %s%s. "
+            "Best blend of cheap reach, cheap conversion, and value. Scale it.") % (
+        money(c["cpa"]), gapw(c["gap"]), c["roas"], cold, c["cvr"], money(c["cpmr"]), cw)
 def why_cut(c):
-    return "CPA %s is %s its group median of %s at ROAS %s, wasting about %s this week versus reallocating that spend." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], money(c["waste"]))
+    cw = cpmrword(c).strip()
+    cw = (" CPMR %s %s." % (money(c["cpmr"]), cw)) if cw else ""
+    return "CPA %s is %s its group median of %s at ROAS %s, wasting about %s this week versus reallocating that spend.%s" % (
+        money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], money(c["waste"]), cw)
 def fatigue_line(c):
     """One-line fatigue evidence with the exact numbers and window."""
     p = c.get("prev") or {}
@@ -456,7 +490,9 @@ def msg_digest(A):
         L.append(block(":rocket:", "SCALE", nm(op), statuslabel(op), "Raise budget 20-30%.", cmet(op), why_scale(op, s["cold_roas"]))); did = True
     off = A["offender"]
     if off:
-        L.append(block(":rotating_light:", "CUT", nm(off), statuslabel(off), "Drop 30-40%%, move budget to %s." % tgt(A), cmet(off), why_cut(off))); did = True
+        t = A.get("best_target")
+        act = ("Drop 30-40%%, move budget to %s." % nm(t)) if t else "Drop 30-40%%. Park the freed budget until a winner proves out."
+        L.append(block(":rotating_light:", "CUT", nm(off), statuslabel(off), act, cmet(off), why_cut(off))); did = True
     # only significant (80/20) fatiguing ads, never trivial-spend ads
     fat = [c for c in rows if c["label"] == "FATIGUE" and c.get("significant")]
     if fat:
@@ -479,11 +515,12 @@ def msg_digest(A):
 
 # ----------------------- 3-day pulse (80/20) -----------------------
 def prow(r, key):
-    spend = f(r.get("spend")); purch = pick(r.get("actions"), PURCH)
+    spend = f(r.get("spend")); purch = pick(r.get("actions"), PURCH); reach = f(r.get("reach"))
     rev = pick(r.get("action_values"), PURCH) or f(r.get("purchase_roas")) * spend
     return {"name": r.get(key, "(unnamed)"), "id": r.get("ad_id") or r.get("adset_id"),
             "spend": round(spend), "rev": round(rev), "purch": round(purch),
-            "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None}
+            "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None,
+            "cpmr": round(spend / reach * 1000) if reach else None}
 
 def pareto(rows):
     rows = [x for x in rows if x["spend"] > 0]
@@ -502,7 +539,8 @@ def linkrow(x, cc, is_ad):
     st = ""
     if is_ad and STATUS.get(x["id"]):
         st = "   `%s`" % STAT.get(STATUS[x["id"]], STATUS[x["id"]])
-    return "   • %s%s\n        Spend %s · Rev %s · ROAS %s · CPA %s" % (label, st, money(x["spend"]), money(x["rev"]), x["roas"], money(x["cpa"]))
+    cpmr = ("  ·  CPMR %s" % money(x["cpmr"])) if x.get("cpmr") is not None else ""
+    return "   • %s%s\n        Spend %s · Rev %s · ROAS %s · CPA %s%s" % (label, st, money(x["spend"]), money(x["rev"]), x["roas"], money(x["cpa"]), cpmr)
 
 def pulse_3day(acct, ad_rows, set_rows, m3, p3m):
     cc = acct.get("currency", "")
