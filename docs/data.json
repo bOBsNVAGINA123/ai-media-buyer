@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-08T20:46:10.084619+03:00",
+  "generated_at": "2026-07-08T20:52:46.770795+03:00",
   "timezone": "Africa/Cairo",
   "sample": false,
   "accounts": [
@@ -51,22 +51,22 @@
         "d_cpmr": -7.771484256044821,
         "d_cvr": -13.970588235294128,
         "d_atc": 2.7027027027027093,
-        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue -20% (1,152,742 EGP vs 1,440,506) · ROAS 5.73 (+15%).\n   • CPC: 2.88 → 2.36 EGP (-18%, down (good))\n   • CVR: 1.36% → 1.17% (-14%, down (drag))\n   • AOV: 1,054 → 1,159 EGP (+10%, up (good))\n   *Read:* CPC fell -18% while CVR and AOV held — that's ~*44,363 EGP* and why revenue is up.\n   *Deeper:* biggest single mover was *BERCAU WITH BOW* — its CPC went 1.71%→1.31% on 16,058 EGP spend (~4,893 EGP of the swing)."
+        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue -20% (1,152,742 vs 1,440,506 EGP) · Spend -30% · ROAS 5.73 (+15%).\n   • CPC: 2.88 → 2.36 EGP (-18%, down (good))\n   • CVR: 1.36% → 1.17% (-14%, down (drag))\n   • AOV: 1,054 → 1,159 EGP (+10%, up (good))\n   *Read:* *CPC* fell -18% — the biggest of the three, worth ~*44,363 EGP of spend*. That drove ROAS +15%. Revenue -20% because spend -30%.\n   *Deeper:* biggest single mover was *BERCAU WITH BOW* — its CPC went 1.71 EGP→1.31 EGP on 16,058 EGP spend (~4,893 EGP of the swing)."
       },
       "benchmarks": {
+        "COLD/VIDEO": {
+          "cpa_med": 237.61,
+          "roas_med": 5.48,
+          "hook_med": 72.45,
+          "hold_med": 8.15,
+          "n": 20
+        },
         "WARM/CATALOGUE": {
           "cpa_med": 137.33,
           "roas_med": 6.34,
           "hook_med": 0.5,
           "hold_med": 0.0,
           "n": 9
-        },
-        "WARM/IMAGE": {
-          "cpa_med": 244.36,
-          "roas_med": 3.37,
-          "hook_med": 50.5,
-          "hold_med": 1.2,
-          "n": 3
         },
         "WARM/VIDEO": {
           "cpa_med": 470.92,
@@ -75,12 +75,12 @@
           "hold_med": 5.7,
           "n": 6
         },
-        "COLD/VIDEO": {
-          "cpa_med": 237.61,
-          "roas_med": 5.48,
-          "hook_med": 72.45,
-          "hold_med": 8.15,
-          "n": 20
+        "WARM/IMAGE": {
+          "cpa_med": 244.36,
+          "roas_med": 3.37,
+          "hook_med": 50.5,
+          "hold_med": 1.2,
+          "n": 3
         },
         "COLD/IMAGE": {
           "cpa_med": 303.77,
@@ -255,8 +255,8 @@
           "adset_id": "120238949447990621",
           "aud": "WARM",
           "type": "CATALOGUE",
-          "spend": 10336.81,
-          "impr": 192163,
+          "spend": 10336.83,
+          "impr": 192164,
           "reach": 60217,
           "freq": 3.19,
           "cpm": 53.79,
@@ -2730,7 +2730,7 @@
           "cvr": 0.0,
           "cpc": 21.71,
           "atc_rate": 0.0,
-          "hook": 77.3,
+          "hook": 77.4,
           "hold": 5.5,
           "d_roas": null,
           "d_cpa": null,
@@ -5016,22 +5016,22 @@
         "d_cpmr": 8.299182783329737,
         "d_cvr": -5.759162303664915,
         "d_atc": 11.250000000000004,
-        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue +97% (55,738 EGP vs 28,290) · ROAS 3.2 (-17%).\n   • CPC: 7.02 → 8.74 EGP (+25%, up (drag))\n   • CVR: 1.91% → 1.8% (-6%, down (drag))\n   • AOV: 1,414 → 1,548 EGP (+9%, up (good))\n   *Read:* CPC rose +25% while CVR and AOV held — that's ~*-3,431 EGP* and why revenue is down.\n   *Deeper:* biggest single mover was <https://business.facebook.com/adsmanager/manage/ads?act=336343742536460&selected_ad_ids=120254863762130011|Playmore video + catalogue from all audience - Copy> — its CPC went 6.37%→8.34% on 2,728 EGP spend (~-644 EGP of the swing)."
+        "diagnosis": "*Jul 1→Jul 7 vs Jun 24→Jun 30* · Revenue +97% (55,738 vs 28,290 EGP) · Spend +137% · ROAS 3.2 (-17%).\n   • CPC: 7.02 → 8.74 EGP (+25%, up (drag))\n   • CVR: 1.91% → 1.8% (-6%, down (drag))\n   • AOV: 1,414 → 1,548 EGP (+9%, up (good))\n   *Read:* *CPC* rose +25% — the biggest of the three, worth ~*-3,431 EGP of spend*. That drove ROAS -17%. Revenue +97% because spend +137%.\n   *Deeper:* biggest single mover was <https://business.facebook.com/adsmanager/manage/ads?act=336343742536460&selected_ad_ids=120254863762130011|Playmore video + catalogue from all audience - Copy> — its CPC went 6.37 EGP→8.34 EGP on 2,728 EGP spend (~-644 EGP of the swing)."
       },
       "benchmarks": {
-        "WARM/VIDEO": {
-          "cpa_med": 333.1,
-          "roas_med": 4.61,
-          "hook_med": 93.8,
-          "hold_med": 23.1,
-          "n": 3
-        },
         "COLD/IMAGE": {
           "cpa_med": 430.48,
           "roas_med": 5.09,
           "hook_med": 0.0,
           "hold_med": 0.0,
           "n": 2
+        },
+        "WARM/VIDEO": {
+          "cpa_med": 333.1,
+          "roas_med": 4.61,
+          "hook_med": 93.8,
+          "hold_med": 23.1,
+          "n": 3
         },
         "WARM/CATALOGUE": {
           "cpa_med": 553.15,
