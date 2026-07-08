@@ -178,10 +178,12 @@ def pick(rows, ordered):
 def first(rows): return f(rows[0].get("value")) if rows else 0.0
 PURCH = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"]
 
+ATC = ["add_to_cart", "omni_add_to_cart", "offsite_conversion.fb_pixel_add_to_cart"]
+
 def metric(r):
     spend = f(r.get("spend")); impr = f(r.get("impressions")); reach = f(r.get("reach"))
     purch = pick(r.get("actions"), PURCH); rev = pick(r.get("action_values"), PURCH)
-    lc = pick(r.get("actions"), ["link_click"])
+    lc = pick(r.get("actions"), ["link_click"]); atc = pick(r.get("actions"), ATC)
     v3 = first(r.get("video_play_actions")); p25 = first(r.get("video_p25_watched_actions"))
     octr = first(r.get("outbound_clicks_ctr")) or f(r.get("inline_link_click_ctr"))
     name = r.get("ad_name", ""); camp = r.get("campaign_name", ""); adset = r.get("adset_name", "")
@@ -192,12 +194,16 @@ def metric(r):
     else: typ = "IMAGE"
     return {"ad_id": r.get("ad_id"), "ad_name": name, "campaign": camp, "adset": adset, "adset_id": r.get("adset_id"),
             "aud": "WARM" if warm else "COLD", "type": typ,
-            "spend": round(spend, 2), "impr": int(impr), "freq": round(f(r.get("frequency")) or (impr / reach if reach else 0), 2),
-            "cpm": round(f(r.get("cpm")), 2), "ctr": round(f(r.get("ctr")), 2), "octr": round(octr, 2),
-            "purch": round(purch, 1), "rev": round(rev, 2), "lc": round(lc, 1),
+            "spend": round(spend, 2), "impr": int(impr), "reach": int(reach),
+            "freq": round(f(r.get("frequency")) or (impr / reach if reach else 0), 2),
+            "cpm": round(f(r.get("cpm")), 2), "cpmr": round(spend / reach * 1000, 2) if reach else 0.0,
+            "ctr": round(f(r.get("ctr")), 2), "octr": round(octr, 2),
+            "purch": round(purch, 1), "rev": round(rev, 2), "lc": round(lc, 1), "atc": round(atc, 1),
             "cpa": round(spend / purch, 2) if purch else None,
             "roas": round(rev / spend, 2) if spend else 0.0,
             "aov": round(rev / purch, 2) if purch else None,
+            "cvr": round(purch / lc * 100, 2) if lc else 0.0,
+            "atc_rate": round(atc / lc * 100, 1) if lc else 0.0,
             "hook": round(v3 / impr * 100, 1) if impr else 0.0,
             "hold": round(p25 / impr * 100, 1) if impr else 0.0}
 
@@ -219,7 +225,8 @@ def label(c, B, prev, cold_roas):
     c["d_cpa"] = pct(c["cpa"], p["cpa"]) if (p and p.get("cpa") and c["cpa"]) else None
     c["d_freq"] = pct(c["freq"], p["freq"]) if p else None
     c["d_octr"] = pct(c["octr"], p["octr"]) if p else None
-    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend")} if p else None
+    c["d_cpm"] = pct(c["cpm"], p["cpm"]) if p else None
+    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr")} if p else None
     if p and p.get("freq") and p.get("octr") and c["d_freq"] is not None and c["d_freq"] > FAT_FREQ \
        and c["d_octr"] is not None and c["d_octr"] < -FAT_CTR:
         return "FATIGUE"
@@ -241,6 +248,37 @@ def label(c, B, prev, cold_roas):
         return "PERFORMS"
     return "WATCH"
 
+def agg(ms):
+    spend = sum(c["spend"] for c in ms); rev = sum(c["rev"] for c in ms); purch = sum(c["purch"] for c in ms)
+    reach = sum(c["reach"] for c in ms); impr = sum(c["impr"] for c in ms)
+    lc = sum(c["lc"] for c in ms); atc = sum(c["atc"] for c in ms)
+    return {"spend": round(spend), "rev": round(rev), "purch": int(purch), "reach": int(reach),
+            "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None,
+            "cpm": round(spend / impr * 1000, 2) if impr else 0, "cpmr": round(spend / reach * 1000, 2) if reach else 0,
+            "cvr": round(purch / lc * 100, 2) if lc else 0, "atc_rate": round(atc / lc * 100, 1) if lc else 0,
+            "aov": round(rev / purch) if purch else None,
+            "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0}
+
+def diagnose(m, p):
+    """Funnel diagnostic: name the single main driver behind the ROAS change."""
+    if not p or not p.get("spend"): return "No comparable prior period to diagnose."
+    droas = pct(m["roas"], p["roas"]); dcpmr = pct(m["cpmr"], p["cpmr"]); dctr = pct(m["ctr"], p["ctr"])
+    datc = pct(m["atc_rate"], p["atc_rate"]); dcvr = pct(m["cvr"], p["cvr"])
+    daov = pct(m["aov"] or 0, p["aov"] or 0); dcpa = pct(m["cpa"] or 0, p["cpa"] or 0)
+    if droas is None or abs(droas) < 8:
+        return "Stable. ROAS moved %s, no single funnel stage broke." % sp(droas)
+    if dcpmr is not None and dcpmr > 15 and (dctr is None or dctr > -10):
+        return "*Auction cost.* CPMR %s (reach got pricier) while CTR held %s. This is traffic cost, not the creative. Watch frequency and widen the audience." % (sp(dcpmr), sp(dctr))
+    if dctr is not None and dctr < -15:
+        return "*Creative.* CTR fell %s (CPMR %s). Fewer people click, the hook or angle is tiring. Refresh creative." % (sp(dctr), sp(dcpmr))
+    if datc is not None and datc < -15 and (dctr is None or dctr > -10):
+        return "*Landing page.* Clicks held but ATC%% fell %s. Interest is fine, the page or offer is not converting clicks. Check PDP, price, offer." % sp(datc)
+    if dcvr is not None and dcvr < -15 and (datc is None or datc > -10):
+        return "*Checkout.* Add-to-cart held but CVR fell %s. People add then drop at checkout. Check shipping, payment, price." % sp(dcvr)
+    if daov is not None and daov < -10 and (dcpa is None or abs(dcpa) < 10):
+        return "*Value mix.* Acquisition steady but AOV fell %s, so revenue per order dropped. Push bundles or higher-price heroes." % sp(daov)
+    return "*Mixed.* ROAS %s driven by CPMR %s, CTR %s, ATC%% %s, CVR %s, AOV %s." % (sp(droas), sp(dcpmr), sp(dctr), sp(datc), sp(dcvr), sp(daov))
+
 def analyze(acct, cur_rows, prev_rows):
     rows = [metric(r) for r in cur_rows]
     prev = {m["ad_id"]: m for m in (metric(r) for r in prev_rows)}
@@ -255,12 +293,20 @@ def analyze(acct, cur_rows, prev_rows):
         c["seg_cpa_med"] = b["cpa_med"] if b else None
         c["waste"] = round(c["purch"] * (c["cpa"] - b["cpa_med"])) if (c["aud"] == "COLD" and b and c["cpa"] and c["cpa"] > b["cpa_med"] and c["spend"] >= MIN_SPEND) else 0
         c["scale_score"] = round(c["spend"] * (b["cpa_med"] - c["cpa"]) / b["cpa_med"]) if (c["label"] == "SCALE OPPORTUNITY" and b) else 0
-    spend = sum(c["spend"] for c in rows); rev = sum(c["rev"] for c in rows); purch = sum(c["purch"] for c in rows)
-    pspend = sum((c["prev"] or {}).get("spend", 0) for c in rows)
+    cur_a = agg(rows); prev_a = agg(list(prev.values())) if prev else None
     cat = sum(c["spend"] for c in rows if c["type"] == "CATALOGUE")
-    summary = {"spend": round(spend), "revenue": round(rev), "purchases": int(purch),
-               "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None,
-               "cat_pct": round(cat / spend * 100) if spend else 0, "cold_roas": cold_roas, "d_spend": pct(spend, pspend)}
+    summary = dict(cur_a)
+    summary.update({"revenue": cur_a["rev"], "purchases": cur_a["purch"],
+                    "cat_pct": round(cat / cur_a["spend"] * 100) if cur_a["spend"] else 0,
+                    "cold_roas": cold_roas, "prev": prev_a,
+                    "d_spend": pct(cur_a["spend"], prev_a["spend"]) if prev_a else None,
+                    "d_roas": pct(cur_a["roas"], prev_a["roas"]) if prev_a else None,
+                    "d_cpa": pct(cur_a["cpa"] or 0, (prev_a or {}).get("cpa") or 0) if prev_a else None,
+                    "d_cpm": pct(cur_a["cpm"], prev_a["cpm"]) if prev_a else None,
+                    "d_cpmr": pct(cur_a["cpmr"], prev_a["cpmr"]) if prev_a else None,
+                    "d_cvr": pct(cur_a["cvr"], prev_a["cvr"]) if prev_a else None,
+                    "d_atc": pct(cur_a["atc_rate"], prev_a["atc_rate"]) if prev_a else None,
+                    "diagnosis": diagnose(cur_a, prev_a)})
     winners = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
     offenders = [c for c in rows if c["waste"] > 0]
     best = max(winners, key=lambda c: c["scale_score"]) if winners else None
@@ -291,41 +337,53 @@ def cur(A): return A["account"].get("currency", "")
 def tgt(A):
     t = A.get("best_target")
     return nm(t) if t else "the lowest-CPA cold winner"
+def cmet(c, cc):
+    """Compact full metric line for one creative. Never a lone metric."""
+    return "     ROAS %s · CPA %s %s · CPM %s · CPMR %s · CVR %s%% · ATC %s%% · AOV %s %s" % (
+        c["roas"], money(c["cpa"]), cc, money(c["cpm"]), money(c["cpmr"]), c["cvr"], c["atc_rate"], money(c["aov"]), cc)
+def fatline(c, cc):
+    p = c.get("prev") or {}
+    cpm_note = "CPM steady" if (c.get("d_cpm") is not None and abs(c["d_cpm"]) < 12) else "CPM %s" % sp(c.get("d_cpm"))
+    return ("freq %s→%s (%s), Outbound CTR %s%%→%s%% (%s), %s. Users see it more and click less, so it is creative fatigue not auction." %
+            (p.get("freq"), c["freq"], sp(c["d_freq"]), p.get("octr"), c["octr"], sp(c["d_octr"]), cpm_note))
 
 def msg_digest(A):
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
     L = ["%s  :bar_chart:  *%s — Daily*" % (MENTION, A["account"]["name"]),
          ":date: *%s → %s*   (vs %s → %s)" % (d1, d2, p1, p2), "",
-         "Spend *%s %s* (%s)  ·  ROAS *%s*  ·  Cold ROAS *%s*  ·  CPA *%s*  ·  %d purch" %
-         (money(s["spend"]), cc, sp(s["d_spend"]), s["roas"], s["cold_roas"], money(s["cpa"]), s["purchases"])]
+         "*BATCH TOTALS (all ads)*",
+         "Spend *%s %s* (%s)  ·  Revenue %s %s  ·  %d purchases" % (money(s["spend"]), cc, sp(s["d_spend"]), money(s["revenue"]), cc, s["purchases"]),
+         "ROAS *%s* (%s)  ·  CPA *%s* (%s)  ·  AOV %s %s" % (s["roas"], sp(s["d_roas"]), money(s["cpa"]), sp(s["d_cpa"]), money(s["aov"]), cc),
+         "CPM %s (%s)  ·  *CPMR %s* (%s)  ·  CVR %s%% (%s)  ·  ATC %s%% (%s)" %
+         (money(s["cpm"]), sp(s["d_cpm"]), money(s["cpmr"]), sp(s["d_cpmr"]), s["cvr"], sp(s["d_cvr"]), s["atc_rate"], sp(s["d_atc"])),
+         "Cold prospecting ROAS *%s* is the bar new creatives must beat." % s["cold_roas"]]
     if s["cat_pct"] >= 15:
-        L.append("_Catalogue %d%% of spend inflates ROAS. Bar to beat = cold %s._" % (s["cat_pct"], s["cold_roas"]))
-    L += ["", "*DO NOW*"]
+        L.append("_Catalogue %d%% of spend inflates blended ROAS._" % s["cat_pct"])
+    L += ["", ":mag: *Diagnosis:* %s" % s["diagnosis"], "", "*DO NOW*"]
     did = False
     op = A["opportunity"]
     if op:
-        L.append(":rocket: *Scale* %s +20-30%%  —  CPA %s %s (%s), ROAS %s beats cold %s. Fund it from the cut below." %
-                 (nm(op), money(op["cpa"]), cc, bw(op["gap"]), op["roas"], s["cold_roas"])); did = True
+        L.append(":rocket: *Scale* %s  +20-30%%  —  CPA %s (%s), ROAS %s beats cold %s. Fund from the cut below." % (nm(op), money(op["cpa"]), bw(op["gap"]), op["roas"], s["cold_roas"]))
+        L.append(cmet(op, cc)); did = True
     off = A["offender"]
     if off:
-        L.append(":rotating_light: *Cut* %s -30-40%%  —  CPA %s %s (%s), ~%s %s wasted/wk. Move budget to %s." %
-                 (nm(off), money(off["cpa"]), cc, bw(off["gap"]), money(off["waste"]), cc, tgt(A))); did = True
+        L.append(":rotating_light: *Cut* %s  -30-40%%  —  CPA %s (%s), ~%s %s wasted/wk. Move budget to %s." % (nm(off), money(off["cpa"]), bw(off["gap"]), money(off["waste"]), cc, tgt(A)))
+        L.append(cmet(off, cc)); did = True
     fat = [c for c in rows if c["label"] == "FATIGUE"]
     if fat:
         c = fat[0]
-        L.append(":recycle: *Refresh* %s  —  freq %s (%s), Outbound CTR %s%% (%s). New first 3 seconds." %
-                 (nm(c), c["freq"], sp(c["d_freq"]), c["octr"], sp(c["d_octr"]))); did = True
+        L.append(":recycle: *Refresh* %s  —  fatigue: %s New first 3 seconds." % (nm(c), fatline(c, cc)))
+        L.append(cmet(c, cc)); did = True
     lowroas = [c for c in rows if c["label"] == "EFFICIENT-LOW-ROAS"]
     if lowroas:
         c = lowroas[0]
-        L.append(":test_tube: *Test higher AOV* %s  —  cheap CPA %s %s but ROAS %s under cold %s (AOV %s). Same hook, pricier product." %
-                 (nm(c), money(c["cpa"]), cc, c["roas"], s["cold_roas"], money(c["aov"]))); did = True
+        L.append(":test_tube: *Test higher AOV* %s  —  cheap CPA %s but ROAS %s under cold %s. Same hook, pricier product." % (nm(c), money(c["cpa"]), c["roas"], s["cold_roas"]))
+        L.append(cmet(c, cc)); did = True
     if not did:
         L.append("_No hard action today. Everything is inside its guardrails._")
     if len(fat) > 1:
-        L.append("")
-        L.append(":chart_with_downwards_trend: *Watch %d fatiguing:* %s" % (len(fat), ", ".join(nm(c) for c in fat[1:6])))
+        L += ["", ":chart_with_downwards_trend: *Also fatiguing (%d):* %s" % (len(fat) - 1, ", ".join(nm(c) for c in fat[1:6]))]
     L += ["", "_Window: last 7 days vs previous 7. Runs 9 AM Cairo daily._"]
     return "\n".join(L)
 
@@ -354,19 +412,27 @@ def linkrow(x, cc, is_ad):
     label = nm({"ad_name": x["name"], "ad_id": x["id"]}) if is_ad else aset_link(x["name"], x["id"])
     return "   • %s\n        %s %s  ·  ROAS %s  ·  CPA %s %s" % (label, money(x["spend"]), cc, x["roas"], money(x["cpa"]), cc)
 
-def pulse_3day(acct, ad_rows, set_rows):
+def pulse_3day(acct, ad_rows, set_rows, m3, p3m):
     cc = acct.get("currency", "")
     ads = [prow(r, "ad_name") for r in ad_rows]
     sets = [prow(r, "adset_name") for r in set_rows]
     tot = sum(x["spend"] for x in ads)
     if tot <= 0: return None
     rev = sum(x["roas"] * x["spend"] for x in ads); purch = sum(x["purch"] for x in ads)
-    d1, d2 = DATES["l3"]
+    d1, d2 = DATES["l3"]; q1, q2 = DATES["p3"]
     _, bset, wset, tset = pareto(sets)
     _, bad, wad, _ = pareto(ads)
     L = ["%s  :zap:  *%s — 3-Day Pulse*" % (MENTION, acct["name"]),
-         ":date: *%s → %s*" % (d1, d2), "",
-         "Spend *%s %s*  ·  ROAS *%s*  ·  %d purch" % (money(tot), cc, round(rev / tot, 2), int(purch)), "",
+         ":date: *%s → %s*   (vs prior 3 days %s → %s)" % (d1, d2, q1, q2), "",
+         "Spend *%s %s*  ·  ROAS *%s*  ·  %d purch" % (money(tot), cc, round(rev / tot, 2), int(purch))]
+    if m3:
+        dd = lambda k: sp(pct(m3.get(k), (p3m or {}).get(k))) if p3m else "n/a"
+        L.append("ROAS %s (%s)  ·  CPA %s (%s)  ·  *CPMR %s* (%s)  ·  CPM %s (%s)" %
+                 (m3["roas"], dd("roas"), money(m3["cpa"]), dd("cpa"), money(m3["cpmr"]), dd("cpmr"), money(m3["cpm"]), dd("cpm")))
+        L.append("CVR %s%% (%s)  ·  ATC %s%% (%s)  ·  AOV %s %s (%s)" %
+                 (m3["cvr"], dd("cvr"), m3["atc_rate"], dd("atc_rate"), money(m3["aov"]), cc, dd("aov")))
+        L.append(":mag: *Diagnosis (3d vs prior 3d):* %s" % diagnose(m3, p3m))
+    L += ["",
          ":large_green_circle: *Best adsets*"] + [linkrow(x, cc, False) for x in bset] + \
         ["", ":red_circle: *Worst adsets*"] + [linkrow(x, cc, False) for x in wset] + \
         ["", ":large_green_circle: *Best ads*"] + [linkrow(x, cc, True) for x in bad] + \
@@ -376,14 +442,14 @@ def pulse_3day(acct, ad_rows, set_rows):
 
 
 # ----------------------- New launches -----------------------
-def msg_launches(acct, creatives, new_map, since_label):
+def msg_launches(acct, creatives, prev_ids):
     cc = acct.get("currency", "")
-    launched = [c for c in creatives if c["ad_id"] in new_map]
+    launched = [c for c in creatives if c["ad_id"] not in prev_ids and c["spend"] > 0]
     d1, d2 = DATES["label"]
     head = ["%s  :rocket:  *%s — New Launches*" % (MENTION, acct["name"]),
-            ":date: launched since *%s*  ·  performance *%s → %s*" % (since_label, d1, d2), ""]
+            ":date: new this week (no spend in the prior 7 days)  ·  performance *%s → %s*" % (d1, d2), ""]
     if not launched:
-        return "\n".join(head + ["_No new ads launched in the last 7 days._"])
+        return "\n".join(head + ["_No new ads started spending in the last 7 days._"])
     groups = {}
     for c in launched:
         g = groups.setdefault(c["adset"] or "(no adset)", {"spend": 0, "rev": 0, "purch": 0, "sid": c.get("adset_id"), "ads": []})
@@ -421,10 +487,12 @@ def main():
     last = {"since": str(y - datetime.timedelta(days=6)), "until": str(y)}
     prev = {"since": str(y - datetime.timedelta(days=13)), "until": str(y - datetime.timedelta(days=7))}
     l3 = {"since": str(y - datetime.timedelta(days=2)), "until": str(y)}
-    since_launch = str(y - datetime.timedelta(days=6))
+    prev3 = {"since": str(y - datetime.timedelta(days=5)), "until": str(y - datetime.timedelta(days=3))}
     DATES["label"] = (fmt_day(y - datetime.timedelta(days=6)), fmt_day(y))
     DATES["p_label"] = (fmt_day(y - datetime.timedelta(days=13)), fmt_day(y - datetime.timedelta(days=7)))
     DATES["l3"] = (fmt_day(y - datetime.timedelta(days=2)), fmt_day(y))
+    DATES["p3"] = (fmt_day(y - datetime.timedelta(days=5)), fmt_day(y - datetime.timedelta(days=3)))
+    ACC = "spend,impressions,reach,frequency,cpm,ctr,actions,action_values"
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
     for acct in get_accounts():
@@ -438,12 +506,15 @@ def main():
         ch = channel_for(acct["name"]); lch = channel_launch_for(acct["name"])
         if a.daily or a.dry_run:
             slack(ch, msg_digest(A))
-            p3 = pulse_3day(acct, get_insights(acct["id"], l3, level="ad", fields=LITE_FIELDS, extra="ad_name"),
-                            get_insights(acct["id"], l3, level="adset", fields=LITE_FIELDS, extra="adset_name"))
+            a3 = get_insights(acct["id"], l3, level="account", fields=ACC)
+            ap3 = get_insights(acct["id"], prev3, level="account", fields=ACC)
+            m3 = metric(a3[0]) if a3 else None; p3m = metric(ap3[0]) if ap3 else None
+            p3 = pulse_3day(acct, get_insights(acct["id"], l3, level="ad", fields=LITE_FIELDS, extra="ad_name,ad_id"),
+                            get_insights(acct["id"], l3, level="adset", fields=LITE_FIELDS, extra="adset_name,adset_id"), m3, p3m)
             if p3: slack(ch, p3)
             if lch:
-                new_map = get_new_ad_ids(acct["id"], since_launch)
-                slack(lch, msg_launches(acct, A["creatives"], new_map, fmt_day(y - datetime.timedelta(days=6))))
+                prev_ids = set(r.get("ad_id") for r in prev_rows)
+                slack(lch, msg_launches(acct, A["creatives"], prev_ids))
         time.sleep(1)
 
     for A in report["accounts"]:
