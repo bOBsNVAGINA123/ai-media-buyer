@@ -80,6 +80,14 @@ def fmt_day(d): return d.strftime("%b ") + str(d.day)
 
 DATES = {}
 NUMID = ""  # numeric ad-account id for building Ads Manager links, set per account
+STATUS = {}  # {ad_id: effective_status} for the account being rendered
+STAT = {"ACTIVE": "ACTIVE", "PAUSED": "PAUSED", "ADSET_PAUSED": "ADSET PAUSED",
+        "CAMPAIGN_PAUSED": "CAMPAIGN PAUSED", "IN_PROCESS": "IN REVIEW", "PENDING_REVIEW": "IN REVIEW",
+        "PENDING_BILLING_INFO": "BILLING ISSUE", "DISAPPROVED": "DISAPPROVED", "WITH_ISSUES": "WITH ISSUES",
+        "ARCHIVED": "ARCHIVED", "DELETED": "DELETED", "PREAPPROVED": "APPROVED"}
+def statuslabel(c):
+    s = c.get("status") or STATUS.get(c.get("ad_id"))
+    return STAT.get(s, s or "UNKNOWN")
 def safe(s): return (s or "").replace("|", " ").replace("<", " ").replace(">", " ").strip()[:70]
 def nm(c):
     name = safe(c.get("ad_name"))
@@ -147,6 +155,19 @@ def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
         if "error" in d: break
         out += d.get("data", [])
         after = d.get("paging", {}).get("cursors", {}).get("after")
+        if not after: break
+    return out
+
+def get_ad_statuses(acct, max_pages=12):
+    """{ad_id: effective_status} for every ad in the account (delivery state)."""
+    out, after, pages = {}, None, 0
+    while pages < max_pages:
+        p = {"fields": "id,effective_status", "limit": 500}
+        if after: p["after"] = after
+        d = api_get("%s/ads" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []): out[a["id"]] = a.get("effective_status")
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
         if not after: break
     return out
 
@@ -228,7 +249,8 @@ def label(c, B, prev, cold_roas):
     c["d_octr"] = pct(c["octr"], p["octr"]) if p else None
     c["d_cpm"] = pct(c["cpm"], p["cpm"]) if p else None
     c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr")} if p else None
-    if p and p.get("freq") and p.get("octr") and c["d_freq"] is not None and c["d_freq"] > FAT_FREQ \
+    if c["spend"] >= MIN_SPEND and p and p.get("freq") and p.get("octr") \
+       and c["d_freq"] is not None and c["d_freq"] > FAT_FREQ \
        and c["d_octr"] is not None and c["d_octr"] < -FAT_CTR:
         return "FATIGUE"
     if (c["spend"] < MIN_SPEND * 0.5) and (c["purch"] or 0) < MIN_PUR:
@@ -319,13 +341,20 @@ def diagnose(m, p, rows=None, prev=None, tf=None):
             nm(culprit), name, pc.get(key), u, culprit.get(key), u, money(culprit["spend"]), money(cimp)))
     return "\n".join(out)
 
-def analyze(acct, cur_rows, prev_rows):
+def analyze(acct, cur_rows, prev_rows, statuses=None):
     rows = [metric(r) for r in cur_rows]
+    for c in rows: c["status"] = (statuses or {}).get(c["ad_id"])
     prev = {m["ad_id"]: m for m in (metric(r) for r in prev_rows)}
     B = benchmarks(rows)
     cold = [c for c in rows if c["aud"] == "COLD"]
     cold_s = sum(c["spend"] for c in cold); cold_r = sum(c["rev"] for c in cold)
     cold_roas = round(cold_r / cold_s, 2) if cold_s else 0
+    # Pareto 80/20: mark the vital few that make up 80% of spend + a hard significance floor
+    tot_spend = sum(c["spend"] for c in rows) or 1
+    cum = 0
+    for c in sorted(rows, key=lambda c: c["spend"], reverse=True):
+        cum += c["spend"]; c["vital"] = cum <= 0.8 * tot_spend + 0.01
+        c["significant"] = c["spend"] >= max(MIN_SPEND, 0.03 * tot_spend)
     for c in rows:
         c["label"] = label(c, B, prev, cold_roas)
         b = B.get("%s/%s" % (c["aud"], c["type"]))
@@ -390,21 +419,30 @@ def why_scale(c, cold):
     return "CPA %s is %s its group median of %s, and ROAS %s beats the cold bar of %s. Proven cold winner." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], cold)
 def why_cut(c):
     return "CPA %s is %s its group median of %s at ROAS %s, wasting about %s this week versus reallocating that spend." % (money(c["cpa"]), gapw(c["gap"]), money(c["seg_cpa_med"]), c["roas"], money(c["waste"]))
-def why_fatigue(c):
+def fatigue_line(c):
+    """One-line fatigue evidence with the exact numbers and window."""
     p = c.get("prev") or {}
+    d1, d2 = DATES["label"]; q1, q2 = DATES["p_label"]
     cpm = "CPM steady" if (c.get("d_cpm") is not None and abs(c["d_cpm"]) < 12) else "CPM %s" % sp(c.get("d_cpm"))
-    return "Frequency %s→%s (%s) and Outbound CTR %s%%→%s%% (%s), %s. More views, fewer clicks = creative fatigue, not auction." % (
-        p.get("freq"), c["freq"], sp(c["d_freq"]), p.get("octr"), c["octr"], sp(c["d_octr"]), cpm)
+    return "Freq %s→%s (%s) · Outbound CTR %s%%→%s%% (%s) · %s · Spend %s   _(%s → %s vs %s → %s)_" % (
+        p.get("freq"), c["freq"], sp(c["d_freq"]), p.get("octr"), c["octr"], sp(c["d_octr"]), cpm, money(c["spend"]),
+        d1, d2, q1, q2)
+def why_fatigue(c):
+    return "Frequency up, Outbound CTR down = same people, fewer clicks. Creative fatigue, not the auction. Refresh the hook.\n     " + fatigue_line(c)
 def why_lowroas(c, cold):
     return "Cheap CPA %s (%s vs group) but ROAS %s is under the cold bar of %s and AOV is only %s. Efficient reach, low value." % (money(c["cpa"]), bw(c["gap"]), c["roas"], cold, money(c["aov"]))
 
-def block(icon, title, name, do, metrics, why):
-    return "\n".join(["%s *%s — %s*   _(%s)_" % (icon, title, name, do), metrics, "     *Why:* %s" % why, ""])
+def block(icon, title, name, status, do, metrics, why):
+    return "\n".join([
+        "%s  *%s*  —  %s   `%s`" % (icon, title, name, status),
+        "     :arrow_right: _%s_" % do,
+        metrics,
+        "     *Why:* %s" % why, ""])
 
 def msg_digest(A):
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
-    L = ["%s  :bar_chart:  *%s — DAILY*" % (MENTION, A["account"]["name"].upper()),
+    L = ["%s  :bar_chart:  *%s — LAST 7 DAYS*  _(refreshed every morning)_" % (MENTION, A["account"]["name"].upper()),
          ":date: *%s → %s*   vs   *%s → %s*   (all values in %s)" % (d1, d2, p1, p2, cc), BAR,
          "*ACCOUNT — all ads*",
          "Spend *%s* (%s) · Revenue *%s* · %d purchases" % (money(s["spend"]), sp(s["d_spend"]), money(s["revenue"]), s["purchases"]),
@@ -415,23 +453,27 @@ def msg_digest(A):
     did = False
     op = A["opportunity"]
     if op:
-        L.append(block(":rocket:", "SCALE", nm(op), "raise budget 20-30%", cmet(op), why_scale(op, s["cold_roas"]))); did = True
+        L.append(block(":rocket:", "SCALE", nm(op), statuslabel(op), "Raise budget 20-30%.", cmet(op), why_scale(op, s["cold_roas"]))); did = True
     off = A["offender"]
     if off:
-        L.append(block(":rotating_light:", "CUT", nm(off), "drop 30-40%%, move budget to %s" % tgt(A), cmet(off), why_cut(off))); did = True
-    fat = [c for c in rows if c["label"] == "FATIGUE"]
+        L.append(block(":rotating_light:", "CUT", nm(off), statuslabel(off), "Drop 30-40%%, move budget to %s." % tgt(A), cmet(off), why_cut(off))); did = True
+    # only significant (80/20) fatiguing ads, never trivial-spend ads
+    fat = [c for c in rows if c["label"] == "FATIGUE" and c.get("significant")]
     if fat:
         c = fat[0]
-        L.append(block(":recycle:", "REFRESH", nm(c), "new first 3 seconds, keep concept", cmet(c), why_fatigue(c))); did = True
-    low = [c for c in rows if c["label"] == "EFFICIENT-LOW-ROAS"]
+        L.append(block(":recycle:", "REFRESH", nm(c), statuslabel(c), "New first 3 seconds, keep the concept.", cmet(c), why_fatigue(c))); did = True
+    low = [c for c in rows if c["label"] == "EFFICIENT-LOW-ROAS" and c.get("significant")]
     if low:
         c = low[0]
-        L.append(block(":test_tube:", "TEST HIGHER AOV", nm(c), "same hook, pricier product", cmet(c), why_lowroas(c, s["cold_roas"]))); did = True
+        L.append(block(":test_tube:", "TEST HIGHER AOV", nm(low[0]), statuslabel(low[0]), "Same hook, pricier product.", cmet(low[0]), why_lowroas(low[0], s["cold_roas"]))); did = True
     if not did:
         L.append("_Nothing crossed an action threshold. Everything is inside its guardrails._\n")
     if len(fat) > 1:
-        L.append(":chart_with_downwards_trend: *Also fatiguing (%d):* %s" % (len(fat) - 1, ", ".join(nm(c) for c in fat[1:6])))
-    L += [BAR, "_7-day window vs the previous 7 days. Runs automatically 9 AM Cairo daily._"]
+        L.append(":chart_with_downwards_trend: *Also fatiguing (%d) — the numbers:*" % (len(fat) - 1))
+        for c in fat[1:5]:
+            L.append("• %s   `%s`\n     %s" % (nm(c), statuslabel(c), fatigue_line(c)))
+        L.append("")
+    L += [BAR, "_Window: last 7 full days vs the 7 before. Runs automatically 9 AM Cairo, every day._"]
     return "\n".join(L)
 
 
@@ -457,7 +499,10 @@ def pareto(rows):
 
 def linkrow(x, cc, is_ad):
     label = nm({"ad_name": x["name"], "ad_id": x["id"]}) if is_ad else aset_link(x["name"], x["id"])
-    return "   • %s\n        Spend %s · Rev %s · ROAS %s · CPA %s" % (label, money(x["spend"]), money(x["rev"]), x["roas"], money(x["cpa"]))
+    st = ""
+    if is_ad and STATUS.get(x["id"]):
+        st = "   `%s`" % STAT.get(STATUS[x["id"]], STATUS[x["id"]])
+    return "   • %s%s\n        Spend %s · Rev %s · ROAS %s · CPA %s" % (label, st, money(x["spend"]), money(x["rev"]), x["roas"], money(x["cpa"]))
 
 def pulse_3day(acct, ad_rows, set_rows, m3, p3m):
     cc = acct.get("currency", "")
@@ -512,7 +557,7 @@ def msg_launches(acct, creatives, prev_ids):
         L.append("• %s" % aset_link(name, g["sid"]))
         L.append("     spend %s %s  ·  ROAS %s  ·  CPA %s %s  ·  %d purch" % (money(g["spend"]), cc, roas, cpa, cc, int(g["purch"])))
         if best:
-            L.append("     best ad: %s  (ROAS %s, CPA %s %s)" % (nm(best), best["roas"], money(best["cpa"]), cc))
+            L.append("     best ad: %s  `%s`  (ROAS %s, CPA %s %s)" % (nm(best), statuslabel(best), best["roas"], money(best["cpa"]), cc))
         L.append("")
     L.append("_New launches only. Runs 9 AM Cairo daily._")
     return "\n".join(L)
@@ -524,7 +569,7 @@ def main():
     ap.add_argument("--daily", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
-    global SLACK_TOKEN, NUMID
+    global SLACK_TOKEN, NUMID, STATUS
     if a.dry_run: SLACK_TOKEN = ""
     if not TOKEN: sys.stderr.write("META_ACCESS_TOKEN missing\n"); sys.exit(1)
 
@@ -548,7 +593,8 @@ def main():
         cur_rows = get_insights(acct["id"], last)
         if not cur_rows: continue
         prev_rows = get_insights(acct["id"], prev)
-        A = analyze(acct, cur_rows, prev_rows)
+        STATUS = get_ad_statuses(acct["id"])
+        A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
         NUMID = acct["id"].replace("act_", "")
