@@ -24,11 +24,11 @@
 
   "slack": {
     "mention_user_id": "U082VCLRZ6E",
+    "_routing": "each account posts to its own channel; matched by keyword in the account name, else default.",
     "channels": {
-      "growth": "C0BFN4UGYKY",
-      "actions": "C0BFN4PLT2A",
-      "anomalies": "C0BFG6A1WCX",
-      "three_day": "C0BFG68BGBH"
+      "default": "C0BFN4UGYKY",
+      "playmore": "C0BG0966CEM",
+      "ourkids": "C0BFWB6EHUN"
     }
   }
 }
