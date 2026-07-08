@@ -264,69 +264,96 @@ def slack(channel, text):
 
 def cur(A): return A["account"].get("currency", "")
 def vid(c): return c["type"] == "VIDEO"
+DIV = "──────────────"
+
+def bw(gap):
+    """CPA gap phrased as better/worse (positive gap = worse, more expensive)."""
+    if gap is None: return "n/a"
+    if gap <= 0: return "*%d%% better*" % abs(gap)
+    return "*+%d%% worse*" % gap
+
+def trend(c, cc):
+    """Week over week trend line, naming the old number."""
+    p = c.get("prev")
+    if not p: return None
+    bits = []
+    if c["d_cpa"] is not None and p.get("cpa"):
+        bits.append("CPA %s (was %s %s last week)" % (sp(c["d_cpa"]), money(p["cpa"]), cc))
+    if c["d_roas"] is not None and p.get("roas"):
+        bits.append("ROAS %s (was %s last week)" % (sp(c["d_roas"]), p["roas"]))
+    return "   ".join(bits) if bits else None
+
 def line(c, cc):
-    """One readable creative line with the numbers that matter."""
-    parts = ["*%s*" % c["ad_name"], "%s %s" % (c["aud"].title(), c["type"].title()),
-             "CPA %s %s" % (money(c["cpa"]), cc)]
-    if c.get("gap") is not None: parts.append("%s vs seg" % sp(c["gap"]))
-    parts.append("ROAS %s" % c["roas"])
+    """One readable creative line: name, CPA + how much better/worse, ROAS, video attention."""
+    parts = ["*%s*" % c["ad_name"],
+             "CPA %s %s (%s vs its group)" % (money(c["cpa"]), cc, bw(c.get("gap"))),
+             "ROAS %s" % c["roas"]]
     if vid(c): parts.append("hook %s%% / hold %s%%" % (c["hook"], c["hold"]))
     parts.append("freq %s" % c["freq"])
-    return "  •  ".join(parts)
+    return "\n    ".join(["• " + parts[0]] + ["   " + p for p in parts[1:]])
 
 def msg_summary(A):
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     wins = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
     warm = sorted([c for c in rows if c["label"] == "AUDIENCE-ASSISTED"], key=lambda c: c["spend"], reverse=True)[:4]
-    L = ["%s :dart: *Daily Growth Summary — %s (%s)*" % (MENTION, A["account"]["name"], cc),
-         ":date: Last 7 Days vs Previous 7 Days", "",
-         "*Account*",
-         "• Spend: *%s %s* (%s vs prev)" % (money(s["spend"]), cc, sp(s["d_spend"])),
-         "• Revenue: %s %s" % (money(s["revenue"]), cc),
-         "• Blended ROAS: *%s*   |   Cold prospecting ROAS: *%s*" % (s["roas"], s["cold_roas"]),
-         "• Purchases: %d   |   Blended CPA: %s %s" % (s["purchases"], money(s["cpa"]), cc)]
+    L = ["%s  :dart:  *DAILY GROWTH SUMMARY*" % MENTION,
+         "*%s (%s)*  ·  :date: Last 7 Days vs Previous 7 Days" % (A["account"]["name"], cc), DIV,
+         "*ACCOUNT*",
+         "• Spend:  *%s %s*   (%s vs last week)" % (money(s["spend"]), cc, sp(s["d_spend"])),
+         "• Revenue:  %s %s" % (money(s["revenue"]), cc),
+         "• Blended ROAS:  *%s*      Cold ROAS:  *%s*" % (s["roas"], s["cold_roas"]),
+         "• Purchases:  %d      Blended CPA:  %s %s" % (s["purchases"], money(s["cpa"]), cc)]
     if s["cat_pct"] >= 15:
-        L += ["", ":warning: Catalogue is *%d%%* of spend and lifts blended ROAS. Judge new creatives against Cold ROAS %s, not blended." % (s["cat_pct"], s["cold_roas"])]
+        L += ["", ":warning:  Catalogue = *%d%%* of spend, it inflates blended ROAS. Judge new creatives against *Cold ROAS %s*." % (s["cat_pct"], s["cold_roas"])]
     if wins:
-        L += ["", ":large_green_circle: *True creative winners (cold)*"] + ["• " + line(c, cc) for c in wins[:4]]
+        L += ["", DIV, ":large_green_circle:  *TRUE CREATIVE WINNERS (cold)*"] + [line(c, cc) for c in wins[:4]]
     if warm:
-        L += ["", ":large_blue_circle: *Audience-assisted (retargeting / catalogue, NOT creative wins)*"] + \
-             ["• *%s*  •  CPA %s %s  •  ROAS %s  •  freq %s  •  spend %s %s" %
+        L += ["", DIV, ":large_blue_circle:  *AUDIENCE-ASSISTED (retargeting / catalogue, NOT creative wins)*"] + \
+             ["• *%s*\n     CPA %s %s   ROAS %s   freq %s   spend %s %s" %
               (c["ad_name"], money(c["cpa"]), cc, c["roas"], c["freq"], money(c["spend"]), cc) for c in warm]
-    if A["offender"]: L += ["", ":rotating_light: Biggest risk: *%s*" % A["offender"]["ad_name"]]
-    if A["opportunity"]: L += [":rocket: Biggest opportunity: *%s*" % A["opportunity"]["ad_name"]]
+    L += ["", DIV]
+    if A["offender"]: L += [":rotating_light:  *Biggest risk:*  %s  (CPA %s worse than its group)" % (A["offender"]["ad_name"], sp(A["offender"]["gap"]))]
+    if A["opportunity"]: L += [":rocket:  *Biggest opportunity:*  %s  (CPA %s vs its group)" % (A["opportunity"]["ad_name"], sp(A["opportunity"]["gap"]))]
     L += ["", CADENCE]
     return "\n".join(L)
 
 def msg_offender(A):
     c = A["offender"]; cc = cur(A); seg = "%s/%s" % (c["aud"], c["type"]); b = A["benchmarks"].get(seg, {})
-    L = ["%s :rotating_light: *Biggest Offender — %s*" % (MENTION, A["account"]["name"]),
-         ":date: Last 7 Days vs Previous 7 Days", "",
-         "*%s*   (%s %s)" % (c["ad_name"], c["aud"].title(), c["type"].title()),
-         "• Spend: *%s %s*" % (money(c["spend"]), cc),
-         "• CPA: *%s %s*  →  *%s* vs %s median %s" % (money(c["cpa"]), cc, sp(c["gap"]), seg, money(b.get("cpa_med"))),
-         "• ROAS: %s" % c["roas"]]
+    L = ["%s  :rotating_light:  *BIGGEST OFFENDER*" % MENTION,
+         "*%s*  ·  :date: Last 7 Days vs Previous 7 Days" % A["account"]["name"], DIV,
+         "*Creative:*  %s" % c["ad_name"],
+         "*Type:*  %s %s" % (c["aud"].title(), c["type"].title()), "",
+         "• *CPA:*  %s %s   →   %s than the %s median (%s %s)" % (money(c["cpa"]), cc, bw(c["gap"]), seg, money(b.get("cpa_med")), cc),
+         "• *ROAS:*  %s" % c["roas"]]
+    t = trend(c, cc)
+    if t: L.append("• *Trend:*  %s" % t)
     if vid(c):
-        L.append("• Hook: %s%% (median %s%%)   |   Hold: %s%% (median %s%%)" % (c["hook"], b.get("hook_med"), c["hold"], b.get("hold_med")))
-    L += ["• Estimated wasted spend: *~%s %s this week*" % (money(c["waste"]), cc), "",
-          ":brain: %s" % c["why"],
-          ":white_check_mark: *Action:* cut budget 30 to 40%. Reallocate to the cold winners in this account.",
+        L.append("• *Hook:*  %s%%  (group median %s%%)" % (c["hook"], b.get("hook_med")))
+        L.append("• *Hold:*  %s%%  (group median %s%%)" % (c["hold"], b.get("hold_med")))
+    L += ["• *Spend:*  %s %s" % (money(c["spend"]), cc),
+          "• *Wasted this week:*  *~%s %s*" % (money(c["waste"]), cc), DIV,
+          ":brain:  *Why:*  %s" % c["why"],
+          ":white_check_mark:  *Action:*  cut budget 30 to 40%, move it to the cold winners in this account.",
           "", CADENCE]
     return "\n".join(L)
 
 def msg_opportunity(A):
     c = A["opportunity"]; cc = cur(A); seg = "%s/%s" % (c["aud"], c["type"]); b = A["benchmarks"].get(seg, {})
-    L = ["%s :rocket: *Biggest Opportunity — %s*" % (MENTION, A["account"]["name"]),
-         ":date: Last 7 Days vs Previous 7 Days", "",
-         "*%s*   (%s %s, Scale Opportunity)" % (c["ad_name"], c["aud"].title(), c["type"].title()),
-         "• CPA: *%s %s*  →  *%s* vs %s median %s" % (money(c["cpa"]), cc, sp(c["gap"]), seg, money(b.get("cpa_med"))),
-         "• ROAS: *%s*   |   Frequency: %s   |   Spend: %s %s" % (c["roas"], c["freq"], money(c["spend"]), cc)]
+    L = ["%s  :rocket:  *BIGGEST OPPORTUNITY*" % MENTION,
+         "*%s*  ·  :date: Last 7 Days vs Previous 7 Days" % A["account"]["name"], DIV,
+         "*Creative:*  %s" % c["ad_name"],
+         "*Type:*  %s %s  ·  Scale Opportunity" % (c["aud"].title(), c["type"].title()), "",
+         "• *CPA:*  %s %s   →   %s than the %s median (%s %s)" % (money(c["cpa"]), cc, bw(c["gap"]), seg, money(b.get("cpa_med")), cc),
+         "• *ROAS:*  %s      *Frequency:*  %s      *Spend:*  %s %s" % (c["roas"], c["freq"], money(c["spend"]), cc)]
+    t = trend(c, cc)
+    if t: L.append("• *Trend:*  %s" % t)
     if vid(c):
-        L.append("• Hook: %s%% (median %s%%)   |   Hold: %s%% (median %s%%)" % (c["hook"], b.get("hook_med"), c["hold"], b.get("hold_med")))
-    L += ["", "It wins in a COLD audience, so the creative is doing the work, not warm intent.",
-          ":white_check_mark: *Action:* increase budget 20 to 30% and build 5 iterations:",
-          "1. Same layout, different product", "2. Alternate model", "3. Parent POV angle",
-          "4. UGC testimonial", "5. Close-up quality detail", "", CADENCE]
+        L.append("• *Hook:*  %s%%  (group median %s%%)" % (c["hook"], b.get("hook_med")))
+        L.append("• *Hold:*  %s%%  (group median %s%%)" % (c["hold"], b.get("hold_med")))
+    L += [DIV, "It wins in a *COLD* audience, so the creative is doing the work, not warm intent.",
+          ":white_check_mark:  *Action:*  increase budget 20 to 30% and build 5 iterations:",
+          "   1. Same layout, different product", "   2. Alternate model", "   3. Parent POV angle",
+          "   4. UGC testimonial", "   5. Close-up quality detail", "", CADENCE]
     return "\n".join(L)
 
 def action_cards(A):
