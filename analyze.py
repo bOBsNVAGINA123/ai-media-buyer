@@ -323,7 +323,7 @@ def label(c, B, prev, cold_roas):
     c["d_freq"] = pct(c["freq"], p["freq"]) if p else None
     c["d_octr"] = pct(c["octr"], p["octr"]) if p else None
     c["d_cpm"] = pct(c["cpm"], p["cpm"]) if p else None
-    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr", "rev", "reach", "purch", "cvr", "aov")} if p else None
+    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr", "rev", "reach", "purch", "cvr", "aov", "impr", "lc", "ctr")} if p else None
     if c["spend"] >= MIN_SPEND and p and p.get("freq") and p.get("octr") \
        and c["d_freq"] is not None and c["d_freq"] > FAT_FREQ \
        and c["d_octr"] is not None and c["d_octr"] < -FAT_CTR:
@@ -767,12 +767,14 @@ def video_read(c, avg, rank=None, ntot=None):
             ("75%", c["r75"] - avg["r75"]), ("the end", c["r100"] - avg["r100"])]
     worst = min(gaps, key=lambda x: x[1])
     hook_ok = hg >= -5  # hook is at or above the account
+    smap = {"25%": (c["r25"], avg["r25"]), "halfway": (c["r50"], avg["r50"]), "75%": (c["r75"], avg["r75"]), "the end": (c["r100"], avg["r100"])}
+    wv = smap[worst[0]]
     if c["r50"] >= avg["r50"] and c["r100"] >= avg["r100"]:
         v = "Above-average retention the whole way. *Decision: increase spend, this is a proven format.*"
     elif hook_ok and worst[1] <= -2:
-        v = "Hook is at or above the account but it falls %.1f points below average at %s. Opening lands, body leaks. *Decision: re-cut the body around %s, keep the open.*" % (-worst[1], worst[0], worst[0])
+        v = "Hook holds but retention at %s runs %s%% versus the account %s%%. Opening lands, body leaks. *Decision: re-cut the body around %s, keep the open.*" % (worst[0], wv[0], wv[1], worst[0])
     elif hg < -5 and worst[1] <= -2:
-        v = "Hook is %s below the account and retention trails at %s. Weak from the first frame. *Decision: this format is not working, retire it, do not just re-cut.*" % (sp(hg), worst[0])
+        v = "Hook is %s below the account and retention at %s is %s%% versus %s%% average. Weak from the first frame. *Decision: retire this format, do not just re-cut.*" % (sp(hg), worst[0], wv[0], wv[1])
     else:
         v = "Tracks your average, no retention edge or leak. *Decision: hold, no creative change justified.*"
     L.append(v)
@@ -878,9 +880,9 @@ def msg_advisor(A, overlaps=None):
     if abs(shift[lost]) >= 4 and psp[lost] and csp[gained]:
         helped = roC[gained] >= roC[lost]
         newdir = "shrinking" if csp["NEW"] < psp["NEW"] * 0.95 else "holding"
-        thesis = ("This week is a *capital-allocation* story, not a ROAS story.  Meta pulled *%d points* of budget out of %s (ROAS %s) into %s (ROAS %s).  "
-                  "Blended ROAS %s %s.  The catch: New-audience spend is *%s* week over week, so next week's Engaged and Existing pools %s.") % (
-                  abs(round(shift[lost])), SEGN[lost], r2(roP[lost]), SEGN[gained], r2(roC[gained]),
+        thesis = ("This week is a *capital-allocation* story, not a ROAS story.  Meta cut %s spend share from %d%% to %d%% and lifted %s from %d%% to %d%% (ROAS %s vs %s).  "
+                  "Blended ROAS %s %s.  The catch: New-audience spend is *%s*, so next week's Engaged and Existing pools %s.") % (
+                  SEGN[lost], round(mixP[lost]), round(mixC[lost]), SEGN[gained], round(mixP[gained]), round(mixC[gained]), r2(roC[gained]), r2(roP[lost]),
                   sp(s.get("d_roas")), "because it leaned into your more efficient audience" if helped else "held only because it leaned into a weaker audience, that is Meta misallocating",
                   newdir, "refill" if newdir == "holding" else "starve")
         conv = min(90, 60 + int(abs(shift[lost]) * 3))
@@ -902,12 +904,44 @@ def msg_advisor(A, overlaps=None):
          "*THE THESIS*", thesis, "_Conviction: %d%%._" % conv,
          "", "*Portfolio:* Spend %s (%s) · Revenue %s (%s) · Blended ROAS %s (%s).  Attributed, reconcile vs MER before big cuts." % (
              money(s["spend"]), sp(s.get("d_spend")), money(s["revenue"]), sp(d_rev), blended, sp(s.get("d_roas")))]
+    # ---- ACCOUNT SCORECARD (this week vs last week, % change) ----
+    _ai = sum(c["impr"] for c in rows); _ar = sum(c["reach"] for c in rows) or 1
+    _pi = sum((c["prev"]["impr"] or 0) for c in rows if c.get("prev")); _pr = sum((c["prev"]["reach"] or 0) for c in rows if c.get("prev")) or 1
+    cur_octr = round(sum(c["octr"] * c["impr"] for c in rows) / (_ai or 1), 2); prv_octr = round(sum((c["prev"]["octr"] or 0) * (c["prev"]["impr"] or 0) for c in rows if c.get("prev")) / (_pi or 1), 2)
+    cur_freq = round(_ai / _ar, 2); prv_freq = round(_pi / _pr, 2)
+    def sc(lbl, cu, pv, m=False, pc=False):
+        chg = pct(cu, pv)
+        cus = money(cu) if m else ("%s%%" % cu if pc else str(cu))
+        pvs = money(pv) if m else ("%s%%" % pv if pc else str(pv))
+        return "%-13s %12s %12s   %s" % (lbl, cus, pvs, sp(chg))
+    p_ = prev
+    L += ["", BAR, "*ACCOUNT SCORECARD*", "```",
+          "%-13s %12s %12s   %s" % ("Metric", "This wk", "Last wk", "Chg"),
+          sc("Spend", s["spend"], p_.get("spend") or 0, m=True),
+          sc("Revenue", s["revenue"], p_.get("rev") or 0, m=True),
+          sc("ROAS", blended, r2(p_.get("roas"))),
+          sc("Purchases", s["purchases"], int(p_.get("purch") or 0)),
+          sc("CPA", s["cpa"] or 0, round(p_.get("cpa") or 0), m=True),
+          sc("AOV", s["aov"] or 0, round(p_.get("aov") or 0), m=True),
+          sc("CPM", s["cpm"], r2(p_.get("cpm")), m=True),
+          sc("CPMR", s["cpmr"], r2(p_.get("cpmr")), m=True),
+          sc("CTR", s["ctr"], r2(p_.get("ctr")), pc=True),
+          sc("Outbound CTR", cur_octr, prv_octr, pc=True),
+          sc("CPC", s.get("cpc") or 0, r2(p_.get("cpc")), m=True),
+          sc("CVR", s["cvr"], r2(p_.get("cvr")), pc=True),
+          sc("Frequency", cur_freq, prv_freq),
+          sc("Reach", _ar, _pr, m=True),
+          sc("Impressions", _ai, _pi, m=True), "```"]
     # ---- AUDIENCE: New / Engaged / Existing, week over week ----
     L += ["", BAR, "*AUDIENCE, where the money actually went*"]
     for sg in sorted(segs, key=lambda sg: csp[sg], reverse=True):
         if csp[sg] < tot * 0.01 and psp[sg] < tP * 0.01: continue
-        L.append("• *%s*: spend %s (%d%% of mix, %s pts WoW) · ROAS %s→%s · reach %s · freq %s" % (
-            SEGN[sg], money(csp[sg]), round(mixC[sg]), sp(round(shift[sg])), r2(roP[sg]), r2(roC[sg]), money(crch[sg]), r2(frq[sg])))
+        L.append("• *%s*: spend %s · spend share %d%% (was %d%%) · ROAS %s (was %s) · CPA %s · AOV %s · CVR %s%% · reach %s · frequency %s" % (
+            SEGN[sg], money(csp[sg]), round(mixC[sg]), round(mixP[sg]), r2(roC[sg]), r2(roP[sg]),
+            money(round(csp[sg] / sum(c["purch"] for c in _in(sg))) if sum(c["purch"] for c in _in(sg)) else 0),
+            money(round(crev[sg] / sum(c["purch"] for c in _in(sg))) if sum(c["purch"] for c in _in(sg)) else 0),
+            round(sum(c["purch"] for c in _in(sg)) / sum(c["lc"] for c in _in(sg)) * 100, 2) if sum(c["lc"] for c in _in(sg)) else 0,
+            money(crch[sg]), r2(frq[sg])))
     L.append("Read: budget moved into %s and out of %s, a move %s efficiency.  %s" % (
         SEGN[gained], SEGN[lost], "toward" if roC[gained] >= roC[lost] else "away from",
         "Watch New-audience spend, it is falling and it is what refills Engaged and Existing next week." if csp["NEW"] < psp["NEW"] else "New-audience spend held, the pipeline is intact."))
@@ -930,8 +964,55 @@ def msg_advisor(A, overlaps=None):
     if dest:
         L.append("*The next 10,000 EGP goes to %s* (ROAS %s, frequency %s has room), pulled from %s." % (
             nm(dest), r2(dest["roas"]), dest["freq"], nm(over[0]) if over else (nm(bleeders[0]) if bleeders else "the lowest-ROAS spend")))
-    # ---- CREATIVE (video only, no hallucinated angle) ----
-    L += ["", BAR, "*CREATIVE, retention read (video only, catalogue anomalies removed)*"]
+    # ---- SCALING RANKING (multi-factor, not just ROAS) ----
+    accm = s["cpm"] or 1
+    def scal_score(c):
+        rf = (c["roas"] or 0) / (s["roas"] or 1)
+        vf = (c["cvr"] or 0) / (acc_cvr or 1)
+        mf = accm / (c["cpm"] or 1)
+        hf = max((freq_ceiling(c) - c["freq"]) / freq_ceiling(c), 0.05)
+        return round(rf * vf * mf * hf * (c["spend"] ** 0.3), 1)
+    scalable = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] and c["freq"] < freq_ceiling(c) and c["purch"] >= 3]
+    scalable.sort(key=scal_score, reverse=True)
+    L += ["", BAR, "*MOST SCALABLE WINNERS (ROAS + volume + CPM + CVR + frequency together)*"]
+    if scalable:
+        for i, c in enumerate(scalable[:4], 1):
+            inc = "30%" if c["freq"] < 1.5 else ("20%" if c["freq"] < 1.8 else "15%")
+            L.append("%d. %s  ·  Spend %s (share %s%%) · ROAS %s · Rev %s · %d purch · CPM %s · Outbound CTR %s%% · CVR %s%% · CPA %s · AOV %s · frequency %s" % (
+                i, nm(c), money(c["spend"]), c["spend_share"], r2(c["roas"]), money(c["rev"]), int(c["purch"]),
+                money(c["cpm"]), c["octr"], c["cvr"], money(c["cpa"]), money(c["aov"]), c["freq"]))
+            L.append("     Why scalable: ROAS above account, CPM %s vs account %s, CVR %s%% vs %s%%, frequency %s still has room.  *Recommended: +%s.*" % (
+                money(c["cpm"]), money(round(accm)), c["cvr"], acc_cvr, c["freq"], inc))
+    else:
+        L.append("_No ad clears account ROAS with frequency headroom. Nothing is cleanly scalable, priority is finding a winner._")
+    # ---- CHEAP TRAFFIC ----
+    L += ["", BAR, "*CHEAP TRAFFIC (cheap clicks, do they convert?)*"]
+    cheap = sorted([c for c in sig if c.get("cpc")], key=lambda c: c["cpc"])[:5]
+    cw = [c for c in cheap if c["roas"] and c["roas"] >= s["roas"]]
+    cp = [c for c in cheap if not (c["roas"] and c["roas"] >= s["roas"])]
+    if cw:
+        L.append("*Winners (cheap and converting):* " + "; ".join("%s (CPC %s, CVR %s%%, ROAS %s)" % (nm(c), money(c["cpc"]), c["cvr"], r2(c["roas"])) for c in cw[:3]))
+    if cp:
+        L.append("*Problems (cheap clicks, weak purchases):* " + "; ".join("%s (CPC %s, CVR %s%%, ROAS %s)" % (nm(c), money(c["cpc"]), c["cvr"], r2(c["roas"])) for c in cp[:3]))
+        L.append("_Cheap traffic that does not convert is not cheap. The click is cheap, the purchase is not. Cannot tell page vs offer from this data._")
+    # ---- AOV OPPORTUNITY ----
+    L += ["", BAR, "*AOV OPPORTUNITY*"]
+    aovsort = sorted([c for c in sig if c.get("aov") and c["purch"] >= 3], key=lambda c: c["aov"], reverse=True)[:3]
+    for c in aovsort:
+        flag = "  <- high AOV, clears ROAS, underfunded, expand" if (c["roas"] and c["roas"] >= cold and c.get("spend_share") and c["spend_share"] < 5) else ""
+        L.append("• %s: AOV %s · ROAS %s · Spend %s (share %s%%) · %d purch%s" % (
+            nm(c), money(c["aov"]), r2(c["roas"]), money(c["spend"]), c["spend_share"], int(c["purch"]), flag))
+    # ---- CREATIVE (by format, then video retention) ----
+    L += ["", BAR, "*CREATIVE PERFORMANCE (by format)*"]
+    for fmt in ("VIDEO", "IMAGE", "CATALOGUE"):
+        fp = [c for c in rows if c["type"] == fmt]
+        fsp = sum(c["spend"] for c in fp)
+        if fsp < tot * 0.02: continue
+        frev = sum(c["rev"] for c in fp); fpur = sum(c["purch"] for c in fp); flc = sum(c["lc"] for c in fp); fimp = sum(c["impr"] for c in fp)
+        L.append("• %s: spend %s (share %d%%) · ROAS %s · %d purch · CPA %s · Outbound CTR %s%%" % (
+            fmt.title(), money(fsp), round(fsp / tot * 100), r2(frev / fsp if fsp else 0), int(fpur),
+            money(round(fsp / fpur) if fpur else 0), round(sum(c["octr"] * c["impr"] for c in fp) / fimp, 2) if fimp else 0))
+    L.append("*Video retention* (cold video only, ranked vs your average, catalogue anomalies removed):")
     if videos and vavg:
         ranked = sorted(videos, key=lambda c: c["hook"], reverse=True)
         rankmap = {c["ad_id"]: i + 1 for i, c in enumerate(ranked)}
@@ -952,7 +1033,7 @@ def msg_advisor(A, overlaps=None):
     L += ["", BAR, "*ANOMALIES, this should not happen*"]
     an = []
     if best_ctr and best_ctr.get("roas") and best_ctr["roas"] < s["roas"]:
-        an.append("%s has the highest Outbound CTR (%s%%) yet ROAS %s is below the account %s.  Cheap clicks, weak conversion, the leak is the page or offer, not the ad." % (nm(best_ctr), best_ctr["octr"], r2(best_ctr["roas"]), s["roas"]))
+        an.append("%s has the highest Outbound CTR (%s%%) yet ROAS %s is below the account %s.  It buys attention cheaply but does not convert it. The constraint is downstream of the click, unknown from this data whether page, offer or audience." % (nm(best_ctr), best_ctr["octr"], r2(best_ctr["roas"]), s["roas"]))
     if best_aov and best_aov.get("spend_share") and best_aov["spend_share"] < 5 and best_aov.get("roas") and best_aov["roas"] >= cold:
         an.append("%s has the biggest baskets (AOV %s) and clears the cold bar, but takes only %s%% of spend.  Underfunded, expand it in controlled steps." % (nm(best_aov), money(best_aov["aov"]), best_aov["spend_share"]))
     if videos:
@@ -976,9 +1057,32 @@ def msg_advisor(A, overlaps=None):
             nm(w), nf, money(round(w["spend"] * (2.0 / max(w["freq"], 0.1) - 1)))))
     if csp["NEW"] and roC["NEW"]:
         shift10 = round(tot * 0.10)
-        sims.append("Move 10 points of mix into New audience (+%s): at New ROAS %s that is ~%s revenue, and it refills next week's retargeting pool.  Risk: New ROAS %s is %s the blended %s." % (
+        sims.append("Raise New-audience spend share by 10%% (+%s): at New ROAS %s that is ~%s revenue, and it refills next week's retargeting pool.  Risk: New ROAS %s is %s the blended %s." % (
             money(shift10), r2(roC["NEW"]), money(round(shift10 * roC["NEW"])), r2(roC["NEW"]), "below" if roC["NEW"] < blended else "above", blended))
     for sm in sims[:4]: L.append("• " + sm)
+    # ---- BUDGET MOVE PLAN (explicit) ----
+    L += ["", BAR, "*BUDGET MOVE PLAN*"]
+    rm = (over[:1] or bleeders[:1] or (cp[:1] if 'cp' in dir() else []))
+    L.append("*Remove from:*")
+    if rm:
+        for c in rm:
+            cutamt = round(c["spend"] * (0.5 if (c["roas"] and c["roas"] < s["roas"] * 0.6) else 0.3))
+            L.append("• %s: now %s, cut %s.  ROAS %s vs account %s." % (nm(c), money(c["spend"]), money(cutamt), r2(c["roas"]), s["roas"]))
+    else:
+        L.append("• Nothing is clearly wasting. Hold.")
+    L.append("*Add to:*")
+    rm_ids = {c["ad_id"] for c in rm}
+    addto = [c for c in scalable if c["ad_id"] not in rm_ids][:2]
+    if addto:
+        for c in addto:
+            inc = "30%" if c["freq"] < 1.5 else ("20%" if c["freq"] < 1.8 else "15%")
+            L.append("• %s: now %s, increase %s.  ROAS %s, CVR %s%%, frequency %s has room." % (nm(c), money(c["spend"]), inc, r2(c["roas"]), c["cvr"], c["freq"]))
+    else:
+        strong_sat = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] and c["freq"] >= freq_ceiling(c) and c["ad_id"] not in rm_ids]
+        if strong_sat:
+            L.append("• No ad has strong ROAS *and* frequency headroom. %s are strong but saturated (frequency over ceiling), broaden the audience before adding budget, do not just raise spend." % ", ".join(nm(c) for c in strong_sat[:2]))
+        else:
+            L.append("• No clean winner to feed. Hold the freed budget until one proves out.")
     # ---- IF I HAD ONE HOUR IN ADS MANAGER ----
     L += ["", BAR, ":dart: *IF I HAD ONE HOUR MONDAY*"]
     kill = over[0] if over else (bleeders[0] if bleeders else None)
