@@ -181,6 +181,52 @@ def get_ad_statuses(acct, max_pages=12):
         if not after: break
     return out
 
+def get_adset_targeting(acct, max_pages=8):
+    """Active adsets with their targeting, for audience-overlap analysis."""
+    out, after, pages = [], None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,effective_status,targeting", "limit": 200}
+        if after: p["after"] = after
+        d = api_get("%s/adsets" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []):
+            if a.get("effective_status") == "ACTIVE": out.append(a)
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    return out
+
+def _tsig(t):
+    t = t or {}; geo = t.get("geo_locations", {}) or {}
+    ca = tuple(sorted(str(x.get("id")) for x in (t.get("custom_audiences") or [])))
+    ints = set()
+    for fs in (t.get("flexible_spec") or []):
+        for k in ("interests", "behaviors"):
+            for it in (fs.get(k) or []): ints.add(str(it.get("id")))
+    return {"countries": tuple(sorted(geo.get("countries", []) or [])),
+            "age": (t.get("age_min"), t.get("age_max")), "genders": tuple(t.get("genders", []) or []),
+            "ca": ca, "ints": tuple(sorted(ints)), "broad": (not ca and not ints)}
+
+def _age_overlap(a, b):
+    lo = max(a[0] or 13, b[0] or 13); hi = min(a[1] or 65, b[1] or 65); return lo <= hi
+
+def audience_overlap(adsets, spend_by):
+    rows = [(a["id"], a.get("name", ""), _tsig(a.get("targeting")), spend_by.get(a["id"], 0)) for a in adsets]
+    rows = [r for r in rows if r[3] >= MIN_SPEND * 0.3]
+    pairs = []
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            sa, sb = rows[i][2], rows[j][2]
+            shared = set(sa["ca"]) & set(sb["ca"])
+            if shared: why = "share a custom audience"
+            elif sa["broad"] and sb["broad"] and sa["countries"] == sb["countries"] and _age_overlap(sa["age"], sb["age"]) and sa["genders"] == sb["genders"]:
+                why = "both broad, same geo, age and gender"
+            elif sa["ints"] and (set(sa["ints"]) & set(sb["ints"])) and sa["countries"] == sb["countries"]:
+                why = "share interests and geo"
+            else: continue
+            pairs.append((rows[i][3] + rows[j][3], rows[i][1], rows[j][1], why))
+    pairs.sort(reverse=True)
+    return pairs[:5]
+
 def get_new_ad_ids(acct, since_date, max_pages=6):
     """Ad ids created on/after since_date (YYYY-MM-DD). Filtered client-side."""
     ids, after, pages = {}, None, 0
@@ -380,7 +426,10 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
         c["acc_cpmr"] = round(acc_cpmr); c["acc_cvr"] = round(acc_cvr, 2); c["acc_roas"] = round(acc_roas, 2)
         c["cpmr_vs_acc"] = round(pct(c["cpmr"], acc_cpmr)) if c["cpmr"] else None
         c["cvr_vs_acc"] = round(pct(c["cvr"], acc_cvr)) if c["cvr"] else None
-        c["waste"] = round(c["purch"] * (c["cpa"] - b["cpa_med"])) if (c["aud"] == "COLD" and b and c["cpa"] and c["cpa"] > b["cpa_med"] and c["spend"] >= MIN_SPEND) else 0
+        # only a genuine bleeder: cold, real spend, CPA above group AND ROAS below the cold bar (good ROAS is never waste)
+        c["waste"] = round(c["purch"] * (c["cpa"] - b["cpa_med"])) if (
+            c["aud"] == "COLD" and b and c["cpa"] and c["cpa"] > b["cpa_med"]
+            and c["spend"] >= MIN_SPEND and c["roas"] and c["roas"] < cold_roas) else 0
         # most scalable = best blend of low CPMR, low CPA, high ROAS, high CVR (each vs its benchmark), with real spend behind it
         if c["label"] == "SCALE OPPORTUNITY" and b:
             r_roas = c["roas"] / (cold_roas or 1)
@@ -454,12 +503,13 @@ def gapw(g):
     return "n/a" if g is None else ("%d%% below" % abs(g) if g <= 0 else "%d%% above" % g)
 IND = "\n     "  # indent used to break after every period inside a Why block
 def why_scale(c, cold):
-    return ("Most scalable of the winners." + IND +
+    reach = ("reaches people cheaper than the rest" if (c.get("acc_cpmr") and c["cpmr"] < c["acc_cpmr"])
+             else "reach is dearer than the account, so watch CPM as you scale")
+    return ("Best value of the winners." + IND +
             "CPA %s vs group median %s." % (money(c["cpa"]), money(c["seg_cpa_med"])) + IND +
             "ROAS %s vs cold bar %s." % (c["roas"], cold) + IND +
             "CVR %s%% vs %s%% account avg." % (c["cvr"], c.get("acc_cvr")) + IND +
-            "CPMR %s vs %s account avg, so it reaches people cheaper than the rest." % (money(c["cpmr"]), money(c.get("acc_cpmr"))) + IND +
-            "Best blend of cheap reach, cheap conversion and value.")
+            "CPMR %s vs %s account avg, %s." % (money(c["cpmr"]), money(c.get("acc_cpmr")), reach))
 def why_cut(c):
     return ("CPA %s vs group median %s at ROAS %s." % (money(c["cpa"]), money(c["seg_cpa_med"]), c["roas"]) + IND +
             "CPMR %s vs %s account avg." % (money(c["cpmr"]), money(c.get("acc_cpmr"))) + IND +
@@ -633,9 +683,26 @@ def msg_launches(acct, creatives, prev_ids, acc_roas=None, acc_cpmr=None, acc_cv
 
 
 # ----------------------- Strategic Advisor (weekly) -----------------------
-def adref(c):
-    return "%s (ROAS %s, CPA %s, CVR %s%%, CPMR %s%s)" % (
-        nm(c), c["roas"], money(c["cpa"]), c["cvr"], money(c["cpmr"]), cpmrword(c))
+def gappct(val, ref):
+    return None if not ref else round((val - ref) / ref * 100)
+def adref(c, cold=None):
+    # headline line
+    head = "%s  ·  Spend %s" % (nm(c), money(c["spend"]))
+    # ROAS vs cold bar, in % and EGP of revenue on this spend
+    parts = []
+    if cold and c["roas"]:
+        egp = round(c["spend"] * (c["roas"] - cold))
+        parts.append("ROAS %s vs cold %s (%s, %s EGP rev)" % (c["roas"], cold, sp(gappct(c["roas"], cold)), money(egp)))
+    # CVR vs account avg
+    if c.get("acc_cvr"):
+        cegp = round(c["lc"] * (c["cvr"] - c["acc_cvr"]) / 100 * (c["aov"] or 0))
+        parts.append("CVR %s%% vs %s%% avg (%s, %s EGP rev)" % (c["cvr"], c["acc_cvr"], sp(gappct(c["cvr"], c["acc_cvr"])), money(cegp)))
+    # CPMR vs account avg (lower is cheaper reach)
+    if c.get("acc_cpmr"):
+        regp = round(c["reach"] / 1000 * (c["cpmr"] - c["acc_cpmr"]))
+        cheap = "cheaper" if c["cpmr"] < c["acc_cpmr"] else "dearer"
+        parts.append("CPMR %s vs %s avg (%s reach, %s EGP)" % (money(c["cpmr"]), money(c["acc_cpmr"]), cheap, money(regp)))
+    return head + "\n     " + "\n     ".join(parts)
 # agreed BSD bands (from the Meta Ads Playbook in the vault)
 def hook_band(h): return "good" if h >= 20 else ("average" if h >= 12 else "bad")
 def hold_band(h): return "good" if h >= 35 else ("average" if h >= 22 else "bad")
@@ -645,7 +712,7 @@ def freq_ceiling(c):
 def is_saturating(c):
     return c["aud"] == "COLD" and c.get("significant") and c["freq"] > freq_ceiling(c)
 
-def msg_advisor(A):
+def msg_advisor(A, overlaps=None):
     """A weekly strategic brief: read the numbers, then tell Shavi exactly what to do and why."""
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
@@ -653,17 +720,21 @@ def msg_advisor(A):
     dcpc = pct(s.get("cpc"), prev.get("cpc")); dcvr = pct(s["cvr"], prev.get("cvr"))
     daov = pct(s["aov"] or 0, prev.get("aov") or 0)
     cold = s["cold_roas"]; blended = s["roas"]
+    # winner quality: ROAS above the cold bar first, cheaper reach breaks ties. Never a below-bar ad.
+    qual = lambda c: (c["roas"] or 0) + (0.3 if (c.get("acc_cpmr") and c["cpmr"] < c["acc_cpmr"]) else 0)
     winners = sorted([c for c in rows if c["label"] == "SCALE OPPORTUNITY"], key=lambda c: c.get("scale_score", 0), reverse=True)[:3]
     if not winners:
         winners = sorted([c for c in rows if c["aud"] == "COLD" and c.get("significant") and c["roas"] and c["roas"] >= cold],
-                         key=lambda c: c["roas"], reverse=True)[:3]
+                         key=qual, reverse=True)[:3]
+    # bleeders: genuinely below the cold bar with real spend (good ROAS is never a bleeder)
     bleeders = sorted([c for c in rows if c.get("waste", 0) > 0], key=lambda c: c["waste"], reverse=True)[:3]
     if not bleeders:
-        bleeders = sorted([c for c in rows if c.get("significant") and c["aud"] == "COLD" and c["roas"] and c["roas"] < cold * 0.8],
+        bleeders = sorted([c for c in rows if c.get("significant") and c["aud"] == "COLD" and c["roas"] and c["roas"] < cold * 0.85],
                           key=lambda c: c["roas"])[:3]
-    # a winner and a bleeder must never be the same ad (no "move from X into X")
     bleed_ids = {b["ad_id"] for b in bleeders}
     winners = [w for w in winners if w["ad_id"] not in bleed_ids]
+    # reallocation target must beat the bleeder on ROAS, else there is no valid move
+    realloc_to = next((w for w in winners if bleeders and w["roas"] and w["roas"] > bleeders[0]["roas"]), None)
     fatiguing = [c for c in rows if c["label"] == "FATIGUE" and c.get("significant")]
     assisted = sorted([c for c in rows if c["aud"] == "WARM" and c["roas"] and c["spend"] >= MIN_SPEND],
                       key=lambda c: c["roas"], reverse=True)[:2]
@@ -699,17 +770,21 @@ def msg_advisor(A):
          "ROAS here is attributed.  Reconcile against MER and AMER before any big cut, and treat catalogue ROAS as over-attributed.",
          "", BAR, "*WHAT IS WORKING, scale these*"]
     if winners:
-        for c in winners: L.append("• %s" % adref(c))
-        L.append("_Cheapest reach and best conversion. This is where new budget should go._")
+        for c in winners: L.append("• %s" % adref(c, cold))
+        top = winners[0]
+        if top.get("acc_cpmr") and top["cpmr"] < top["acc_cpmr"]:
+            L.append("_Above the cold bar with cheaper reach than the account. New budget goes here._")
+        else:
+            L.append("_Above the cold bar on ROAS. New budget goes here, watch its CPMR as you scale._")
     else:
-        L.append("_No ad cleared the scale bar this week. Priority is finding one, not scaling._")
+        L.append("_No ad cleared the cold bar this week. Priority is finding one, not scaling._")
     L += ["", "*WHAT IS BLEEDING, cut or fix*"]
     if bleeders:
         for c in bleeders:
-            w = ("  wasting ~%s/wk" % money(c["waste"])) if c.get("waste") else ""
-            L.append("• %s%s" % (adref(c), w))
+            w = ("\n     Wasting ~%s/wk vs reallocating that spend." % money(c["waste"])) if c.get("waste") else ""
+            L.append("• %s%s" % (adref(c, cold), w))
     else:
-        L.append("_Nothing is badly bleeding. Guardrails are holding._")
+        L.append("_Nothing is below the cold bar. Guardrails are holding._")
     # Saturation and creative read, straight from the BSD playbook (cold freq ceiling 2.0, hook/hold bands)
     L += ["", BAR, "*SATURATION & CREATIVE*"]
     if saturating:
@@ -727,12 +802,35 @@ def msg_advisor(A):
             L.append("_Hook is under 12%, the first 3 seconds are losing people.  Rework the thumb-stop._")
         elif hold_band(top_vid["hold"]) == "bad":
             L.append("_Hook lands but hold is under 22%, the body drops them.  Tighten the middle._")
-    L += ["", BAR, "*THE MAIN LEVER TO FIX*", fix, "", BAR, "*STRATEGIC MOVES THIS WEEK*"]
+    # audience overlap (adsets competing in the same auction)
+    L += ["", BAR, "*AUDIENCE OVERLAP*"]
+    if overlaps:
+        L.append("These active adsets fight each other in the auction, which lifts your own CPM and CPP:")
+        for tot, a, b, why in overlaps:
+            L.append("• %s  vs  %s  (%s), combined spend %s" % (aset_link(a, None), aset_link(b, None), why, money(tot)))
+        L.append("_Fix: merge the duplicates into one adset, or exclude each from the other so you stop bidding against yourself._")
+    elif overlaps is None:
+        L.append("_Not checked this run._")
+    else:
+        L.append("_No meaningful overlap. Your significant adsets are not bidding against each other._")
+    # ground the lever in this week's actual money and name what to touch first
+    _cur = {"CVR": s["cvr"], "AOV": s["aov"] or 0, "CPC": s.get("cpc")}[lever]
+    _prev = {"CVR": prev.get("cvr"), "AOV": prev.get("aov") or 0, "CPC": prev.get("cpc")}[lever]
+    _d = {"CVR": dcvr, "AOV": daov, "CPC": dcpc}[lever]
+    if lever == "CVR": _egp = round(s["lc"] * ((_cur or 0) - (_prev or 0)) / 100 * (s["aov"] or 0)); _kind = "revenue at the same clicks"
+    elif lever == "AOV": _egp = round(s["purch"] * ((_cur or 0) - (_prev or 0))); _kind = "revenue"
+    else: _egp = round(-s["lc"] * ((_cur or 0) - (_prev or 0))); _kind = "spend"
+    intro = "*%s* moved %s this week, about *%s EGP* of %s, the biggest of the three levers." % (lever, sp(_d), money(_egp), _kind)
+    start = ""
+    if fatiguing: start = IND + "Start with the fatiguing ads: %s." % ", ".join(nm(c) for c in fatiguing[:3])
+    elif saturating: start = IND + "Start by relieving the over-frequency adsets flagged above."
+    L += ["", BAR, "*THE MAIN LEVER TO FIX*", intro, fix + start, "", BAR, "*STRATEGIC MOVES THIS WEEK*"]
     n = 0
-    if bleeders and winners:
-        move = round(bleeders[0]["spend"] * 0.35)
-        n += 1; L.append("%d. *Reallocate.* Pull ~%s from %s and push it into %s.  Same audience pool, better creative economics." % (
-            n, money(move), nm(bleeders[0]), nm(winners[0])))
+    if bleeders and realloc_to:
+        b = bleeders[0]; move = round(b["spend"] * 0.35)
+        gain = round(move * (realloc_to["roas"] - (b["roas"] or 0)))
+        n += 1; L.append("%d. *Reallocate.* Pull ~%s from %s (ROAS %s) into %s (ROAS %s).  At that spend it is about %s EGP more revenue." % (
+            n, money(move), nm(b), b["roas"], nm(realloc_to), realloc_to["roas"], money(gain)))
     if winners:
         w = winners[0]
         sat = w["freq"] > freq_ceiling(w)
@@ -755,8 +853,8 @@ def msg_advisor(A):
     if n == 0:
         L.append("_Hold. Everything is inside its guardrails, keep feeding the winners and watch frequency._")
     # the one thing
-    if bleeders and winners:
-        one = "Move budget from %s into %s today." % (nm(bleeders[0]), nm(winners[0]))
+    if bleeders and realloc_to:
+        one = "Move budget from %s into %s today." % (nm(bleeders[0]), nm(realloc_to))
     elif winners:
         one = "Scale %s and protect it, it is your engine." % nm(winners[0])
     else:
@@ -817,7 +915,13 @@ def main():
                 prev_ids = set(r.get("ad_id") for r in prev_rows)
                 slack(lch, msg_launches(acct, A["creatives"], prev_ids, sm["roas"], sm["cpmr"], sm["cvr"]))
         if a.weekly or a.dry_run:
-            slack(ach, msg_advisor(A))
+            aset_ins = get_insights(acct["id"], last, level="adset", fields=LITE_FIELDS, extra="adset_id,adset_name")
+            spend_by = {}
+            for r in aset_ins:
+                sid = r.get("adset_id")
+                if sid: spend_by[sid] = spend_by.get(sid, 0) + f(r.get("spend"))
+            overlaps = audience_overlap(get_adset_targeting(acct["id"]), spend_by)
+            slack(ach, msg_advisor(A, overlaps))
         time.sleep(1)
 
     for A in report["accounts"]:
