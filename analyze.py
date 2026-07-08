@@ -286,10 +286,10 @@ def diagnose(m, p, rows=None, prev=None, tf=None):
     if not p or not p.get("spend"): return "No comparable prior period to diagnose."
     if tf is None:
         tf = "%s→%s vs %s→%s" % (DATES["label"][0], DATES["label"][1], DATES["p_label"][0], DATES["p_label"][1])
-    drev = pct(m["rev"], p["rev"]); droas = pct(m["roas"], p["roas"])
+    drev = pct(m["rev"], p["rev"]); droas = pct(m["roas"], p["roas"]); dspend = pct(m["spend"], p["spend"])
     dcpc = pct(m["cpc"], p["cpc"]); dcvr = pct(m["cvr"], p["cvr"]); daov = pct(m["aov"] or 0, p["aov"] or 0)
-    head = "*%s* · Revenue %s (%s EGP vs %s) · ROAS %s (%s)." % (
-        tf, sp(drev), money(m["rev"]), money(p["rev"]), m["roas"], sp(droas))
+    head = "*%s* · Revenue %s (%s vs %s EGP) · Spend %s · ROAS %s (%s)." % (
+        tf, sp(drev), money(m["rev"]), money(p["rev"]), sp(dspend), m["roas"], sp(droas))
     lines = [
         "   • CPC: %s → %s EGP (%s, %s)" % (p["cpc"], m["cpc"], sp(dcpc), tag(dcpc, False)),
         "   • CVR: %s%% → %s%% (%s, %s)" % (p["cvr"], m["cvr"], sp(dcvr), tag(dcvr, True)),
@@ -303,18 +303,18 @@ def diagnose(m, p, rows=None, prev=None, tf=None):
         return head + "\n" + "\n".join(lines) + "\n   *Read:* all three held ±flat — revenue steady, nothing to act on."
     name, key, d, up_good, word = max(levers, key=lambda x: abs(x[2]))
     prevv, curv = p[key], m[key]
-    if key == "cvr":   egp = round(m["lc"] * (curv - prevv) / 100 * (m["aov"] or 0))
-    elif key == "aov": egp = round(m["purch"] * (curv - prevv))
-    else:              egp = round(-m["lc"] * (curv - prevv))
-    others = " and ".join(n for n, k, *_ in levers if k != key)
-    good = (d > 0) == up_good
-    read = "%s %s %s while %s held — that's ~*%s EGP* and why revenue is %s." % (
-        name, "rose" if d > 0 else "fell", sp(d), others, money(egp), "up" if good else "down")
+    # EGP the lever is worth. CVR/AOV = revenue at same clicks; CPC = spend saved.
+    if key == "cvr":   egp = round(m["lc"] * (curv - prevv) / 100 * (m["aov"] or 0)); egpw = "%s EGP of revenue at the same clicks" % money(egp)
+    elif key == "aov": egp = round(m["purch"] * (curv - prevv));                       egpw = "%s EGP of revenue" % money(egp)
+    else:              egp = round(-m["lc"] * (curv - prevv));                          egpw = "%s EGP of spend" % money(egp)
+    # ROAS is what the 3 levers exactly control (ROAS = CVR x AOV / CPC). Revenue = that efficiency x spend.
+    read = "*%s* %s %s — the biggest of the three, worth ~*%s*. That drove ROAS %s. Revenue %s because spend %s." % (
+        name, "rose" if d > 0 else "fell", sp(d), egpw, sp(droas), sp(drev), sp(dspend))
     out = [head] + lines + ["   *Read:* " + read]
     culprit, cimp = attribute(rows, prev, key) if (rows and prev) else (None, 0)
     if culprit and abs(cimp) > 0:
         pc = prev.get(culprit["ad_id"], {})
-        u = "%" if key != "aov" else ""
+        u = "%" if key == "cvr" else " EGP"
         out.append("   *Deeper:* biggest single mover was %s — its %s went %s%s→%s%s on %s EGP spend (~%s EGP of the swing)." % (
             nm(culprit), name, pc.get(key), u, culprit.get(key), u, money(culprit["spend"]), money(cimp)))
     return "\n".join(out)
