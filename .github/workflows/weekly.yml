@@ -1,0 +1,30 @@
+name: AI Media Buyer — Weekly Strategic Advisor
+
+# ── Weekly strategic brief per account. Runs on GitHub's servers. ──
+# Posts to #strategic-advisor-ourkids and #strategic-advisor-playmore.
+on:
+  schedule:
+    # Saturday 06:00 UTC = 9AM Cairo (summer). Start-of-week planning brief.
+    - cron: "0 6 * * 6"
+  workflow_dispatch: {}   # also triggerable by hand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: media-buyer-weekly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run the weekly strategic advisor
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: python analyze.py --weekly
