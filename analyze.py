@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-AI MEDIA BUYER v2  |  Senior Meta Ads Growth Operator.
+AI MEDIA BUYER v2.1  |  Senior Meta Ads Growth Operator.
 
-Runs on GitHub Actions (free cron) with ONLY your Meta token + Slack bot token.
-No Claude, no Cowork, no laptop. GitHub's servers run it every morning.
+Runs on GitHub Actions (free cron) with ONLY a Meta token + Slack bot token.
+No Claude, no laptop. GitHub runs it every morning.
 
-What it does, like a senior growth marketer:
-- Separates CREATIVE performance from AUDIENCE performance (cold vs warm/retargeting).
-- Benchmarks each ad against its own segment (COLD/VIDEO, COLD/IMAGE, WARM/CATALOGUE...) using MEDIAN + MEAN, never blended.
-- Labels: SCALE OPPORTUNITY, AUDIENCE-ASSISTED, UNDERFUNDED, CREATIVE FATIGUE, BAD CREATIVE, PERFORMS, WATCH.
-- Funnel diagnosis (auction vs creative vs landing vs checkout vs AOV).
-- Impact score -> BIGGEST OFFENDER + BIGGEST OPPORTUNITY.
-- Budget mix: catalogue spend %, cold-only ROAS vs blended.
-- Posts to #meta-growth-alerts and a P0/P1/P2 board in #meta-actions.
-- Writes docs/data.json for the dashboard. Standard library only.
+Posts to 4 channels:
+  #meta-growth-alerts  daily summary + biggest offender + biggest opportunity
+  #meta-actions        P0/P1/P2 task board
+  #meta-anomalies      week-over-week anomaly detector (ROAS/CPA/spend/frequency)
+  #meta-3day-pulse     fast 3-day rolling read
 
-House style: line break after every period, no em dashes, CTR = Outbound CTR, never "pts".
+Every message states the time window and the run cadence, shows hook / hold /
+ROAS / CPA, and the exact % better or worse vs the segment or prior period.
+
+House style: line break after every period, no em dashes, CTR = Outbound CTR.
 """
 import os, sys, json, time, argparse, datetime, statistics as st
 import urllib.request, urllib.parse, urllib.error
@@ -28,12 +27,10 @@ DATA_PATH = os.path.join(DOCS, "data.json")
 TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 SLACK_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 
-
 def load_json(p, d):
     try:
         with open(p, encoding="utf-8") as f: return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError): return d
-
 def save_json(p, o):
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as f: json.dump(o, f, ensure_ascii=False, indent=2)
@@ -50,16 +47,33 @@ MIN_PUR = TH.get("winner_min_purchases", 5)
 ROAS_T = TH.get("roas_target", 2.0)
 FAT_FREQ = TH.get("fatigue_freq_increase", 30)
 FAT_CTR = TH.get("fatigue_ctr_drop", 20)
+AN_ROAS = TH.get("anomaly_roas_drop", 25)
+AN_CPA = TH.get("anomaly_cpa_spike", 30)
+AN_SPEND = TH.get("anomaly_spend_swing", 40)
 
 WARM_KW = ["retarget", " rt ", "rt_", "catalog", "dpa", "promocode", "promo code",
            "didn't purchase", "didnt purchase", "back2cart", "atc ", "atc_", "zombie",
            "existing", "evergreen", "ever green", "abandon", "viewed", "add to cart", "savewith"]
 CAT_KW = ["catalog", "dpa"]
 
-
 def f(x):
     try: return float(x)
     except (TypeError, ValueError): return 0.0
+def money(v):
+    return "{:,.0f}".format(v) if v is not None else "n/a"
+def pct(new, old):
+    if not old: return None
+    return (new - old) / old * 100.0
+def sp(x):  # signed percent string
+    return "n/a" if x is None else ("+" if x >= 0 else "") + "{:.0f}%".format(x)
+def when(tz):
+    try:
+        from zoneinfo import ZoneInfo; z = ZoneInfo(tz)
+    except Exception:
+        z = datetime.timezone.utc
+    now = datetime.datetime.now(z); y = (now - datetime.timedelta(days=1)).date()
+    return now, y
+CADENCE = "_Window: Last 7 Days vs Previous 7 Days. Runs automatically every morning at 9 AM Cairo._"
 
 
 # ----------------------- Graph API -----------------------
@@ -80,7 +94,6 @@ def api_get(path, params):
             last = str(e); time.sleep(2 ** i)
     return {"error": last}
 
-
 def get_accounts():
     cfg = CONFIG.get("accounts", {})
     if cfg.get("mode") == "manual":
@@ -98,7 +111,6 @@ def get_accounts():
         after = d.get("paging", {}).get("cursors", {}).get("after")
         if not after or not d.get("data"): break
     return out
-
 
 FIELDS = ",".join(["ad_id", "ad_name", "campaign_name", "adset_name", "objective",
     "spend", "impressions", "reach", "frequency", "cpm", "ctr", "inline_link_click_ctr",
@@ -125,7 +137,6 @@ def pick(rows, ordered):
     for t in ordered:
         if t in d: return f(d[t])
     return 0.0
-
 def first(rows): return f(rows[0].get("value")) if rows else 0.0
 PURCH = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"]
 
@@ -141,7 +152,7 @@ def metric(r):
     if any(k in blob for k in CAT_KW): typ = "CATALOGUE"
     elif p25 > impr * 0.02: typ = "VIDEO"
     else: typ = "IMAGE"
-    return {"ad_id": r.get("ad_id"), "ad_name": name, "campaign": camp, "adset": adset,
+    return {"ad_id": r.get("ad_id"), "ad_name": name, "campaign": camp,
             "aud": "WARM" if warm else "COLD", "type": typ,
             "spend": round(spend, 2), "impr": int(impr), "reach": int(reach),
             "freq": round(f(r.get("frequency")) or (impr / reach if reach else 0), 2),
@@ -154,14 +165,12 @@ def metric(r):
             "hook": round(v3 / impr * 100, 1) if impr else 0.0,
             "hold": round(p25 / impr * 100, 1) if impr else 0.0}
 
-
 def med(xs): return round(st.median(xs), 2) if xs else None
 def mean(xs): return round(st.mean(xs), 2) if xs else None
 
 def benchmarks(rows):
     B = {}
-    segs = set("%s/%s" % (c["aud"], c["type"]) for c in rows)
-    for s in segs:
+    for s in set("%s/%s" % (c["aud"], c["type"]) for c in rows):
         g = [c for c in rows if "%s/%s" % (c["aud"], c["type"]) == s and c["cpa"] and c["spend"] >= 500]
         if len(g) >= 2:
             B[s] = {"cpa_med": med([c["cpa"] for c in g]), "cpa_mean": mean([c["cpa"] for c in g]),
@@ -169,65 +178,68 @@ def benchmarks(rows):
                     "hold_med": med([c["hold"] for c in g]), "n": len(g)}
     return B
 
-
 def funnel(c, b):
     if c["type"] == "VIDEO" and b and b.get("hook_med") and c["hook"] >= b["hook_med"] * 1.15:
-        return "Attention is strong (hook above segment median). The break is after the click, conversion efficiency, not the hook."
+        return "Attention is strong, hook is above the segment median. The break is after the click, conversion efficiency, not the hook."
     if c["type"] == "VIDEO" and b and b.get("hook_med") and c["hook"] < b["hook_med"] * 0.7:
-        return "Weak first 3 seconds vs segment. The problem is the hook."
-    return "CTR is healthy, the cost is in conversion, not the click."
-
+        return "Weak first 3 seconds versus the segment. The problem is the hook."
+    return "CTR is healthy, the cost sits in conversion, not the click."
 
 def label(c, B, prev):
     seg = "%s/%s" % (c["aud"], c["type"]); b = B.get(seg)
-    # fatigue first (needs prev)
     p = prev.get(c["ad_id"]) if prev else None
+    c["d_roas"] = pct(c["roas"], p["roas"]) if p else None
+    c["d_cpa"] = pct(c["cpa"], p["cpa"]) if (p and p.get("cpa") and c["cpa"]) else None
+    c["d_freq"] = pct(c["freq"], p["freq"]) if p else None
+    c["d_octr"] = pct(c["octr"], p["octr"]) if p else None
+    c["d_spend"] = pct(c["spend"], p["spend"]) if p else None
+    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend")} if p else None
     if p and p.get("freq") and p.get("octr"):
-        dfreq = (c["freq"] - p["freq"]) / p["freq"] * 100 if p["freq"] else 0
-        doctr = (c["octr"] - p["octr"]) / p["octr"] * 100 if p["octr"] else 0
-        dcpm = (c["cpm"] - p["cpm"]) / p["cpm"] * 100 if p["cpm"] else 0
-        if dfreq > FAT_FREQ and doctr < -FAT_CTR and abs(dcpm) < 15:
-            return "CREATIVE FATIGUE", ("Frequency %s to %s (+%.0f%%). Outbound CTR %s%% to %s%% (%.0f%%). CPM stable. "
-                "Users see it more and respond less. Creative fatigue, refresh the first 3 seconds." %
-                (p["freq"], c["freq"], dfreq, p["octr"], c["octr"], doctr)), {"dfreq": dfreq, "doctr": doctr}
+        if c["d_freq"] is not None and c["d_freq"] > FAT_FREQ and c["d_octr"] is not None and c["d_octr"] < -FAT_CTR:
+            return "CREATIVE FATIGUE", ("Frequency %s to %s (%s). Outbound CTR %s%% to %s%% (%s). "
+                "Seen more, responding less. Refresh the first 3 seconds." %
+                (p["freq"], c["freq"], sp(c["d_freq"]), p["octr"], c["octr"], sp(c["d_octr"])))
     if (c["spend"] < MIN_SPEND * 0.5) and (c["purch"] or 0) < MIN_PUR:
-        return "UNDERFUNDED", ("Only %.0f spend and %d purchases. Not enough data to judge. Do not kill." %
-                (c["spend"], int(c["purch"] or 0))), {}
+        return "UNDERFUNDED", "Only %s spend and %d purchases. Not enough data to judge. Do not kill." % (money(c["spend"]), int(c["purch"] or 0))
     if c["aud"] == "WARM":
-        return "AUDIENCE-ASSISTED", ("Warm/%s audience. CPA %s and ROAS %s are driven by purchase intent, not the creative. "
-            "Do not call it a creative winner. To prove the creative, test it cold." %
-            (c["type"].lower(), c["cpa"], c["roas"]), ), {}
+        return "AUDIENCE-ASSISTED", ("Warm/%s audience. CPA %s and ROAS %s come from purchase intent, not the creative. Prove it cold before scaling." %
+            (c["type"].lower(), money(c["cpa"]), c["roas"]))
     if not b or not c["cpa"]:
-        return "STEADY", "Not enough cold peers in this segment to benchmark yet.", {}
+        return "STEADY", "Not enough cold peers in this segment to benchmark yet."
     gap = round((c["cpa"] - b["cpa_med"]) / b["cpa_med"] * 100)
     if c["spend"] >= MIN_SPEND and c["purch"] >= MIN_PUR and c["cpa"] <= b["cpa_med"] * 0.85 and c["roas"] >= ROAS_T and c["freq"] < 3.5:
-        return "SCALE OPPORTUNITY", ("Cold %s. CPA %s is %d%% below the %s median of %s. ROAS %s. Frequency %s healthy. "
-            "Real creative winner, the audience is not inflating it." %
-            (c["type"].lower(), c["cpa"], abs(gap), seg, b["cpa_med"], c["roas"], c["freq"]), ), {"gap": gap}
+        return "SCALE OPPORTUNITY", ("Cold %s. CPA %s is %d%% below the %s median of %s. ROAS %s. Frequency %s. Real creative winner." %
+            (c["type"].lower(), money(c["cpa"]), abs(gap), seg, money(b["cpa_med"]), c["roas"], c["freq"]))
     if c["spend"] >= MIN_SPEND and c["cpa"] > b["cpa_med"] * 1.3:
-        return "BAD CREATIVE", ("Cold %s. CPA %s is %+d%% vs the %s median of %s on real spend. %s" %
-            (c["type"].lower(), c["cpa"], gap, seg, b["cpa_med"], funnel(c, b)), ), {"gap": gap}
+        return "BAD CREATIVE", ("Cold %s. CPA %s is %s versus the %s median of %s. %s" %
+            (c["type"].lower(), money(c["cpa"]), sp(gap), seg, money(b["cpa_med"]), funnel(c, b)))
     if c["cpa"] <= b["cpa_med"]:
-        return "PERFORMS", "Cold %s, CPA %s at/below the %s median %s. Keep." % (c["type"].lower(), c["cpa"], seg, b["cpa_med"]), {"gap": gap}
-    return "WATCH", "Cold %s, CPA %s slightly above %s median %s (%+d%%)." % (c["type"].lower(), c["cpa"], seg, b["cpa_med"], gap), {"gap": gap}
+        return "PERFORMS", "Cold %s, CPA %s at or below the %s median %s. Keep." % (c["type"].lower(), money(c["cpa"]), seg, money(b["cpa_med"]))
+    return "WATCH", "Cold %s, CPA %s is %s versus the %s median %s." % (c["type"].lower(), money(c["cpa"]), sp(gap), seg, money(b["cpa_med"]))
 
+def seg_gap(c, B):
+    b = B.get("%s/%s" % (c["aud"], c["type"]))
+    if not b or not c["cpa"]: return None, None
+    return round((c["cpa"] - b["cpa_med"]) / b["cpa_med"] * 100), b
 
 def analyze(acct, cur_rows, prev_rows):
     rows = [metric(r) for r in cur_rows]
     prev = {m["ad_id"]: m for m in (metric(r) for r in prev_rows)}
     B = benchmarks(rows)
     for c in rows:
-        lab, why, extra = label(c, B, prev)
-        c["label"] = lab; c["why"] = why[0] if isinstance(why, tuple) else why
-        seg = "%s/%s" % (c["aud"], c["type"]); b = B.get(seg)
+        c["label"], c["why"] = label(c, B, prev)
+        g, b = seg_gap(c, B)
+        c["gap"] = g; c["seg_cpa_med"] = b["cpa_med"] if b else None
         c["waste"] = round(c["purch"] * (c["cpa"] - b["cpa_med"])) if (c["aud"] == "COLD" and b and c["cpa"] and c["cpa"] > b["cpa_med"] and c["spend"] >= MIN_SPEND) else 0
-        c["scale_score"] = round(c["spend"] * (b["cpa_med"] - c["cpa"]) / b["cpa_med"]) if (lab == "SCALE OPPORTUNITY" and b) else 0
+        c["scale_score"] = round(c["spend"] * (b["cpa_med"] - c["cpa"]) / b["cpa_med"]) if (c["label"] == "SCALE OPPORTUNITY" and b) else 0
     spend = sum(c["spend"] for c in rows); rev = sum(c["rev"] for c in rows); purch = sum(c["purch"] for c in rows)
+    pspend = sum((c["prev"] or {}).get("spend", 0) for c in rows)
     cat = sum(c["spend"] for c in rows if c["type"] == "CATALOGUE")
     cold = [c for c in rows if c["aud"] == "COLD"]; cold_s = sum(c["spend"] for c in cold); cold_r = sum(c["rev"] for c in cold)
     summary = {"spend": round(spend), "revenue": round(rev), "purchases": int(purch),
                "roas": round(rev / spend, 2) if spend else 0, "cpa": round(spend / purch) if purch else None,
-               "cat_pct": round(cat / spend * 100) if spend else 0, "cold_roas": round(cold_r / cold_s, 2) if cold_s else 0}
+               "cat_pct": round(cat / spend * 100) if spend else 0, "cold_roas": round(cold_r / cold_s, 2) if cold_s else 0,
+               "d_spend": pct(spend, pspend)}
     offenders = [c for c in rows if c["waste"] > 0]
     opps = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
     return {"account": acct, "summary": summary, "benchmarks": B,
@@ -238,9 +250,10 @@ def analyze(acct, cur_rows, prev_rows):
 
 # ----------------------- Slack -----------------------
 def slack(channel, text):
+    if not channel: return
     if not SLACK_TOKEN:
         print("[slack:%s] %s\n" % (channel, text[:70])); return
-    body = json.dumps({"channel": channel, "text": text, "unfurl_links": False}).encode()
+    body = json.dumps({"channel": channel, "text": text, "unfurl_links": False, "mrkdwn": True}).encode()
     req = urllib.request.Request("https://slack.com/api/chat.postMessage", data=body,
         headers={"Authorization": "Bearer %s" % SLACK_TOKEN, "Content-Type": "application/json; charset=utf-8"})
     try:
@@ -249,73 +262,149 @@ def slack(channel, text):
     except Exception as e:
         sys.stderr.write("[slack] %s\n" % e)
 
-
-def cur(a): return a["account"].get("currency", "")
+def cur(A): return A["account"].get("currency", "")
+def vid(c): return c["type"] == "VIDEO"
+def line(c, cc):
+    """One readable creative line with the numbers that matter."""
+    parts = ["*%s*" % c["ad_name"], "%s %s" % (c["aud"].title(), c["type"].title()),
+             "CPA %s %s" % (money(c["cpa"]), cc)]
+    if c.get("gap") is not None: parts.append("%s vs seg" % sp(c["gap"]))
+    parts.append("ROAS %s" % c["roas"])
+    if vid(c): parts.append("hook %s%% / hold %s%%" % (c["hook"], c["hold"]))
+    parts.append("freq %s" % c["freq"])
+    return "  •  ".join(parts)
 
 def msg_summary(A):
-    s = A["summary"]; c = cur(A); rows = A["creatives"]
-    wins = [x for x in rows if x["label"] == "SCALE OPPORTUNITY"]
-    warm = [x for x in rows if x["label"] == "AUDIENCE-ASSISTED"][:3]
-    L = [MENTION + " 📊 Daily Growth Summary — " + A["account"]["name"] + " (" + c + ")",
-         "Spend %s %s | ROAS %s | %d purchases | CPA %s %s" % (s["spend"], c, s["roas"], s["purchases"], s["cpa"], c)]
+    s = A["summary"]; cc = cur(A); rows = A["creatives"]
+    wins = [c for c in rows if c["label"] == "SCALE OPPORTUNITY"]
+    warm = sorted([c for c in rows if c["label"] == "AUDIENCE-ASSISTED"], key=lambda c: c["spend"], reverse=True)[:4]
+    L = ["%s :dart: *Daily Growth Summary — %s (%s)*" % (MENTION, A["account"]["name"], cc),
+         ":date: Last 7 Days vs Previous 7 Days", "",
+         "*Account*",
+         "• Spend: *%s %s* (%s vs prev)" % (money(s["spend"]), cc, sp(s["d_spend"])),
+         "• Revenue: %s %s" % (money(s["revenue"]), cc),
+         "• Blended ROAS: *%s*   |   Cold prospecting ROAS: *%s*" % (s["roas"], s["cold_roas"]),
+         "• Purchases: %d   |   Blended CPA: %s %s" % (s["purchases"], money(s["cpa"]), cc)]
     if s["cat_pct"] >= 15:
-        L.append("\nRead ROAS carefully: catalogue is %d%% of spend. Cold prospecting ROAS is %s, judge new creatives against cold." % (s["cat_pct"], s["cold_roas"]))
+        L += ["", ":warning: Catalogue is *%d%%* of spend and lifts blended ROAS. Judge new creatives against Cold ROAS %s, not blended." % (s["cat_pct"], s["cold_roas"])]
     if wins:
-        L.append("\nTrue creative winners (cold): " + ", ".join("%s (CPA %s)" % (w["ad_name"], w["cpa"]) for w in wins[:3]))
+        L += ["", ":large_green_circle: *True creative winners (cold)*"] + ["• " + line(c, cc) for c in wins[:4]]
     if warm:
-        L.append("Audience-assisted (not creative winners): " + ", ".join("%s (%s)" % (w["ad_name"], w["cpa"]) for w in warm))
-    if A["offender"]: L.append("\nBiggest risk: " + A["offender"]["ad_name"])
-    if A["opportunity"]: L.append("Biggest opportunity: " + A["opportunity"]["ad_name"])
+        L += ["", ":large_blue_circle: *Audience-assisted (retargeting / catalogue, NOT creative wins)*"] + \
+             ["• *%s*  •  CPA %s %s  •  ROAS %s  •  freq %s  •  spend %s %s" %
+              (c["ad_name"], money(c["cpa"]), cc, c["roas"], c["freq"], money(c["spend"]), cc) for c in warm]
+    if A["offender"]: L += ["", ":rotating_light: Biggest risk: *%s*" % A["offender"]["ad_name"]]
+    if A["opportunity"]: L += [":rocket: Biggest opportunity: *%s*" % A["opportunity"]["ad_name"]]
+    L += ["", CADENCE]
     return "\n".join(L)
 
 def msg_offender(A):
     c = A["offender"]; cc = cur(A); seg = "%s/%s" % (c["aud"], c["type"]); b = A["benchmarks"].get(seg, {})
-    return "\n".join([MENTION + " 🚨 Biggest Offender Today", "Account: " + A["account"]["name"],
-        "Creative: %s" % c["ad_name"], "Type: %s | Audience: %s | Impact: High" % (c["type"].title(), c["aud"].title()), "",
-        "Spend: %s %s" % (c["spend"], cc), "CPA: %s %s" % (c["cpa"], cc),
-        "%s median CPA: %s %s" % (seg, b.get("cpa_med"), cc),
-        "Estimated wasted spend: ~%s %s this week" % (c["waste"], cc), "",
-        "Diagnosis: " + c["why"], "Action: cut budget 30 to 40%. Reallocate to the cold winners in this account."])
+    L = ["%s :rotating_light: *Biggest Offender — %s*" % (MENTION, A["account"]["name"]),
+         ":date: Last 7 Days vs Previous 7 Days", "",
+         "*%s*   (%s %s)" % (c["ad_name"], c["aud"].title(), c["type"].title()),
+         "• Spend: *%s %s*" % (money(c["spend"]), cc),
+         "• CPA: *%s %s*  →  *%s* vs %s median %s" % (money(c["cpa"]), cc, sp(c["gap"]), seg, money(b.get("cpa_med"))),
+         "• ROAS: %s" % c["roas"]]
+    if vid(c):
+        L.append("• Hook: %s%% (median %s%%)   |   Hold: %s%% (median %s%%)" % (c["hook"], b.get("hook_med"), c["hold"], b.get("hold_med")))
+    L += ["• Estimated wasted spend: *~%s %s this week*" % (money(c["waste"]), cc), "",
+          ":brain: %s" % c["why"],
+          ":white_check_mark: *Action:* cut budget 30 to 40%. Reallocate to the cold winners in this account.",
+          "", CADENCE]
+    return "\n".join(L)
 
 def msg_opportunity(A):
     c = A["opportunity"]; cc = cur(A); seg = "%s/%s" % (c["aud"], c["type"]); b = A["benchmarks"].get(seg, {})
-    return "\n".join([MENTION + " 🚀 Biggest Opportunity", "Account: " + A["account"]["name"],
-        "Creative: %s" % c["ad_name"], "Type: %s | Audience: %s | Label: Scale Opportunity" % (c["type"].title(), c["aud"].title()), "",
-        "CPA: %s %s" % (c["cpa"], cc), "%s median CPA: %s %s" % (seg, b.get("cpa_med"), cc),
-        "ROAS: %s | Frequency: %s | Spend: %s %s" % (c["roas"], c["freq"], c["spend"], cc), "",
-        "Why it is real and not audience: it wins in COLD, so the creative is doing the work.",
-        "Action: increase budget 20 to 30%. Build 5 iterations:",
-        "1. Same layout, different product", "2. Alternate model", "3. Parent POV angle",
-        "4. UGC testimonial", "5. Close-up quality detail", "Expected impact: High."])
+    L = ["%s :rocket: *Biggest Opportunity — %s*" % (MENTION, A["account"]["name"]),
+         ":date: Last 7 Days vs Previous 7 Days", "",
+         "*%s*   (%s %s, Scale Opportunity)" % (c["ad_name"], c["aud"].title(), c["type"].title()),
+         "• CPA: *%s %s*  →  *%s* vs %s median %s" % (money(c["cpa"]), cc, sp(c["gap"]), seg, money(b.get("cpa_med"))),
+         "• ROAS: *%s*   |   Frequency: %s   |   Spend: %s %s" % (c["roas"], c["freq"], money(c["spend"]), cc)]
+    if vid(c):
+        L.append("• Hook: %s%% (median %s%%)   |   Hold: %s%% (median %s%%)" % (c["hook"], b.get("hook_med"), c["hold"], b.get("hold_med")))
+    L += ["", "It wins in a COLD audience, so the creative is doing the work, not warm intent.",
+          ":white_check_mark: *Action:* increase budget 20 to 30% and build 5 iterations:",
+          "1. Same layout, different product", "2. Alternate model", "3. Parent POV angle",
+          "4. UGC testimonial", "5. Close-up quality detail", "", CADENCE]
+    return "\n".join(L)
 
 def action_cards(A):
-    cards = []; cc = cur(A); nm = A["account"]["name"]
+    cards, cc, nm = [], cur(A), A["account"]["name"]
     if A["offender"]:
         c = A["offender"]
-        cards.append("🔴 P0 — Cut budget: %s (%s)\nAction: reduce 30 to 40%%, reallocate to cold winners.\nReason: biggest offender.\nEvidence: spend %s %s, CPA %s, ~%s %s wasted this week.\nExpected impact: High.\nStatus: Open" % (c["ad_name"], nm, c["spend"], cc, c["cpa"], c["waste"], cc))
+        cards.append(":red_circle: *P0 — Cut budget: %s* (%s)\n"
+            "Action: reduce 30 to 40%%, reallocate to cold winners.\n"
+            "Reason: biggest offender.\n"
+            "Evidence: spend %s %s, CPA %s (%s vs seg median %s), ROAS %s, ~%s %s wasted this week.\n"
+            "Expected impact: High.  Status: Open" %
+            (c["ad_name"], nm, money(c["spend"]), cc, money(c["cpa"]), sp(c["gap"]), money(c["seg_cpa_med"]), c["roas"], money(c["waste"]), cc))
     if A["opportunity"]:
-        c = A["opportunity"]
-        cards.append("🔴 P0 — Scale: %s (%s)\nAction: increase budget 20 to 30%% and brief 5 iterations.\nReason: true cold creative winner.\nEvidence: CPA %s, ROAS %s, frequency %s, spend %s %s.\nExpected impact: High.\nStatus: Open" % (c["ad_name"], nm, c["cpa"], c["roas"], c["freq"], c["spend"], cc))
+        c = A["opportunity"]; hh = " Hook %s%%/hold %s%%." % (c["hook"], c["hold"]) if vid(c) else ""
+        cards.append(":red_circle: *P0 — Scale: %s* (%s)\n"
+            "Action: increase budget 20 to 30%% and brief 5 iterations.\n"
+            "Reason: true cold creative winner.\n"
+            "Evidence: CPA %s (%s vs seg median %s), ROAS %s, freq %s, spend %s %s.%s\n"
+            "Expected impact: High.  Status: Open" %
+            (c["ad_name"], nm, money(c["cpa"]), sp(c["gap"]), money(c["seg_cpa_med"]), c["roas"], c["freq"], money(c["spend"]), cc, hh))
     for c in A["creatives"]:
         if c["label"] == "CREATIVE FATIGUE":
-            cards.append("🟠 P1 — Refresh: %s (%s)\nAction: new first 3 seconds, keep the concept.\nReason: creative fatigue with evidence.\nEvidence: %s\nExpected impact: Medium.\nStatus: Open" % (c["ad_name"], nm, c["why"]))
+            cards.append(":large_orange_circle: *P1 — Refresh: %s* (%s)\n"
+                "Action: new first 3 seconds, keep the concept.\nReason: creative fatigue with evidence.\n"
+                "Evidence: %s\nExpected impact: Medium.  Status: Open" % (c["ad_name"], nm, c["why"]))
         elif c["label"] == "BAD CREATIVE" and c is not A["offender"]:
-            cards.append("🟠 P1 — Trim: %s (%s)\nAction: reduce budget or pause.\nReason: above segment on real spend.\nEvidence: %s\nExpected impact: Medium.\nStatus: Open" % (c["ad_name"], nm, c["why"]))
+            cards.append(":large_orange_circle: *P1 — Trim: %s* (%s)\n"
+                "Action: reduce budget or pause.\nReason: above segment on real spend.\n"
+                "Evidence: CPA %s (%s vs seg), ROAS %s.\nExpected impact: Medium.  Status: Open" %
+                (c["ad_name"], nm, money(c["cpa"]), sp(c["gap"]), c["roas"]))
     return cards
+
+def anomalies(A):
+    """Week over week anomaly detector at account and creative level."""
+    s = A["summary"]; cc = cur(A); out = []
+    # account level
+    acc = []
+    if s["d_spend"] is not None and abs(s["d_spend"]) >= AN_SPEND:
+        acc.append("Spend swung *%s* week over week" % sp(s["d_spend"]))
+    for c in A["creatives"]:
+        if c["spend"] < MIN_SPEND / 2: continue
+        flags = []
+        if c["d_roas"] is not None and c["d_roas"] <= -AN_ROAS:
+            flags.append("ROAS %s to %s (*%s*)" % (c["prev"]["roas"], c["roas"], sp(c["d_roas"])))
+        if c["d_cpa"] is not None and c["d_cpa"] >= AN_CPA:
+            flags.append("CPA %s to %s (*%s*)" % (money(c["prev"]["cpa"]), money(c["cpa"]), sp(c["d_cpa"])))
+        if c["d_freq"] is not None and c["d_freq"] >= FAT_FREQ:
+            flags.append("Frequency %s to %s (*%s*)" % (c["prev"]["freq"], c["freq"], sp(c["d_freq"])))
+        if flags:
+            out.append("• *%s* (%s %s, spend %s %s)\n    %s" %
+                       (c["ad_name"], c["aud"].title(), c["type"].title(), money(c["spend"]), cc, "\n    ".join(flags)))
+    if not acc and not out: return None
+    head = ["%s :ocean: *Anomaly Detector — %s*" % (MENTION, A["account"]["name"]),
+            ":date: Last 7 Days vs Previous 7 Days", ""]
+    if acc: head += acc + [""]
+    if out: head += ["*Creatives that moved sharply*"] + out
+    else: head += ["No creative-level anomalies. Account-level swing only."]
+    head += ["", CADENCE]
+    return "\n".join(head)
+
+def pulse_3day(acct, rows):
+    cc = acct.get("currency", "")
+    spend = sum(f(r.get("spend")) for r in rows)
+    if spend <= 0: return None
+    ms = [metric(r) for r in rows]
+    rev = sum(c["rev"] for c in ms); purch = sum(c["purch"] for c in ms)
+    top = max(ms, key=lambda c: c["spend"])
+    return "\n".join([
+        "%s :zap: *3-Day Pulse — %s (%s)*" % (MENTION, acct["name"], cc),
+        ":date: Last 3 Days", "",
+        "• Spend: *%s %s*" % (money(spend), cc),
+        "• Revenue: %s %s" % (money(rev), cc),
+        "• ROAS: *%s*   |   Purchases: %d   |   CPA: %s %s" % (round(rev / spend, 2), int(purch), money(spend / purch if purch else None), cc),
+        "• Top spender: *%s* (CPA %s %s, ROAS %s)" % (top["ad_name"], money(top["cpa"]), cc, top["roas"]),
+        "", "_Fast 3-day read. Runs every morning at 9 AM Cairo._"])
 
 
 # ----------------------- main -----------------------
-def daterange(tz_hour_check=False):
-    try:
-        from zoneinfo import ZoneInfo; tz = ZoneInfo(TZ)
-    except Exception:
-        tz = datetime.timezone.utc
-    now = datetime.datetime.now(tz); y = (now - datetime.timedelta(days=1)).date()
-    last = {"since": str(y - datetime.timedelta(days=6)), "until": str(y)}
-    prev = {"since": str(y - datetime.timedelta(days=13)), "until": str(y - datetime.timedelta(days=7))}
-    return last, prev, now
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--daily", action="store_true")
@@ -325,9 +414,12 @@ def main():
     if a.dry_run: SLACK_TOKEN = ""
     if not TOKEN: sys.stderr.write("META_ACCESS_TOKEN missing\n"); sys.exit(1)
 
-    last, prev, now = daterange()
-    state = load_json(STATE_PATH, {"winners": {}, "fatigue": {}})
+    now, y = when(TZ)
+    last = {"since": str(y - datetime.timedelta(days=6)), "until": str(y)}
+    prev = {"since": str(y - datetime.timedelta(days=13)), "until": str(y - datetime.timedelta(days=7))}
+    last3 = {"since": str(y - datetime.timedelta(days=2)), "until": str(y)}
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
+
     for acct in get_accounts():
         cur_rows = get_insights(acct["id"], last)
         if not cur_rows: continue
@@ -335,30 +427,25 @@ def main():
         A = analyze(acct, cur_rows, prev_rows)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
-
         if a.daily or a.dry_run:
-            slack(CH.get("growth", "#meta-growth-alerts"), msg_summary(A))
-            if A["offender"]: slack(CH.get("growth", "#meta-growth-alerts"), msg_offender(A))
-            if A["opportunity"]: slack(CH.get("growth", "#meta-growth-alerts"), msg_opportunity(A))
+            slack(CH.get("growth"), msg_summary(A))
+            if A["offender"]: slack(CH.get("growth"), msg_offender(A))
+            if A["opportunity"]: slack(CH.get("growth"), msg_opportunity(A))
             cards = action_cards(A)
             if cards:
-                slack(CH.get("actions", "#meta-actions"), MENTION + " 📌 Daily Growth Actions — " + A["account"]["name"])
-                for c in cards: slack(CH.get("actions", "#meta-actions"), c)
-        # winner announce once
-        for c in A["creatives"]:
-            key = "%s:%s" % (acct["id"], c["ad_id"])
-            if c["label"] == "SCALE OPPORTUNITY" and key not in state["winners"]:
-                state["winners"][key] = str(datetime.date.today())
+                slack(CH.get("actions"), "%s :pushpin: *Daily Growth Actions — %s*  (ranked by impact, evidence attached)" % (MENTION, acct["name"]))
+                for c in cards: slack(CH.get("actions"), c)
+            an = anomalies(A)
+            if an: slack(CH.get("anomalies"), an)
+            p3 = pulse_3day(acct, get_insights(acct["id"], last3))
+            if p3: slack(CH.get("three_day"), p3)
         time.sleep(1)
 
-    # trim heavy fields for dashboard
     for A in report["accounts"]:
         for c in A["creatives"]:
-            c.pop("adset", None)
+            c.pop("prev", None)
     save_json(DATA_PATH, report)
-    if not a.dry_run: save_json(STATE_PATH, state)
     sys.stderr.write("[done] %d accounts\n" % len(report["accounts"]))
-
 
 if __name__ == "__main__":
     main()

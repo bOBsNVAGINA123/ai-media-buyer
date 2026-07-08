@@ -26,7 +26,9 @@
     "mention_user_id": "U082VCLRZ6E",
     "channels": {
       "growth": "C0BFN4UGYKY",
-      "actions": "C0BFN4PLT2A"
+      "actions": "C0BFN4PLT2A",
+      "anomalies": "C0BFG6A1WCX",
+      "three_day": "C0BFG68BGBH"
     }
   }
 }
