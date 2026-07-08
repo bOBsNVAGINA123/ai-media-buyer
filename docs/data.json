@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-08T15:35:54.359869+03:00",
+  "generated_at": "2026-07-08T15:49:43.452480+03:00",
   "timezone": "Africa/Cairo",
   "sample": false,
   "accounts": [
@@ -17,15 +17,29 @@
         "cpa": 202,
         "cat_pct": 24,
         "cold_roas": 5.32,
-        "d_spend": -30.331401058377256
+        "d_spend": -30.331387209260324
       },
       "benchmarks": {
+        "COLD/IMAGE": {
+          "cpa_med": 303.77,
+          "roas_med": 4.01,
+          "hook_med": 0.3,
+          "hold_med": 0.05,
+          "n": 10
+        },
         "WARM/VIDEO": {
           "cpa_med": 470.92,
           "roas_med": 2.21,
           "hook_med": 63.75,
           "hold_med": 5.7,
           "n": 6
+        },
+        "WARM/IMAGE": {
+          "cpa_med": 244.34,
+          "roas_med": 3.37,
+          "hook_med": 50.5,
+          "hold_med": 1.2,
+          "n": 3
         },
         "WARM/CATALOGUE": {
           "cpa_med": 137.33,
@@ -34,26 +48,12 @@
           "hold_med": 0.0,
           "n": 9
         },
-        "COLD/IMAGE": {
-          "cpa_med": 303.77,
-          "roas_med": 4.01,
-          "hook_med": 0.3,
-          "hold_med": 0.05,
-          "n": 10
-        },
         "COLD/VIDEO": {
           "cpa_med": 237.61,
           "roas_med": 5.48,
           "hook_med": 72.45,
           "hold_med": 8.15,
           "n": 20
-        },
-        "WARM/IMAGE": {
-          "cpa_med": 244.34,
-          "roas_med": 3.37,
-          "hook_med": 50.5,
-          "hold_med": 1.2,
-          "n": 3
         }
       },
       "creatives": [
@@ -161,8 +161,8 @@
           "adset_id": "120240930373430621",
           "aud": "WARM",
           "type": "CATALOGUE",
-          "spend": 12199.65,
-          "impr": 196697,
+          "spend": 12199.66,
+          "impr": 196698,
           "freq": 3.59,
           "cpm": 62.02,
           "ctr": 4.47,
@@ -194,7 +194,7 @@
           "aud": "WARM",
           "type": "CATALOGUE",
           "spend": 10336.76,
-          "impr": 192158,
+          "impr": 192159,
           "freq": 3.19,
           "cpm": 53.79,
           "ctr": 2.4,
@@ -321,8 +321,8 @@
           "adset_id": "120241492120860621",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 7706.63,
-          "impr": 234537,
+          "spend": 7706.64,
+          "impr": 234538,
           "freq": 2.55,
           "cpm": 32.86,
           "ctr": 1.54,
@@ -545,8 +545,8 @@
           "adset_id": "120243793730120621",
           "aud": "COLD",
           "type": "VIDEO",
-          "spend": 3815.51,
-          "impr": 95067,
+          "spend": 3815.52,
+          "impr": 95069,
           "freq": 1.99,
           "cpm": 40.13,
           "ctr": 2.43,
@@ -1281,8 +1281,8 @@
           "adset_id": "120245665745820621",
           "aud": "WARM",
           "type": "VIDEO",
-          "spend": 1085.4,
-          "impr": 15112,
+          "spend": 1085.41,
+          "impr": 15113,
           "freq": 1.82,
           "cpm": 71.82,
           "ctr": 4.18,
@@ -4076,6 +4076,13 @@
         "d_spend": 137.39883361509843
       },
       "benchmarks": {
+        "WARM/VIDEO": {
+          "cpa_med": 333.1,
+          "roas_med": 4.61,
+          "hook_med": 93.8,
+          "hold_med": 23.1,
+          "n": 3
+        },
         "WARM/CATALOGUE": {
           "cpa_med": 553.14,
           "roas_med": 3.5,
@@ -4089,13 +4096,6 @@
           "hook_med": 0.0,
           "hold_med": 0.0,
           "n": 2
-        },
-        "WARM/VIDEO": {
-          "cpa_med": 333.1,
-          "roas_med": 4.61,
-          "hook_med": 93.8,
-          "hold_med": 23.1,
-          "n": 3
         }
       },
       "creatives": [
