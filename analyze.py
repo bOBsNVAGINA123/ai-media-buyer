@@ -152,7 +152,8 @@ def get_accounts():
 AD_FIELDS = ",".join(["ad_id", "ad_name", "campaign_name", "adset_name", "adset_id", "objective",
     "spend", "impressions", "reach", "frequency", "cpm", "ctr", "inline_link_click_ctr",
     "outbound_clicks_ctr", "actions", "action_values", "video_play_actions",
-    "video_p25_watched_actions", "video_p100_watched_actions", "video_thruplay_watched_actions"])
+    "video_p25_watched_actions", "video_p50_watched_actions", "video_p75_watched_actions",
+    "video_p95_watched_actions", "video_p100_watched_actions", "video_thruplay_watched_actions"])
 LITE_FIELDS = "spend,reach,purchase_roas,actions,action_values"
 
 def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
@@ -262,6 +263,9 @@ def metric(r):
     purch = pick(r.get("actions"), PURCH); rev = pick(r.get("action_values"), PURCH)
     lc = pick(r.get("actions"), ["link_click"]); atc = pick(r.get("actions"), ATC)
     v3 = first(r.get("video_play_actions")); p25 = first(r.get("video_p25_watched_actions"))
+    p50 = first(r.get("video_p50_watched_actions")); p75 = first(r.get("video_p75_watched_actions"))
+    p95 = first(r.get("video_p95_watched_actions")); p100 = first(r.get("video_p100_watched_actions"))
+    thru = first(r.get("video_thruplay_watched_actions"))
     octr = first(r.get("outbound_clicks_ctr")) or f(r.get("inline_link_click_ctr"))
     name = r.get("ad_name", ""); camp = r.get("campaign_name", ""); adset = r.get("adset_name", "")
     blob = (" %s %s %s " % (name, camp, adset)).lower()
@@ -283,7 +287,12 @@ def metric(r):
             "cpc": round(spend / lc, 2) if lc else 0.0,
             "atc_rate": round(atc / lc * 100, 1) if lc else 0.0,
             "hook": round(v3 / impr * 100, 1) if impr else 0.0,
-            "hold": round(p25 / impr * 100, 1) if impr else 0.0}
+            "hold": round(p25 / impr * 100, 1) if impr else 0.0,
+            "v3": round(v3), "thru": round(thru),
+            # retention among people who watched 3 seconds (where they drop off)
+            "r25": round(p25 / v3 * 100) if v3 else 0, "r50": round(p50 / v3 * 100) if v3 else 0,
+            "r75": round(p75 / v3 * 100) if v3 else 0, "r95": round(p95 / v3 * 100) if v3 else 0,
+            "r100": round(p100 / v3 * 100) if v3 else 0}
 
 def med(xs): return round(st.median(xs), 2) if xs else None
 
@@ -417,7 +426,12 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
         cum += c["spend"]; c["vital"] = cum <= 0.8 * tot_spend + 0.01
         c["significant"] = c["spend"] >= max(MIN_SPEND, 0.03 * tot_spend)
     _acc = agg(rows); acc_cpmr = _acc["cpmr"] or 1; acc_cvr = _acc["cvr"] or 1; acc_roas = _acc["roas"] or 1
+    tot_sp = _acc["spend"] or 1
+    _vids = [c for c in rows if c["type"] == "VIDEO" and c["hook"] and c["spend"] >= 500]
+    acc_hook = round(st.mean([c["hook"] for c in _vids]), 1) if _vids else 0
     for c in rows:
+        c["acc_hook"] = acc_hook; c["spend_share"] = round(c["spend"] / tot_sp * 100, 1)
+        c["avg_share"] = round(100.0 / len(rows), 1) if rows else 0
         c["label"] = label(c, B, prev, cold_roas)
         b = B.get("%s/%s" % (c["aud"], c["type"]))
         c["gap"] = round((c["cpa"] - b["cpa_med"]) / b["cpa_med"] * 100) if (b and c["cpa"]) else None
@@ -504,7 +518,7 @@ def gapw(g):
 IND = "\n     "  # indent used to break after every period inside a Why block
 def why_scale(c, cold):
     reach = ("reaches people cheaper than the rest" if (c.get("acc_cpmr") and c["cpmr"] < c["acc_cpmr"])
-             else "reach is dearer than the account, so watch CPM as you scale")
+             else "reach is more expensive than the account, so watch CPM as you scale")
     return ("Best value of the winners." + IND +
             "CPA %s vs group median %s." % (money(c["cpa"]), money(c["seg_cpa_med"])) + IND +
             "ROAS %s vs cold bar %s." % (c["roas"], cold) + IND +
@@ -686,22 +700,24 @@ def msg_launches(acct, creatives, prev_ids, acc_roas=None, acc_cpmr=None, acc_cv
 def gappct(val, ref):
     return None if not ref else round((val - ref) / ref * 100)
 def adref(c, cold=None):
-    # headline line
-    head = "%s  ·  Spend %s" % (nm(c), money(c["spend"]))
-    # ROAS vs cold bar, in % and EGP of revenue on this spend
+    # headline: spend + share of the account, and whether that share is bigger than the average ad
+    share = c.get("spend_share"); avg = c.get("avg_share")
+    sh = ""
+    if share is not None:
+        big = "above the average ad" if (avg and share > avg) else "below the average ad"
+        sh = "  (%s%% of account spend, %s)" % (share, big)
+    head = "%s  ·  Spend %s%s" % (nm(c), money(c["spend"]), sh)
     parts = []
     if cold and c["roas"]:
         egp = round(c["spend"] * (c["roas"] - cold))
         parts.append("ROAS %s vs cold %s (%s, %s EGP rev)" % (c["roas"], cold, sp(gappct(c["roas"], cold)), money(egp)))
-    # CVR vs account avg
     if c.get("acc_cvr"):
         cegp = round(c["lc"] * (c["cvr"] - c["acc_cvr"]) / 100 * (c["aov"] or 0))
         parts.append("CVR %s%% vs %s%% avg (%s, %s EGP rev)" % (c["cvr"], c["acc_cvr"], sp(gappct(c["cvr"], c["acc_cvr"])), money(cegp)))
-    # CPMR vs account avg (lower is cheaper reach)
     if c.get("acc_cpmr"):
         regp = round(c["reach"] / 1000 * (c["cpmr"] - c["acc_cpmr"]))
-        cheap = "cheaper" if c["cpmr"] < c["acc_cpmr"] else "dearer"
-        parts.append("CPMR %s vs %s avg (%s reach, %s EGP)" % (money(c["cpmr"]), money(c["acc_cpmr"]), cheap, money(regp)))
+        cheap = "cheaper reach" if c["cpmr"] < c["acc_cpmr"] else "more expensive reach"
+        parts.append("CPMR %s vs %s avg (%s, %s EGP)" % (money(c["cpmr"]), money(c["acc_cpmr"]), cheap, money(regp)))
     return head + "\n     " + "\n     ".join(parts)
 # agreed BSD bands (from the Meta Ads Playbook in the vault)
 def hook_band(h): return "good" if h >= 20 else ("average" if h >= 12 else "bad")
@@ -711,6 +727,27 @@ def freq_ceiling(c):
     return 3.0 if c.get("type") == "CATALOGUE" else 2.0
 def is_saturating(c):
     return c["aud"] == "COLD" and c.get("significant") and c["freq"] > freq_ceiling(c)
+def video_read(c):
+    """Hook vs the account, the full retention funnel, where they drop, and a verdict."""
+    if not c.get("hook"): return None
+    vs = (" vs %s%% account avg" % c["acc_hook"]) if c.get("acc_hook") else ""
+    L = ["%s" % nm(c),
+         "Hook rate %s%% (%s%s)." % (c["hook"], hook_band(c["hook"]), vs),
+         "Of everyone who watches 3 seconds: 25%% stay %s%%, halfway %s%%, 75%% stay %s%%, finish %s%%." % (
+             c["r25"], c["r50"], c["r75"], c["r100"])]
+    stages = [("3s", 100), ("25%", c["r25"]), ("halfway", c["r50"]), ("75%", c["r75"]), ("95%", c["r95"]), ("the end", c["r100"])]
+    drops = [(stages[i][0] + " to " + stages[i + 1][0], stages[i][1] - stages[i + 1][1]) for i in range(len(stages) - 1)]
+    worst = max(drops, key=lambda x: x[1]) if drops else None
+    if hook_band(c["hook"]) == "bad":
+        v = "Hook is weak, most scroll past the first 3 seconds. The opening is the whole problem, rewrite it."
+    elif c["r50"] >= 50 and c["r100"] >= 20:
+        v = "Strong hook and strong hold, this creative rips. Make more like it and scale it."
+    elif worst and worst[1] >= 25:
+        v = "Great hook but the body loses them. Biggest drop is %s (%d%% gone). Re-cut that part." % (worst[0], worst[1])
+    else:
+        v = "Decent all round, no single fatal drop point."
+    L.append("*Verdict:* " + v)
+    return "\n     ".join(L)
 
 def msg_advisor(A, overlaps=None):
     """A weekly strategic brief: read the numbers, then tell Shavi exactly what to do and why."""
@@ -739,8 +776,10 @@ def msg_advisor(A, overlaps=None):
     assisted = sorted([c for c in rows if c["aud"] == "WARM" and c["roas"] and c["spend"] >= MIN_SPEND],
                       key=lambda c: c["roas"], reverse=True)[:2]
     saturating = sorted([c for c in rows if is_saturating(c)], key=lambda c: c["spend"], reverse=True)[:3]
-    videos = [c for c in rows if c["type"] == "VIDEO" and c.get("significant")]
-    top_vid = max(videos, key=lambda c: c["spend"], default=None)
+    # clean cold videos only: real 3-sec plays, not catalogue, not the anomalous catalogue-enabled high-freq ones
+    videos = sorted([c for c in rows if c["type"] == "VIDEO" and c["aud"] == "COLD" and c.get("significant")
+                     and c.get("v3", 0) >= 500 and c["freq"] < 4 and c["hook"] <= 100],
+                    key=lambda c: c["spend"], reverse=True)
 
     levers = [("CVR", dcvr, True), ("AOV", daov, True), ("CPC", dcpc, False)]
     levers = [x for x in levers if x[1] is not None]
@@ -757,16 +796,24 @@ def msg_advisor(A, overlaps=None):
                 "Refresh the fatiguing ads, add new angles, and widen the audience so frequency drops."),
     }[lever]
 
+    # money impact of each lever, in EGP
+    e_cvr = round(s["lc"] * ((s["cvr"] or 0) - (prev.get("cvr") or 0)) / 100 * (s["aov"] or 0))
+    e_cpc = round(-s["lc"] * ((s.get("cpc") or 0) - (prev.get("cpc") or 0)))
+    e_aov = round(s["purch"] * ((s["aov"] or 0) - (prev.get("aov") or 0)))
+    e_cpmr = round(s["reach"] / 1000 * ((s["cpmr"] or 0) - (prev.get("cpmr") or 0)))
+    d_rev = pct(s["revenue"], prev.get("rev"))
     L = ["%s  :compass:  *%s - STRATEGIC ADVISOR*" % (MENTION, A["account"]["name"].upper()),
          ":date: Week of *%s → %s*   vs   *%s → %s*   (all values in %s)" % (d1, d2, p1, p2, cc), BAR,
          "*THE READ*",
-         "Spent %s to make %s at ROAS *%s*.  Cold prospecting ROAS is *%s*, the number that actually matters." % (
-             money(s["spend"]), money(s["revenue"]), blended, cold),
-         "Blended ROAS %s vs cold %s%s." % (
-             blended, cold,
-             (".  Catalogue is %d%% of spend and is propping up the blended number, judge scaling on cold only" % s["cat_pct"]) if s["cat_pct"] >= 20 else ""),
-         "The lever that moved performance this week: *%s*.  %s" % (
-             lever, ", ".join("%s %s" % (n, sp(d)) for n, d, _ in levers)),
+         "• Spend *%s* (%s)" % (money(s["spend"]), sp(s.get("d_spend"))),
+         "• Revenue *%s* (%s)" % (money(s["revenue"]), sp(d_rev)),
+         "• ROAS *%s* (%s)   ·   cold prospecting ROAS *%s* is the number that matters" % (blended, sp(s.get("d_roas")), cold),
+         "• CVR %s%% (%s, %s EGP rev)" % (s["cvr"], sp(dcvr), money(e_cvr)),
+         "• CPC %s EGP (%s, %s EGP spend)" % (s.get("cpc"), sp(dcpc), money(e_cpc)),
+         "• AOV %s (%s, %s EGP rev)" % (money(s["aov"]), sp(daov), money(e_aov)),
+         "• CPMR %s (%s, %s EGP reach)" % (money(s["cpmr"]), sp(s.get("d_cpmr")), money(e_cpmr)),
+         "The lever that moved performance this week: *%s*." % lever
+         + ("  Catalogue is %d%% of spend and props up the blended number, judge scaling on cold only." % s["cat_pct"] if s["cat_pct"] >= 20 else ""),
          "ROAS here is attributed.  Reconcile against MER and AMER before any big cut, and treat catalogue ROAS as over-attributed.",
          "", BAR, "*WHAT IS WORKING, scale these*"]
     if winners:
@@ -795,13 +842,13 @@ def msg_advisor(A, overlaps=None):
         L.append("_Fix: pull budget back, let frequency recover toward 2.5, then scale in 15% increments._")
     else:
         L.append("Cold frequency is under the 2.0 ceiling, no saturation.  Room to scale.")
-    if top_vid and top_vid["hook"] > 0:
-        L.append("Top video %s: hook %s%% (%s), hold %s%% (%s)." % (
-            nm(top_vid), top_vid["hook"], hook_band(top_vid["hook"]), top_vid["hold"], hold_band(top_vid["hold"])))
-        if hook_band(top_vid["hook"]) == "bad":
-            L.append("_Hook is under 12%, the first 3 seconds are losing people.  Rework the thumb-stop._")
-        elif hold_band(top_vid["hold"]) == "bad":
-            L.append("_Hook lands but hold is under 22%, the body drops them.  Tighten the middle._")
+    if videos:
+        L.append("*Creative read* (cold video only, catalogue and catalogue-enabled anomalies excluded):")
+        for c in videos[:3]:
+            vr = video_read(c)
+            if vr: L.append("• " + vr)
+    else:
+        L.append("_No clean cold video with enough real 3-second plays to read this week._")
     # audience overlap (adsets competing in the same auction)
     L += ["", BAR, "*AUDIENCE OVERLAP*"]
     if overlaps:
