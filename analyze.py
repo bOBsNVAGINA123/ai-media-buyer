@@ -79,6 +79,11 @@ def channel_advisor_for(name):
     if "playmore" in n: return CH.get("playmore_advisor")
     if "kids" in n: return CH.get("ourkids_advisor")
     return None
+def channel_3sec_for(name):
+    n = (name or "").lower()
+    if "playmore" in n: return CH.get("playmore_3sec")
+    if "kids" in n: return CH.get("ourkids_3sec")
+    return None
 
 def f(x):
     try: return float(x)
@@ -568,7 +573,7 @@ def block(icon, title, name, status, do, metrics, why):
 def msg_digest(A):
     s = A["summary"]; cc = cur(A); rows = A["creatives"]
     d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
-    L = ["%s  :bar_chart:  *%s - LAST 7 DAYS*  _(refreshed every morning)_" % (MENTION, A["account"]["name"].upper()),
+    L = ["%s  :bar_chart:  *%s - LAST 3 DAYS*  _(refreshed every morning)_" % (MENTION, A["account"]["name"].upper()),
          ":date: *%s → %s*   vs   *%s → %s*   (all values in %s)" % (d1, d2, p1, p2, cc), BAR,
          "*ACCOUNT - all ads*",
          "Spend *%s* (%s) · Revenue *%s* · %d purchases" % (money(s["spend"]), sp(s["d_spend"]), money(s["revenue"]), s["purchases"]),
@@ -596,12 +601,38 @@ def msg_digest(A):
         L.append(block(":test_tube:", "TEST HIGHER AOV", nm(low[0]), statuslabel(low[0]), "Same hook, pricier product.", cmet(low[0]), why_lowroas(low[0], s["cold_roas"]))); did = True
     if not did:
         L.append("_Nothing crossed an action threshold. Everything is inside its guardrails._\n")
-    if len(fat) > 1:
-        L.append(":chart_with_downwards_trend: *Also fatiguing (%d), the numbers:*" % (len(fat) - 1))
-        for c in fat[1:5]:
-            L.append("• %s   `%s`\n     %s" % (nm(c), statuslabel(c), fatigue_line(c)))
+
+    # ---- DO MORE OF: every ad beating the account with frequency headroom, not just one ----
+    domore = [c for c in rows if c.get("significant") and c["roas"] and c["roas"] >= s["roas"]
+              and c["freq"] < freq_ceiling(c) and (c["purch"] or 0) >= 2]
+    domore.sort(key=lambda c: (c["roas"] or 0) * (c["spend"] ** 0.4), reverse=True)
+    L += [BAR, ":arrow_up: *DO MORE OF*  _(beating account ROAS %s with room to grow)_" % s["roas"]]
+    if domore:
+        for c in domore[:4]:
+            inc = "30%" if c["freq"] < 1.5 else ("20%" if c["freq"] < 1.8 else "15%")
+            cheap = "cheaper reach" if (c.get("acc_cpmr") and c["cpmr"] < c["acc_cpmr"]) else "reach at account cost"
+            L.append("• %s   `%s`  -  raise budget +%s" % (nm(c), statuslabel(c), inc))
+            L.append("     ROAS %s vs %s account · CPA %s · CVR %s%% · CPMR %s vs %s avg (%s) · Freq %s" % (
+                c["roas"], s["roas"], money(c["cpa"]), c["cvr"], money(c["cpmr"]), money(c.get("acc_cpmr")), cheap, c["freq"]))
         L.append("")
-    L += [BAR, "_Window: last 7 full days vs the 7 before. Runs automatically 9 AM Cairo, every day._"]
+    else:
+        L.append("_No ad clears account ROAS with frequency headroom right now. Nothing clean to scale, find a winner first._\n")
+
+    # ---- FATIGUING: any significant ad where the same people see it more and fewer click ----
+    fatig = [c for c in rows if c.get("significant") and c.get("d_freq") is not None and c["d_freq"] > 10
+             and c.get("d_octr") is not None and c["d_octr"] < -8]
+    fatig.sort(key=lambda c: (c.get("d_freq") or 0) - (c.get("d_octr") or 0), reverse=True)
+    L += [BAR, ":chart_with_downwards_trend: *FATIGUING*  _(frequency rising, Outbound CTR falling, refresh the hook)_"]
+    if fatig:
+        for c in fatig[:6]:
+            sev = "hard" if (c["d_freq"] > 30 and c["d_octr"] < -20) else ("building" if (c["d_freq"] > 18 or c["d_octr"] < -15) else "early")
+            L.append("• %s   `%s`  -  %s fatigue" % (nm(c), statuslabel(c), sev))
+            L.append("     %s" % fatigue_line(c))
+        L.append("")
+    else:
+        L.append("_No significant ad is fatiguing. Frequency and Outbound CTR are holding across the board._\n")
+
+    L += [BAR, "_Window: rolling last 3 days vs the 3 before. Runs automatically 9 AM Cairo, every day._"]
     return "\n".join(L)
 
 
@@ -707,6 +738,52 @@ def msg_launches(acct, creatives, prev_ids, acc_roas=None, acc_cpmr=None, acc_cv
                 best["cvr"], vs_avg(acc_cvr, pct=True), money(best["cpmr"]), vs_avg(acc_cpmr, is_money=True)))
         L.append("")
     L.append("_New launches only. Runs 9 AM Cairo daily._")
+    return "\n".join(L)
+
+
+# ----------------------- 3-second hook report (video only) -----------------------
+def msg_3sec(A):
+    """Rank video ads by the honest thumbstop: share who actually stayed to 25% watched.
+    Raw 3-sec plays are inflated by autoplay, so they are shown but not ranked on."""
+    cc = cur(A); rows = A["creatives"]; s = A["summary"]
+    d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
+    acct = A["account"]
+    vids = [c for c in rows if c["type"] == "VIDEO" and c["impr"] >= 1000 and c.get("hold")]
+    L = ["%s  :clapper:  *%s - 3-SECOND HOOK REPORT*" % (MENTION, acct["name"].upper()),
+         ":date: *%s → %s*   (all values in %s)" % (d1, d2, cc),
+         "_The hook is the first 3 seconds. Ranked by the share of people who stayed to 25% watched, the honest thumbstop._",
+         "_Raw 3-sec plays are inflated by autoplay, so shown for reference but not ranked on._", BAR]
+    if not vids:
+        L.append("_No video ad had enough impressions to read a hook this window. Most spend ran through image or catalogue ads._")
+        return "\n".join(L)
+    avg = round(st.mean([c["hold"] for c in vids]), 1)
+    ranked = sorted(vids, key=lambda c: c["hold"], reverse=True)
+    good = [c for c in ranked if hold_band(c["hold"]) == "good"]
+    bad = [c for c in ranked if hold_band(c["hold"]) == "bad"]
+    def vline(c):
+        return ("• %s   `%s`\n"
+                "     3-sec hold *%s%%* (account avg %s%%) · raw 3-sec %s%% · halfway %s%% · to end %s%%\n"
+                "     Spend %s · ROAS %s · CPA %s · Freq %s") % (
+            nm(c), statuslabel(c), c["hold"], avg, c["hook"], c["r50"], c["r100"],
+            money(c["spend"]), c["roas"], money(c["cpa"]), c["freq"])
+    L.append(":white_check_mark: *GOOD HOOKS (do more of these)*")
+    if good:
+        for c in good[:5]: L.append(vline(c))
+        dm = [c for c in good if c["roas"] and c["roas"] >= s["cold_roas"]]
+        if dm:
+            L.append("     :arrow_right: _Do more of: %s hold attention AND convert above the cold bar %s.  Cut new variations from these openings and raise their budget._" % (
+                ", ".join(nm(c) for c in dm[:3]), s["cold_roas"]))
+        else:
+            L.append("     :arrow_right: _These hold attention but none clears the cold bar %s yet.  The hook works, the offer or landing is the leak._" % s["cold_roas"])
+    else:
+        L.append("_No video cleared the good band (25% hold at or above 35%) this window._")
+    L += ["", ":x: *WEAK HOOKS (re-cut the first 3 seconds)*"]
+    if bad:
+        for c in bad[:5]: L.append(vline(c))
+        L.append("     :arrow_right: _People leave in the first seconds.  Re-cut the opening frame, keep only concepts that hold.  Do not scale these._")
+    else:
+        L.append("_No video is in the weak band.  Hooks are holding._")
+    L += [BAR, "_3-second hook report.  Ranked by 25% watched, the reliable thumbstop.  Runs 9 AM Cairo daily._"]
     return "\n".join(L)
 
 
@@ -1162,13 +1239,22 @@ def main():
         ach = channel_advisor_for(acct["name"])
         sm = A["summary"]
         if a.daily or a.dry_run:
-            slack(ch, msg_digest(A))
+            # DAILY = rolling 3 days, not L7D. Build a 3-day analysis for the action digest + hook report.
+            c3rows = get_insights(acct["id"], l3); p3rows = get_insights(acct["id"], prev3)
+            A3 = analyze(acct, c3rows, p3rows, STATUS)
+            save7 = (DATES["label"], DATES["p_label"])
+            DATES["label"], DATES["p_label"] = DATES["l3"], DATES["p3"]
+            if A3["summary"]["spend"] > 0:
+                slack(ch, msg_digest(A3))
+                t3 = channel_3sec_for(acct["name"])
+                if t3: slack(t3, msg_3sec(A3))
             a3 = get_insights(acct["id"], l3, level="account", fields=ACC)
             ap3 = get_insights(acct["id"], prev3, level="account", fields=ACC)
             m3 = metric(a3[0]) if a3 else None; p3m = metric(ap3[0]) if ap3 else None
             p3 = pulse_3day(acct, get_insights(acct["id"], l3, level="ad", fields=LITE_FIELDS, extra="ad_name,ad_id"),
                             get_insights(acct["id"], l3, level="adset", fields=LITE_FIELDS, extra="adset_name,adset_id"), m3, p3m)
             if p3: slack(ch, p3)
+            DATES["label"], DATES["p_label"] = save7
             if lch:
                 prev_ids = set(r.get("ad_id") for r in prev_rows)
                 slack(lch, msg_launches(acct, A["creatives"], prev_ids, sm["roas"], sm["cpmr"], sm["cvr"]))
