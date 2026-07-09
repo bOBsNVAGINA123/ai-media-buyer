@@ -5,7 +5,7 @@ name: AI Media Buyer — Weekly Strategic Advisor
 on:
   schedule:
     # Saturday 06:00 UTC = 9AM Cairo (summer). Start-of-week planning brief.
-    - cron: "0 6 * * 6"
+    - cron: "17 6 * * 6"
   workflow_dispatch: {}   # also triggerable by hand from the Actions tab
 
 permissions:

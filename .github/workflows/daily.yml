@@ -4,9 +4,9 @@ name: AI Media Buyer
 # You do not run anything. Your laptop can be off. Nobody has to be online.
 on:
   schedule:
-    # GitHub cron is UTC only. Egypt is UTC+3 in summer, so 06:00 UTC = 9AM Cairo.
-    # (In winter it lands at 8AM Cairo. Change to "0 7 * * *" if you prefer 9AM year round.)
-    - cron: "0 6 * * *"
+    # GitHub cron is UTC only. Egypt is UTC+3 in summer, so 06:17 UTC ~= 9AM Cairo.
+    # Off the :00 minute on purpose: GitHub heavily throttles and often drops crons scheduled at exactly :00.
+    - cron: "17 6 * * *"
   workflow_dispatch: {}   # lets you also trigger it by hand from the Actions tab
 
 permissions:
