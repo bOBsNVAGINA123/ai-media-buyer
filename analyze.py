@@ -56,8 +56,9 @@ ENGAGED_KW = ["retarget", " rt ", "rt_", "atc", "add to cart", "back2cart", "did
               "abandon", "viewed", "view content", "engag", "30 day", "60 day", "90 day", "zombie", "savewith", "cart", "wsv"]
 def segment(blob):
     b = " " + (blob or "").lower() + " "
-    if any(k in b for k in EXIST_KW): return "EXISTING"
+    # ENGAGED first: "didn't purchase", "back2cart" etc are engagers, not existing customers
     if any(k in b for k in ENGAGED_KW): return "ENGAGED"
+    if any(k in b for k in EXIST_KW): return "EXISTING"
     return "NEW"
 
 def _match(name, keys):
@@ -933,56 +934,68 @@ def msg_advisor(A, overlaps=None):
           sc("Reach", _ar, _pr, m=True),
           sc("Impressions", _ai, _pi, m=True), "```"]
     # ---- AUDIENCE: New / Engaged / Existing, week over week ----
-    L += ["", BAR, "*AUDIENCE, where the money actually went*"]
+    L += ["", BAR, "*AUDIENCE - where the money actually went*", ""]
     for sg in sorted(segs, key=lambda sg: csp[sg], reverse=True):
         if csp[sg] < tot * 0.01 and psp[sg] < tP * 0.01: continue
-        L.append("• *%s*: spend %s · spend share %d%% (was %d%%) · ROAS %s (was %s) · CPA %s · AOV %s · CVR %s%% · reach %s · frequency %s" % (
-            SEGN[sg], money(csp[sg]), round(mixC[sg]), round(mixP[sg]), r2(roC[sg]), r2(roP[sg]),
-            money(round(csp[sg] / sum(c["purch"] for c in _in(sg))) if sum(c["purch"] for c in _in(sg)) else 0),
-            money(round(crev[sg] / sum(c["purch"] for c in _in(sg))) if sum(c["purch"] for c in _in(sg)) else 0),
-            round(sum(c["purch"] for c in _in(sg)) / sum(c["lc"] for c in _in(sg)) * 100, 2) if sum(c["lc"] for c in _in(sg)) else 0,
-            money(crch[sg]), r2(frq[sg])))
-    L.append("Read: budget moved into %s and out of %s, a move %s efficiency.  %s" % (
+        pu = sum(c["purch"] for c in _in(sg)); lcs = sum(c["lc"] for c in _in(sg))
+        L.append("*%s* - spend %s, share %d%% (was %d%%)" % (SEGN[sg], money(csp[sg]), round(mixC[sg]), round(mixP[sg])))
+        L.append("     ROAS %s (was %s) · CPA %s · AOV %s · CVR %s%% · reach %s · frequency %s" % (
+            r2(roC[sg]), r2(roP[sg]),
+            money(round(csp[sg] / pu)) if pu else "n/a", money(round(crev[sg] / pu)) if pu else "n/a",
+            round(pu / lcs * 100, 2) if lcs else 0, money(crch[sg]), r2(frq[sg])))
+        L.append("")
+    L.append("*Read:* budget moved into %s and out of %s, a move %s efficiency.  %s" % (
         SEGN[gained], SEGN[lost], "toward" if roC[gained] >= roC[lost] else "away from",
         "Watch New-audience spend, it is falling and it is what refills Engaged and Existing next week." if csp["NEW"] < psp["NEW"] else "New-audience spend held, the pipeline is intact."))
     # ---- CAPITAL ALLOCATION ----
-    L += ["", BAR, "*CAPITAL ALLOCATION, did Meta allocate right*"]
+    L += ["", BAR, "*CAPITAL ALLOCATION - did Meta allocate right*", "", "*Top spenders:*"]
     top3 = sorted(sig, key=lambda c: c["spend"], reverse=True)[:3]
     for c in top3:
-        tag = "earning its budget" if (c["roas"] and c["roas"] >= s["roas"]) else "below the account, overfunded"
-        L.append("• Top spender: %s  ·  %s (%s%% of account)  ·  ROAS %s vs account %s  ·  %s" % (
+        tag = "earning it" if (c["roas"] and c["roas"] >= s["roas"]) else "*overfunded* (ROAS below account)"
+        L.append("• %s - %s (%s%% of account), ROAS %s vs %s account, %s" % (
             nm(c), money(c["spend"]), c["spend_share"], r2(c["roas"]), s["roas"], tag))
     over = [c for c in sig if c["roas"] and c["roas"] < s["roas"] * 0.8 and c["spend_share"] and c["spend_share"] >= (100.0 / max(len(rows), 1))]
     over.sort(key=lambda c: c["spend"], reverse=True)
-    if over:
-        c = over[0]; L.append("• Overfunded loser: %s takes %s%% of spend at ROAS %s, well under the account %s.  Cut it first." % (nm(c), c["spend_share"], r2(c["roas"]), s["roas"]))
     under = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] * 1.2 and c["spend_share"] and c["spend_share"] < (100.0 / max(len(rows), 1))]
     under.sort(key=lambda c: c["roas"], reverse=True)
+    L.append("")
+    if over:
+        c = over[0]; L.append("*Overfunded loser:* %s takes %s%% of spend at ROAS %s, well under the account %s.  Cut it first." % (nm(c), c["spend_share"], r2(c["roas"]), s["roas"]))
     if under:
-        c = under[0]; L.append("• Underfunded winner: %s ranks top on ROAS %s but takes only %s%% of spend.  This is where budget should follow performance." % (nm(c), r2(c["roas"]), c["spend_share"]))
+        c = under[0]; L.append("*Underfunded winner:* %s ranks top on ROAS %s but takes only %s%% of spend.  Budget should follow performance." % (nm(c), r2(c["roas"]), c["spend_share"]))
     dest = under[0] if under else (winners[0] if winners else None)
     if dest:
-        L.append("*The next 10,000 EGP goes to %s* (ROAS %s, frequency %s has room), pulled from %s." % (
-            nm(dest), r2(dest["roas"]), dest["freq"], nm(over[0]) if over else (nm(bleeders[0]) if bleeders else "the lowest-ROAS spend")))
-    # ---- SCALING RANKING (multi-factor, not just ROAS) ----
+        L += ["", "*Next 10,000 EGP → %s* (ROAS %s, frequency %s has room), pulled from %s." % (
+            nm(dest), r2(dest["roas"]), dest["freq"], nm(over[0]) if over else (nm(bleeders[0]) if bleeders else "the lowest-ROAS spend"))]
+    # ---- SCALING RANKING (ROAS + CVR + CPM + CPMR + frequency + audience-segment direction) ----
     accm = s["cpm"] or 1
+    over_seg = gained if abs(shift[gained]) >= 4 else None      # segment Meta already over-rotated into this week
+    starved_seg = lost if abs(shift[lost]) >= 4 else None       # segment losing share, needs refilling
     def scal_score(c):
         rf = (c["roas"] or 0) / (s["roas"] or 1)
         vf = (c["cvr"] or 0) / (s["cvr"] or 1)
         mf = accm / (c["cpm"] or 1)
+        rmf = (c.get("acc_cpmr") or accm) / (c["cpmr"] or 1)     # cheaper reach scales further
         hf = max((freq_ceiling(c) - c["freq"]) / freq_ceiling(c), 0.05)
-        return round(rf * vf * mf * hf * (c["spend"] ** 0.3), 1)
+        seg_adj = 1.3 if c["seg"] == starved_seg else (0.7 if c["seg"] == over_seg else 1.0)
+        return round(rf * vf * mf * rmf * hf * seg_adj * (c["spend"] ** 0.3), 1)
     scalable = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] and c["freq"] < freq_ceiling(c) and c["purch"] >= 3]
     scalable.sort(key=scal_score, reverse=True)
-    L += ["", BAR, "*MOST SCALABLE WINNERS (ROAS + volume + CPM + CVR + frequency together)*"]
+    L += ["", BAR, "*MOST SCALABLE WINNERS*  _(ROAS, CVR, CPM, CPMR, frequency and audience direction together)_", ""]
     if scalable:
-        for i, c in enumerate(scalable[:4], 1):
+        for i, c in enumerate(scalable[:3], 1):
             inc = "30%" if c["freq"] < 1.5 else ("20%" if c["freq"] < 1.8 else "15%")
-            L.append("%d. %s  ·  Spend %s (share %s%%) · ROAS %s · Rev %s · %d purch · CPM %s · Outbound CTR %s%% · CVR %s%% · CPA %s · AOV %s · frequency %s" % (
-                i, nm(c), money(c["spend"]), c["spend_share"], r2(c["roas"]), money(c["rev"]), int(c["purch"]),
-                money(c["cpm"]), c["octr"], c["cvr"], money(c["cpa"]), money(c["aov"]), c["freq"]))
-            L.append("     Why scalable: ROAS above account, CPM %s vs account %s, CVR %s%% vs %s%%, frequency %s still has room.  *Recommended: +%s.*" % (
-                money(c["cpm"]), money(round(accm)), c["cvr"], s["cvr"], c["freq"], inc))
+            segnote = ""
+            if c["seg"] == over_seg:
+                segnote = "  Caution: this is %s, the segment Meta already over-weighted this week, so scaling it deepens the tilt away from New." % SEGN[c["seg"]]
+            elif c["seg"] == starved_seg:
+                segnote = "  Bonus: this is %s, the segment losing share, feeding it also refills the pipeline." % SEGN[c["seg"]]
+            L.append("*%d. %s*  (%s)" % (i, nm(c), SEGN[c["seg"]]))
+            L.append("     ROAS %s · Rev %s · %d purch · Spend %s (%s%% of account)" % (r2(c["roas"]), money(c["rev"]), int(c["purch"]), money(c["spend"]), c["spend_share"]))
+            L.append("     CPM %s vs %s avg · CPMR %s vs %s avg · CVR %s%% vs %s%% · Outbound CTR %s%% · frequency %s" % (
+                money(c["cpm"]), money(round(accm)), money(c["cpmr"]), money(c.get("acc_cpmr")), c["cvr"], s["cvr"], c["octr"], c["freq"]))
+            L.append("     *Recommended: +%s.*%s" % (inc, segnote))
+            L.append("")
     else:
         L.append("_No ad clears account ROAS with frequency headroom. Nothing is cleanly scalable, priority is finding a winner._")
     # ---- CHEAP TRAFFIC ----
@@ -1076,7 +1089,11 @@ def msg_advisor(A, overlaps=None):
     if addto:
         for c in addto:
             inc = "30%" if c["freq"] < 1.5 else ("20%" if c["freq"] < 1.8 else "15%")
-            L.append("• %s: now %s, increase %s.  ROAS %s, CVR %s%%, frequency %s has room." % (nm(c), money(c["spend"]), inc, r2(c["roas"]), c["cvr"], c["freq"]))
+            seg_note = ""
+            if c["seg"] == over_seg: seg_note = "  Note: %s is already over-weighted, size this small and prioritise a New-audience winner." % SEGN[c["seg"]]
+            elif c["seg"] == starved_seg: seg_note = "  This also refills %s, which is losing share." % SEGN[c["seg"]]
+            L.append("• %s (%s): now %s, increase %s.  ROAS %s, CVR %s%%, CPMR %s vs %s avg, frequency %s has room.%s" % (
+                nm(c), SEGN[c["seg"]], money(c["spend"]), inc, r2(c["roas"]), c["cvr"], money(c["cpmr"]), money(c.get("acc_cpmr")), c["freq"], seg_note))
     else:
         strong_sat = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] and c["freq"] >= freq_ceiling(c) and c["ad_id"] not in rm_ids]
         if strong_sat:
