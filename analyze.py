@@ -968,7 +968,7 @@ def msg_advisor(A, overlaps=None):
     accm = s["cpm"] or 1
     def scal_score(c):
         rf = (c["roas"] or 0) / (s["roas"] or 1)
-        vf = (c["cvr"] or 0) / (acc_cvr or 1)
+        vf = (c["cvr"] or 0) / (s["cvr"] or 1)
         mf = accm / (c["cpm"] or 1)
         hf = max((freq_ceiling(c) - c["freq"]) / freq_ceiling(c), 0.05)
         return round(rf * vf * mf * hf * (c["spend"] ** 0.3), 1)
@@ -982,7 +982,7 @@ def msg_advisor(A, overlaps=None):
                 i, nm(c), money(c["spend"]), c["spend_share"], r2(c["roas"]), money(c["rev"]), int(c["purch"]),
                 money(c["cpm"]), c["octr"], c["cvr"], money(c["cpa"]), money(c["aov"]), c["freq"]))
             L.append("     Why scalable: ROAS above account, CPM %s vs account %s, CVR %s%% vs %s%%, frequency %s still has room.  *Recommended: +%s.*" % (
-                money(c["cpm"]), money(round(accm)), c["cvr"], acc_cvr, c["freq"], inc))
+                money(c["cpm"]), money(round(accm)), c["cvr"], s["cvr"], c["freq"], inc))
     else:
         L.append("_No ad clears account ROAS with frequency headroom. Nothing is cleanly scalable, priority is finding a winner._")
     # ---- CHEAP TRAFFIC ----
@@ -1087,9 +1087,9 @@ def msg_advisor(A, overlaps=None):
     L += ["", BAR, ":dart: *IF I HAD ONE HOUR MONDAY*"]
     kill = over[0] if over else (bleeders[0] if bleeders else None)
     fund = dest
-    L.append("*09:00 Pause:* %s.  %s" % (nm(kill), "ROAS %s under the account, it is bleeding budget." % r2(kill["roas"]) if kill else "nothing, guardrails hold."))
-    L.append("*09:15 More budget:* %s, +15%%.  %s" % (
-        nm(fund) if fund else "hold", ("ROAS %s with frequency headroom, this is where freed spend goes." % r2(fund["roas"])) if fund else "no clear winner to feed."))
+    L.append("*09:00 Pause:* %s" % (("%s.  ROAS %s under the account, it is bleeding budget." % (nm(kill), r2(kill["roas"]))) if kill else "nothing, guardrails are holding."))
+    L.append("*09:15 More budget:* %s" % (
+        ("%s, +15%%.  ROAS %s with frequency headroom, this is where freed spend goes." % (nm(fund), r2(fund["roas"]))) if fund else "hold, no clear winner to feed."))
     if csp["NEW"] < psp["NEW"]:
         L.append("*09:30 Audiences:* raise New-audience budget back toward last week's mix; Meta over-rotated into %s and is starving acquisition." % SEGN[gained])
     else:
