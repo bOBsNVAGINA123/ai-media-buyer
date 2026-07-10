@@ -128,6 +128,40 @@ def aset_link(name, sid):
     return "*%s*" % (name or "(adset)")
 
 
+# ----------------------- ops alerts (fail LOUD, never silent) -----------------------
+def ops_alert(msg):
+    """Critical failure alert. Posts to the alerts channel (falls back to default),
+    always mirrors to stderr so the Actions log shows it either way."""
+    sys.stderr.write("[ALERT] %s\n" % msg)
+    ch = CH.get("alerts") or CH.get("default")
+    try:
+        slack(ch, ":rotating_light: %s AI Media Buyer is DOWN.\n%s" % (MENTION, msg))
+    except Exception as e:
+        sys.stderr.write("[ALERT] slack post failed too: %s\n" % e)
+
+def _die(msg):
+    ops_alert(msg)
+    sys.exit(1)
+
+def validate_token():
+    """Prove the token works BEFORE the run. A dead token must page us, not pass silently."""
+    url = "%s/me?fields=id,name&access_token=%s" % (GRAPH, urllib.parse.quote(TOKEN))
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:
+            who = json.loads(r.read().decode())
+        print("token OK, acting as %s (%s)" % (who.get("name"), who.get("id")))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "ignore")
+        if '"code":190' in body.replace(" ", "") or "OAuthException" in body:
+            _die("Meta token is DEAD (error 190).\n"
+                 "Fix: Business Settings > System Users > generate a new token "
+                 "(expiration Never) > update the META_ACCESS_TOKEN secret in the repo.\n"
+                 "Today's run did NOT happen.")
+        _die("Token validation failed HTTP %s: %s" % (e.code, body[:200]))
+    except Exception as e:
+        _die("Token validation failed: %s" % e)
+
+
 # ----------------------- Graph API -----------------------
 def api_get(path, params):
     params = dict(params); params["access_token"] = TOKEN
@@ -141,6 +175,10 @@ def api_get(path, params):
             last = e.read().decode("utf-8", "ignore"); low = last.lower()
             if (e.code in (429, 500, 502, 503) or "throttl" in low or "reduce the amount" in low) and i < 4:
                 time.sleep(min(90, 2 ** i * 6)); continue
+            if '"code":190' in last.replace(" ", "") or "OAuthException" in last:
+                _die("Meta token died MID-RUN (190) on %s.\n"
+                     "Fix: regenerate the System User token (expiration Never) and update "
+                     "the META_ACCESS_TOKEN secret." % path)
             sys.stderr.write("[api] %s %s: %s\n" % (e.code, path, last[:200])); return {"error": last}
         except Exception as e:
             last = str(e); time.sleep(2 ** i)
@@ -1208,7 +1246,8 @@ def main():
     a = ap.parse_args()
     global SLACK_TOKEN, NUMID, STATUS
     if a.dry_run: SLACK_TOKEN = ""
-    if not TOKEN: sys.stderr.write("META_ACCESS_TOKEN missing\n"); sys.exit(1)
+    if not TOKEN: _die("META_ACCESS_TOKEN secret is missing from the workflow environment.")
+    validate_token()
 
     try:
         from zoneinfo import ZoneInfo; z = ZoneInfo(TZ)
