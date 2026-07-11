@@ -798,6 +798,52 @@ def render_card(A, win):
     return buf.getvalue()
 
 
+IMG_DIR = os.path.join(DOCS, "img")
+
+def slug(s):
+    return "".join(ch if ch.isalnum() else "-" for ch in (s or "").lower()).strip("-")
+
+def img_url(fn):
+    """raw.githubusercontent serves a committed file instantly, no Pages build needed."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "bOBsNVAGINA123/ai-media-buyer")
+    return "https://raw.githubusercontent.com/%s/main/docs/img/%s?v=%d" % (repo, fn, int(time.time()))
+
+def push_images():
+    """Commit the cards so Slack has a public URL to render."""
+    import subprocess
+    try:
+        subprocess.run(["git", "config", "user.name", "ai-media-buyer"], check=False)
+        subprocess.run(["git", "config", "user.email", "bot@users.noreply.github.com"], check=False)
+        subprocess.run(["git", "add", "docs/img", "docs/data.json"], check=False)
+        subprocess.run(["git", "commit", "-m", "auto: briefing cards"], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        r = subprocess.run(["git", "push"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sys.stderr.write("[cards] pushed (rc=%s)\n" % r.returncode)
+        return r.returncode == 0
+    except Exception as e:
+        sys.stderr.write("[cards] push failed: %s\n" % e); return False
+
+def slack_image_url(channel, url, comment):
+    """Post the card as an image block. Needs only chat:write, which the bot already has."""
+    if not channel: return False
+    if not SLACK_TOKEN:
+        print("[card-url:%s] %s\n" % (channel, url)); return True
+    blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": comment}},
+              {"type": "image", "image_url": url, "alt_text": "performance briefing"}]
+    body = json.dumps({"channel": channel, "text": comment, "blocks": blocks,
+                       "unfurl_links": False}).encode()
+    req = urllib.request.Request("https://slack.com/api/chat.postMessage", data=body,
+        headers={"Authorization": "Bearer %s" % SLACK_TOKEN,
+                 "Content-Type": "application/json; charset=utf-8"})
+    try:
+        r = json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+        if not r.get("ok"):
+            sys.stderr.write("[card-url] %s: %s\n" % (channel, r.get("error"))); return False
+        return True
+    except Exception as e:
+        sys.stderr.write("[card-url] %s\n" % e); return False
+
+
 def slack_image(channel, png, title, comment=""):
     """Upload the card straight into the channel. No dependency on any external host."""
     if not channel or not png: return False
@@ -1734,6 +1780,7 @@ def main():
     ]
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
+    CARDS = []
     global SEGMAP
     for acct in get_accounts():
         cur_rows = get_insights(acct["id"], last)
@@ -1764,14 +1811,17 @@ def main():
                 A["windows"][win] = strat_payload(AW)      # feeds the visual dashboard
                 wch = channel_window_for(acct["name"], win)
                 if wch:
-                    # the picture first: what moved, where exactly, and the move to make
+                    # render the card now, post it after the images are pushed
                     png = render_card(AW, win)
-                    slack_image(wch, png, "%s-%s" % (acct["name"].replace(" ", "-").lower(), win),
-                                "%s  %s - %s.  The detail is in the thread below." % (
-                                    MENTION, acct["name"].upper(), WIN_TITLE.get(win, "MEMO")))
-                    time.sleep(1)
-                    slack(wch, msg_advisor(AW))
-                    time.sleep(1)
+                    fn = "%s-%s.png" % (slug(acct["name"]), win)
+                    if png:
+                        os.makedirs(IMG_DIR, exist_ok=True)
+                        with open(os.path.join(IMG_DIR, fn), "wb") as f: f.write(png)
+                    CARDS.append({"ch": wch, "png": png, "fn": fn,
+                                  "title": "%s-%s" % (slug(acct["name"]), win),
+                                  "comment": "%s  *%s - %s*  ·  where the money moved, and the one move to make." % (
+                                      MENTION, acct["name"].upper(), WIN_TITLE.get(win, "MEMO")),
+                                  "memo": msg_advisor(AW)})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
@@ -1781,7 +1831,22 @@ def main():
         for c in A["creatives"]:
             c.pop("prev", None)
     save_json(DATA_PATH, report)
-    sys.stderr.write("[done] %d accounts\n" % len(report["accounts"]))
+
+    # ---- ship the cards. Try a native upload; if the app lacks files:write, push + link the image. ----
+    if CARDS:
+        pushed = push_images() if any(c["png"] for c in CARDS) else False
+        if pushed: time.sleep(6)   # give raw.githubusercontent a moment to serve the new blobs
+        for c in CARDS:
+            sent = slack_image(c["ch"], c["png"], c["title"], c["comment"])
+            if not sent and c["png"] and pushed:
+                sent = slack_image_url(c["ch"], img_url(c["fn"]), c["comment"])
+            if not sent:
+                slack(c["ch"], c["comment"])   # never leave the channel silent
+            time.sleep(1)
+            slack(c["ch"], c["memo"])
+            time.sleep(1)
+
+    sys.stderr.write("[done] %d accounts, %d cards\n" % (len(report["accounts"]), len(CARDS)))
 
 if __name__ == "__main__":
     main()
