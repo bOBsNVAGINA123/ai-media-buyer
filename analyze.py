@@ -1351,7 +1351,7 @@ def decay_watch(A):
         if not rows: continue
         culprit = max(rows, key=lambda r: r["hurt"])
         if culprit["hurt"] < 5: continue
-        out.append({"name": safe(c["ad_name"]), "seg": c["seg"], "spend": c["spend"],
+        out.append({"name": safe(c["ad_name"]), "ad_id": c["ad_id"], "seg": c["seg"], "spend": c["spend"],
                     "roas": c["roas"], "proas": p.get("roas"),
                     "d_roas": pct(c["roas"], p.get("roas") or 0),
                     "rows": rows, "culprit": culprit,
@@ -2080,34 +2080,38 @@ def card_funnel(A, win):
 # ---------- CARD: it was working, now it is not ----------
 def card_decay(A, win):
     D = decay_watch(A)
-    fig = _fig(9.6)
+    fig = _fig(11.0)
     _head(fig, A, win, "It was working, now it is not",
           "Creatives that used to beat the account and no longer do. Measured against their own past, with the metric responsible named.")
-    ax = _panel(fig, .420, .375, "flagged")
+    ax = _panel(fig, .380, .420, "flagged  ·  the whole card, and every metric against its own past")
     if not D:
         ax.text(1.6, 45, "Nothing that was beating the account has fallen below it. No decay to report.",
                 fontsize=F_H + 2, color=GREEN, family="DejaVu Sans", weight="bold")
         _foot(fig, win)
         return _png(fig)
 
+    acc7 = A.get("b7_acc") or A["summary"]
+    b7 = A.get("b7") or {}
+    _mhead(ax, 92)
     for i, e in enumerate(D[:3]):
-        y = 84 - i * 30
-        ax.text(1.6, y, _clip(e["name"], 36), fontsize=F_H + 3, color=INK,
+        y = 82 - i * 30
+        ax.text(1.6, y, _clip(e["name"], 22), fontsize=F_ROW + 2, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(98, y, "ROAS %.2fx to %.2fx  (%s)" % (
-            r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"])),
-            fontsize=F_ROW + 1, color=RED, family="DejaVu Sans", weight="bold", ha="right")
-        ax.text(98, y - 8, "%s  ·  %s spend" % (SEGN.get(e["seg"], e["seg"]), _k(e["spend"])),
-                fontsize=10.5, color=MUTED, family="DejaVu Sans", ha="right")
+        b = b7.get(str(e.get("ad_id") or "")) or {}
+        if b:
+            _mrow(ax, card_of(b, b, acc7), y)
+        ax.text(1.6, y - 6, "%s  ·  7 day spend %s" % (SEGN.get(e["seg"], e["seg"]), _k(e["spend"])),
+                fontsize=9.5, color=MUTED, family="DejaVu Sans")
         cul = e["culprit"]
-        ax.text(1.6, y - 9, "THE CAUSE: %s %+.0f%%" % (cul["lab"], cul["chg"]),
-                fontsize=F_ROW + 2, color=RED, family="DejaVu Sans", weight="bold")
-        # every metric, so nothing has to be chased manually
+        ax.text(1.6, y - 12, "ROAS %.2fx to %.2fx (%s)   ·   THE CAUSE: %s %+.0f%%" % (
+            r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"]), cul["lab"], cul["chg"]),
+            fontsize=F_ROW, color=RED, family="DejaVu Sans", weight="bold")
+        # every metric against its own past, so nothing has to be chased manually
         x = 1.6
         for r in e["rows"]:
             col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else FAINT)
-            ax.text(x, y - 17, r["lab"], fontsize=8.5, color=FAINT, family="DejaVu Sans")
-            ax.text(x, y - 22.5, "%+.0f%%" % r["chg"], fontsize=10.5, color=col,
+            ax.text(x, y - 18, r["lab"], fontsize=8, color=FAINT, family="DejaVu Sans")
+            ax.text(x, y - 23, "%+.0f%%" % r["chg"], fontsize=10, color=col,
                     family="DejaVu Sans", weight="bold")
             x += 8.9
     _foot(fig, win)
@@ -2135,7 +2139,8 @@ def retention(A):
                  (c.get("p25", 0) / v3) * 100, (c.get("p50", 0) / v3) * 100,
                  (c.get("p75", 0) / v3) * 100, (c.get("p95", 0) / v3) * 100,
                  (c.get("p100", 0) / v3) * 100]
-        rows.append({"name": safe(c["ad_name"]), "hook": (c["v3"] / (c["impr"] or 1)) * 100,
+        rows.append({"name": safe(c["ad_name"]), "ad_id": c.get("ad_id"),
+                     "hook": (c["v3"] / (c["impr"] or 1)) * 100,
                      "curve": curve, "spend": c["spend"], "roas": c["roas"],
                      "cpmr": c.get("cpmr") or 0, "v3": c["v3"],
                      "hook_src": c.get("hook_src", "3s")})
@@ -2215,24 +2220,23 @@ def card_retention(A, win):
         ax.text(1.6, 14 - j * 7, ln, fontsize=F_ROW, color=INK, family="DejaVu Sans",
                 weight="bold")
 
-    ax = _panel(fig, .075, .150, "the videos, by spend  ·  with what reach is costing you")
-    _c = A.get("b7_acc") or A["summary"]
-    acc_cpmr = _c.get("cpmr") or 0
-    ax.text(1.6, 82, "AD", fontsize=8.5, color=FAINT, family="DejaVu Sans", weight="bold")
-    for j, (lab, x) in enumerate((("SPEND", 44), ("ROAS", 54), ("HOOK", 64), ("25%", 72),
-                                  ("50%", 80), ("100%", 88), ("CPMR", 98))):
-        ax.text(x, 82, lab, fontsize=8.5, color=FAINT, family="DejaVu Sans", weight="bold", ha="right")
+    ax = _panel(fig, .060, .175, "the videos, by spend  ·  the whole card, plus where each one drops")
+    acc7 = A.get("b7_acc") or A["summary"]
+    b7 = A.get("b7") or {}
+    acc_cpmr = acc7.get("cpmr") or 0
+    _mhead(ax, 88)
+    for j, (lab, x) in enumerate((("HOOK", 24), ("25%", 21), ("50%", 18))):
+        pass
     for i, r in enumerate(R["rows"][:5]):
-        y = 70 - i * 13
-        ax.text(1.6, y, _clip(r["name"], 30), fontsize=10.5, color=INK, family="DejaVu Sans",
+        y = 76 - i * 15
+        ax.text(1.6, y, _clip(r["name"], 20), fontsize=10, color=INK, family="DejaVu Sans",
                 weight="bold")
+        b = b7.get(str(r.get("ad_id") or "")) or {}
+        if b: _mrow(ax, card_of(b, b, acc7), y)
         hc = GREEN if r["hook"] >= R["acc"]["hook"] * 1.1 else (RED if r["hook"] <= R["acc"]["hook"] * .9 else MUTED)
-        cc = GREEN if r["cpmr"] <= acc_cpmr else RED
-        for v, x, c in ((_k(r["spend"]), 44, MUTED), ("%.2fx" % r2(r["roas"]), 54, INK),
-                        ("%.1f%%" % r["hook"], 64, hc), ("%.0f%%" % r["curve"][1], 72, MUTED),
-                        ("%.0f%%" % r["curve"][2], 80, MUTED), ("%.0f%%" % r["curve"][5], 88, MUTED),
-                        (_k(r["cpmr"]), 98, cc)):
-            ax.text(x, y, v, fontsize=10.5, color=c, family="DejaVu Sans", weight="bold", ha="right")
+        ax.text(1.6, y - 6, "hook %.1f%%   ·   25%% %.0f%%   ·   50%% %.0f%%   ·   100%% %.0f%%" % (
+            r["hook"], r["curve"][1], r["curve"][2], r["curve"][5]),
+            fontsize=9, color=hc, family="DejaVu Sans", weight="bold")
     ax.text(1.6, 5, "CPMR green means it reaches people cheaper than the account's %s. Red means a premium for the same reach." % _k(acc_cpmr),
             fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
     _foot(fig, win)
@@ -2455,7 +2459,7 @@ def card_bars(A, win, level):
     _head(fig, A, win, "%s: where the money is and what it returns" % title,
           "Bars are spend. Green beats the account's %.2fx, red loses to it. Everything else is percent change against the period before." % r2(acc))
 
-    AX0, AY0, AW, AH = .300, .150, .330, .690
+    AX0, AY0, AW, AH = .270, .150, .250, .690
     ax = fig.add_axes([AX0, AY0, AW, AH])
     ax.set_facecolor(BONE)
     for sp in ax.spines.values(): sp.set_visible(False)
@@ -2475,7 +2479,7 @@ def card_bars(A, win, level):
     for i, e in enumerate(ents):
         m = e["total"]; q = prevmap.get(e["name"])
         yc = AY0 + AH * ((n - 1 - i) + .5) / n
-        fig.text(AX0 - .012, yc + .014, _clip(e["name"], 30), fontsize=F_ROW + 2, color=INK,
+        fig.text(AX0 - .012, yc + .014, _clip(e["name"], 21), fontsize=F_ROW + 1, color=INK,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
         parts = sorted(e["segments"].items(), key=lambda kv: -kv[1]["spend"])[:3]
         seg_t = "  ".join("%s %d%%" % (SEGN.get(k2, k2).split()[0], round(v["spend"] / (m["spend"] or 1) * 100))
@@ -2487,11 +2491,13 @@ def card_bars(A, win, level):
         fig.text(AX0 - .012, yc - .018, lab_sp, fontsize=10.5, color=BLUE,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
 
-    COLS = [("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPA", "cpa", _k, False),
+    COLS = [("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPP", "cpa", _k, False),
             ("AOV", "aov", _k, True), ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True),
             ("CPC", "cpc", lambda v: "%.2f" % r2(v), False), ("CTR-O", "octr", _pctv, True),
-            ("CPMR", "cpmr", _k, False), ("FREQ", "freq", lambda v: "%.1f" % r2(v), False)]
-    xs = [.700, .744, .788, .836, .874, .918, .955, .988]
+            ("CPM", "cpm", _k, False), ("CPMR", "cpmr", _k, False),
+            ("FRQ", "freq", lambda v: "%.1f" % r2(v), False),
+            ("PUR", "purch", lambda v: "%d" % int(v or 0), True)]
+    xs = [.578, .624, .672, .724, .766, .818, .858, .906, .942, .980]
     for x, c in zip(xs, COLS):
         fig.text(x, AY0 + AH + .022, c[0], fontsize=10.5, color=FAINT, family="DejaVu Sans",
                  weight="bold", ha="right")
