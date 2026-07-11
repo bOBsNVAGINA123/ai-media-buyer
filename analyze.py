@@ -450,6 +450,7 @@ def metric(r):
             "freq": round(f(r.get("frequency")) or (impr / reach if reach else 0), 2),
             "cpm": round(f(r.get("cpm")), 2), "cpmr": round(spend / reach * 1000, 2) if reach else 0.0,
             "ctr": round(f(r.get("ctr")), 2), "octr": round(octr, 2),
+            "lctr": round(f(r.get("inline_link_click_ctr")), 2),
             "purch": round(purch, 1), "rev": round(rev, 2), "lc": round(lc, 1), "atc": round(atc, 1),
             "cpa": round(spend / purch, 2) if purch else None,
             "roas": round(rev / spend, 2) if spend else 0.0,
@@ -518,7 +519,9 @@ def agg(ms):
             "cvr": round(purch / lc * 100, 2) if lc else 0, "atc_rate": round(atc / lc * 100, 1) if lc else 0,
             "cpc": round(spend / lc, 2) if lc else 0,
             "aov": round(rev / purch) if purch else None,
-            "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0}
+            "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0,
+            "octr": round(sum(c["octr"] * c["impr"] for c in ms) / impr, 2) if impr else 0,
+            "lctr": round(sum(c.get("lctr", 0) * c["impr"] for c in ms) / impr, 2) if impr else 0}
 
 def attribute(rows, prev, key):
     """Which single creative drove the account-level change in `key` the most (in EGP)."""
@@ -991,6 +994,10 @@ def _n(v, dp=0):
     if v is None: return "n/a"
     return ("{:,.%df}" % dp).format(v)
 
+def _pctv(v):
+    """A zero here means Meta did not return it, not that nobody clicked. Say so."""
+    return "n/a" if not v else "%.2f%%" % round(v, 2)
+
 def _k(v):
     """Compact money. A briefing is read, not audited."""
     if v is None: return "n/a"
@@ -1021,8 +1028,8 @@ def card_levers(A, win):
          ("AOV", _k(s.get("aov")), pct(s.get("aov") or 0, p.get("aov") or 0), True),
          ("CVR", "%.2f%%" % r2(s.get("cvr")), s.get("d_cvr"), True),
          ("CPC", "%.2f" % r2(s.get("cpc")), pct(s.get("cpc") or 0, p.get("cpc") or 0), False),
-         ("CTR OUT", "%.2f%%" % r2(s.get("octr")), pct(s.get("octr") or 0, p.get("octr") or 0), True),
-         ("CTR LINK", "%.2f%%" % r2(s.get("ctr")), pct(s.get("ctr") or 0, p.get("ctr") or 0), True),
+         ("CTR OUT", _pctv(s.get("octr")), pct(s.get("octr") or 0, p.get("octr") or 0), True),
+         ("CTR LINK", _pctv(s.get("lctr")), pct(s.get("lctr") or 0, p.get("lctr") or 0), True),
          ("CPM", _k(s.get("cpm")), s.get("d_cpm"), False),
          ("CPMR", _k(s.get("cpmr")), s.get("d_cpmr"), False)]
     for i, (k, v, d, ug) in enumerate(K):
@@ -1056,7 +1063,9 @@ def card_levers(A, win):
     ax = _panel(fig, .330, .235, "audience  ·  meta's breakdown by audience segment")
     segs = A.get("segs") or {}
     sp_ = A.get("segs_prev") or {}
-    order = [k for k in ("NEW", "ENGAGED", "EXISTING", "UNKNOWN") if segs.get(k)]
+    # a segment holding a rounding error's worth of spend is noise, not a segment
+    order = [k for k in ("NEW", "ENGAGED", "EXISTING", "UNKNOWN")
+             if segs.get(k) and segs[k].get("share", 0) >= 1.0]
     hdr = ["SEGMENT", "SPEND", "SHARE", "ROAS", "CPA", "AOV", "CVR", "CPC", "PURCH"]
     xs = [1.6, 36, 46, 56, 65, 74, 83, 91, 98]
     for j, (x, h) in enumerate(zip(xs, hdr)):
@@ -1076,8 +1085,8 @@ def card_levers(A, win):
                     family="DejaVu Sans", weight=("bold" if j in (0, 2) else "normal"), ha="right")
         d = pct(m["spend"], q.get("spend") or 0)
         dr_ = pct(m["roas"], q.get("roas") or 0)
-        sub = "CTR out %.2f%%   CTR link %.2f%%   CPM %s   CPMR %s   Freq %.1f   Reach %s" % (
-            r2(m.get("octr")), r2(m.get("ctr")), _k(m.get("cpm")), _k(m.get("cpmr")),
+        sub = "CTR out %s   CTR link %s   CPM %s   CPMR %s   Freq %.1f   Reach %s" % (
+            _pctv(m.get("octr")), _pctv(m.get("lctr")), _k(m.get("cpm")), _k(m.get("cpmr")),
             r2(m.get("freq")), _k(m.get("reach")))
         ax.text(3.6, y - 8, sub, fontsize=11, color=FAINT, family="DejaVu Sans")
         if d is not None:
@@ -1169,7 +1178,7 @@ def card_table(A, win, level):
         vals = [_k(m["spend"]), "%d%%" % round(m["spend"] / (acc["spend"] or 1) * 100),
                 "%.2f" % r2(m["roas"]), _k(m.get("cpa")), _k(m.get("aov")),
                 "%.1f%%" % r2(m.get("cvr")), "%.2f" % r2(m.get("cpc")),
-                "%.2f%%" % r2(m.get("octr")), "%.2f%%" % r2(m.get("ctr")),
+                _pctv(m.get("octr")), _pctv(m.get("lctr")),
                 _k(m.get("cpm")), _k(m.get("cpmr")), "%.1f" % r2(m.get("freq")), _n(m.get("purch"))]
         for j, (x, v) in enumerate(zip(xs[1:], vals)):
             fig.text(x, y, v, fontsize=F_ROW + 1, color=(INK if j in (0, 2) else MUTED),
@@ -1197,6 +1206,28 @@ def card_table(A, win, level):
     return _png(fig)
 
 
+def plan(A):
+    """Cut what is under the account, fund what is over it, at the same total spend.
+    Nothing here is a guess: every number is that ad's own current performance."""
+    s = A["summary"]; rows = A["creatives"]; acc = s["roas"] or 0
+    sig = [c for c in rows if (c["spend"] or 0) >= 500 and c["lc"] >= 10]
+    cut = [c for c in sig if c["roas"] and c["roas"] < acc * 0.8]
+    cut = sorted(cut, key=lambda c: (c["roas"] or 0))[:5]
+    fund = [c for c in sig if c["roas"] and c["roas"] >= acc
+            and c["freq"] < freq_ceiling(c) and (c["purch"] or 0) >= 2]
+    fund = sorted(fund, key=lambda c: -((c["roas"] or 0) * (c["spend"] ** 0.3)))[:5]
+    cut = [c for c in cut if c["ad_id"] not in {x["ad_id"] for x in fund}]
+    if not cut or not fund: return None
+    freed = sum(c["spend"] * 0.30 for c in cut)
+    # the freed money is split across the funded ads in proportion to what they already spend
+    fspend = sum(c["spend"] for c in fund) or 1
+    gain = sum(freed * (c["spend"] / fspend) * (c["roas"] or 0) for c in fund) \
+         - sum(c["spend"] * 0.30 * (c["roas"] or 0) for c in cut)
+    rev = s["rev"]
+    return {"cut": cut, "fund": fund, "freed": round(freed), "gain": round(gain),
+            "rev_now": round(rev), "rev_then": round(rev + gain)}
+
+
 # ---------- CARD 5: fatigue + the move ----------
 def card_action(A, win):
     fig = _fig(13.6)
@@ -1206,25 +1237,27 @@ def card_action(A, win):
     ax = _panel(fig, .500, .380, "fatiguing now")
     F = fatiguing(A["creatives"])
     if F:
-        hdr = ["AD", "SEGMENT", "SPEND", "ROAS", "FREQUENCY", "OUTBOUND CTR"]
-        xs = [1.6, 42, 64, 74, 86, 98]
-        for j, (x, h) in enumerate(zip(hdr and xs, hdr)):
+        hdr = ["AD", "SEGMENT", "SPEND", "ROAS", "FREQ", "CTR OUT"]
+        xs = [1.6, 42, 62, 72, 84, 98]
+        for j, (x, h) in enumerate(zip(xs, hdr)):
             ax.text(x, 84, h, fontsize=F_HD, color=FAINT, family="DejaVu Sans", weight="bold",
                     ha=("right" if j >= 2 else "left"))
         for i, e in enumerate(F[:4]):
             y = 68 - i * 16
-            ax.text(1.6, y, _clip(safe(e["name"]), 40), fontsize=F_ROW + 2, color=INK,
+            ax.text(1.6, y, _clip(safe(e["name"]), 38), fontsize=F_ROW + 2, color=INK,
                     family="DejaVu Sans", weight="bold")
             ax.text(42, y, SEGN.get(e["seg"], e["seg"]), fontsize=F_ROW,
                     color=SEGC.get(e["seg"], MUTED), family="DejaVu Sans")
-            ax.text(64, y, _k(e["spend"]), fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans", ha="right")
-            ax.text(74, y, "%.2f" % r2(e["roas"]), fontsize=F_ROW + 1, color=INK,
+            ax.text(62, y, _k(e["spend"]), fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans", ha="right")
+            ax.text(72, y, "%.2f" % r2(e["roas"]), fontsize=F_ROW + 1, color=INK,
                     family="DejaVu Sans", weight="bold", ha="right")
-            ax.text(86, y, "%.1f from %.1f" % (r2(e["freq"]), r2(e["pfreq"])), fontsize=F_ROW,
-                    color=RED, family="DejaVu Sans", ha="right")
-            ax.text(98, y, "%.2f%% from %.2f%%" % (r2(e["octr"]), r2(e["poctr"])), fontsize=F_ROW,
-                    color=RED, family="DejaVu Sans", ha="right")
-            ax.text(1.6, y - 7.0, "frequency %s, outbound CTR %s" % (_d(e["d_freq"]), _d(e["d_octr"])),
+            ax.text(84, y, "%.1f" % r2(e["freq"]), fontsize=F_ROW + 1, color=RED,
+                    family="DejaVu Sans", weight="bold", ha="right")
+            ax.text(98, y, _pctv(e["octr"]), fontsize=F_ROW + 1, color=RED,
+                    family="DejaVu Sans", weight="bold", ha="right")
+            ax.text(1.6, y - 7.0, "frequency %.1f from %.1f (%s)   ·   outbound CTR %s from %s (%s)" % (
+                    r2(e["freq"]), r2(e["pfreq"]), _d(e["d_freq"]),
+                    _pctv(e["octr"]), _pctv(e["poctr"]), _d(e["d_octr"])),
                     fontsize=10.5, color=FAINT, family="DejaVu Sans")
         ax.text(1.6, 4, "These are burning. The audience has seen them and stopped clicking out. Refresh the creative, do not raise the budget.",
                 fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
@@ -1233,26 +1266,30 @@ def card_action(A, win):
                 fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
 
     ax = _panel(fig, .075, .395, "do this next")
-    S = scenario(A)
-    if S and (S.get("cut") or S.get("fund")):
-        ax.text(1.6, 86, "Cut the leaks by 30%, move the money to what is already working. Same spend, no new budget.",
+    S = plan(A)
+    if S:
+        ax.text(1.6, 84, "Cut the leaks by 30%, move that money to what is already working. Same total spend, no new budget.",
                 fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
-        ax.text(1.6, 74, "CUT", fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
-        for i, c in enumerate((S.get("cut") or [])[:4]):
-            y = 62 - i * 9
-            ax.text(1.6, y, "%s   %s   %s spend   %.2fx" % (
-                _clip(safe(c["ad_name"]), 38), SEGN.get(c["seg"], c["seg"]), _n(c["spend"] * .3), r2(c["roas"])),
-                fontsize=F_ROW, color=INK, family="DejaVu Sans")
-        ax.text(52, 74, "FUND", fontsize=F_H, color=GREEN, family="DejaVu Sans", weight="bold")
-        for i, c in enumerate((S.get("fund") or [])[:4]):
-            y = 62 - i * 9
-            ax.text(52, y, "%s   %s   %.2fx   freq %.1f" % (
-                _clip(safe(c["ad_name"]), 34), SEGN.get(c["seg"], c["seg"]), r2(c["roas"]), r2(c["freq"])),
-                fontsize=F_ROW, color=INK, family="DejaVu Sans")
-        ax.text(1.6, 20, "Frees %s. Modelled revenue %s to %s at the same spend." % (
-            _n(S.get("freed")), _n(S.get("rev_now")), _n(S.get("rev_then"))),
-            fontsize=F_H, color=INK, family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 8, "Modelled at each ad's own current ROAS. It assumes the winners hold, which is why frequency is shown next to them.",
+        ax.text(1.6, 73, "CUT 30%", fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
+        ax.text(52, 73, "FUND", fontsize=F_H, color=GREEN, family="DejaVu Sans", weight="bold")
+        for i, c in enumerate(S["cut"][:5]):
+            y = 61 - i * 9.5
+            ax.text(1.6, y, _clip(safe(c["ad_name"]), 30), fontsize=F_ROW, color=INK, family="DejaVu Sans")
+            ax.text(38, y, "%.2fx" % r2(c["roas"]), fontsize=F_ROW, color=RED,
+                    family="DejaVu Sans", weight="bold", ha="right")
+            ax.text(48, y, "-%s" % _k(c["spend"] * .3), fontsize=F_ROW, color=MUTED,
+                    family="DejaVu Sans", ha="right")
+        for i, c in enumerate(S["fund"][:5]):
+            y = 61 - i * 9.5
+            ax.text(52, y, _clip(safe(c["ad_name"]), 24), fontsize=F_ROW, color=INK, family="DejaVu Sans")
+            ax.text(84, y, "%.2fx" % r2(c["roas"]), fontsize=F_ROW, color=GREEN,
+                    family="DejaVu Sans", weight="bold", ha="right")
+            ax.text(99, y, "freq %.1f" % r2(c["freq"]), fontsize=F_ROW, color=MUTED,
+                    family="DejaVu Sans", ha="right")
+        ax.text(1.6, 12, "Moves %s. Revenue %s to %s at the same spend." % (
+            _k(S["freed"]), _k(S["rev_now"]), _k(S["rev_then"])),
+            fontsize=F_H + 4, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 2, "Modelled at each ad's own current ROAS. It assumes the winners hold, which is why frequency is shown next to them.",
                 fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
     else:
         ax.text(1.6, 50, "No clean reallocation this window. Nothing is far enough below account ROAS to cut with confidence.",
@@ -1275,7 +1312,8 @@ def render_cards(A, win):
                 png = fn()
                 if png: out.append((suf, png))
             except Exception as e:
-                sys.stderr.write("[card] %s failed: %s\n" % (suf, e))
+                import traceback
+                sys.stderr.write("[card] %s failed: %s\n%s\n" % (suf, e, traceback.format_exc()))
     except Exception as e:
         sys.stderr.write("[card] render failed: %s\n" % e)
     return out
