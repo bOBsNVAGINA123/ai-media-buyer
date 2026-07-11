@@ -119,6 +119,11 @@ def f(x):
     try: return float(x)
     except (TypeError, ValueError): return 0.0
 def money(v): return "{:,.0f}".format(v) if v is not None else "n/a"
+def _safe_pct(new, old, floor=50.0):
+    """A percent change off a near zero base is a lie. Say what it is instead."""
+    if not old or abs(old) < floor: return None
+    return (new / old - 1) * 100.0
+
 def pct(new, old):
     if not old: return None
     return (new - old) / old * 100.0
@@ -1108,6 +1113,21 @@ def _d(v):
     if v is None: return ""
     return ("+%.0f%%" % v) if v >= 0 else ("%.0f%%" % v)
 
+# Business impact, not mathematical direction. Down is not automatically good.
+LOWER_IS_BETTER = {"cpc", "cpm", "cpmr", "cpa", "cpp"}
+NEUTRAL = {"spend", "impr", "reach", "lc"}          # inputs, not outcomes
+FREQ_HEALTHY = 3.0
+
+def impact(key, chg, val=None):
+    """Colour by what it does to the business."""
+    if chg is None or abs(chg) < 2: return MUTED
+    if key in NEUTRAL: return BLUE                   # you chose this, it is not good or bad
+    if key == "freq":
+        if val is not None and val >= FREQ_HEALTHY and chg > 0: return RED
+        return MUTED if abs(chg) < 8 else (RED if chg > 0 else GREEN)
+    if key in LOWER_IS_BETTER: return GREEN if chg < 0 else RED
+    return GREEN if chg > 0 else RED                 # revenue, roas, cvr, aov, ctr, hook, hold, atc
+
 def _dc(v, up_good=True):
     if v is None or abs(v) < 1: return MUTED
     good = (v > 0) if up_good else (v < 0)
@@ -1305,6 +1325,126 @@ def decay_watch(A):
     return sorted(out, key=lambda x: -(x["loss"] * x["spend"]))[:3]
 
 
+def allocate(A):
+    """An actual allocation, in percent. A segment earns budget when it returns above the
+    account AND still has room (frequency under the healthy ceiling). Nothing else."""
+    segs = A.get("segs") or {}
+    ks = [k for k in ("NEW", "ENGAGED", "EXISTING") if segs.get(k) and segs[k].get("share", 0) >= 1]
+    if len(ks) < 2: return None
+    acc = A["summary"]["roas"] or 0
+    tot = sum(segs[k]["spend"] for k in ks) or 1
+    now = {k: segs[k]["spend"] / tot for k in ks}
+    score = {}
+    for k in ks:
+        m = segs[k]
+        r = (m["roas"] or 0) / (acc or 1)                     # how much better than the account
+        fq = m.get("freq") or 0
+        room = max(0.0, 1.0 - fq / FREQ_HEALTHY)              # 0 when saturated, 1 when empty
+        score[k] = max(0.05, r * (0.35 + 0.65 * room))        # returns, weighted by whether it can take it
+    ssum = sum(score.values()) or 1
+    raw = {k: score[k] / ssum for k in ks}
+    # never move more than 10 points of the account in one go
+    target = {k: now[k] + max(-0.10, min(0.10, raw[k] - now[k])) for k in ks}
+    tsum = sum(target.values()) or 1
+    target = {k: target[k] / tsum for k in ks}
+    up = sorted(ks, key=lambda k: -(target[k] - now[k]))[0]
+    dn = sorted(ks, key=lambda k: (target[k] - now[k]))[0]
+    m_up, m_dn = segs[up], segs[dn]
+    why = ("%s earns more budget: %.2fx against the account's %.2fx at frequency %.1f, so it still has room. "
+           "%s gives budget up: %.2fx at frequency %.1f." % (
+               SEGN[up], r2(m_up["roas"]), r2(acc), r2(m_up.get("freq")),
+               SEGN[dn], r2(m_dn["roas"]), r2(m_dn.get("freq"))))
+    return {"now": now, "target": target, "order": ks, "why": why, "up": up, "dn": dn}
+
+
+# ---------- what a winner actually is ----------
+def significant(c):
+    """No verdict on an ad without enough evidence to justify one."""
+    return (c["spend"] or 0) >= 500 and (c["purch"] or 0) >= 3 and (c["lc"] or 0) >= 25
+
+
+def classify(A):
+    """Every ad, judged on the whole card, not on ROAS. Then given one of five verdicts."""
+    acc = A["summary"]["roas"] or 0
+    B = A.get("benchmarks") or {}
+    out = []
+    for c in A["creatives"]:
+        if (c["spend"] or 0) < 200: continue
+        sig = significant(c)
+        r = (c["roas"] or 0) / (acc or 1)
+        fq = c["freq"] or 0
+        p = c.get("prev") or {}
+        d_roas = pct(c["roas"], p.get("roas") or 0) if p else None
+        fresh = (c["purch"] or 0) < 3 and (c["spend"] or 0) < 1500
+        if not sig and fresh:
+            v, why = "MONITOR", "Not enough evidence yet. %d purchases on %s spend." % (
+                int(c["purch"] or 0), _k(c["spend"]))
+        elif r >= 1.25 and fq < FREQ_HEALTHY and sig:
+            v, why = "SCALE IMMEDIATELY", "%.2fx against the account's %.2fx, frequency %.1f so it still has room." % (
+                r2(c["roas"]), r2(acc), fq)
+        elif r >= 1.0 and sig and fq < FREQ_HEALTHY:
+            v, why = "SCALE CAREFULLY", "Beats the account but not by much. Raise in steps and watch frequency %.1f." % fq
+        elif r >= 1.0 and fq >= FREQ_HEALTHY:
+            v, why = "MONITOR", "Returns %.2fx but frequency is %.1f. More budget buys repeats, not new buyers." % (
+                r2(c["roas"]), fq)
+        elif 0.6 <= r < 1.0:
+            v, why = "ITERATE", "%.2fx against %.2fx. Close enough to fix, not close enough to fund. Re-cut it." % (
+                r2(c["roas"]), r2(acc))
+        else:
+            v, why = "KILL", "%.2fx against %.2fx on %s spend. It is not coming back." % (
+                r2(c["roas"]), r2(acc), _k(c["spend"]))
+        out.append({"c": c, "verdict": v, "why": why, "sig": sig, "ratio": r, "d_roas": d_roas})
+    ORDER = {"SCALE IMMEDIATELY": 0, "SCALE CAREFULLY": 1, "ITERATE": 2, "MONITOR": 3, "KILL": 4}
+    return sorted(out, key=lambda e: (ORDER[e["verdict"]], -e["c"]["spend"]))
+
+
+VCOL = {"SCALE IMMEDIATELY": GREEN, "SCALE CAREFULLY": GREEN, "MONITOR": AMBER,
+        "ITERATE": AMBER, "KILL": RED}
+
+
+def hit_rate(A):
+    """What share of the ads you run actually beat the account. That number decides how many
+    you must launch to find the next winner."""
+    acc = A["summary"]["roas"] or 0
+    tested = [c for c in A["creatives"] if significant(c)]
+    if len(tested) < 4: return None
+    winners = [c for c in tested if (c["roas"] or 0) >= acc * 1.25]
+    hr = len(winners) / len(tested)
+    hr = max(0.03, min(0.9, hr))
+    need_1 = math.ceil(1 / hr)
+    need_3 = math.ceil(3 / hr)
+    return {"tested": len(tested), "winners": len(winners), "hr": hr * 100,
+            "need_1": need_1, "need_3": need_3}
+
+
+def scenarios(A):
+    """Revenue = spend / CPC x CVR x AOV. Move one thing, hold the rest, and the identity
+    tells you exactly what happens. No forecasting magic, just the arithmetic."""
+    s = A["summary"]
+    spend, cpc, cvr, aov = s["spend"], m_cpc(s), s.get("cvr") or 0, s.get("aov") or 0
+    if not (spend and cpc and cvr and aov): return None
+    base = spend / cpc * (cvr / 100.0) * aov
+    def rev(sp=1.0, cp=1.0, cv=1.0, av=1.0):
+        return (spend * sp) / (cpc * cp) * (cvr * cv / 100.0) * (aov * av)
+    P = plan(A)
+    rows = [("DO NOTHING", base, spend, "Today's numbers, held flat."),
+            ("SPEND +20%", rev(sp=1.20), spend * 1.20,
+             "Assumes CPC holds. It rarely does, so treat this as the ceiling."),
+            ("SPEND -20%", rev(sp=0.80), spend * 0.80, "Straight linear give-back."),
+            ("CVR +10%", rev(cv=1.10), spend, "An offer, price or landing page win."),
+            ("CPM +20% (CPC follows)", rev(cp=1.20), spend,
+             "What auction inflation costs you if nothing else changes."),
+            ("FREQUENCY TO 3.0", rev(cp=1.0 + max(0.0, (3.0 - (s.get("freq") or 1.5)) * 0.06)), spend,
+             "Saturation shows up as a rising CPC. Modelled at 6 percent CPC per point of frequency.")]
+    if P:
+        rows.insert(1, ("FOLLOW THE PLAN", base * (1 + P["gain_pct"] / 100.0), spend,
+                        "Cut the leaks 30 percent, move it to what already works. Same budget."))
+    return {"base": base, "rows": [{"name": n, "rev": r, "spend": sp,
+                                    "d": (r / base - 1) * 100.0,
+                                    "roas": r / sp if sp else 0, "note": nt}
+                                   for n, r, sp, nt in rows]}
+
+
 # ===================== CHART PRIMITIVES =====================
 def _tile(fig, x, y, w, h):
     ax = fig.add_axes([x, y, w, h])
@@ -1393,10 +1533,10 @@ def card_pulse(A, win):
     nd = WIN_DAYS.get(win, 1)
     fig = _fig(13.8)
     _head(fig, A, win, "Is this normal, and what moved it",
-          "Judged against this account's own last 30 days. Everything is in percent.")
+          "TWO DIFFERENT COMPARISONS. Top: against a typical day over 30 days. Bottom: against the period immediately before. They will not match, and they are not meant to.")
 
     # THE VERDICT. Not a z score. A percentage, and whether it is inside the usual swing.
-    ax = _panel(fig, .775, .105, "the verdict")
+    ax = _panel(fig, .775, .105, "the verdict  ·  vs a typical day over the last 30 days")
     B = normal_band(H, "rev", (s["rev"] or 0) / nd)
     if B:
         col = GREEN if (B["inside"] and B["vs"] >= 0) else (RED if not B["inside"] and B["vs"] < 0
@@ -1429,7 +1569,7 @@ def card_pulse(A, win):
         spark(fig, cx, cy, .268, .125, H, k, t, fmt, ug)
 
     # THE WATERFALL, in percent of last period's revenue.
-    ax = _panel(fig, .075, .270, "what moved it  ·  every percent of the change charged to one lever")
+    ax = _panel(fig, .075, .270, "what moved it  ·  vs the period immediately before, not vs the 30 day average")
     W = waterfall(s, p)
     if W:
         down = W["d_pct"] < 0
@@ -1464,8 +1604,9 @@ def card_pulse(A, win):
                                        facecolor=col, edgecolor="none"))
             ax.text(x + bw / 2, mid_y + (hgt + 2.5 if up else -hgt - 5.5), "%+.1f%%" % st_["rev_pct"],
                     fontsize=F_ROW + 1, color=col, family="DejaVu Sans", weight="bold", ha="center")
+            kk = {"SPEND": "spend", "CPC": "cpc", "CVR": "cvr", "AOV": "aov"}[st_["k"]]
             ax.text(x + bw / 2, 6, "%s %+.0f%%" % (st_["k"], st_["chg"] or 0), fontsize=F_ROW + 1,
-                    color=INK, family="DejaVu Sans", weight="bold", ha="center")
+                    color=impact(kk, st_["chg"]), family="DejaVu Sans", weight="bold", ha="center")
             ax.text(x + bw / 2, 1, "%d%% of the move" % st_["pct"], fontsize=10, color=FAINT,
                     family="DejaVu Sans", ha="center")
     else:
@@ -1479,7 +1620,7 @@ def card_pulse(A, win):
 def card_trend(A, win):
     H = A.get("hist") or []
     if len(H) < 12: return None
-    fig = _fig(11.6)
+    fig = _fig(12.6)
     _head(fig, A, win, "The trend, not the day",
           "Rolling 7 day average. Frequency, CPMR and CPM are noise on a single day, so they are never judged on one.")
     TR = [("freq", "FREQUENCY", lambda v: "%.2f" % r2(v), False),
@@ -1497,17 +1638,31 @@ def card_trend(A, win):
         if W and abs(W["chg"]) >= 5 and not ((W["chg"] >= 0) if ug else (W["chg"] <= 0)):
             bad.append((t.split("  ")[0], W["chg"]))
     ax = _panel(fig, .075, .155, "what the week is telling you")
-    if bad:
-        ax.text(1.6, 66, "DETERIORATING OVER THE WEEK:  " + "   ·   ".join(
-            "%s %+.0f%%" % (n, c) for n, c in bad[:4]), fontsize=F_H + 3, color=RED,
-            family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 38, "Rising CPMR with rising frequency is saturation: you are paying more to reach the same people.",
-                fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
-        ax.text(1.6, 16, "Falling outbound CTR with flat CVR is a creative problem, not a landing page problem.",
-                fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
-    else:
-        ax.text(1.6, 50, "Nothing is deteriorating on a 7 day view. The week is holding.",
-                fontsize=F_H + 3, color=GREEN, family="DejaVu Sans", weight="bold")
+    Wm = {k: wow(H, k, 7) for k in ("freq", "cpmr", "cpm", "octr", "cpc", "cvr", "rev", "roas")}
+    def g(k):
+        w = Wm.get(k)
+        return w["chg"] if w else None
+    said = []
+    # every sentence below is built from the numbers, never assumed
+    if (g("cpmr") or 0) >= 5 and (g("freq") or 0) >= 3:
+        said.append(("SATURATION", RED, "CPMR %+.0f%% with frequency %+.0f%%. You are paying more to reach the same people." % (g("cpmr"), g("freq"))))
+    elif (g("cpmr") or 0) <= -5:
+        said.append(("REACH IS GETTING CHEAPER", GREEN, "CPMR %+.0f%% over the week. Each new person costs less than it did, so there is room to buy more of them." % g("cpmr")))
+    if (g("octr") or 0) <= -5 and (g("cvr") or 0) > -5:
+        said.append(("CREATIVE, NOT LANDING PAGE", RED, "Outbound CTR %+.0f%% while CVR held. Fewer people click, the ones who do still buy." % g("octr")))
+    elif (g("cvr") or 0) <= -5 and (g("octr") or 0) > -5:
+        said.append(("LANDING PAGE OR OFFER", RED, "CVR %+.0f%% while outbound CTR held. They still click, they stop buying. The break is after the click." % g("cvr")))
+    elif (g("cvr") or 0) <= -5 and (g("octr") or 0) <= -5:
+        said.append(("TRAFFIC QUALITY", RED, "Outbound CTR %+.0f%% and CVR %+.0f%% together. The audience is worse, not just the creative." % (g("octr"), g("cvr"))))
+    if (g("cpc") or 0) <= -5:
+        said.append(("CLICKS GOT CHEAPER", GREEN, "CPC %+.0f%% over the week." % g("cpc")))
+    if not said:
+        said.append(("THE WEEK IS HOLDING", GREEN, "Nothing moved more than 5 percent on a 7 day view."))
+    for i, (hd, col, body) in enumerate(said[:3]):
+        y = 74 - i * 26
+        ax.text(1.6, y, hd, fontsize=F_H + 2, color=col, family="DejaVu Sans", weight="bold")
+        for j, ln in enumerate(_wrap(body, 92)[:2]):
+            ax.text(1.6, y - 10 - j * 7, ln, fontsize=F_ROW + 1, color=INK, family="DejaVu Sans")
     _foot(fig, win)
     return _png(fig)
 
@@ -1600,13 +1755,14 @@ def card_audience(A, win):
         ax.text(x, 22, ("frequency under 3, it can absorb more budget" if room
                         else "frequency is high on a finite pool, more budget buys repeats"),
                 fontsize=10.5, color=FAINT, family="DejaVu Sans")
-    if room_ks:
-        ax.text(1.6, 8, "ACTION: put the next budget into %s. It is the only segment that can absorb it." % (
-            ", ".join(SEGN[k].lower() for k in room_ks)), fontsize=F_ROW + 1, color=INK,
-            family="DejaVu Sans", weight="bold")
-    else:
-        ax.text(1.6, 8, "ACTION: every segment is saturated. More budget buys repeat impressions, not new buyers. Open a new audience or refresh creative first.",
-                fontsize=F_ROW + 1, color=RED, family="DejaVu Sans", weight="bold")
+    REC = allocate(A)
+    if REC:
+        txt = "TARGET ALLOCATION:   " + "    ".join(
+            "%s %.0f%% to %.0f%%" % (SEGN[k].split()[0], REC["now"][k] * 100, REC["target"][k] * 100)
+            for k in REC["order"])
+        ax.text(1.6, 12, txt, fontsize=F_ROW + 2, color=INK, family="DejaVu Sans", weight="bold")
+        for j, ln in enumerate(_wrap(REC["why"], 100)[:1]):
+            ax.text(1.6, 3, ln, fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
     _foot(fig, win)
     return _png(fig)
 
@@ -1795,6 +1951,190 @@ def card_decay(A, win):
     return _png(fig)
 
 
+# ---------- CARD: the verdict on every ad ----------
+def card_verdicts(A, win):
+    V = classify(A)
+    if not V: return None
+    H = hit_rate(A)
+    fig = _fig(13.4)
+    _head(fig, A, win, "The verdict on every ad",
+          "Judged on the whole card, not on ROAS alone. An ad gets a verdict only when there is enough evidence for one.")
+
+    counts = {}
+    for e in V: counts[e["verdict"]] = counts.get(e["verdict"], 0) + 1
+    ax = _panel(fig, .795, .085, "the call")
+    x = 1.6
+    for v in ("SCALE IMMEDIATELY", "SCALE CAREFULLY", "ITERATE", "MONITOR", "KILL"):
+        n = counts.get(v, 0)
+        sp_ = sum(e["c"]["spend"] for e in V if e["verdict"] == v)
+        ax.text(x, 58, str(n), fontsize=26, color=VCOL[v], family="DejaVu Sans", weight="bold")
+        ax.text(x, 32, v, fontsize=10.5, color=MUTED, family="DejaVu Sans", weight="bold")
+        ax.text(x, 12, "%s spend" % _k(sp_), fontsize=10, color=FAINT, family="DejaVu Sans")
+        x += 19.6
+
+    ax = _panel(fig, .310, .460, "every ad, with the reason")
+    rows = V[:9]
+    for i, e in enumerate(rows):
+        c = e["c"]; y = 84 - i * 9.4
+        ax.add_patch(plt.Rectangle((1.4, y - 3.0), 1.0, 6.6, facecolor=VCOL[e["verdict"]], edgecolor="none"))
+        ax.text(3.6, y, _clip(safe(c["ad_name"]), 21), fontsize=F_ROW + 1, color=INK,
+                family="DejaVu Sans", weight="bold", va="center")
+        ax.text(29, y, e["verdict"], fontsize=10, color=VCOL[e["verdict"]],
+                family="DejaVu Sans", weight="bold", va="center")
+        ax.text(50, y, "%.2fx" % r2(c["roas"]), fontsize=F_ROW, color=INK,
+                family="DejaVu Sans", weight="bold", ha="right", va="center")
+        ax.text(59, y, _k(c["spend"]), fontsize=F_ROW, color=MUTED, family="DejaVu Sans",
+                ha="right", va="center")
+        ax.text(67, y, "%d pur" % int(c["purch"] or 0), fontsize=10, color=FAINT,
+                family="DejaVu Sans", ha="right", va="center")
+        ax.text(69, y, _clip(e["why"], 42), fontsize=9.5, color=MUTED, family="DejaVu Sans", va="center")
+    ax.text(1.6, 2, "Evidence bar: 500 spend, 3 purchases, 25 link clicks. Below that an ad is MONITOR, never a winner and never a kill.",
+            fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
+
+    ax = _panel(fig, .075, .215, "how many creatives you need to launch")
+    if H:
+        ax.text(1.6, 72, "HIT RATE %.0f%%" % H["hr"], fontsize=F_H + 9,
+                color=(GREEN if H["hr"] >= 25 else (AMBER if H["hr"] >= 12 else RED)),
+                family="DejaVu Sans", weight="bold")
+        ax.text(30, 72, "%d of the %d ads with enough evidence beat the account by 25 percent or more." % (
+            H["winners"], H["tested"]), fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
+        ax.text(1.6, 44, "LAUNCH %d" % H["need_1"], fontsize=F_H + 5, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(22, 44, "to expect 1 winner", fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
+        ax.text(50, 44, "LAUNCH %d" % H["need_3"], fontsize=F_H + 5, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(72, 44, "to expect 3 winners", fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
+        ax.text(1.6, 18, "At a %.0f%% hit rate you need %d launches per winner. That is the number, not a feeling." % (
+            H["hr"], H["need_1"]), fontsize=F_ROW + 1, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 6, "Winner means 25 percent above the account ROAS with enough purchases to trust it.",
+                fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
+    else:
+        ax.text(1.6, 45, "Not enough ads with real evidence to compute a hit rate yet.",
+                fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
+    _foot(fig, win)
+    return _png(fig)
+
+
+# ---------- CARD: what happens if ----------
+def card_scenarios(A, win):
+    S = scenarios(A)
+    if not S: return None
+    fig = _fig(12.0)
+    _head(fig, A, win, "What happens if",
+          "Revenue = spend / CPC x CVR x AOV. Move one thing, hold the rest, and the arithmetic tells you the rest.")
+
+    ax = fig.add_axes([.270, .300, .330, .520])
+    ax.set_facecolor(BONE)
+    for sp_ in ax.spines.values(): sp_.set_visible(False)
+    ax.set_yticks([]); ax.tick_params(colors=FAINT, labelsize=10)
+    rows = S["rows"]; n = len(rows)
+    mx = max(abs(r["d"]) for r in rows) or 1
+    for i, r in enumerate(rows):
+        y = n - 1 - i
+        col = MUTED if abs(r["d"]) < 1 else (GREEN if r["d"] > 0 else RED)
+        ax.barh([y], [r["d"]], height=.6, color=col, alpha=.9, edgecolor="none")
+    ax.axvline(0, color=INK, lw=1.2)
+    ax.set_xlim(-mx * 1.35, mx * 1.35); ax.set_ylim(-.6, n - .4)
+    ax.set_xlabel("REVENUE CHANGE %", fontsize=F_HD, color=MUTED, family="DejaVu Sans")
+
+    for i, r in enumerate(rows):
+        yc = .300 + .520 * ((n - 1 - i) + .5) / n
+        fig.text(.258, yc, r["name"], fontsize=F_ROW + 1, color=INK, family="DejaVu Sans",
+                 weight="bold", ha="right", va="center")
+        col = MUTED if abs(r["d"]) < 1 else (GREEN if r["d"] > 0 else RED)
+        fig.text(.615, yc + .011, "%+.1f%%" % r["d"], fontsize=F_ROW + 3, color=col,
+                 family="DejaVu Sans", weight="bold", va="center")
+        fig.text(.615, yc - .010, "revenue %s   ·   ROAS %.2fx" % (_k(r["rev"]), r2(r["roas"])),
+                 fontsize=10.5, color=MUTED, family="DejaVu Sans", va="center")
+        fig.text(.845, yc, _clip(r["note"], 40), fontsize=9.5, color=FAINT,
+                 family="DejaVu Sans", va="center")
+
+    ax = _panel(fig, .075, .190, "what it means")
+    # buying more media is not a win. The best move is the one that lifts revenue at the SAME spend.
+    same_spend = [r for r in rows if abs(r["spend"] - S["rows"][0]["spend"]) < 1 and r["d"] > 0.5]
+    best = max(same_spend, key=lambda r: r["d"]) if same_spend else None
+    worst = min(rows, key=lambda r: r["d"])
+    if best:
+        ax.text(1.6, 70, "BEST MOVE AT THE SAME BUDGET: %s, %+.1f%% revenue." % (best["name"], best["d"]),
+                fontsize=F_H + 2, color=GREEN, family="DejaVu Sans", weight="bold")
+    else:
+        ax.text(1.6, 70, "NOTHING LIFTS REVENUE AT THE SAME BUDGET. Only more spend moves it, and that is not efficiency.",
+                fontsize=F_H + 1, color=AMBER, family="DejaVu Sans", weight="bold")
+    ax.text(1.6, 44, "BIGGEST RISK: %s, %+.1f%% revenue." % (worst["name"], worst["d"]),
+            fontsize=F_H + 2, color=RED, family="DejaVu Sans", weight="bold")
+    ax.text(1.6, 16, "Spend +20%% buys +20%% revenue at the same ROAS. That is buying, not improving. Judge a move by what it does at a flat budget.",
+            fontsize=F_ROW + 1, color=INK, family="DejaVu Sans")
+    _foot(fig, win)
+    return _png(fig)
+
+
+# ---------- CARD: do today, do this week, monitor ----------
+def card_plan(A, win):
+    P = plan(A); V = classify(A); H = hit_rate(A); REC = allocate(A)
+    F = fatiguing(A["creatives"]); D = decay_watch(A)
+    R = funnel_read(A["summary"], A["summary"].get("prev") or {})
+    fig = _fig(12.6)
+    _head(fig, A, win, "Do today. Do this week. Monitor.",
+          "Every line has the evidence behind it and the expected impact next to it.")
+
+    today, week, watch = [], [], []
+    if P:
+        today.append(("Cut %s by 30%%" % _clip(safe(P["cut"][0]["ad_name"]), 26),
+                      "%.2fx against the account's %.2fx" % (r2(P["cut"][0]["roas"]), r2(A["summary"]["roas"])),
+                      "frees %s" % _k(P["freed"]), RED))
+        today.append(("Move it into %s" % _clip(safe(P["fund"][0]["ad_name"]), 26),
+                      "%.2fx at frequency %.1f, still has room" % (r2(P["fund"][0]["roas"]), r2(P["fund"][0]["freq"])),
+                      "revenue %+.1f%%" % P["gain_pct"], GREEN))
+    kills = [e for e in V if e["verdict"] == "KILL"][:2]
+    for e in kills:
+        today.append(("Kill %s" % _clip(safe(e["c"]["ad_name"]), 26), e["why"],
+                      "stops %s of waste" % _k(e["c"]["spend"]), RED))
+    if D:
+        today.append(("Pause %s" % _clip(D[0]["name"], 26),
+                      "was %.2fx, now %.2fx. %s %+.0f%%" % (r2(D[0]["proas"]), r2(D[0]["roas"]),
+                                                            D[0]["culprit"]["lab"], D[0]["culprit"]["chg"]),
+                      "protects %s" % _k(D[0]["spend"]), RED))
+    if REC:
+        week.append(("Shift allocation to %s %.0f%%" % (SEGN[REC["up"]].split()[0], REC["target"][REC["up"]] * 100),
+                     REC["why"][:70], "reweights the account", GREEN))
+    if H:
+        week.append(("Launch %d new creatives" % H["need_3"],
+                     "hit rate is %.0f%%, so %d launches is what 3 winners costs" % (H["hr"], H["need_3"]),
+                     "3 expected winners", GREEN))
+    if R and R["broke"]:
+        week.append(("Fix %s" % R["broke"]["lab"].lower(),
+                     "first stage of the funnel to break, %+.0f%%" % (R["broke"]["chg"] or 0),
+                     "everything below it inherits this", AMBER))
+    if F:
+        watch.append((_clip(F[0]["name"], 26), F[0]["verdict"].lower(),
+                      "frequency %+.0f%%, outbound CTR %+.0f%%" % (F[0]["d"]["freq"] or 0, F[0]["d"]["octr"] or 0), AMBER))
+    for e in [x for x in V if x["verdict"] == "MONITOR"][:2]:
+        watch.append((_clip(safe(e["c"]["ad_name"]), 26), e["why"][:56],
+                      "no verdict until the evidence is there", BLUE))
+
+    BLOCKS = [("DO TODAY", RED, today, .560, .310),
+              ("DO THIS WEEK", AMBER, week, .310, .230),
+              ("MONITOR", BLUE, watch, .075, .215)]
+    for title, col, items, y0, h in BLOCKS:
+        ax = _panel(fig, y0, h, title.lower())
+        if not items:
+            ax.text(1.6, 45, "Nothing here.", fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
+            continue
+        for i, it in enumerate(items[:4]):
+            what, why, impactt = it[0], it[1], it[2]
+            icol = it[3] if len(it) > 3 else col
+            yy = 76 - i * 22
+            ax.add_patch(plt.Rectangle((1.4, yy - 6), 1.0, 13, facecolor=icol, edgecolor="none"))
+            ax.text(3.8, yy + 2, what, fontsize=F_ROW + 3, color=INK, family="DejaVu Sans",
+                    weight="bold", va="center")
+            ax.text(3.8, yy - 6, _clip(why, 76), fontsize=10.5, color=MUTED,
+                    family="DejaVu Sans", va="center")
+            ax.text(98, yy, impactt, fontsize=F_ROW + 1, color=icol, family="DejaVu Sans",
+                    weight="bold", ha="right", va="center")
+    _foot(fig, win)
+    return _png(fig)
+
+
 # ---------- CARDS 5-7: campaigns / ad sets / ads, as bars. Ranked, not tabulated. ----------
 def card_bars(A, win, level):
     LV = {"campaign": ("Campaigns", "seg_campaigns"), "adset": ("Ad sets", "seg_adsets"),
@@ -1838,10 +2178,10 @@ def card_bars(A, win, level):
                           for k2, v in parts)
         fig.text(AX0 - .012, yc - .002, seg_t, fontsize=10, color=FAINT, family="DejaVu Sans",
                  ha="right", va="center")
-        d_sp = pct(m["spend"], q["spend"]) if q else None
-        fig.text(AX0 - .012, yc - .018, "spend %s" % _d(d_sp), fontsize=10.5,
-                 color=_dc(d_sp, True), family="DejaVu Sans", weight="bold",
-                 ha="right", va="center")
+        d_sp = _safe_pct(m["spend"], (q or {}).get("spend") or 0) if q else None
+        lab_sp = ("spend %s" % _d(d_sp)) if d_sp is not None else "new or restarted"
+        fig.text(AX0 - .012, yc - .018, lab_sp, fontsize=10.5, color=BLUE,
+                 family="DejaVu Sans", weight="bold", ha="right", va="center")
 
     COLS = [("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPA", "cpa", _k, False),
             ("AOV", "aov", _k, True), ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True),
@@ -1859,9 +2199,9 @@ def card_bars(A, win, level):
             fig.text(x, y, fmt(v), fontsize=11.5, color=INK, family="DejaVu Sans",
                      weight="bold", ha="right")
             pv = (m_cpc(q) if k2 == "cpc" else q.get(k2)) if q else None
-            d = pct(v or 0, pv or 0) if q else None
-            fig.text(x, y - .018, _d(d), fontsize=10, color=_dc(d, ug), family="DejaVu Sans",
-                     weight="bold", ha="right")
+            d = _safe_pct(v or 0, pv or 0, floor=(0.01 if k2 not in ("spend",) else 50)) if q else None
+            fig.text(x, y - .018, _d(d) if d is not None else "n/a", fontsize=10,
+                     color=impact(k2, d, v), family="DejaVu Sans", weight="bold", ha="right")
     _foot(fig, win)
     return _png(fig)
 
@@ -1943,6 +2283,9 @@ def render_cards(A, win):
                         ("audience", lambda: card_audience(A, win)),
                         ("funnel", lambda: card_funnel(A, win)),
                         ("decay", lambda: card_decay(A, win)),
+                        ("verdicts", lambda: card_verdicts(A, win)),
+                        ("scenarios", lambda: card_scenarios(A, win)),
+                        ("plan", lambda: card_plan(A, win)),
                         ("decide", lambda: card_decide(A, win)),
                         ("campaigns", lambda: card_bars(A, win, "campaign")),
                         ("adsets", lambda: card_bars(A, win, "adset")),
@@ -2993,7 +3336,10 @@ def main():
                            "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
                            "funnel": "*4 · THE FUNNEL* — hook to hold to CTR to ATC to CVR to ROAS, and the first stage that broke.",
                            "decay": "*5 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, with the metric responsible.",
-                           "decide": "*6 · CUT, SCALE, MONITOR* — the decision map and the money move.",
+                           "verdicts": "*6 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
+                           "scenarios": "*7 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
+                           "plan": "*8 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
+                           "decide": "*9 · CUT, SCALE, MONITOR* — the decision map and the money move.",
                            "campaigns": "*7 · CAMPAIGNS*",
                            "adsets": "*8 · AD SETS*",
                            "ads": "*9 · ADS*"}
