@@ -486,7 +486,9 @@ def label(c, B, prev, cold_roas):
     c["d_freq"] = pct(c["freq"], p["freq"]) if p else None
     c["d_octr"] = pct(c["octr"], p["octr"]) if p else None
     c["d_cpm"] = pct(c["cpm"], p["cpm"]) if p else None
-    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr", "rev", "reach", "purch", "cvr", "aov", "impr", "lc", "ctr")} if p else None
+    c["prev"] = {k: p.get(k) for k in ("cpa", "roas", "freq", "octr", "spend", "cpm", "cpmr",
+                                       "rev", "reach", "purch", "cvr", "aov", "impr", "lc",
+                                       "ctr", "lctr", "atc", "atc_rate", "hook", "hold")} if p else None
     if c["spend"] >= MIN_SPEND and p and p.get("freq") and p.get("octr") \
        and c["d_freq"] is not None and c["d_freq"] > FAT_FREQ \
        and c["d_octr"] is not None and c["d_octr"] < -FAT_CTR:
@@ -521,7 +523,11 @@ def agg(ms):
             "aov": round(rev / purch) if purch else None,
             "ctr": round(sum(c["ctr"] * c["impr"] for c in ms) / impr, 2) if impr else 0,
             "octr": round(sum(c["octr"] * c["impr"] for c in ms) / impr, 2) if impr else 0,
-            "lctr": round(sum(c.get("lctr", 0) * c["impr"] for c in ms) / impr, 2) if impr else 0}
+            "lctr": round(sum(c.get("lctr", 0) * c["impr"] for c in ms) / impr, 2) if impr else 0,
+            "impr": int(impr), "atc": round(atc),
+            "freq": round(impr / reach, 2) if reach else 0,
+            "hook": round(sum(c.get("v3", 0) for c in ms) / impr * 100, 1) if impr else 0,
+            "hold": round(sum(c.get("thru", 0) for c in ms) / (sum(c.get("v3", 0) for c in ms) or 1) * 100, 1)}
 
 def attribute(rows, prev, key):
     """Which single creative drove the account-level change in `key` the most (in EGP)."""
@@ -894,7 +900,8 @@ def get_daily_series(acct, days=30):
     """This account's own daily history. It is the only honest definition of normal."""
     p = {"level": "account", "time_increment": 1, "date_preset": "last_30d", "limit": 60,
          "fields": "spend,impressions,reach,frequency,cpm,ctr,inline_link_click_ctr,"
-                   "outbound_clicks_ctr,actions,action_values"}
+                   "outbound_clicks_ctr,video_play_actions,video_thruplay_watched_actions,"
+                   "actions,action_values"}
     d = api_get("%s/insights" % acct, p)
     out = []
     for r in d.get("data", []) or []:
@@ -902,7 +909,13 @@ def get_daily_series(acct, days=30):
         purch = pick(r.get("actions"), PURCH); lc = pick(r.get("actions"), ["link_click"])
         impr = f(r.get("impressions")); reach = f(r.get("reach"))
         octr = first(r.get("outbound_clicks_ctr")) or f(r.get("inline_link_click_ctr"))
+        atc = pick(r.get("actions"), ATC)
+        v3 = first(r.get("video_play_actions")); thru = first(r.get("video_thruplay_watched_actions"))
         out.append({"date": r.get("date_start"), "spend": spend, "rev": rev,
+                    "atc": atc, "atc_rate": atc / lc * 100 if lc else 0,
+                    "ctr": f(r.get("ctr")), "lctr": f(r.get("inline_link_click_ctr")),
+                    "hook": v3 / impr * 100 if impr else 0,
+                    "hold": thru / v3 * 100 if v3 else 0,
                     "roas": rev / spend if spend else 0, "cpc": spend / lc if lc else 0,
                     "cvr": purch / lc * 100 if lc else 0, "aov": rev / purch if purch else 0,
                     "cpa": spend / purch if purch else 0,
@@ -1206,6 +1219,92 @@ def mix_split(A):
             "w_now": w_now, "w_pre": w_pre, "r_now": r_now, "r_pre": r_pre, "ks": ks}
 
 
+FUNNEL = [("hook", "HOOK RATE", "%.1f%%", True, "3 second views over impressions"),
+          ("hold", "HOLD RATE", "%.1f%%", True, "thruplays over 3 second views"),
+          ("ctr", "CTR (ALL)", "%.2f%%", True, "all clicks over impressions"),
+          ("lctr", "LINK CTR", "%.2f%%", True, "link clicks over impressions"),
+          ("octr", "OUTBOUND CTR", "%.2f%%", True, "clicks that actually left Meta"),
+          ("atc_rate", "ATC RATE", "%.1f%%", True, "add to carts over link clicks"),
+          ("cvr", "CVR", "%.2f%%", True, "purchases over link clicks"),
+          ("aov", "AOV", "%s", True, "revenue per purchase"),
+          ("roas", "ROAS", "%.2fx", True, "revenue over spend")]
+
+COST = [("cpm", "CPM", False), ("cpmr", "CPMR", False), ("cpc", "CPC", False),
+        ("freq", "FREQUENCY", False)]
+
+
+def funnel_read(m, p):
+    """Walk the funnel top to bottom and find the first stage that broke.
+    Then say what that means, because a metric on its own says nothing."""
+    if not p: return None
+    st = []
+    for k, lab, fmt, ug, expl in FUNNEL:
+        now = m_cpc(m) if k == "cpc" else m.get(k)
+        pre = m_cpc(p) if k == "cpc" else p.get(k)
+        st.append({"k": k, "lab": lab, "now": now or 0, "prev": pre or 0,
+                   "chg": pct(now or 0, pre or 0), "expl": expl})
+    d = {x["k"]: (x["chg"] if x["chg"] is not None else 0) for x in st}
+
+    # where did it break. First stage down more than 5 percent wins, top of funnel first.
+    broke = next((x for x in st if (x["chg"] or 0) <= -5), None)
+    lines = []
+    if d.get("cvr", 0) <= -5 and d.get("atc_rate", 0) <= -5:
+        lines.append("CVR and ATC rate fell together, so the break is *above* checkout: the product page, the price, the offer, or the quality of the traffic you are sending.")
+    elif d.get("cvr", 0) <= -5 and d.get("atc_rate", 0) > -5:
+        lines.append("CVR fell but ATC rate held, so people still added to cart and then did not buy. The break is *at checkout*: payment, shipping cost, or purchase intent.")
+    elif d.get("cvr", 0) > 5 and d.get("atc_rate", 0) > 5:
+        lines.append("ATC rate and CVR both rose. The page and the offer are converting better than they were.")
+    if d.get("lctr", 0) <= -5 or d.get("octr", 0) <= -5:
+        lines.append("Link CTR fell, so the creative or the audience is no longer producing qualified traffic. Fewer of the right people are clicking through.")
+    if d.get("hook", 0) <= -5:
+        lines.append("Hook rate fell, so the first 3 seconds are losing people. That is a thumbstop problem, not a targeting problem.")
+    elif d.get("hold", 0) <= -5:
+        lines.append("Hook held but hold rate fell, so the opening works and the body does not. Re-cut the middle, keep the hook.")
+    if not lines:
+        lines.append("No stage of the funnel broke by more than 5 percent. Whatever moved revenue did not come from the funnel.")
+    return {"stages": st, "broke": broke, "lines": lines, "d": d}
+
+
+def decay_watch(A):
+    """A creative that used to beat the account and now does not. Compare each one against
+    its own past, and name the metric that is responsible. Never make him hunt for it."""
+    acc = A["summary"]["roas"] or 0
+    out = []
+    for c in A["creatives"]:
+        p = c.get("prev")
+        if not p or (c["spend"] or 0) < 400: continue
+        was_good = (p.get("roas") or 0) >= acc
+        now_bad = (c["roas"] or 0) < acc
+        if not (was_good and now_bad): continue
+        checks = [("hook", "Hook rate", c.get("hook"), p.get("hook"), True),
+                  ("hold", "Hold rate", c.get("hold"), p.get("hold"), True),
+                  ("ctr", "CTR (all)", c.get("ctr"), p.get("ctr"), True),
+                  ("lctr", "Link CTR", c.get("lctr"), p.get("lctr"), True),
+                  ("octr", "Outbound CTR", c.get("octr"), p.get("octr"), True),
+                  ("atc_rate", "ATC rate", c.get("atc_rate"), p.get("atc_rate"), True),
+                  ("cvr", "CVR", c.get("cvr"), p.get("cvr"), True),
+                  ("aov", "AOV", c.get("aov"), p.get("aov"), True),
+                  ("cpm", "CPM", c.get("cpm"), p.get("cpm"), False),
+                  ("cpmr", "CPMR", c.get("cpmr"), p.get("cpmr"), False),
+                  ("freq", "Frequency", c.get("freq"), p.get("freq"), False)]
+        rows = []
+        for k, lab, now, pre, ug in checks:
+            ch = pct(now or 0, pre or 0)
+            if ch is None: continue
+            hurt = (-ch) if ug else ch          # how much this metric hurt, in percent
+            rows.append({"k": k, "lab": lab, "now": now or 0, "prev": pre or 0,
+                         "chg": ch, "hurt": hurt, "up_good": ug})
+        if not rows: continue
+        culprit = max(rows, key=lambda r: r["hurt"])
+        if culprit["hurt"] < 5: continue
+        out.append({"name": safe(c["ad_name"]), "seg": c["seg"], "spend": c["spend"],
+                    "roas": c["roas"], "proas": p.get("roas"),
+                    "d_roas": pct(c["roas"], p.get("roas") or 0),
+                    "rows": rows, "culprit": culprit,
+                    "loss": (p.get("roas") or 0) - (c["roas"] or 0)})
+    return sorted(out, key=lambda x: -(x["loss"] * x["spend"]))[:3]
+
+
 # ===================== CHART PRIMITIVES =====================
 def _tile(fig, x, y, w, h):
     ax = fig.add_axes([x, y, w, h])
@@ -1228,6 +1327,20 @@ def spark(fig, x, y, w, h, series, key, title, fmt, up_good, invert=False):
     if lo is not None and hi is not None:
         ax.axhspan(lo, hi, color=LINE, alpha=.55, zorder=1)
         ax.axhline(mid, color=MUTED, lw=.8, ls=(0, (3, 3)), zorder=2)
+    # annotate the days that actually explain the line
+    if key == "rev" and len(series) >= 10:
+        sp_ = [d.get("spend") or 0 for d in series]
+        for i in range(1, len(sp_)):
+            if not sp_[i - 1]: continue
+            ch = (sp_[i] / sp_[i - 1] - 1) * 100
+            if abs(ch) >= 35:
+                ax.annotate("budget %+.0f%%" % ch, (i, xs[i]), textcoords="offset points",
+                            xytext=(0, 11), fontsize=8.5, color=MUTED, family="DejaVu Sans",
+                            ha="center",
+                            arrowprops=dict(arrowstyle="-", color=FAINT, lw=.7))
+        for i, v in enumerate(xs):
+            if lo is not None and (v < lo or v > hi) and i < len(xs) - 1:
+                ax.plot([i], [v], "o", color=(RED if v < lo else GREEN), ms=4, zorder=3)
     now = xs[-1]
     outside = (lo is not None and (now < lo or now > hi))
     good = (now >= mid) if up_good else (now <= mid)
@@ -1319,33 +1432,42 @@ def card_pulse(A, win):
     ax = _panel(fig, .075, .270, "what moved it  ·  every percent of the change charged to one lever")
     W = waterfall(s, p)
     if W:
+        down = W["d_pct"] < 0
+        out_col = RED if down else GREEN
         t = max(W["steps"], key=lambda z: abs(z["rev_pct"]))
-        ax.text(1.6, 79, "MAIN REASON: %s" % t["k"], fontsize=F_H + 5,
-                color=(GREEN if t["rev_pct"] >= 0 else RED), family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 70, "%d%% of the move, worth %+.1f%% of revenue on its own." % (
-            t["pct"], t["rev_pct"]), fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans")
-        base_y, height = 14.0, 46.0
+        # the headline is the OUTCOME, not the lever. Red when revenue is down, always.
+        ax.text(1.6, 82, "REVENUE %+.1f%%" % W["d_pct"], fontsize=F_H + 8, color=out_col,
+                family="DejaVu Sans", weight="bold")
+        # the causal sentence, written out, so nothing has to be joined up by hand
+        hurt = sorted([x for x in W["steps"] if x["rev_pct"] < 0], key=lambda x: x["rev_pct"])
+        helped = sorted([x for x in W["steps"] if x["rev_pct"] >= 0], key=lambda x: -x["rev_pct"])
+        SAY = {"SPEND": "spend", "CPC": "CPC", "CVR": "CVR", "AOV": "AOV"}
+        bits = []
+        for x in hurt[:2]:
+            bits.append("%s %+.0f%% took %.1f%% off revenue" % (SAY[x["k"]], x["chg"] or 0, abs(x["rev_pct"])))
+        for x in helped[:2]:
+            bits.append("%s %+.0f%% added %.1f%%" % (SAY[x["k"]], x["chg"] or 0, x["rev_pct"]))
+        sent = ".  ".join(bits) + "."
+        for j, ln in enumerate(_wrap(sent, 92)[:2]):
+            ax.text(1.6, 71 - j * 7, ln, fontsize=F_ROW + 2, color=INK, family="DejaVu Sans")
+        base_y, height = 12.0, 40.0
         top = max(abs(x["rev_pct"]) for x in W["steps"]) * 1.5 or 1
         mid_y = base_y + height / 2
         ax.plot([2, 98], [mid_y, mid_y], color=LINE, lw=1)
         bw = 15.0; x0 = 8.0
-        for i, st in enumerate(W["steps"]):
+        for i, st_ in enumerate(W["steps"]):
             x = x0 + i * 22.0
-            hgt = abs(st["rev_pct"]) / top * (height / 2)
-            up = st["rev_pct"] >= 0
+            hgt = abs(st_["rev_pct"]) / top * (height / 2)
+            up = st_["rev_pct"] >= 0
             col = GREEN if up else RED
             ax.add_patch(plt.Rectangle((x, mid_y if up else mid_y - hgt), bw, hgt,
                                        facecolor=col, edgecolor="none"))
-            ax.text(x + bw / 2, mid_y + (hgt + 3 if up else -hgt - 6), "%+.1f%%" % st["rev_pct"],
-                    fontsize=F_ROW + 2, color=col, family="DejaVu Sans", weight="bold", ha="center")
-            ax.text(x + bw / 2, 12, st["k"], fontsize=F_ROW + 2, color=INK,
-                    family="DejaVu Sans", weight="bold", ha="center")
-            ax.text(x + bw / 2, 5, "%s %+.0f%%   ·   %d%% of the move" % (
-                st["k"].lower(), st["chg"] or 0, st["pct"]), fontsize=10.5, color=FAINT,
-                family="DejaVu Sans", ha="center")
-        ax.text(98, 79, "revenue %+.1f%%" % W["d_pct"], fontsize=F_H + 5,
-                color=(GREEN if W["d_pct"] >= 0 else RED), family="DejaVu Sans",
-                weight="bold", ha="right")
+            ax.text(x + bw / 2, mid_y + (hgt + 2.5 if up else -hgt - 5.5), "%+.1f%%" % st_["rev_pct"],
+                    fontsize=F_ROW + 1, color=col, family="DejaVu Sans", weight="bold", ha="center")
+            ax.text(x + bw / 2, 6, "%s %+.0f%%" % (st_["k"], st_["chg"] or 0), fontsize=F_ROW + 1,
+                    color=INK, family="DejaVu Sans", weight="bold", ha="center")
+            ax.text(x + bw / 2, 1, "%d%% of the move" % st_["pct"], fontsize=10, color=FAINT,
+                    family="DejaVu Sans", ha="center")
     else:
         ax.text(1.6, 45, "No comparable prior period.", fontsize=F_ROW + 2, color=MUTED,
                 family="DejaVu Sans")
@@ -1459,7 +1581,7 @@ def card_audience(A, win):
 
     # 3. HEADROOM. Who can still take money.
     ax = _panel(fig, .075, .245, "who can still take money")
-    xs0 = 1.6
+    room_ks = [k for k in ks if (segs[k].get("freq") or 9) < 3.0]
     for i, k in enumerate(ks):
         m = segs[k]; q = prev.get(k) or {}
         x = 1.6 + i * 33.0
@@ -1478,9 +1600,13 @@ def card_audience(A, win):
         ax.text(x, 22, ("frequency under 3, it can absorb more budget" if room
                         else "frequency is high on a finite pool, more budget buys repeats"),
                 fontsize=10.5, color=FAINT, family="DejaVu Sans")
-    for j, ln in enumerate(_wrap("Money should flow to the segment with headroom, not the one with the highest ROAS. "
-                                 "The highest ROAS segment is usually the smallest and the most saturated.", 96)[:2]):
-        ax.text(1.6, 10 - j * 6, ln, fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
+    if room_ks:
+        ax.text(1.6, 8, "ACTION: put the next budget into %s. It is the only segment that can absorb it." % (
+            ", ".join(SEGN[k].lower() for k in room_ks)), fontsize=F_ROW + 1, color=INK,
+            family="DejaVu Sans", weight="bold")
+    else:
+        ax.text(1.6, 8, "ACTION: every segment is saturated. More budget buys repeat impressions, not new buyers. Open a new audience or refresh creative first.",
+                fontsize=F_ROW + 1, color=RED, family="DejaVu Sans", weight="bold")
     _foot(fig, win)
     return _png(fig)
 
@@ -1567,6 +1693,104 @@ def card_decide(A, win):
     else:
         ax.text(1.6, 45, "Nothing is fatiguing. Frequency and outbound CTR are still moving together.",
                 fontsize=F_ROW + 2, color=GREEN, family="DejaVu Sans", weight="bold")
+    _foot(fig, win)
+    return _png(fig)
+
+
+# ---------- CARD: the funnel, top to bottom, and where it broke ----------
+def card_funnel(A, win):
+    m = A["summary"]; p = m.get("prev") or {}
+    R = funnel_read(m, p)
+    if not R: return None
+    fig = _fig(13.0)
+    _head(fig, A, win, "The funnel, top to bottom",
+          "Hook to hold to CTR to link CTR to ATC to CVR to AOV to ROAS. One metric on its own says nothing.")
+
+    ax = _panel(fig, .440, .400, "every stage against the period before")
+    n = len(R["stages"])
+    w = 96.0 / n
+    for i, st_ in enumerate(R["stages"]):
+        x = 2.0 + i * w
+        ch = st_["chg"] or 0
+        col = GREEN if ch >= 2 else (RED if ch <= -2 else MUTED)
+        bh = min(abs(ch), 60) / 60.0 * 26.0
+        ax.add_patch(plt.Rectangle((x + w * .18, 40 if ch >= 0 else 40 - bh), w * .5, bh,
+                                   facecolor=col, edgecolor="none"))
+        ax.plot([x + w * .10, x + w * .78], [40, 40], color=LINE, lw=1)
+        ax.text(x + w * .43, 40 + (bh + 4 if ch >= 0 else -bh - 8), "%+.0f%%" % ch,
+                fontsize=F_ROW + 1, color=col, family="DejaVu Sans", weight="bold", ha="center")
+        val = _k(st_["now"]) if st_["k"] == "aov" else (
+            ("%.2fx" % r2(st_["now"])) if st_["k"] == "roas" else ("%.2f%%" % r2(st_["now"])))
+        ax.text(x + w * .43, 24, val, fontsize=F_ROW + 2, color=INK, family="DejaVu Sans",
+                weight="bold", ha="center")
+        ax.text(x + w * .43, 14, st_["lab"], fontsize=9.5, color=MUTED, family="DejaVu Sans",
+                ha="center")
+        if i < n - 1:
+            ax.text(x + w * .95, 24, "→", fontsize=15, color=FAINT, family="DejaVu Sans",
+                    ha="center", va="center")
+    br = R["broke"]
+    ax.text(2.0, 83, ("FIRST STAGE TO BREAK: %s, %+.0f%%" % (br["lab"], br["chg"] or 0))
+            if br else "NO STAGE BROKE BY MORE THAN 5 PERCENT",
+            fontsize=F_H + 5, color=(RED if br else GREEN), family="DejaVu Sans", weight="bold")
+    ax.text(2.0, 72, "The funnel is read from the top. The first stage that fell is the one to fix, "
+                     "because everything under it inherits the damage.",
+            fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
+
+    ax = _panel(fig, .075, .330, "what that actually means")
+    for i, ln in enumerate(R["lines"][:3]):
+        y = 78 - i * 26
+        ax.add_patch(plt.Rectangle((1.4, y - 12), .8, 20, facecolor=RED if i == 0 else FAINT,
+                                   edgecolor="none"))
+        for j, chunk in enumerate(_wrap(ln.replace("*", ""), 88)[:2]):
+            ax.text(4.0, y - j * 8, chunk, fontsize=F_ROW + 2, color=INK, family="DejaVu Sans")
+
+    C = [("CPM", m.get("cpm"), p.get("cpm"), _k), ("CPMR", m.get("cpmr"), p.get("cpmr"), _k),
+         ("CPC", m_cpc(m), m_cpc(p), lambda v: "%.2f" % r2(v)),
+         ("FREQUENCY", m.get("freq"), p.get("freq"), lambda v: "%.2f" % r2(v))]
+    for i, (lab, now, pre, fmt) in enumerate(C):
+        x = 2.0 + i * 25.0
+        ch = pct(now or 0, pre or 0)
+        col = RED if (ch or 0) >= 2 else (GREEN if (ch or 0) <= -2 else MUTED)
+        ax.text(x, 14, lab, fontsize=9.5, color=FAINT, family="DejaVu Sans", weight="bold")
+        ax.text(x, 4, "%s   %s" % (fmt(now), _d(ch)), fontsize=F_ROW + 1, color=col,
+                family="DejaVu Sans", weight="bold")
+    _foot(fig, win)
+    return _png(fig)
+
+
+# ---------- CARD: it was working, now it is not ----------
+def card_decay(A, win):
+    D = decay_watch(A)
+    fig = _fig(9.6)
+    _head(fig, A, win, "It was working, now it is not",
+          "Creatives that used to beat the account and no longer do. Measured against their own past, with the metric responsible named.")
+    ax = _panel(fig, .420, .375, "flagged")
+    if not D:
+        ax.text(1.6, 45, "Nothing that was beating the account has fallen below it. No decay to report.",
+                fontsize=F_H + 2, color=GREEN, family="DejaVu Sans", weight="bold")
+        _foot(fig, win)
+        return _png(fig)
+
+    for i, e in enumerate(D[:3]):
+        y = 84 - i * 30
+        ax.text(1.6, y, _clip(e["name"], 36), fontsize=F_H + 3, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(98, y, "ROAS %.2fx to %.2fx  (%s)" % (
+            r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"])),
+            fontsize=F_ROW + 1, color=RED, family="DejaVu Sans", weight="bold", ha="right")
+        ax.text(98, y - 8, "%s  ·  %s spend" % (SEGN.get(e["seg"], e["seg"]), _k(e["spend"])),
+                fontsize=10.5, color=MUTED, family="DejaVu Sans", ha="right")
+        cul = e["culprit"]
+        ax.text(1.6, y - 9, "THE CAUSE: %s %+.0f%%" % (cul["lab"], cul["chg"]),
+                fontsize=F_ROW + 2, color=RED, family="DejaVu Sans", weight="bold")
+        # every metric, so nothing has to be chased manually
+        x = 1.6
+        for r in e["rows"]:
+            col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else FAINT)
+            ax.text(x, y - 17, r["lab"], fontsize=8.5, color=FAINT, family="DejaVu Sans")
+            ax.text(x, y - 22.5, "%+.0f%%" % r["chg"], fontsize=10.5, color=col,
+                    family="DejaVu Sans", weight="bold")
+            x += 8.9
     _foot(fig, win)
     return _png(fig)
 
@@ -1717,6 +1941,8 @@ def render_cards(A, win):
         for suf, fn in (("pulse", lambda: card_pulse(A, win)),
                         ("trend", lambda: card_trend(A, win)),
                         ("audience", lambda: card_audience(A, win)),
+                        ("funnel", lambda: card_funnel(A, win)),
+                        ("decay", lambda: card_decay(A, win)),
                         ("decide", lambda: card_decide(A, win)),
                         ("campaigns", lambda: card_bars(A, win, "campaign")),
                         ("adsets", lambda: card_bars(A, win, "adset")),
@@ -2765,10 +2991,12 @@ def main():
                     CAP = {"pulse": "*1 · IS THIS NORMAL* — today against this account's own 30 days, and the lever that moved it.",
                            "trend": "*2 · THE TREND* — rolling 7 day. Frequency, CPMR and CPM are never judged on one day.",
                            "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
-                           "decide": "*4 · CUT, SCALE, MONITOR* — the decision map and the money move.",
-                           "campaigns": "*5 · CAMPAIGNS*",
-                           "adsets": "*6 · AD SETS*",
-                           "ads": "*7 · ADS*"}
+                           "funnel": "*4 · THE FUNNEL* — hook to hold to CTR to ATC to CVR to ROAS, and the first stage that broke.",
+                           "decay": "*5 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, with the metric responsible.",
+                           "decide": "*6 · CUT, SCALE, MONITOR* — the decision map and the money move.",
+                           "campaigns": "*7 · CAMPAIGNS*",
+                           "adsets": "*8 · AD SETS*",
+                           "ads": "*9 · ADS*"}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
