@@ -214,13 +214,28 @@ def _strip3(f):
 
 
 def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
+    """If Meta will not give up the 3 second field for this token, drop it and carry on.
+    One deprecated field must never take the whole report down."""
     out, after = [], None
     ff = fields + ("," + extra if extra else "")
+    if not HAS_3SEC[0]:
+        ff = _strip3(ff)
     while True:
         p = {"level": level, "fields": ff, "time_range": json.dumps(tr), "limit": 400}
         if after: p["after"] = after
         d = api_get("%s/insights" % acct, p)
-        if "error" in d: break
+        if "error" in d:
+            msg = str(d.get("error"))
+            if HAS_3SEC[0] and "video_3_sec_watched_actions" in ff and (
+                    "video_3_sec" in msg or "nonexistent" in msg.lower()
+                    or "invalid" in msg.lower() or "(#100)" in msg):
+                HAS_3SEC[0] = False
+                sys.stderr.write("[video] Meta rejected video_3_sec_watched_actions, "
+                                 "falling back to 2 second continuous plays\n")
+                ff = _strip3(ff); after = None; out = []
+                continue
+            sys.stderr.write("[insights] %s\n" % msg[:160])
+            break
         out += d.get("data", [])
         after = d.get("paging", {}).get("cursors", {}).get("after")
         if not after: break
