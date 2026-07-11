@@ -611,6 +611,224 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
             "best_target": best if (best and best["ad_id"] != off_id) else None}
 
 
+# ===================== VISUAL BRIEFING CARD =====================
+# Taste palette: warm bone canvas, ink, hairlines, muted pastels. No gradients, no emoji, no chartjunk.
+BONE, INK, MUTED, FAINT, LINE = "#F7F6F3", "#1A1A18", "#787774", "#9B9A96", "#E4E2DE"
+BLUE, AMBER, GREEN, RED, PAPER = "#8FB6D4", "#D9BC72", "#8CB392", "#D08C86", "#FFFFFF"
+SEGC = {"NEW": BLUE, "ENGAGED": AMBER, "EXISTING": GREEN, "MIXED": FAINT}
+
+def r2(x): return round(x or 0, 2)
+
+def _clip(s, n=34):
+    s = (s or "").strip()
+    return s if len(s) <= n else s[:n - 1] + "…"
+
+def render_card(A, win):
+    """One PNG that says: what moved, exactly WHERE it moved, and what to do about it."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import FancyBboxPatch, Rectangle
+    except Exception as e:
+        sys.stderr.write("[card] matplotlib unavailable: %s\n" % e); return None
+
+    s = A["summary"]; rows = A["creatives"]; prev = s.get("prev") or {}
+    name = A["account"]["name"]; d1, d2 = DATES["label"]; p1, p2 = DATES["p_label"]
+    con = contrib(s, prev) or []
+    mv = movers(rows, 5)
+    sc = scenario(A)
+    tot = sum(c["spend"] for c in rows) or 1
+
+    plt.rcParams["font.family"] = ["DejaVu Sans"]
+    fig = plt.figure(figsize=(11.2, 13.0), dpi=110, facecolor=BONE)
+
+    def panel(x, y, w, h):
+        fig.patches.append(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.004,rounding_size=0.012",
+                                          transform=fig.transFigure, facecolor=PAPER, edgecolor=LINE,
+                                          linewidth=1.1, zorder=0))
+    def txt(x, y, t, size=10, color=INK, weight="normal", ha="left", style="normal", mono=False):
+        fig.text(x, y, t, size=size, color=color, weight=weight, ha=ha, style=style,
+                 family=("DejaVu Sans Mono" if mono else "DejaVu Sans"), zorder=3)
+
+    # ---------- header ----------
+    txt(.062, .967, "%s  ·  %s" % (name.upper(), WIN_TITLE.get(win, "MEMO")), 10.5, FAINT, "bold", mono=True)
+    txt(.062, .941, "Where the money moved.", 27, INK)
+    txt(.062, .921, "%s to %s   vs   %s to %s   ·  all values EGP" % (d1, d2, p1, p2), 9.5, MUTED, mono=True)
+
+    # ---------- KPI strip ----------
+    kp = [("SPEND", money(s["spend"]), s.get("d_spend"), False),
+          ("REVENUE", money(s["revenue"]), pct(s["revenue"], prev.get("rev")), False),
+          ("ROAS", str(s["roas"]), s.get("d_roas"), False),
+          ("CPA", money(s["cpa"]), s.get("d_cpa"), True),
+          ("CVR", "%s%%" % s["cvr"], s.get("d_cvr"), False),
+          ("CPMR", money(s["cpmr"]), s.get("d_cpmr"), True)]
+    y0, ph = .838, .058
+    panel(.055, y0, .89, ph)
+    for i, (k, v, d, inv) in enumerate(kp):
+        x = .075 + i * .148
+        txt(x, y0 + ph - .019, k, 7.6, FAINT, "bold", mono=True)
+        txt(x, y0 + .013, v, 15, INK)
+        if d is None:
+            txt(x + .085, y0 + .017, "-", 8, FAINT, mono=True)
+        else:
+            good = (d < 0) if inv else (d > 0)
+            c = GREEN if (good and abs(d) > 2) else (RED if (not good and abs(d) > 2) else FAINT)
+            txt(x + .085, y0 + .017, sp(d), 8.4, c, "bold", mono=True)
+
+    # ---------- WHO moved ROAS ----------
+    y0, ph = .690, .140
+    panel(.055, y0, .43, ph)
+    txt(.075, y0 + ph - .022, "WHO MOVED ROAS", 8, FAINT, "bold", mono=True)
+    if con:
+        for i, c in enumerate(con[:3]):
+            yy = y0 + ph - .055 - i * .027
+            txt(.075, yy, c["k"], 9.6, INK, "bold")
+            bw = .21 * (c["pct"] / 100.0)
+            fig.patches.append(Rectangle((.125, yy - .003), .21, .010, transform=fig.transFigure,
+                                         facecolor="#EFEDE9", edgecolor="none", zorder=2))
+            fig.patches.append(Rectangle((.125, yy - .003), bw, .010, transform=fig.transFigure,
+                                         facecolor=(GREEN if c["help"] else RED), edgecolor="none", zorder=3))
+            txt(.345, yy, "%d%%" % c["pct"], 9, INK, "bold", mono=True)
+            txt(.378, yy, "%s%s" % ("+" if c["egp"] >= 0 else "-", money(abs(c["egp"]))),
+                8.2, (GREEN if c["help"] else RED), mono=True)
+        txt(.075, y0 + .009, "ROAS = CVR x AOV / CPC, so shares add to 100%.", 7.4, FAINT, style="italic")
+    else:
+        txt(.075, y0 + .06, "No prior period to attribute.", 9, MUTED)
+
+    # ---------- AUDIENCE ----------
+    panel(.515, y0, .43, ph)
+    txt(.535, y0 + ph - .022, "SPEND BY AUDIENCE", 8, FAINT, "bold", mono=True)
+    aud = [(sg, [c for c in rows if c["seg"] == sg]) for sg in ("NEW", "ENGAGED", "EXISTING")]
+    for i, (sg, g) in enumerate(aud):
+        yy = y0 + ph - .055 - i * .027
+        spd = sum(c["spend"] for c in g); rv = sum(c["rev"] for c in g)
+        sh = spd / tot * 100
+        txt(.535, yy, SEGN[sg].split()[0], 9.4, INK, "bold")
+        fig.patches.append(Rectangle((.625, yy - .003), .18, .010, transform=fig.transFigure,
+                                     facecolor="#EFEDE9", edgecolor="none", zorder=2))
+        fig.patches.append(Rectangle((.625, yy - .003), .18 * (sh / 100.0), .010, transform=fig.transFigure,
+                                     facecolor=SEGC[sg], edgecolor="none", zorder=3))
+        txt(.815, yy, "%.0f%%" % sh, 9, INK, "bold", mono=True)
+        txt(.855, yy, ("%sx" % round(rv / spd, 2)) if spd else "nothing", 8.2, MUTED, mono=True)
+    live = [sg for sg, g in aud if sum(c["spend"] for c in g) > 0]
+    txt(.535, y0 + .009,
+        ("Only %s is running. Nothing re-engages paid traffic." % SEGN[live[0]]) if len(live) <= 1
+        else "Read from real ad set targeting, not names.", 7.4, (RED if len(live) <= 1 else FAINT), style="italic")
+
+    # ---------- WHERE it happened (named) ----------
+    y0, ph = .400, .265
+    panel(.055, y0, .89, ph)
+    txt(.075, y0 + ph - .024, "EXACTLY WHERE IT MOVED", 8, FAINT, "bold", mono=True)
+    txt(.075, y0 + ph - .048, "Revenue change per ad vs the period before, biggest swing first.", 8.4, MUTED)
+    if mv:
+        mx = max(abs(m["d_rev"]) for m in mv) or 1
+        cx = .50   # zero line
+        for i, m in enumerate(mv):
+            yy = y0 + ph - .086 - i * .036
+            up = m["d_rev"] >= 0
+            txt(.075, yy, _clip(m["name"], 30), 9.2, INK)
+            fig.patches.append(Rectangle((.40, yy - .0035), .006, .011, transform=fig.transFigure,
+                                         facecolor=SEGC.get(m["seg"], FAINT), edgecolor="none", zorder=3))
+            w = .195 * (abs(m["d_rev"]) / mx)
+            fig.patches.append(Rectangle((cx if up else cx - w, yy - .004), w, .012, transform=fig.transFigure,
+                                         facecolor=(GREEN if up else RED), edgecolor="none", zorder=3))
+            fig.patches.append(Rectangle((cx - .0006, yy - .009), .0012, .022, transform=fig.transFigure,
+                                         facecolor=LINE, edgecolor="none", zorder=4))
+            txt(.71, yy, "%s%s" % ("+" if up else "-", money(abs(m["d_rev"]))), 9, (GREEN if up else RED), "bold", mono=True)
+            txt(.775, yy, "%s to %s ROAS" % (r2(m["prev_roas"]), r2(m["roas"])), 8, MUTED, mono=True)
+            txt(.075, yy - .0125, "in %s" % _clip(m["adset"], 40), 7.4, FAINT, style="italic")
+    else:
+        txt(.075, y0 + .10, "No comparable prior period.", 9, MUTED)
+
+    # ---------- DO THIS (the visual scenario) ----------
+    y0, ph = .075, .295
+    panel(.055, y0, .89, ph)
+    txt(.075, y0 + ph - .026, "DO THIS ON MONDAY", 8, FAINT, "bold", mono=True)
+    if sc:
+        cut, fund = sc["cut"], sc["fund"]
+        txt(.075, y0 + ph - .062, "Move %s from one ad to the other." % money(sc["freed"]), 16, INK)
+
+        by = y0 + .150   # box row
+        # CUT box
+        fig.patches.append(FancyBboxPatch((.075, by), .38, .072, boxstyle="round,pad=0.003,rounding_size=0.008",
+                                          transform=fig.transFigure, facecolor="#FDEBEC", edgecolor="#E9C9C6", linewidth=1, zorder=2))
+        txt(.09, by + .052, "CUT 30%", 7.6, "#9F2F2D", "bold", mono=True)
+        txt(.09, by + .030, _clip(cut["name"], 26), 10.5, INK, "bold")
+        txt(.09, by + .012, "ROAS %s  ·  CPA %s  ·  CVR %s%%  ·  %s spend" % (
+            r2(cut["roas"]), money(cut["cpa"]), cut["cvr"], money(cut["spend"])), 7.6, MUTED, mono=True)
+
+        # arrow
+        fig.text(.478, by + .034, "→", size=24, color=INK, ha="center", zorder=3)
+        fig.text(.478, by + .014, money(sc["freed"]), size=8, color=MUTED, ha="center",
+                 family="DejaVu Sans Mono", zorder=3)
+
+        # FUND box
+        fig.patches.append(FancyBboxPatch((.545, by), .38, .072, boxstyle="round,pad=0.003,rounding_size=0.008",
+                                          transform=fig.transFigure, facecolor="#EDF3EC", edgecolor="#C7D9C6", linewidth=1, zorder=2))
+        txt(.56, by + .052, "FUND IT", 7.6, "#346538", "bold", mono=True)
+        txt(.56, by + .030, _clip(fund["name"], 26), 10.5, INK, "bold")
+        txt(.56, by + .012, "ROAS %s  ·  CPA %s  ·  freq %s has room" % (
+            r2(fund["roas"]), money(fund["cpa"]), fund["freq"]), 7.6, MUTED, mono=True)
+
+        # projected revenue bars
+        base, proj = sc["rev_now"], sc["rev_then"]
+        mx = max(base, proj) or 1
+        txt(.075, y0 + .112, "REVENUE IF YOU DO IT", 7.6, FAINT, "bold", mono=True)
+        for i, (lbl, val, col) in enumerate([("now", base, "#CFCCC6"), ("after the move", proj, GREEN)]):
+            yy = y0 + .080 - i * .030
+            fig.patches.append(Rectangle((.21, yy - .005), .55 * (val / mx), .017, transform=fig.transFigure,
+                                         facecolor=col, edgecolor="none", zorder=3))
+            txt(.075, yy, lbl, 8.8, MUTED)
+            txt(.79, yy, money(val), 9.4, INK, "bold", mono=True)
+        txt(.075, y0 + .016, "Worth about %s more revenue at the same spend." % money(sc["gain"]),
+            9, "#346538", "bold", style="italic")
+    else:
+        txt(.075, y0 + .16, "Nothing is clearly wasting and nothing is clearly scalable.", 13, INK)
+        txt(.075, y0 + .13, "Hold the budget where it is.", 9.5, MUTED)
+
+    txt(.062, .035, "AI Media Buyer  ·  audience from real ad set targeting  ·  lookalikes count as New",
+        7.4, FAINT, mono=True)
+
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=BONE, bbox_inches=None)
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def slack_image(channel, png, title, comment=""):
+    """Upload the card straight into the channel. No dependency on any external host."""
+    if not channel or not png: return False
+    if not SLACK_TOKEN:
+        print("[card:%s] %d bytes\n" % (channel, len(png))); return True
+    try:
+        # 1. reserve an upload url
+        q = urllib.parse.urlencode({"filename": title + ".png", "length": len(png)}).encode()
+        r1 = urllib.request.Request("https://slack.com/api/files.getUploadURLExternal", data=q,
+              headers={"Authorization": "Bearer %s" % SLACK_TOKEN,
+                       "Content-Type": "application/x-www-form-urlencoded"})
+        j1 = json.loads(urllib.request.urlopen(r1, timeout=30).read().decode())
+        if not j1.get("ok"):
+            sys.stderr.write("[card] getUploadURL: %s\n" % j1.get("error")); return False
+        # 2. push the bytes
+        r2 = urllib.request.Request(j1["upload_url"], data=png, method="POST")
+        urllib.request.urlopen(r2, timeout=60).read()
+        # 3. publish it into the channel
+        body = json.dumps({"files": [{"id": j1["file_id"], "title": title}],
+                           "channel_id": channel, "initial_comment": comment}).encode()
+        r3 = urllib.request.Request("https://slack.com/api/files.completeUploadExternal", data=body,
+              headers={"Authorization": "Bearer %s" % SLACK_TOKEN,
+                       "Content-Type": "application/json; charset=utf-8"})
+        j3 = json.loads(urllib.request.urlopen(r3, timeout=30).read().decode())
+        if not j3.get("ok"):
+            sys.stderr.write("[card] complete: %s\n" % j3.get("error")); return False
+        return True
+    except Exception as e:
+        sys.stderr.write("[card] %s\n" % e); return False
+
+
 # ----------------------- Slack -----------------------
 def slack(channel, text):
     if not channel: return
@@ -1333,18 +1551,104 @@ def msg_advisor(A, overlaps=None):
     return "\n".join(L)
 
 
+# ----------------------- the full metric set, at every level -----------------------
+# CPC, AOV, CPMR, CVR, ROAS, CPA, CTR, Outbound CTR, CPM, frequency. Always. No exceptions.
+def full_metrics(g):
+    spend = sum(c["spend"] for c in g); rev = sum(c["rev"] for c in g); purch = sum(c["purch"] for c in g)
+    impr = sum(c["impr"] for c in g); reach = sum(c["reach"] for c in g); lc = sum(c["lc"] for c in g)
+    atc = sum(c.get("atc", 0) for c in g)
+    return {
+        "spend": round(spend), "rev": round(rev), "purch": int(purch),
+        "roas": round(rev / spend, 2) if spend else 0,
+        "cpa":  round(spend / purch) if purch else None,
+        "aov":  round(rev / purch) if purch else None,
+        "cpc":  round(spend / lc, 2) if lc else None,
+        "cvr":  round(purch / lc * 100, 2) if lc else None,
+        "ctr":  round(sum(c["ctr"] * c["impr"] for c in g) / impr, 2) if impr else 0,
+        "octr": round(sum(c["octr"] * c["impr"] for c in g) / impr, 2) if impr else 0,
+        "cpm":  round(spend / impr * 1000, 2) if impr else 0,
+        "cpmr": round(spend / reach * 1000, 2) if reach else 0,
+        "freq": round(impr / reach, 2) if reach else 0,
+        "atc_rate": round(atc / lc * 100, 1) if lc else 0,
+        "reach": int(reach), "impr": int(impr), "lc": round(lc), "n": len(g),
+    }
+
+def dom_seg(g):
+    """The audience a campaign/adset actually buys. MIXED when it is genuinely split."""
+    sp = {}
+    for c in g: sp[c["seg"]] = sp.get(c["seg"], 0) + c["spend"]
+    if not sp: return "NEW"
+    tot = sum(sp.values()) or 1
+    top = max(sp, key=sp.get)
+    return top if sp[top] / tot >= 0.8 else "MIXED"
+
+def group_full(rows, keyfn, namefn, tot_spend):
+    buckets = {}
+    for c in rows:
+        buckets.setdefault(keyfn(c), []).append(c)
+    out = []
+    for k, g in buckets.items():
+        m = full_metrics(g)
+        m["name"] = namefn(g[0]) or "(unnamed)"
+        m["seg"] = dom_seg(g)
+        m["share"] = round(m["spend"] / tot_spend * 100, 1) if tot_spend else 0
+        out.append(m)
+    out.sort(key=lambda x: -x["spend"])
+    return out
+
+
+# ----------------------- WHERE exactly did it move -----------------------
+def movers(rows, n=5):
+    """Name the exact ads that caused the revenue move, biggest absolute swing first."""
+    out = []
+    for c in rows:
+        p = c.get("prev")
+        if not p or not p.get("rev"): continue
+        d = c["rev"] - (p["rev"] or 0)
+        if abs(d) < 1: continue
+        out.append({"name": c["ad_name"], "seg": c["seg"], "adset": c["adset"], "campaign": c["campaign"],
+                    "d_rev": round(d), "rev": round(c["rev"]), "prev_rev": round(p["rev"] or 0),
+                    "roas": c["roas"], "prev_roas": p.get("roas"), "spend": round(c["spend"]),
+                    "prev_spend": round(p.get("spend") or 0),
+                    "cvr": c["cvr"], "prev_cvr": p.get("cvr"), "cpa": c["cpa"], "prev_cpa": p.get("cpa")})
+    out.sort(key=lambda x: -abs(x["d_rev"]))
+    return out[:n]
+
+def scenario(A):
+    """The concrete move: cut the worst, fund the best, and what that is worth."""
+    s = A["summary"]; rows = A["creatives"]
+    sig = [c for c in rows if c.get("significant")]
+    if not sig: return None
+    cut = None
+    bleed = [c for c in sig if c["roas"] and c["roas"] < s["roas"] * 0.8]
+    if bleed: cut = min(bleed, key=lambda c: c["roas"])
+    fund = None
+    good = [c for c in sig if c["roas"] and c["roas"] >= s["roas"] and c["freq"] < freq_ceiling(c) and (c["purch"] or 0) >= 2]
+    if good: fund = max(good, key=lambda c: (c["roas"] or 0) * (c["spend"] ** 0.3))
+    if not cut or not fund or cut["ad_id"] == fund["ad_id"]: return None
+    freed = round(cut["spend"] * 0.3)
+    gain = round(freed * ((fund["roas"] or 0) - (cut["roas"] or 0)))
+    return {"cut": {"name": cut["ad_name"], "seg": cut["seg"], "spend": round(cut["spend"]), "roas": cut["roas"],
+                    "cpa": cut["cpa"], "cvr": cut["cvr"]},
+            "fund": {"name": fund["ad_name"], "seg": fund["seg"], "spend": round(fund["spend"]), "roas": fund["roas"],
+                     "cpa": fund["cpa"], "cvr": fund["cvr"], "freq": fund["freq"]},
+            "freed": freed, "gain": gain,
+            "rev_now": round(s["revenue"]), "rev_then": round(s["revenue"] + gain)}
+
+
 # ----------------------- payload for the visual dashboard -----------------------
 def strat_payload(A):
     """Everything the Strategic dashboard renders, per account per window."""
     s = A["summary"]; rows = A["creatives"]; prev = s.get("prev") or {}
     tot = sum(c["spend"] for c in rows) or 1
+    # AUDIENCE: the complete metric set per segment, never a partial row
     segs = {}
     for sg in ("NEW", "ENGAGED", "EXISTING"):
         g = [c for c in rows if c["seg"] == sg]
-        spd = sum(c["spend"] for c in g); rv = sum(c["rev"] for c in g); pu = sum(c["purch"] for c in g)
-        segs[sg] = {"name": SEGN[sg], "spend": round(spd), "share": round(spd / tot * 100, 1),
-                    "roas": round(rv / spd, 2) if spd else 0, "rev": round(rv), "purch": int(pu),
-                    "cpa": round(spd / pu) if pu else None}
+        m = full_metrics(g) if g else full_metrics([])
+        m["name"] = SEGN[sg]
+        m["share"] = round(m["spend"] / tot * 100, 1) if tot else 0
+        segs[sg] = m
     def cd(c):
         return {"name": c["ad_name"], "seg": c["seg"], "segn": SEGN[c["seg"]], "spend": round(c["spend"]),
                 "share": c.get("spend_share"), "roas": c["roas"], "cpa": c["cpa"], "cvr": c["cvr"],
@@ -1383,6 +1687,10 @@ def strat_payload(A):
         "audience": segs,
         "contrib": contrib(s, prev) or [],
         "formats": fmt,
+        # the full metric set at every level of the account
+        "campaigns": group_full(rows, lambda c: c["campaign"], lambda c: c["campaign"], tot),
+        "adsets":    group_full(rows, lambda c: c.get("adset_id") or c["adset"], lambda c: c["adset"], tot),
+        "ads":       group_full(rows, lambda c: c["ad_id"], lambda c: c["ad_name"], tot),
         "top": [cd(c) for c in sorted([c for c in rows if c.get("significant")], key=lambda c: -c["spend"])[:8]],
         "scalable": [cd(c) for c in scal[:5]],
         "bleeders": [cd(c) for c in bleed],
@@ -1456,6 +1764,12 @@ def main():
                 A["windows"][win] = strat_payload(AW)      # feeds the visual dashboard
                 wch = channel_window_for(acct["name"], win)
                 if wch:
+                    # the picture first: what moved, where exactly, and the move to make
+                    png = render_card(AW, win)
+                    slack_image(wch, png, "%s-%s" % (acct["name"].replace(" ", "-").lower(), win),
+                                "%s  %s - %s.  The detail is in the thread below." % (
+                                    MENTION, acct["name"].upper(), WIN_TITLE.get(win, "MEMO")))
+                    time.sleep(1)
                     slack(wch, msg_advisor(AW))
                     time.sleep(1)
             DATES["label"], DATES["p_label"] = save7
