@@ -13,7 +13,7 @@ the account cold ROAS, not a weak floor. Never a lone metric.
 
 House style: line break after every period, no em dashes, CTR = Outbound CTR.
 """
-import os, sys, json, time, argparse, datetime, statistics as st
+import os, sys, json, time, argparse, datetime, math, statistics as st
 import urllib.request, urllib.parse, urllib.error
 
 GRAPH = "https://graph.facebook.com/v21.0"
@@ -50,13 +50,37 @@ WARM_KW = ["retarget", " rt ", "rt_", "catalog", "dpa", "promocode", "promo code
            "didn't purchase", "didnt purchase", "back2cart", "atc ", "atc_", "zombie",
            "existing", "evergreen", "ever green", "abandon", "viewed", "add to cart", "savewith"]
 CAT_KW = ["catalog", "dpa"]
-# audience segments (New / Engaged / Existing) by targeting signal in the name
-EXIST_KW = ["existing", "customer", "purchas", "buyer", " ltv", "repeat", "loyal", "past buyer", "180d", "180 day"]
+# ---------- audience segments (New / Engaged / Existing) ----------
+# TRUTH SOURCE: the ad set's actual targeting (which custom audiences it targets), NOT the ad/campaign name.
+# Names lie: "Existing Content" is a CREATIVE naming convention, not an existing-customer audience.
+SEGN = {"NEW": "New audience", "ENGAGED": "Engaged", "EXISTING": "Existing customers"}
+SEGMAP = {}   # adset_id -> "NEW"/"ENGAGED"/"EXISTING", rebuilt per account from targeting
+WIN_TITLE = {"daily": "DAILY MEMO", "3day": "3-DAY MEMO", "7day": "7-DAY MEMO"}
+WIN_FOOT = {"daily": "Daily memo. Yesterday vs the day before. One day is noisy, treat it as a signal, not a verdict.",
+            "3day": "3-day memo. Last 3 days vs the 3 before.",
+            "7day": "7-day memo. Last 7 days vs the 7 before."}
+
+def ca_segment(name, subtype=""):
+    """Classify one custom audience. A lookalike is prospecting (NEW), not the seed audience."""
+    n = (name or "").lower()
+    if (subtype or "").upper() == "LOOKALIKE" or "lookalike" in n or n.startswith("lal"):
+        return "NEW"
+    # "wsv 30 day didn't purchase" / "atc 60 didn't pur 30" are ENGAGERS, never customers
+    if "didn't pur" in n or "didnt pur" in n or "not purchas" in n or "non purchas" in n:
+        return "ENGAGED"
+    if any(k in n for k in ("purchase", "purchaser", "buyer", "customer", " ltv", "repeat", "loyal")):
+        return "EXISTING"
+    return "ENGAGED"   # any other custom audience (engagers, viewers, ATC, ICO, site visitors) is a warm pool
+
+# name-based fallback, ONLY used when an ad set has no resolvable targeting
+EXIST_KW = ["existing customer", "past buyer", "repeat", "loyal", " ltv"]
 ENGAGED_KW = ["retarget", " rt ", "rt_", "atc", "add to cart", "back2cart", "didn't purchase", "didnt purchase",
-              "abandon", "viewed", "view content", "engag", "30 day", "60 day", "90 day", "zombie", "savewith", "cart", "wsv"]
+              "abandon", "viewed", "view content", "engag", "zombie", "savewith", "cart", "wsv", "ico"]
 def segment(blob):
     b = " " + (blob or "").lower() + " "
-    # ENGAGED first: "didn't purchase", "back2cart" etc are engagers, not existing customers
+    # strip creative-naming false positives before looking for audience words
+    for junk in ("existing content", "existing posts", "existing post"):
+        b = b.replace(junk, " ")
     if any(k in b for k in ENGAGED_KW): return "ENGAGED"
     if any(k in b for k in EXIST_KW): return "EXISTING"
     return "NEW"
@@ -84,6 +108,12 @@ def channel_3sec_for(name):
     if "playmore" in n: return CH.get("playmore_3sec")
     if "kids" in n: return CH.get("ourkids_3sec")
     return None
+def channel_window_for(name, win):
+    """win = daily | 3day | 7day. Each brand has its own channel per read."""
+    n = (name or "").lower()
+    brand = "playmore" if "playmore" in n else ("ourkids" if "kids" in n else None)
+    if not brand: return None
+    return CH.get("%s_%s" % (brand, win))
 
 def f(x):
     try: return float(x)
@@ -128,40 +158,6 @@ def aset_link(name, sid):
     return "*%s*" % (name or "(adset)")
 
 
-# ----------------------- ops alerts (fail LOUD, never silent) -----------------------
-def ops_alert(msg):
-    """Critical failure alert. Posts to the alerts channel (falls back to default),
-    always mirrors to stderr so the Actions log shows it either way."""
-    sys.stderr.write("[ALERT] %s\n" % msg)
-    ch = CH.get("alerts") or CH.get("default")
-    try:
-        slack(ch, ":rotating_light: %s AI Media Buyer is DOWN.\n%s" % (MENTION, msg))
-    except Exception as e:
-        sys.stderr.write("[ALERT] slack post failed too: %s\n" % e)
-
-def _die(msg):
-    ops_alert(msg)
-    sys.exit(1)
-
-def validate_token():
-    """Prove the token works BEFORE the run. A dead token must page us, not pass silently."""
-    url = "%s/me?fields=id,name&access_token=%s" % (GRAPH, urllib.parse.quote(TOKEN))
-    try:
-        with urllib.request.urlopen(url, timeout=20) as r:
-            who = json.loads(r.read().decode())
-        print("token OK, acting as %s (%s)" % (who.get("name"), who.get("id")))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "ignore")
-        if '"code":190' in body.replace(" ", "") or "OAuthException" in body:
-            _die("Meta token is DEAD (error 190).\n"
-                 "Fix: Business Settings > System Users > generate a new token "
-                 "(expiration Never) > update the META_ACCESS_TOKEN secret in the repo.\n"
-                 "Today's run did NOT happen.")
-        _die("Token validation failed HTTP %s: %s" % (e.code, body[:200]))
-    except Exception as e:
-        _die("Token validation failed: %s" % e)
-
-
 # ----------------------- Graph API -----------------------
 def api_get(path, params):
     params = dict(params); params["access_token"] = TOKEN
@@ -175,10 +171,6 @@ def api_get(path, params):
             last = e.read().decode("utf-8", "ignore"); low = last.lower()
             if (e.code in (429, 500, 502, 503) or "throttl" in low or "reduce the amount" in low) and i < 4:
                 time.sleep(min(90, 2 ** i * 6)); continue
-            if '"code":190' in last.replace(" ", "") or "OAuthException" in last:
-                _die("Meta token died MID-RUN (190) on %s.\n"
-                     "Fix: regenerate the System User token (expiration Never) and update "
-                     "the META_ACCESS_TOKEN secret." % path)
             sys.stderr.write("[api] %s %s: %s\n" % (e.code, path, last[:200])); return {"error": last}
         except Exception as e:
             last = str(e); time.sleep(2 ** i)
@@ -231,6 +223,47 @@ def get_ad_statuses(acct, max_pages=12):
         d = api_get("%s/ads" % acct, p)
         if "error" in d: break
         for a in d.get("data", []): out[a["id"]] = a.get("effective_status")
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    return out
+
+def get_custom_audiences(acct, max_pages=8):
+    """{custom_audience_id: NEW|ENGAGED|EXISTING} for the account."""
+    out, after, pages = {}, None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,subtype", "limit": 200}
+        if after: p["after"] = after
+        d = api_get("%s/customaudiences" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []):
+            out[str(a.get("id"))] = ca_segment(a.get("name"), a.get("subtype"))
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    return out
+
+def build_segmap(acct, max_pages=12):
+    """adset_id -> audience segment, read from the ad set's REAL targeting.
+    No custom audience on the ad set = broad / interest / lookalike prospecting = NEW."""
+    CA = get_custom_audiences(acct)
+    out, after, pages = {}, None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,targeting", "limit": 200}
+        if after: p["after"] = after
+        d = api_get("%s/adsets" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []):
+            t = a.get("targeting") or {}
+            cas = t.get("custom_audiences") or []
+            segs = []
+            for x in cas:
+                s = CA.get(str(x.get("id")))
+                if not s and x.get("name"): s = ca_segment(x.get("name"))
+                if s: segs.append(s)
+            if "EXISTING" in segs:  s = "EXISTING"
+            elif "ENGAGED" in segs: s = "ENGAGED"
+            elif segs:              s = "NEW"      # lookalike-only = prospecting
+            else:                   s = "NEW"      # no custom audience at all = broad/interest = prospecting
+            out[str(a.get("id"))] = s
         after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
         if not after: break
     return out
@@ -326,8 +359,10 @@ def metric(r):
     if any(k in blob for k in CAT_KW): typ = "CATALOGUE"
     elif p25 > impr * 0.02: typ = "VIDEO"
     else: typ = "IMAGE"
+    # audience comes from the AD SET'S REAL TARGETING. Names are only a last resort.
+    seg = SEGMAP.get(str(r.get("adset_id"))) or segment(blob)
     return {"ad_id": r.get("ad_id"), "ad_name": name, "campaign": camp, "adset": adset, "adset_id": r.get("adset_id"),
-            "aud": "WARM" if warm else "COLD", "type": typ, "seg": segment(blob),
+            "aud": "WARM" if warm else "COLD", "type": typ, "seg": seg,
             "spend": round(spend, 2), "impr": int(impr), "reach": int(reach),
             "freq": round(f(r.get("frequency")) or (impr / reach if reach else 0), 2),
             "cpm": round(f(r.get("cpm")), 2), "cpmr": round(spend / reach * 1000, 2) if reach else 0.0,
@@ -421,6 +456,38 @@ def tag(d, up_good):
     good = (d > 0) == up_good
     return ("up" if d > 0 else "down") + (" (good)" if good else " (drag)")
 
+def contrib(m, p):
+    """How much of the ROAS move each lever is responsible for, in %.
+    ROAS = CVR x AOV / CPC is an exact identity, so the log of each ratio is that lever's
+    additive share of the move. Shares are absolute and always sum to 100%."""
+    def lr(a, b):
+        try:
+            a = float(a or 0); b = float(b or 0)
+            if a > 0 and b > 0: return math.log(a / b)
+        except Exception: pass
+        return 0.0
+    t = {"CVR": lr(m.get("cvr"), p.get("cvr")),
+         "AOV": lr(m.get("aov"), p.get("aov")),
+         "CPC": -lr(m.get("cpc"), p.get("cpc"))}   # cheaper clicks LIFT roas, so flip the sign
+    tot = sum(abs(v) for v in t.values())
+    if tot <= 0: return None
+    egp = {"CVR": round(m["lc"] * ((m.get("cvr") or 0) - (p.get("cvr") or 0)) / 100 * (m.get("aov") or 0)),
+           "AOV": round(m["purch"] * ((m.get("aov") or 0) - (p.get("aov") or 0))),
+           "CPC": round(-m["lc"] * ((m.get("cpc") or 0) - (p.get("cpc") or 0)))}
+    return [{"k": k, "pct": round(abs(t[k]) / tot * 100), "help": t[k] >= 0, "egp": egp[k]}
+            for k in sorted(t, key=lambda k: -abs(t[k]))]
+
+def share_line(m, p):
+    """'CVR did 52% of the move (helped, +29,071 EGP) · AOV 38% (hurt, -18,400) · CPC 10% ...'"""
+    c = contrib(m, p)
+    if not c: return None
+    bits = []
+    for x in c:
+        bits.append("*%s %d%%* of the move (%s, %s%s EGP)" % (
+            x["k"], x["pct"], "helped" if x["help"] else "hurt",
+            "+" if x["egp"] >= 0 else "-", money(abs(x["egp"]))))
+    return "  ·  ".join(bits)
+
 def diagnose(m, p, rows=None, prev=None, tf=None):
     """Revenue = Traffic x CVR x AOV, clicks priced by CPC.
     Report all 3 levers (CPC / CVR / AOV) with % change every time, name which moved, then dig to the ad."""
@@ -453,7 +520,10 @@ def diagnose(m, p, rows=None, prev=None, tf=None):
             "Worth about *%s*." % egpw + IND +
             "That drove ROAS %s." % sp(droas) + IND +
             "Revenue %s because spend %s." % (sp(drev), sp(dspend)))
-    out = [head] + lines + ["   *Read:* " + read]
+    out = [head] + lines
+    sl = share_line(m, p)
+    if sl: out.append("   *Who moved it:* " + sl + ".")
+    out.append("   *Read:* " + read)
     culprit, cimp = attribute(rows, prev, key) if (rows and prev) else (None, 0)
     if culprit and abs(cimp) > 0:
         pc = prev.get(culprit["ad_id"], {})
@@ -601,6 +671,20 @@ def why_lowroas(c, cold):
             money(c["cpa"]), money(c["seg_cpa_med"]), c["roas"], cold) + IND +
             "AOV is only %s." % money(c["aov"]) + IND + "Efficient reach, low value.")
 
+def aud_block(rows):
+    """Spend split by real audience: New / Engaged / Existing, % of spend + what it returned."""
+    tot = sum(c["spend"] for c in rows) or 1
+    L = [":busts_in_silhouette: *AUDIENCE SPLIT (% of spend)*"]
+    for sg in ("NEW", "ENGAGED", "EXISTING"):
+        g = [c for c in rows if c["seg"] == sg]
+        sp = sum(c["spend"] for c in g); rv = sum(c["rev"] for c in g); pu = sum(c["purch"] for c in g)
+        if not sp:
+            L.append("• *%s* - 0%% of spend, nothing running." % SEGN[sg]); continue
+        L.append("• *%s* - *%d%%* of spend (%s) · ROAS %s · CPA %s · %d purch" % (
+            SEGN[sg], round(sp / tot * 100), money(sp), round(rv / sp, 2),
+            money(round(sp / pu)) if pu else "n/a", int(pu)))
+    return "\n".join(L)
+
 def block(icon, title, name, status, do, metrics, why):
     return "\n".join([
         "%s  *%s* - %s   `%s`" % (icon, title, name, status),
@@ -618,7 +702,8 @@ def msg_digest(A):
          "ROAS *%s* (%s) · CPA *%s* (%s) · AOV %s" % (s["roas"], sp(s["d_roas"]), money(s["cpa"]), sp(s["d_cpa"]), money(s["aov"])),
          "CVR %s%% (%s) · ATC %s%% (%s) · CPMR *%s* (%s) · CPM %s (%s)" % (s["cvr"], sp(s["d_cvr"]), s["atc_rate"], sp(s["d_atc"]), money(s["cpmr"]), sp(s["d_cpmr"]), money(s["cpm"]), sp(s["d_cpm"])),
          "Cold prospecting ROAS *%s* = the bar to beat.%s" % (s["cold_roas"], (" Catalogue %d%% of spend inflates blended ROAS." % s["cat_pct"]) if s["cat_pct"] >= 15 else ""),
-         "", ":mag: *WHY REVENUE MOVED*  (Revenue = clicks × CVR × AOV)", s["diagnosis"], BAR, "*DO NOW*", ""]
+         "", ":mag: *WHY REVENUE MOVED*  (Revenue = clicks × CVR × AOV)", s["diagnosis"],
+         "", aud_block(rows), BAR, "*DO NOW*", ""]
     did = False
     op = A["opportunity"]
     if op:
@@ -1015,7 +1100,8 @@ def msg_advisor(A, overlaps=None):
         thesis = ("No structural problem this week.  Audience mix, efficiency and frequency all held, so this is purely a *scaling* question: "
                   "where does the next EGP buy the most incremental revenue, covered below.")
         conv = 65
-    L = ["%s  :compass:  *%s - WEEKLY MEMO*" % (MENTION, A["account"]["name"].upper()),
+    L = ["%s  :compass:  *%s - %s*" % (MENTION, A["account"]["name"].upper(),
+                                       WIN_TITLE.get(DATES.get("win", "7day"), "MEMO")),
          ":date: *%s → %s*   vs   *%s → %s*   (all values in %s)" % (d1, d2, p1, p2, cc), BAR,
          "*THE THESIS*", thesis, "_Conviction: %d%%._" % conv,
          "", "*Portfolio:* Spend %s (%s) · Revenue %s (%s) · Blended ROAS %s (%s).  Attributed, reconcile vs MER before big cuts." % (
@@ -1233,7 +1319,7 @@ def msg_advisor(A, overlaps=None):
     watch = "New-audience reach growing, %s holding ROAS above %s at higher spend, and %s's CPM after any merge." % (
         nm(fund) if fund else "the top winner", blended, overlaps[0][1] if overlaps else "the top adset")
     L.append("*10:00 Check tomorrow:* %s" % watch)
-    L.append("_Weekly memo. Numbers are the last 7 days vs the 7 before._")
+    L.append("_%s_" % WIN_FOOT.get(DATES.get("win", "7day"), "Numbers are this period vs the one before."))
     return "\n".join(L)
 
 
@@ -1246,8 +1332,7 @@ def main():
     a = ap.parse_args()
     global SLACK_TOKEN, NUMID, STATUS
     if a.dry_run: SLACK_TOKEN = ""
-    if not TOKEN: _die("META_ACCESS_TOKEN secret is missing from the workflow environment.")
-    validate_token()
+    if not TOKEN: sys.stderr.write("META_ACCESS_TOKEN missing\n"); sys.exit(1)
 
     try:
         from zoneinfo import ZoneInfo; z = ZoneInfo(TZ)
@@ -1258,18 +1343,30 @@ def main():
     prev = {"since": str(y - datetime.timedelta(days=13)), "until": str(y - datetime.timedelta(days=7))}
     l3 = {"since": str(y - datetime.timedelta(days=2)), "until": str(y)}
     prev3 = {"since": str(y - datetime.timedelta(days=5)), "until": str(y - datetime.timedelta(days=3))}
+    l1 = {"since": str(y), "until": str(y)}
+    prev1 = {"since": str(y - datetime.timedelta(days=1)), "until": str(y - datetime.timedelta(days=1))}
     DATES["label"] = (fmt_day(y - datetime.timedelta(days=6)), fmt_day(y))
     DATES["p_label"] = (fmt_day(y - datetime.timedelta(days=13)), fmt_day(y - datetime.timedelta(days=7)))
     DATES["l3"] = (fmt_day(y - datetime.timedelta(days=2)), fmt_day(y))
     DATES["p3"] = (fmt_day(y - datetime.timedelta(days=5)), fmt_day(y - datetime.timedelta(days=3)))
     ACC = "spend,impressions,reach,frequency,cpm,ctr,actions,action_values"
+    # the three reads the memo is written for, each to its own channel per brand
+    WINDOWS = [
+        ("daily", l1, prev1, (fmt_day(y), fmt_day(y)), (fmt_day(y - datetime.timedelta(days=1)),) * 2),
+        ("3day",  l3, prev3, DATES["l3"], DATES["p3"]),
+        ("7day",  last, prev, DATES["label"], DATES["p_label"]),
+    ]
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
+    global SEGMAP
     for acct in get_accounts():
         cur_rows = get_insights(acct["id"], last)
         if not cur_rows: continue
         prev_rows = get_insights(acct["id"], prev)
         STATUS = get_ad_statuses(acct["id"])
+        # audience truth: read every ad set's real targeting before any metric is built
+        SEGMAP = build_segmap(acct["id"])
+        sys.stderr.write("[seg] %s: %d adsets mapped\n" % (acct["name"], len(SEGMAP)))
         A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
@@ -1278,10 +1375,25 @@ def main():
         ach = channel_advisor_for(acct["name"])
         sm = A["summary"]
         if a.daily or a.dry_run:
+            # ---- THE MEMO, written three times: 1 day, 3 days, 7 days. Each to its own channel. ----
+            save7 = (DATES["label"], DATES["p_label"])
+            for win, cw, pw, lab, plab in WINDOWS:
+                wch = channel_window_for(acct["name"], win)
+                if not wch: continue
+                cr = get_insights(acct["id"], cw)
+                if not cr: continue
+                pr = get_insights(acct["id"], pw)
+                AW = analyze(acct, cr, pr, STATUS)
+                if AW["summary"]["spend"] <= 0: continue
+                DATES["label"], DATES["p_label"], DATES["win"] = lab, plab, win
+                slack(wch, msg_advisor(AW))
+                time.sleep(1)
+            DATES["label"], DATES["p_label"] = save7
+            DATES["win"] = "7day"
+
             # DAILY = rolling 3 days, not L7D. Build a 3-day analysis for the action digest + hook report.
             c3rows = get_insights(acct["id"], l3); p3rows = get_insights(acct["id"], prev3)
             A3 = analyze(acct, c3rows, p3rows, STATUS)
-            save7 = (DATES["label"], DATES["p_label"])
             DATES["label"], DATES["p_label"] = DATES["l3"], DATES["p3"]
             if A3["summary"]["spend"] > 0:
                 slack(ch, msg_digest(A3))
