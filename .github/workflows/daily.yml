@@ -26,6 +26,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install the chart renderer
+        run: pip install --quiet matplotlib
+
       - name: Run the media buyer
         env:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
@@ -39,13 +42,3 @@ jobs:
           git add docs/data.json docs/state.json || true
           git commit -m "auto: update $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
           git push || echo "nothing to push"
-
-      - name: Alert on job failure
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        run: |
-          curl -s -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            -H "Content-Type: application/json; charset=utf-8" \
-            -d "{\"channel\":\"C0BFN4UGYKY\",\"text\":\":rotating_light: <@U082VCLRZ6E> AI Media Buyer daily run FAILED.\\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
