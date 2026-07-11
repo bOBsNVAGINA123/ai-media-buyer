@@ -2559,7 +2559,12 @@ def msg_short(A, win):
                     "AOV": "Basket size %s. That is the mix of what is selling." % (
                         "rose" if r >= 0 else "fell")}.get(k, "")
 
-        L.append("*%s is the reason.* It is %d%% of the move and worth *%+.1f%%* of revenue on its own.\n%s" % (
+        # TWO DIFFERENT BASELINES, SO NAME BOTH. The line above is versus a TYPICAL DAY of the
+        # last 30. The lever split below is versus the PERIOD IMMEDIATELY BEFORE. Never print
+        # one number against one baseline and the next against another without saying so.
+        pp = _safe_pct(s.get("rev") or 0, p.get("rev") or 0)
+        L.append("Against the *period immediately before* (a different baseline to the line above), revenue %s.\n*%s is the reason.* It is %d%% of that move and worth *%+.1f%%* of revenue on its own.\n%s" % (
+            ("moved *%+.0f%%*" % pp) if pp is not None else "moved",
             t["k"], t["pct"], t["rev_pct"], _why(t["k"], t["rev_pct"])))
 
         if opp:
