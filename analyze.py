@@ -903,6 +903,8 @@ def get_daily_series(acct, days=30):
     return out
 
 
+WIN_DAYS = {"daily": 1, "3day": 3, "7day": 7}
+
 def zscore(series, key, val):
     """How far outside normal is this. Returns (z, verdict, mean)."""
     xs = [d[key] for d in series if d.get(key)]
@@ -1171,8 +1173,10 @@ def card_levers(A, win):
 
     ax = _panel(fig, .075, .265, "is this an anomaly, or just a tuesday")
     H = A.get("hist") or []
-    lab = {"rev": "Revenue", "roas": "ROAS", "cpc": "CPC", "cvr": "CVR", "aov": "AOV"}
-    checks = [("rev", s["rev"]), ("roas", s["roas"]), ("cpc", m_cpc(s)),
+    nd = WIN_DAYS.get(win, 1)
+    lab = {"rev": "Revenue per day", "roas": "ROAS", "cpc": "CPC", "cvr": "CVR", "aov": "AOV"}
+    # totals must be per day, or a 7 day total looks like an anomaly against a daily history
+    checks = [("rev", (s["rev"] or 0) / nd), ("roas", s["roas"]), ("cpc", m_cpc(s)),
               ("cvr", s.get("cvr")), ("aov", s.get("aov"))]
     zs = [z for z in (zscore(H, k, v) for k, v in checks) if z]
     if zs:
@@ -1433,7 +1437,7 @@ def card_advisor(A, win):
     F = fatiguing(A["creatives"])
     S = plan(A)
     H = A.get("hist") or []
-    z = zscore(H, "rev", s["rev"])
+    z = zscore(H, "rev", (s["rev"] or 0) / WIN_DAYS.get(win, 1))
 
     lines = []
     dr = pct(s["rev"], p.get("rev") or 0)
@@ -1474,8 +1478,8 @@ def card_advisor(A, win):
                           len(F), _clip(F[0]["name"], 34), F[0]["verdict"].lower())))
     if z:
         lines.append(("IS THIS NORMAL",
-                      "Revenue is %.1f standard deviations from this account's own 30 day normal of %s. Verdict: %s." % (
-                          max(-9.9, min(9.9, z["z"])), _k(z["mean"]), z["verdict"].lower())))
+                      "Revenue per day is %s against this account's own 30 day normal of %s per day, %.1f standard deviations out. Verdict: %s." % (
+                          _k(z["val"]), _k(z["mean"]), max(-9.9, min(9.9, z["z"])), z["verdict"].lower())))
 
     ax = _panel(fig, .430, .450, "the read")
     yy = 84
