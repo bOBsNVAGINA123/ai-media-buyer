@@ -2570,8 +2570,14 @@ def msg_short(A, win):
         if opp:
             d = max(opp, key=lambda x: abs(x["rev_pct"]))
             if abs(d["rev_pct"]) >= 3:
-                L.append("*%s pulled the other way*, worth *%+.1f%%* of revenue.\n%s\nFix that and the %s gets bigger." % (
-                    d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"]), "gain" if up else "recovery"))
+                # A lever pointing against a FALL is holding you up, so do not "fix" it.
+                # A lever pointing against a RISE is capping you, so that one you fix.
+                tail = ("*%s capped the gain*, worth *%+.1f%%* of revenue.\n%s\nFix that and the gain gets bigger." % (
+                            d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"]))
+                        if up else
+                        "*%s cushioned the fall*, worth *%+.1f%%* of revenue.\n%s\nWithout it the drop would be worse. Protect it." % (
+                            d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"])))
+                L.append(tail)
 
     if M:
         dom = "mix" if abs(M["mix"]) >= abs(M["perf"]) else "performance"
