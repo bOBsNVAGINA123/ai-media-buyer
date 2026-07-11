@@ -1135,19 +1135,29 @@ def msg_advisor(A, overlaps=None):
           sc("Reach", _ar, _pr, m=True),
           sc("Impressions", _ai, _pi, m=True), "```"]
     # ---- AUDIENCE: New / Engaged / Existing, week over week ----
-    L += ["", BAR, "*AUDIENCE - where the money actually went*", ""]
+    L += ["", BAR, "*AUDIENCE - % of spend by who they actually are*",
+          "_Read from each ad set's real targeting. Engaged = interacted, never bought. Existing = has purchased. New = prospecting (broad, interest, lookalike)._", ""]
+    # ALWAYS show all three, even at 0%. A zero is a finding, not a reason to hide the row.
     for sg in sorted(segs, key=lambda sg: csp[sg], reverse=True):
-        if csp[sg] < tot * 0.01 and psp[sg] < tP * 0.01: continue
         pu = sum(c["purch"] for c in _in(sg)); lcs = sum(c["lc"] for c in _in(sg))
-        L.append("*%s* - spend %s, share %d%% (was %d%%)" % (SEGN[sg], money(csp[sg]), round(mixC[sg]), round(mixP[sg])))
+        if not csp[sg] and not psp[sg]:
+            L.append("*%s* - *0%%* of spend.  Nothing is running to this audience at all." % SEGN[sg]); L.append(""); continue
+        L.append("*%s* - spend %s, *%d%% of spend* (was %d%%)" % (SEGN[sg], money(csp[sg]), round(mixC[sg]), round(mixP[sg])))
         L.append("     ROAS %s (was %s) · CPA %s · AOV %s · CVR %s%% · reach %s · frequency %s" % (
             r2(roC[sg]), r2(roP[sg]),
             money(round(csp[sg] / pu)) if pu else "n/a", money(round(crev[sg] / pu)) if pu else "n/a",
             round(pu / lcs * 100, 2) if lcs else 0, money(crch[sg]), r2(frq[sg])))
         L.append("")
-    L.append("*Read:* budget moved into %s and out of %s, a move %s efficiency.  %s" % (
-        SEGN[gained], SEGN[lost], "toward" if roC[gained] >= roC[lost] else "away from",
-        "Watch New-audience spend, it is falling and it is what refills Engaged and Existing next week." if csp["NEW"] < psp["NEW"] else "New-audience spend held, the pipeline is intact."))
+    live = [sg for sg in segs if csp[sg] > 0]
+    if len(live) <= 1:
+        only = SEGN[live[0]] if live else "nothing"
+        L.append("*Read:* every EGP is going to *%s*.  There is no retargeting and no customer re-activation running at all, so nothing is monetising the traffic you already paid for.  That is the single biggest gap here, not the ROAS." % only)
+    elif gained == lost:
+        L.append("*Read:* the audience mix did not move this period.  The split is a decision you are making, not one Meta is making for you.")
+    else:
+        L.append("*Read:* budget moved into %s and out of %s, a move %s efficiency.  %s" % (
+            SEGN[gained], SEGN[lost], "toward" if roC[gained] >= roC[lost] else "away from",
+            "Watch New-audience spend, it is falling and it is what refills Engaged and Existing next week." if csp["NEW"] < psp["NEW"] else "New-audience spend held, the pipeline is intact."))
     # ---- CAPITAL ALLOCATION ----
     L += ["", BAR, "*CAPITAL ALLOCATION - did Meta allocate right*", "", "*Top spenders:*"]
     top3 = sorted(sig, key=lambda c: c["spend"], reverse=True)[:3]
