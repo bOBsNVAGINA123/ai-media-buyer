@@ -458,7 +458,8 @@ def metric(r):
     # HOOK RATE = 3 SECOND VIDEO VIEWS / IMPRESSIONS. video_play_actions is video PLAYS, not
     # 3 second views, and using it overstates the hook. Fall back to 2 second continuous only
     # if Meta will not give up the 3 second field, and say so on the card.
-    v3 = first(r.get("video_3_sec_watched_actions"))
+    # 3 SECOND VIDEO VIEWS. Meta exposes these at ad level as the "video_view" action type.
+    v3 = pick(r.get("actions"), ["video_view"])
     v3_src = "3s"
     if not v3:
         v3 = first(r.get("video_continuous_2_sec_watched_actions"))
@@ -949,7 +950,8 @@ def get_daily_series(acct, days=30):
         impr = f(r.get("impressions")); reach = f(r.get("reach"))
         octr = first(r.get("outbound_clicks_ctr")) or f(r.get("inline_link_click_ctr"))
         atc = pick(r.get("actions"), ATC)
-        v3 = first(r.get("video_play_actions")); thru = first(r.get("video_thruplay_watched_actions"))
+        v3 = pick(r.get("actions"), ["video_view"]) or first(r.get("video_play_actions"))
+        thru = first(r.get("video_thruplay_watched_actions"))
         out.append({"date": r.get("date_start"), "spend": spend, "rev": rev,
                     "atc": atc, "atc_rate": atc / lc * 100 if lc else 0,
                     "ctr": f(r.get("ctr")), "lctr": f(r.get("inline_link_click_ctr")),
@@ -2160,7 +2162,7 @@ def card_retention(A, win):
     R = retention(A)
     if not R: return None
     fig = _fig(13.6)
-    src = {"3s": "3 second video views / impressions",
+    src = {"3s": "3 second video views / impressions (Meta action type video_view)",
            "2s": "2 second continuous plays / impressions (Meta would not return 3 second for this account)",
            "play": "video plays / impressions (Meta returned neither 3 second nor 2 second)"}[R["src"]]
     _head(fig, A, win, "Where every video loses them",
