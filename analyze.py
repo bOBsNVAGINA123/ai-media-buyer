@@ -2541,17 +2541,32 @@ def msg_short(A, win):
             money(s["rev"]), _d(pct(s["rev"], p.get("rev") or 0))))
 
     if W:
-        t = max(W["steps"], key=lambda x: abs(x["rev_pct"]))
-        why = {"SPEND": "You bought %s media. The account did not get better or worse." % (
-                   "more" if t["rev_pct"] >= 0 else "less"),
-               "CPC": "Clicks got %s. That is auction cost and click rate, so it is creative and audience." % (
-                   "cheaper" if t["rev_pct"] >= 0 else "dearer"),
-               "CVR": "Conversion rate %s. That is offer, price or landing page, not the ad account." % (
-                   "rose" if t["rev_pct"] >= 0 else "fell"),
-               "AOV": "Basket size %s. That is the mix of what is selling." % (
-                   "rose" if t["rev_pct"] >= 0 else "fell")}
+        # The lever that MOVED revenue must push the SAME WAY revenue went. A lever that
+        # pulled the other way is a drag, not the reason. Never call a drag the reason.
+        tot = sum(x["rev_pct"] for x in W["steps"])
+        up = tot >= 0
+        same = [x for x in W["steps"] if (x["rev_pct"] >= 0) == up]
+        opp = [x for x in W["steps"] if (x["rev_pct"] >= 0) != up]
+        t = max(same or W["steps"], key=lambda x: abs(x["rev_pct"]))
+
+        def _why(k, r):
+            return {"SPEND": "You bought %s media. The account did not get better or worse." % (
+                        "more" if r >= 0 else "less"),
+                    "CPC": "Clicks got %s. That is auction cost and click rate, so it is creative and audience." % (
+                        "cheaper" if r >= 0 else "dearer"),
+                    "CVR": "Conversion rate %s. That is offer, price or landing page, not the ad account." % (
+                        "rose" if r >= 0 else "fell"),
+                    "AOV": "Basket size %s. That is the mix of what is selling." % (
+                        "rose" if r >= 0 else "fell")}.get(k, "")
+
         L.append("*%s is the reason.* It is %d%% of the move and worth *%+.1f%%* of revenue on its own.\n%s" % (
-            t["k"], t["pct"], t["rev_pct"], why.get(t["k"], "")))
+            t["k"], t["pct"], t["rev_pct"], _why(t["k"], t["rev_pct"])))
+
+        if opp:
+            d = max(opp, key=lambda x: abs(x["rev_pct"]))
+            if abs(d["rev_pct"]) >= 3:
+                L.append("*%s pulled the other way*, worth *%+.1f%%* of revenue.\n%s\nFix that and the %s gets bigger." % (
+                    d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"]), "gain" if up else "recovery"))
 
     if M:
         dom = "mix" if abs(M["mix"]) >= abs(M["perf"]) else "performance"
@@ -3658,12 +3673,12 @@ def main():
                            "decay": "*5 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, with the metric responsible.",
                            "retention": "*6 · WHERE EVERY VIDEO LOSES THEM* — hook rate, the drop-off curve, the biggest cliff, and CPMR.",
                            "verdicts": "*7 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
-                           "scenarios": "*7 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
-                           "plan": "*8 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
+                           "scenarios": "*8 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
+                           "plan": "*9 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
                            "decide_unused": "*x* — the decision map and the money move.",
-                           "campaigns": "*7 · CAMPAIGNS*",
-                           "adsets": "*8 · AD SETS*",
-                           "ads": "*9 · ADS*"}
+                           "campaigns": "*10 · CAMPAIGNS* — every metric, versus the account.",
+                           "adsets": "*11 · AD SETS* — every metric, versus the account.",
+                           "ads": "*12 · ADS* — every metric, versus the account."}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
