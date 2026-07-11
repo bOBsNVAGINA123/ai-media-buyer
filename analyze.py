@@ -1371,20 +1371,20 @@ def card_action(A, win):
     F = fatiguing(A["creatives"])
     if F:
         for i, e in enumerate(F[:3]):
-            y = 84 - i * 28
-            ax.text(1.6, y, _clip(e["name"], 46), fontsize=F_ROW + 4, color=INK,
+            y = 82 - i * 28
+            ax.text(1.6, y, _clip(e["name"], 40), fontsize=F_ROW + 4, color=INK,
                     family="DejaVu Sans", weight="bold")
-            ax.text(70, y, SEGN.get(e["seg"], e["seg"]), fontsize=F_ROW,
+            ax.text(66, y, SEGN.get(e["seg"], e["seg"]), fontsize=F_ROW,
                     color=SEGC.get(e["seg"], MUTED), family="DejaVu Sans")
-            ax.text(86, y, "%s spend" % _k(e["spend"]), fontsize=F_ROW, color=MUTED,
-                    family="DejaVu Sans")
+            ax.text(98, y, "%s spend" % _k(e["spend"]), fontsize=F_ROW, color=MUTED,
+                    family="DejaVu Sans", ha="right")
             ax.text(1.6, y - 6.5, e["verdict"], fontsize=F_ROW + 2, color=RED,
                     family="DejaVu Sans", weight="bold")
-            ax.text(30, y - 6.5, "ROAS %.2f (%s)   ·   freq %.1f   ·   outbound CTR %s   ·   reach %s" % (
+            ax.text(98, y - 6.5, "ROAS %.2f (%s)   ·   freq %.1f   ·   CTR out %s   ·   reach %s" % (
                     r2(e["roas"]), _dd(e["d"]["roas"]), r2(e["freq"]), _pctv(e["octr"]), _k(e["reach"])),
-                    fontsize=11, color=MUTED, family="DejaVu Sans")
+                    fontsize=11, color=MUTED, family="DejaVu Sans", ha="right")
             for j, w in enumerate(e["why"][:3]):
-                ax.text(3.0, y - 13.0 - j * 4.4, "·  " + w, fontsize=10.5, color=FAINT,
+                ax.text(3.0, y - 13.5 - j * 4.4, "·  " + w, fontsize=10.5, color=FAINT,
                         family="DejaVu Sans")
         fig.text(.055, .404, "Refresh the creative or open a fresh audience. Raising the budget on these buys the same tired impressions for more money.",
                  fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
@@ -1533,6 +1533,52 @@ def _wrap(t, n):
             cur = (cur + " " + w).strip()
     if cur: out.append(cur)
     return out
+
+
+def msg_short(A, win):
+    """The cards carry the numbers. This is the conclusion, the way an advisor would say it.
+    Short on purpose."""
+    s = A["summary"]; p = s.get("prev") or {}
+    W = waterfall(s, p)
+    segs = A.get("segs") or {}
+    F = fatiguing(A["creatives"])
+    S = plan(A)
+    z = zscore(A.get("hist") or [], "rev", (s["rev"] or 0) / WIN_DAYS.get(win, 1))
+    dr = pct(s["rev"], p.get("rev") or 0)
+    L = []
+    L.append("*%s — %s*" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO")))
+    L.append("Revenue %s EGP at %.2fx, %s against the period before." % (
+        money(s["rev"]), r2(s["roas"]), _d(dr)))
+
+    if W:
+        t = max(W["steps"], key=lambda x: abs(x["egp"]))
+        why = {"SPEND": "You simply bought %s media. The account did not get better or worse." % (
+                   "more" if (t["egp"] or 0) >= 0 else "less"),
+               "CPC": "Clicks got %s. That is auction cost and click rate, so it is creative and audience." % (
+                   "cheaper" if (t["egp"] or 0) >= 0 else "more expensive"),
+               "CVR": "Conversion rate %s. That is the offer, the price or the landing page, not the ad account." % (
+                   "rose" if (t["egp"] or 0) >= 0 else "fell"),
+               "AOV": "Basket size %s. That is the mix of what is selling." % (
+                   "rose" if (t["egp"] or 0) >= 0 else "fell")}
+        L.append("*%s is the reason.* It is %s%% of the move, worth %s%s EGP on its own." % (
+            t["k"], t["pct"], "+" if t["egp"] >= 0 else "-", money(abs(t["egp"]))))
+        L.append(why.get(t["k"], ""))
+
+    nw, ex = segs.get("NEW"), segs.get("EXISTING")
+    if nw and ex and nw.get("roas") and ex.get("roas") and (ex.get("freq") or 0) >= 5:
+        L.append("Existing customers return %.2fx but sit at frequency %.1f on %s reach.\nThat pool is nearly done, so do not read the blended ROAS as improvement." % (
+            r2(ex["roas"]), r2(ex.get("freq")), money(ex.get("reach"))))
+    if z:
+        L.append("Against this account's own 30 days, this is %s." % z["verdict"].lower())
+    if F:
+        L.append("*Burning:* %s.\n%s." % (_clip(F[0]["name"], 40), F[0]["verdict"].lower()))
+    if S:
+        L.append("*Do this:* cut %s by 30%% (%.2fx), fund %s (%.2fx).\nThat moves %s EGP and is worth about %s EGP at the same spend." % (
+            _clip(safe(S["cut"][0]["ad_name"]), 34), r2(S["cut"][0]["roas"]),
+            _clip(safe(S["fund"][0]["ad_name"]), 34), r2(S["fund"][0]["roas"]),
+            money(S["freed"]), money(S["gain"])))
+    L.append("_Everything above is in the seven cards. Margin and LTV are unknown from the ad data._")
+    return "\n".join(x for x in L if x)
 
 
 def render_cards(A, win):
@@ -2605,7 +2651,7 @@ def main():
                         CARDS.append({"ch": wch, "png": png, "fn": fn,
                                       "title": "%s-%s-%s" % (slug(acct["name"]), win, suf),
                                       "comment": head + CAP.get(suf, ""),
-                                      "memo": msg_advisor(AW) if suf == "advisor" else None})
+                                      "memo": msg_short(AW, win) if suf == "advisor" else None})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
