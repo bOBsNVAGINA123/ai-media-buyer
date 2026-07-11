@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strategic — Meta Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bone:#F7F6F3; --paper:#FFFFFF; --surface:#F9F9F8;
+  --ink:#1A1A18; --ink-2:#2F3437; --muted:#787774; --faint:#9B9A96;
+  --line:#EAEAEA; --line-2:rgba(0,0,0,.06);
+  --red-bg:#FDEBEC; --red-fg:#9F2F2D;
+  --blue-bg:#E1F3FE; --blue-fg:#1F6C9F;
+  --green-bg:#EDF3EC; --green-fg:#346538;
+  --yellow-bg:#FBF3DB; --yellow-fg:#956400;
+  --sans:'SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --serif:'Instrument Serif','Lyon Text',Georgia,serif;
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--bone);color:var(--ink-2);font-family:var(--sans);line-height:1.6;font-size:15px}
+/* ambient depth, never flat */
+.ambient{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(60rem 40rem at 15% -10%, rgba(160,140,110,.05), transparent 60%),
+             radial-gradient(50rem 35rem at 95% 5%, rgba(120,150,180,.045), transparent 60%)}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 28px 96px}
+
+/* ---------- header ---------- */
+header{padding:52px 0 26px}
+.kicker{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(38px,5vw,58px);line-height:1.04;letter-spacing:-.02em;color:var(--ink);margin:10px 0 6px}
+h1 em{font-style:italic;color:var(--muted)}
+.sub{color:var(--muted);max-width:62ch}
+.stamp{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14px}
+
+/* ---------- controls ---------- */
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:30px 0 6px;
+  padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{appearance:none;border:0;background:transparent;font-family:var(--sans);font-size:12.5px;font-weight:500;
+  color:var(--muted);padding:9px 15px;cursor:pointer;transition:background .18s,color .18s;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button:hover{background:#F1F0EE;color:var(--ink)}
+.seg button[aria-selected=true]{background:var(--ink);color:#fff}
+.ctl-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-right:2px}
+
+/* ---------- tabs ---------- */
+nav.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);margin:26px 0 30px;overflow-x:auto}
+nav.tabs button{appearance:none;background:none;border:0;padding:0 0 13px;cursor:pointer;position:relative;
+  font-family:var(--sans);font-size:14px;font-weight:500;color:var(--muted);white-space:nowrap;transition:color .18s}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected=true]{color:var(--ink)}
+nav.tabs button[aria-selected=true]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1.5px;background:var(--ink)}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(12px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+.rv.in{opacity:1;transform:none}
+
+/* ---------- cards / bento ---------- */
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+.g21{grid-template-columns:1.35fr 1fr}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:22px 24px;
+  transition:box-shadow .2s ease, transform .2s ease}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.card.pad{padding:26px 28px}
+.card h3{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);font-weight:500;margin-bottom:16px}
+.lede{font-family:var(--serif);font-size:24px;line-height:1.32;letter-spacing:-.01em;color:var(--ink)}
+
+/* KPI */
+.kpi .v{font-family:var(--serif);font-size:38px;line-height:1;letter-spacing:-.02em;color:var(--ink)}
+.kpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.kpi .d{font-family:var(--mono);font-size:11.5px;margin-top:10px;color:var(--muted)}
+.up{color:var(--green-fg)} .dn{color:var(--red-fg)} .fl{color:var(--muted)}
+
+/* tags */
+.tag{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:9999px;font-weight:500;white-space:nowrap}
+.t-new{background:var(--blue-bg);color:var(--blue-fg)}
+.t-eng{background:var(--yellow-bg);color:var(--yellow-fg)}
+.t-exi{background:var(--green-bg);color:var(--green-fg)}
+.t-bad{background:var(--red-bg);color:var(--red-fg)}
+.t-ok{background:var(--green-bg);color:var(--green-fg)}
+.t-neutral{background:#F0EFEC;color:var(--muted)}
+
+/* bars */
+.barrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.barrow:last-child{border-bottom:0}
+.barrow .nm{flex:0 0 132px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.track{flex:1;height:8px;background:#F0EFEC;border-radius:2px;overflow:hidden}
+.fill{height:100%;border-radius:2px;width:0;transition:width .9s cubic-bezier(.16,1,.3,1)}
+.f-new{background:#8FB6D4} .f-eng{background:#D9BC72} .f-exi{background:#8CB392} .f-ink{background:#3A3A38}
+.barrow .val{flex:0 0 auto;font-family:var(--mono);font-size:12px;color:var(--ink);min-width:52px;text-align:right}
+.barrow .meta{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--faint);min-width:98px;text-align:right}
+
+/* table */
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  text-align:right;padding:0 0 11px;font-weight:500;border-bottom:1px solid var(--line)}
+th:first-child{text-align:left}
+td{padding:13px 0;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px;text-align:right;color:var(--ink-2)}
+td:first-child{text-align:left;font-family:var(--sans);font-size:13.5px;color:var(--ink)}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:var(--surface)}
+.adname{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.adname b{font-weight:500}
+
+/* callout */
+.callout{border:1px solid var(--line);border-left:2px solid var(--ink);border-radius:8px;
+  background:var(--paper);padding:18px 22px;font-size:14px;color:var(--ink-2)}
+.callout.warn{border-left-color:var(--red-fg);background:var(--red-bg)}
+.callout.good{border-left-color:var(--green-fg);background:var(--green-bg)}
+.callout strong{color:var(--ink);font-weight:600}
+.empty{color:var(--faint);font-size:13.5px;padding:16px 0}
+.sect-h{font-family:var(--serif);font-size:26px;letter-spacing:-.01em;color:var(--ink);margin:34px 0 14px}
+.foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint)}
+.foot a{color:var(--muted)}
+@media(max-width:940px){.g4,.g3,.g2,.g21{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.g4,.g3,.g2,.g21{grid-template-columns:1fr}.wrap{padding:0 18px 64px}.barrow .nm{flex-basis:92px}}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Meta Performance / Strategic</div>
+  <h1>What the money<br><em>actually did.</em></h1>
+  <p class="sub">Audience read from real ad set targeting, not names. Every number below is attributed to the lever that moved it.</p>
+  <div class="stamp" id="stamp">loading</div>
+</header>
+
+<div class="controls">
+  <span class="ctl-label">Brand</span>
+  <div class="seg" id="brandSeg"></div>
+  <span class="ctl-label" style="margin-left:12px">Window</span>
+  <div class="seg" id="winSeg"></div>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+<main id="view"></main>
+
+<div class="foot">
+  Generated by the AI Media Buyer. Audience is derived from each ad set's custom audiences.
+  Lookalikes count as New. &nbsp;·&nbsp; <a href="./index.html">Classic view</a>
+</div>
+</div>
+
+<script>
+const F = {
+  n: v => v==null || isNaN(v) ? "n/a" : Math.round(v).toLocaleString(),
+  d2: v => v==null || isNaN(v) ? "n/a" : (Math.round(v*100)/100).toLocaleString(),
+  pc: v => v==null || isNaN(v) ? "n/a" : (v>=0?"+":"") + Math.round(v) + "%",
+  cls: v => v==null ? "fl" : (v>2 ? "up" : v<-2 ? "dn" : "fl"),
+  // for CPA / CPM / CPC / CPMR, down is good — invert
+  clsInv: v => v==null ? "fl" : (v<-2 ? "up" : v>2 ? "dn" : "fl"),
+};
+const SEGTAG = {NEW:"t-new", ENGAGED:"t-eng", EXISTING:"t-exi"};
+const SEGFILL = {NEW:"f-new", ENGAGED:"f-eng", EXISTING:"f-exi"};
+const WINLBL = {daily:"1 day", "3day":"3 days", "7day":"7 days"};
+
+let DATA=null, BRAND=0, WIN="7day", TAB="overview";
+
+const TABS = [
+  ["overview","Overview"],
+  ["audience","Audience"],
+  ["scale","Scale & Cut"],
+  ["creative","Creative"],
+  ["fatigue","Fatigue"],
+];
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function acct(){ return DATA.accounts[BRAND]; }
+function win(){ const w=(acct().windows)||{}; return w[WIN] || w["7day"] || w["3day"] || w["daily"] || null; }
+
+function reveal(){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}}),{threshold:.08});
+  document.querySelectorAll(".rv").forEach((el,i)=>{el.style.transitionDelay=(i%8)*70+"ms";io.observe(el);});
+  requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=f.dataset.w+"%"));
+}
+
+/* ---------- pieces ---------- */
+function kpi(k,v,d,inv){
+  const c = inv ? F.clsInv(d) : F.cls(d);
+  return `<div class="card kpi rv"><div class="k">${k}</div><div class="v">${v}</div>
+    <div class="d ${c}">${d==null?"no prior period":F.pc(d)+" vs last"}</div></div>`;
+}
+function adTag(seg){ return `<span class="tag ${SEGTAG[seg]||'t-neutral'}">${seg==='NEW'?'New':seg==='ENGAGED'?'Engaged':'Existing'}</span>`; }
+
+function adTable(rows, cols){
+  if(!rows || !rows.length) return `<div class="empty">Nothing qualifies here for this window.</div>`;
+  const head = cols.map(c=>`<th>${c[0]}</th>`).join("");
+  const body = rows.map(r=>`<tr><td><div class="adname"><b>${esc(r.name)}</b>${adTag(r.seg)}</div></td>${
+    cols.slice(1).map(c=>`<td>${c[1](r)}</td>`).join("")}</tr>`).join("");
+  return `<table><thead><tr><th>Ad</th>${cols.slice(1).map(c=>`<th>${c[0]}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+/* ---------- tabs ---------- */
+function overview(w){
+  const s=w.summary, d=w.delta;
+  const c=w.contrib||[];
+  const contribRows = c.length ? c.map(x=>{
+    const good = x.help;
+    return `<div class="barrow">
+      <div class="nm"><b>${x.k}</b></div>
+      <div class="track"><div class="fill ${good?'f-exi':'f-new'}" data-w="${x.pct}" style="background:${good?'#8CB392':'#D08C86'}"></div></div>
+      <div class="val">${x.pct}%</div>
+      <div class="meta ${good?'up':'dn'}">${good?'helped':'hurt'} ${x.egp>=0?'+':'-'}${F.n(Math.abs(x.egp))}</div>
+    </div>`;}).join("")
+    : `<div class="empty">No prior period to attribute against.</div>`;
+
+  const lead = c.length
+    ? `<strong>${c[0].k}</strong> did <strong>${c[0].pct}%</strong> of the move and ${c[0].help?"helped":"hurt"} you by ${F.n(Math.abs(c[0].egp))} EGP.`
+    : `Not enough history in this window to attribute the move.`;
+
+  return `
+  <div class="grid g4" style="margin-bottom:14px">
+    ${kpi("Spend", F.n(s.spend), d.spend)}
+    ${kpi("Revenue", F.n(s.revenue), null)}
+    ${kpi("ROAS", F.d2(s.roas), d.roas)}
+    ${kpi("CPA", F.n(s.cpa), d.cpa, true)}
+  </div>
+  <div class="grid g4" style="margin-bottom:14px">
+    ${kpi("AOV", F.n(s.aov), null)}
+    ${kpi("CVR", (s.cvr??0)+"%", d.cvr)}
+    ${kpi("CPMR", F.n(s.cpmr), d.cpmr, true)}
+    ${kpi("Purchases", F.n(s.purchases), null)}
+  </div>
+
+  <div class="grid g21">
+    <div class="card pad rv">
+      <h3>Who moved ROAS</h3>
+      <p class="lede" style="margin-bottom:18px">${lead}</p>
+      ${contribRows}
+      <p style="font-size:12.5px;color:var(--muted);margin-top:16px">
+        ROAS is exactly CVR × AOV ÷ CPC, so these shares are not a guess. They always add to 100%.</p>
+    </div>
+    <div class="card pad rv">
+      <h3>Spend by audience</h3>
+      ${audBars(w)}
+      ${audNote(w)}
+    </div>
+  </div>`;
+}
+
+function audBars(w){
+  const a=w.audience;
+  return ["NEW","ENGAGED","EXISTING"].map(k=>{
+    const x=a[k];
+    return `<div class="barrow">
+      <div class="nm">${adTag(k)}</div>
+      <div class="track"><div class="fill ${SEGFILL[k]}" data-w="${x.share}"></div></div>
+      <div class="val">${x.share}%</div>
+      <div class="meta">${x.spend?F.n(x.spend)+" · "+F.d2(x.roas)+"x":"nothing"}</div>
+    </div>`;}).join("");
+}
+function audNote(w){
+  const a=w.audience;
+  const live=["NEW","ENGAGED","EXISTING"].filter(k=>a[k].spend>0);
+  if(live.length<=1){
+    return `<div class="callout warn" style="margin-top:18px">
+      Every EGP is going to <strong>${a[live[0]||"NEW"].name}</strong>. No retargeting and no customer
+      re-activation is running, so nothing is monetising the traffic you already paid for.</div>`;
+  }
+  const best=live.slice().sort((x,y)=>a[y].roas-a[x].roas)[0];
+  return `<div class="callout good" style="margin-top:18px">
+    <strong>${a[best].name}</strong> returns the most at <strong>${F.d2(a[best].roas)}x</strong> on
+    ${a[best].share}% of spend.</div>`;
+}
+
+function audience(w){
+  const a=w.audience;
+  const cards=["NEW","ENGAGED","EXISTING"].map(k=>{
+    const x=a[k];
+    const dead=!x.spend;
+    return `<div class="card pad rv">
+      <h3>${x.name}</h3>
+      <div class="kpi"><div class="v">${x.share}%</div>
+      <div class="d">${dead?"of spend — nothing running":"of spend · "+F.n(x.spend)+" EGP"}</div></div>
+      ${dead?"":`<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:2">
+        ROAS <span style="color:var(--ink)">${F.d2(x.roas)}x</span><br>
+        CPA <span style="color:var(--ink)">${F.n(x.cpa)}</span><br>
+        Purchases <span style="color:var(--ink)">${F.n(x.purch)}</span><br>
+        Revenue <span style="color:var(--ink)">${F.n(x.rev)}</span></div>`}
+    </div>`;}).join("");
+  return `<div class="grid g3" style="margin-bottom:18px">${cards}</div>
+    <div class="card pad rv">
+      <h3>How this is decided</h3>
+      <p style="font-size:14px;color:var(--ink-2);max-width:76ch">
+      Read from each ad set's real targeting, never from the ad or campaign name.
+      <strong>Engaged</strong> means they interacted but never bought (add to cart, viewed content, site visitors,
+      page engagers, and the "didn't purchase" pools).
+      <strong>Existing</strong> means they actually purchased (the Purchase 30/60/90/180 day audiences).
+      <strong>New</strong> is prospecting: broad, interest, and every lookalike — a lookalike of your buyers is
+      still cold traffic, not a customer.</p>
+      ${audNote(w)}
+    </div>`;
+}
+
+function scale(w){
+  const money=r=>F.n(r.spend), roas=r=>F.d2(r.roas)+"x";
+  return `
+  <h2 class="sect-h">Do more of this</h2>
+  <div class="card pad rv">
+    ${adTable(w.scalable,[["Ad"],["Spend",money],["ROAS",roas],["CPA",r=>F.n(r.cpa)],
+      ["CVR",r=>(r.cvr??0)+"%"],["CPMR",r=>F.n(r.cpmr)],["Freq",r=>F.d2(r.freq)]])}
+    <p style="font-size:12.5px;color:var(--muted);margin-top:14px">
+      Beats account ROAS with frequency headroom left. These are the ones that can take more budget without breaking.</p>
+  </div>
+
+  <h2 class="sect-h">Cut this first</h2>
+  <div class="card pad rv">
+    ${adTable(w.bleeders,[["Ad"],["Spend",money],["ROAS",roas],["CPA",r=>F.n(r.cpa)],
+      ["CVR",r=>(r.cvr??0)+"%"],["CPMR",r=>F.n(r.cpmr)],["Freq",r=>F.d2(r.freq)]])}
+  </div>
+
+  <h2 class="sect-h">Where the money sits</h2>
+  <div class="card pad rv">
+    ${(w.top||[]).map(r=>`<div class="barrow">
+      <div class="nm" title="${esc(r.name)}" style="flex-basis:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+      <div class="track"><div class="fill ${r.roas>=(w.summary.roas||0)?'f-exi':'f-ink'}"
+        data-w="${Math.min(100,(r.share||0)*3)}" style="background:${r.roas>=(w.summary.roas||0)?'#8CB392':'#D08C86'}"></div></div>
+      <div class="val">${r.share??0}%</div>
+      <div class="meta">${F.d2(r.roas)}x · ${F.n(r.spend)}</div></div>`).join("") || `<div class="empty">No significant spend.</div>`}
+    <p style="font-size:12.5px;color:var(--muted);margin-top:14px">Green beats the account ROAS of ${F.d2(w.summary.roas)}x. Red is funded below it.</p>
+  </div>`;
+}
+
+function creative(w){
+  const f=w.formats||{};
+  const fmtCards=Object.keys(f).length? Object.entries(f).map(([k,v])=>`
+    <div class="card rv"><h3>${k.charAt(0)+k.slice(1).toLowerCase()}</h3>
+      <div class="kpi"><div class="v">${F.d2(v.roas)}x</div>
+      <div class="d">${v.share}% of spend · ${F.n(v.spend)} EGP · ${v.purch} purch</div></div></div>`).join("")
+    : `<div class="empty">No format data.</div>`;
+
+  const vids=w.videos||[];
+  const good=vids.filter(v=>(v.hook||0)>=35), bad=vids.filter(v=>(v.hook||0)<22);
+  const vrow=v=>`<div class="barrow">
+      <div class="nm" title="${esc(v.name)}" style="flex-basis:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.name)}</div>
+      <div class="track"><div class="fill" data-w="${Math.min(100,v.hook||0)}"
+        style="background:${(v.hook||0)>=35?'#8CB392':(v.hook||0)>=22?'#D9BC72':'#D08C86'}"></div></div>
+      <div class="val">${F.d2(v.hook)}%</div>
+      <div class="meta">${F.d2(v.roas)}x · ${F.n(v.spend)}</div></div>`;
+
+  return `
+  <div class="grid g3" style="margin-bottom:18px">${fmtCards}</div>
+  <h2 class="sect-h">The first 3 seconds</h2>
+  <div class="card pad rv">
+    <h3>Held to 25% watched</h3>
+    ${vids.length? vids.map(vrow).join("") : `<div class="empty">No video had enough impressions to read a hook in this window.</div>`}
+    <p style="font-size:12.5px;color:var(--muted);margin-top:14px">
+      Ranked on who actually stayed to 25% watched — the honest thumbstop.
+      Raw 3-second plays are inflated by autoplay, so they are not ranked on.
+      Green holds (35%+), amber is average, red loses them in the opening frame.</p>
+  </div>
+  ${good.length?`<div class="callout good rv" style="margin-top:16px">
+    <strong>Do more of these openings:</strong> ${good.slice(0,3).map(v=>esc(v.name)).join(", ")}.</div>`:""}
+  ${bad.length?`<div class="callout warn rv" style="margin-top:12px">
+    <strong>Re-cut the first 3 seconds:</strong> ${bad.slice(0,3).map(v=>esc(v.name)).join(", ")}. Do not scale these.</div>`:""}`;
+}
+
+function fatigue(w){
+  const f=w.fatiguing||[];
+  if(!f.length) return `<div class="card pad rv"><h3>Fatigue</h3>
+    <p class="lede">Nothing is fatiguing.</p>
+    <p style="color:var(--muted);margin-top:8px">Frequency and Outbound CTR are holding across every significant ad in this window.</p></div>`;
+  return `<div class="card pad rv">
+    <h3>Same people, fewer clicks</h3>
+    <table><thead><tr><th>Ad</th><th>Frequency</th><th>Outbound CTR</th><th>Spend</th><th>Severity</th></tr></thead><tbody>
+    ${f.map(r=>{
+      const hard = r.d_freq>30 && r.d_octr<-20;
+      const sev = hard?"Hard":(r.d_freq>18||r.d_octr<-15)?"Building":"Early";
+      return `<tr>
+        <td><div class="adname"><b>${esc(r.name)}</b>${adTag(r.seg)}</div></td>
+        <td>${F.d2(r.freq_prev)} → ${F.d2(r.freq)} <span class="dn">(${F.pc(r.d_freq)})</span></td>
+        <td>${F.d2(r.octr_prev)}% → ${F.d2(r.octr)}% <span class="dn">(${F.pc(r.d_octr)})</span></td>
+        <td>${F.n(r.spend)}</td>
+        <td><span class="tag ${hard?'t-bad':'t-neutral'}">${sev}</span></td></tr>`;}).join("")}
+    </tbody></table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:14px">
+      Frequency up while Outbound CTR falls means the same people are seeing it and fewer are clicking.
+      That is creative fatigue, not the auction. Refresh the hook — do not just add budget.</p>
+  </div>`;
+}
+
+const RENDER={overview,audience,scale,creative,fatigue};
+
+function draw(){
+  const w=win();
+  const v=document.getElementById("view");
+  if(!w){ v.innerHTML=`<div class="card pad"><p class="lede">No data for this window yet.</p>
+    <p style="color:var(--muted)">The next run will fill it in.</p></div>`; return; }
+  v.innerHTML = RENDER[TAB](w);
+  reveal();
+}
+function chrome(){
+  document.getElementById("brandSeg").innerHTML = DATA.accounts.map((a,i)=>
+    `<button data-b="${i}" aria-selected="${i===BRAND}">${esc(a.account.name)}</button>`).join("");
+  const ws=Object.keys((acct().windows)||{});
+  const order=["daily","3day","7day"].filter(k=>ws.includes(k));
+  document.getElementById("winSeg").innerHTML = (order.length?order:["7day"]).map(k=>
+    `<button data-w="${k}" aria-selected="${k===WIN}">${WINLBL[k]}</button>`).join("");
+  document.getElementById("tabs").innerHTML = TABS.map(([k,l])=>
+    `<button data-t="${k}" aria-selected="${k===TAB}">${l}</button>`).join("");
+
+  document.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{BRAND=+b.dataset.b;
+    const ws=Object.keys((acct().windows)||{}); if(!ws.includes(WIN)) WIN=ws[ws.length-1]||"7day"; chrome(); draw();});
+  document.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{WIN=b.dataset.w;chrome();draw();});
+  document.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;chrome();draw();});
+}
+
+fetch("./data.json?t="+Date.now()).then(r=>r.json()).then(d=>{
+  DATA=d;
+  if(!d.accounts||!d.accounts.length){document.getElementById("view").innerHTML=
+    `<div class="card pad"><p class="lede">No accounts yet.</p></div>`;return;}
+  const has=d.accounts.filter(a=>a.windows&&Object.keys(a.windows).length);
+  if(has.length) DATA.accounts=has;
+  const ws=Object.keys((DATA.accounts[0].windows)||{});
+  if(ws.length && !ws.includes(WIN)) WIN=ws[ws.length-1];
+  const t=new Date(d.generated_at);
+  document.getElementById("stamp").textContent =
+    "Last run "+t.toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" · "+(d.timezone||"");
+  chrome(); draw();
+}).catch(e=>{
+  document.getElementById("view").innerHTML=`<div class="card pad"><p class="lede">Could not load data.json.</p>
+  <p style="color:var(--muted)">${esc(e.message)}</p></div>`;
+});
+</script>
+</body>
+</html>
