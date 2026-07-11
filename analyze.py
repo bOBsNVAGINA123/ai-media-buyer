@@ -202,9 +202,16 @@ def get_accounts():
 AD_FIELDS = ",".join(["ad_id", "ad_name", "campaign_name", "adset_name", "adset_id", "objective",
     "spend", "impressions", "reach", "frequency", "cpm", "ctr", "inline_link_click_ctr",
     "outbound_clicks_ctr", "actions", "action_values", "video_play_actions",
+    "video_3_sec_watched_actions", "video_continuous_2_sec_watched_actions",
     "video_p25_watched_actions", "video_p50_watched_actions", "video_p75_watched_actions",
     "video_p95_watched_actions", "video_p100_watched_actions", "video_thruplay_watched_actions"])
 LITE_FIELDS = "spend,reach,purchase_roas,actions,action_values"
+
+HAS_3SEC = [True]     # flipped off if Meta rejects the field for this token
+
+def _strip3(f):
+    return ",".join(x for x in f.split(",") if x != "video_3_sec_watched_actions")
+
 
 def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
     out, after = [], None
@@ -433,7 +440,17 @@ def metric(r):
     spend = f(r.get("spend")); impr = f(r.get("impressions")); reach = f(r.get("reach"))
     purch = pick(r.get("actions"), PURCH); rev = pick(r.get("action_values"), PURCH)
     lc = pick(r.get("actions"), ["link_click"]); atc = pick(r.get("actions"), ATC)
-    v3 = first(r.get("video_play_actions")); p25 = first(r.get("video_p25_watched_actions"))
+    # HOOK RATE = 3 SECOND VIDEO VIEWS / IMPRESSIONS. video_play_actions is video PLAYS, not
+    # 3 second views, and using it overstates the hook. Fall back to 2 second continuous only
+    # if Meta will not give up the 3 second field, and say so on the card.
+    v3 = first(r.get("video_3_sec_watched_actions"))
+    v3_src = "3s"
+    if not v3:
+        v3 = first(r.get("video_continuous_2_sec_watched_actions"))
+        v3_src = "2s" if v3 else "play"
+    if not v3:
+        v3 = first(r.get("video_play_actions")); v3_src = "play"
+    p25 = first(r.get("video_p25_watched_actions"))
     p50 = first(r.get("video_p50_watched_actions")); p75 = first(r.get("video_p75_watched_actions"))
     p95 = first(r.get("video_p95_watched_actions")); p100 = first(r.get("video_p100_watched_actions"))
     thru = first(r.get("video_thruplay_watched_actions"))
@@ -463,13 +480,15 @@ def metric(r):
             "cvr": round(purch / lc * 100, 2) if lc else 0.0,
             "cpc": round(spend / lc, 2) if lc else 0.0,
             "atc_rate": round(atc / lc * 100, 1) if lc else 0.0,
-            "hook": round(v3 / impr * 100, 1) if impr else 0.0,
-            "hold": round(p25 / impr * 100, 1) if impr else 0.0,
-            "v3": round(v3), "thru": round(thru),
+            "hook": round(v3 / impr * 100, 1) if impr else 0.0,          # 3 sec views / impressions
+            "hook_src": v3_src,
+            "hold": round(thru / v3 * 100, 1) if v3 else 0.0,             # thruplays / 3 sec views
+            "v3": round(v3), "thru": round(thru), "p25": round(p25), "p50": round(p50),
+            "p75": round(p75), "p95": round(p95), "p100": round(p100),
             # retention as % of impressions (reliable), how far people actually watch
-            "r25": round(p25 / impr * 100, 1) if impr else 0, "r50": round(p50 / impr * 100, 1) if impr else 0,
-            "r75": round(p75 / impr * 100, 1) if impr else 0, "r95": round(p95 / impr * 100, 1) if impr else 0,
-            "r100": round(p100 / impr * 100, 1) if impr else 0}
+            "r25": round(p25 / v3 * 100, 1) if v3 else 0, "r50": round(p50 / v3 * 100, 1) if v3 else 0,
+            "r75": round(p75 / v3 * 100, 1) if v3 else 0, "r95": round(p95 / v3 * 100, 1) if v3 else 0,
+            "r100": round(p100 / v3 * 100, 1) if v3 else 0}
 
 def med(xs): return round(st.median(xs), 2) if xs else None
 
@@ -1101,7 +1120,7 @@ def _foot(fig, win):
     fig.text(.945, .022, "Audience is Meta's own breakdown by audience segment.", fontsize=10.5,
              color=FAINT, family="DejaVu Sans", style="italic", ha="right")
 
-def _panel(fig, y0, h, title, x0=.055, w=.89):
+def _panel(fig, y0, h, title, x0=.055, w=.89):  # x0/w let a panel sit beside a chart
     ax = fig.add_axes([x0, y0, w, h]); ax.set_axis_off()
     ax.set_xlim(0, 100); ax.set_ylim(0, 100)
     ax.add_patch(plt.Rectangle((0, 0), 100, 100, facecolor=PAPER, edgecolor=LINE, lw=1))
@@ -2080,6 +2099,131 @@ def card_decay(A, win):
     return _png(fig)
 
 
+def retention(A):
+    """Where every video loses people. Measured off the 3 second view, because that is the
+    moment they actually started watching."""
+    b7 = A.get("b7") or {}
+    vids = [c for c in b7.values() if (c.get("v3") or 0) >= 500 and (c.get("impr") or 0) >= 5000]
+    if len(vids) < 2: return None
+    V3 = sum(c["v3"] for c in vids) or 1
+    IM = sum(c["impr"] for c in vids) or 1
+    acc = {"hook": sum(c["v3"] for c in vids) / IM * 100,
+           "p25": sum(c.get("p25", 0) for c in vids) / V3 * 100,
+           "p50": sum(c.get("p50", 0) for c in vids) / V3 * 100,
+           "p75": sum(c.get("p75", 0) for c in vids) / V3 * 100,
+           "p95": sum(c.get("p95", 0) for c in vids) / V3 * 100,
+           "p100": sum(c.get("p100", 0) for c in vids) / V3 * 100}
+    rows = []
+    for c in vids:
+        v3 = c["v3"] or 1
+        curve = [100.0,
+                 (c.get("p25", 0) / v3) * 100, (c.get("p50", 0) / v3) * 100,
+                 (c.get("p75", 0) / v3) * 100, (c.get("p95", 0) / v3) * 100,
+                 (c.get("p100", 0) / v3) * 100]
+        rows.append({"name": safe(c["ad_name"]), "hook": (c["v3"] / (c["impr"] or 1)) * 100,
+                     "curve": curve, "spend": c["spend"], "roas": c["roas"],
+                     "cpmr": c.get("cpmr") or 0, "v3": c["v3"],
+                     "hook_src": c.get("hook_src", "3s")})
+    acc_curve = [100.0, acc["p25"], acc["p50"], acc["p75"], acc["p95"], acc["p100"]]
+    # the biggest single cliff in the account's own curve
+    STEPS = [("start to 25%", 0, 1), ("25% to 50%", 1, 2), ("50% to 75%", 2, 3),
+             ("75% to 95%", 3, 4), ("95% to the end", 4, 5)]
+    drops = [(lab, acc_curve[a] - acc_curve[b]) for lab, a, b in STEPS]
+    worst = max(drops, key=lambda d: d[1])
+    rows.sort(key=lambda r: -r["spend"])
+    return {"acc": acc, "acc_curve": acc_curve, "rows": rows, "drops": drops, "worst": worst,
+            "src": rows[0]["hook_src"] if rows else "3s"}
+
+
+# ---------- CARD: where every video loses them ----------
+def card_retention(A, win):
+    R = retention(A)
+    if not R: return None
+    fig = _fig(13.6)
+    src = {"3s": "3 second video views / impressions",
+           "2s": "2 second continuous plays / impressions (Meta would not return 3 second for this account)",
+           "play": "video plays / impressions (Meta returned neither 3 second nor 2 second)"}[R["src"]]
+    _head(fig, A, win, "Where every video loses them",
+          "Hook rate = %s. The curve after that is measured off the people who actually started watching." % src)
+
+    ax = fig.add_axes([.075, .420, .60, .400])
+    ax.set_facecolor(PAPER)
+    for sp_ in ax.spines.values(): sp_.set_color(LINE)
+    X = [0, 1, 2, 3, 4, 5]
+    LAB = ["START\n(3s view)", "25%", "50%", "75%", "95%", "100%"]
+    for r in R["rows"][:6]:
+        ax.plot(X, r["curve"], color=FAINT, lw=1.2, marker="o", ms=3, alpha=.75, zorder=2)
+    ax.plot(X, R["acc_curve"], color=INK, lw=3.0, marker="o", ms=7, zorder=4, label="account average")
+    # mark the cliff
+    wi = [i for i, (lab, _d) in enumerate(R["drops"]) if lab == R["worst"][0]][0]
+    ax.axvspan(wi, wi + 1, color=RED, alpha=.10, zorder=1)
+    ax.annotate("BIGGEST DROP\n%s, -%.0f points" % (R["worst"][0], R["worst"][1]),
+                ((wi + wi + 1) / 2.0, (R["acc_curve"][wi] + R["acc_curve"][wi + 1]) / 2.0),
+                textcoords="offset points", xytext=(10, 26), fontsize=11, color=RED,
+                family="DejaVu Sans", weight="bold",
+                arrowprops=dict(arrowstyle="->", color=RED, lw=1.2))
+    ax.set_xticks(X); ax.set_xticklabels(LAB, fontsize=10, color=MUTED)
+    ax.set_ylim(0, 108); ax.set_xlim(-.25, 5.25)
+    ax.set_ylabel("% OF THOSE WHO STARTED", fontsize=F_HD, color=MUTED, family="DejaVu Sans")
+    ax.tick_params(colors=FAINT, labelsize=10)
+    lg = ax.legend(loc="upper right", frameon=False, fontsize=11)
+    for t in lg.get_texts(): t.set_color(INK)
+
+    ax = _panel(fig, .420, .400, "", x0=.700, w=.245)
+    ax.text(4, 94, "THE ACCOUNT CURVE", fontsize=F_HD, color=INK, family="DejaVu Sans", weight="bold")
+    ax.text(4, 86, "HOOK  %.1f%%" % R["acc"]["hook"], fontsize=F_H + 5, color=INK,
+            family="DejaVu Sans", weight="bold")
+    ax.text(4, 79, "of impressions become a 3 second view", fontsize=9, color=FAINT,
+            family="DejaVu Sans")
+    y = 66
+    for lab, key in (("25%", "p25"), ("50%", "p50"), ("75%", "p75"), ("95%", "p95"), ("100%", "p100")):
+        ax.text(4, y, lab, fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
+        ax.text(96, y, "%.0f%%" % R["acc"][key], fontsize=F_ROW + 1, color=INK,
+                family="DejaVu Sans", weight="bold", ha="right")
+        y -= 9
+    ax.text(4, 16, "Every step after the hook is the share of\npeople who started and were still\nthere at that point.",
+            fontsize=9.5, color=FAINT, family="DejaVu Sans")
+
+    ax = _panel(fig, .245, .150, "every drop, and what it means")
+    for i, (lab, d) in enumerate(R["drops"]):
+        x = 1.6 + i * 19.6
+        col = RED if d >= R["worst"][1] * .9 else MUTED
+        ax.text(x, 62, "-%.0f" % d, fontsize=22, color=col, family="DejaVu Sans", weight="bold")
+        ax.text(x, 40, lab, fontsize=10, color=MUTED, family="DejaVu Sans")
+        ax.text(x, 26, "points lost", fontsize=9, color=FAINT, family="DejaVu Sans")
+    FIX = {"start to 25%": "They started and bailed inside the first quarter. The hook earned the view and the next line did not keep it. Cut straight to the payoff, kill the intro.",
+           "25% to 50%": "You lose them in the setup. The middle is too slow. Tighten it, or move the proof earlier.",
+           "50% to 75%": "They made it halfway and left before the offer. The offer is arriving too late. Move it forward.",
+           "75% to 95%": "Almost everyone who got here finished. This is not where the problem is.",
+           "95% to the end": "They finished. Nothing to fix here."}
+    for j, ln in enumerate(_wrap("FIX THIS FIRST: " + FIX[R["worst"][0]], 96)[:2]):
+        ax.text(1.6, 14 - j * 7, ln, fontsize=F_ROW, color=INK, family="DejaVu Sans",
+                weight="bold")
+
+    ax = _panel(fig, .075, .150, "the videos, by spend  ·  with what reach is costing you")
+    _c = A.get("b7_acc") or A["summary"]
+    acc_cpmr = _c.get("cpmr") or 0
+    ax.text(1.6, 82, "AD", fontsize=8.5, color=FAINT, family="DejaVu Sans", weight="bold")
+    for j, (lab, x) in enumerate((("SPEND", 44), ("ROAS", 54), ("HOOK", 64), ("25%", 72),
+                                  ("50%", 80), ("100%", 88), ("CPMR", 98))):
+        ax.text(x, 82, lab, fontsize=8.5, color=FAINT, family="DejaVu Sans", weight="bold", ha="right")
+    for i, r in enumerate(R["rows"][:5]):
+        y = 70 - i * 13
+        ax.text(1.6, y, _clip(r["name"], 30), fontsize=10.5, color=INK, family="DejaVu Sans",
+                weight="bold")
+        hc = GREEN if r["hook"] >= R["acc"]["hook"] * 1.1 else (RED if r["hook"] <= R["acc"]["hook"] * .9 else MUTED)
+        cc = GREEN if r["cpmr"] <= acc_cpmr else RED
+        for v, x, c in ((_k(r["spend"]), 44, MUTED), ("%.2fx" % r2(r["roas"]), 54, INK),
+                        ("%.1f%%" % r["hook"], 64, hc), ("%.0f%%" % r["curve"][1], 72, MUTED),
+                        ("%.0f%%" % r["curve"][2], 80, MUTED), ("%.0f%%" % r["curve"][5], 88, MUTED),
+                        (_k(r["cpmr"]), 98, cc)):
+            ax.text(x, y, v, fontsize=10.5, color=c, family="DejaVu Sans", weight="bold", ha="right")
+    ax.text(1.6, 5, "CPMR green means it reaches people cheaper than the account's %s. Red means a premium for the same reach." % _k(acc_cpmr),
+            fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
+    _foot(fig, win)
+    return _png(fig)
+
+
 # ---------- CARD: the verdict on every ad, from its own 7 days ----------
 MCOLS = [("SPEND", "spend", _k, "spend"), ("ROAS", "roas", lambda v: "%.2fx" % r2(v), "roas"),
          ("CPP", "cpp", _k, "cpa"), ("CPMR", "cpmr", _k, "cpmr"),
@@ -2428,6 +2572,7 @@ def render_cards(A, win):
                         ("audience", lambda: card_audience(A, win)),
                         ("funnel", lambda: card_funnel(A, win)),
                         ("decay", lambda: card_decay(A, win)),
+                        ("retention", lambda: card_retention(A, win)),
                         ("verdicts", lambda: card_verdicts(A, win)),
                         ("scenarios", lambda: card_scenarios(A, win)),
                         ("plan", lambda: card_plan(A, win)),
@@ -3488,7 +3633,8 @@ def main():
                            "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
                            "funnel": "*4 · THE FUNNEL* — hook to hold to CTR to ATC to CVR to ROAS, and the first stage that broke.",
                            "decay": "*5 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, with the metric responsible.",
-                           "verdicts": "*6 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
+                           "retention": "*6 · WHERE EVERY VIDEO LOSES THEM* — hook rate, the drop-off curve, the biggest cliff, and CPMR.",
+                           "verdicts": "*7 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
                            "scenarios": "*7 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
                            "plan": "*8 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
                            "decide_unused": "*x* — the decision map and the money move.",
