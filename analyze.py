@@ -919,20 +919,67 @@ def zscore(series, key, val):
 
 
 def fatiguing(rows, min_spend=800):
-    """Frequency climbing while outbound CTR falls. That is fatigue, not bad luck."""
+    """Fatigue is not one number. Name the exact mechanism: the audience ran out,
+    the creative stopped earning the click, or the auction got more expensive."""
     out = []
     for c in rows:
         p = c.get("prev")
         if not p or c["spend"] < min_spend: continue
-        df = pct(c["freq"], p.get("freq") or 0)
-        do = pct(c["octr"], p.get("octr") or 0)
-        if df is None or do is None: continue
-        if df >= 10 and do <= -10:
-            out.append({"name": safe(c["ad_name"]), "seg": c["seg"], "freq": c["freq"], "pfreq": p.get("freq"),
-                        "octr": c["octr"], "poctr": p.get("octr"), "spend": c["spend"],
-                        "roas": c["roas"], "d_freq": df, "d_octr": do,
-                        "score": abs(do) + df})
+        d = {"freq": pct(c["freq"], p.get("freq") or 0),
+             "octr": pct(c["octr"], p.get("octr") or 0),
+             "reach": pct(c["reach"], p.get("reach") or 0),
+             "cpm": pct(c["cpm"], p.get("cpm") or 0),
+             "cpc": pct(c["cpc"], (p.get("spend") or 0) / (p.get("lc") or 1) if p.get("lc") else 0),
+             "cvr": pct(c["cvr"], p.get("cvr") or 0),
+             "roas": pct(c["roas"], p.get("roas") or 0)}
+        if d["freq"] is None or d["octr"] is None: continue
+        if not (d["freq"] >= 10 and d["octr"] <= -10): continue
+
+        # the exact reasons, in plain language, only the ones that are actually true
+        why = []
+        if d["reach"] is not None and d["reach"] <= -10:
+            why.append("reach fell %s to %s while frequency rose %s: Meta ran out of new people to show it to, so it is re-serving the same ones"
+                       % (_dd(d["reach"]), "{:,.0f}".format(c["reach"]), _dd(d["freq"])))
+        elif c["freq"] >= 3.0:
+            why.append("frequency is %.1f, up %s: the same people are seeing it over and over"
+                       % (c["freq"], _dd(d["freq"])))
+        else:
+            why.append("frequency up %s to %.1f" % (_dd(d["freq"]), c["freq"]))
+        why.append("outbound CTR fell %s, from %s to %s: they have seen the creative and stopped clicking it"
+                   % (_dd(d["octr"]), _pctv(p.get("octr")), _pctv(c["octr"])))
+        if d["cpm"] is not None and d["cpm"] >= 8:
+            why.append("CPM rose %s to %s: the auction is charging more for the same impression"
+                       % (_dd(d["cpm"]), "{:,.0f}".format(c["cpm"])))
+        if d["cpc"] is not None and d["cpc"] >= 8:
+            why.append("CPC rose %s to %.2f: fewer clicks per impression means each click costs more"
+                       % (_dd(d["cpc"]), c["cpc"]))
+        if d["cvr"] is not None and d["cvr"] <= -10:
+            why.append("CVR fell %s to %.2f%%: the clicks that are left are worse quality"
+                       % (_dd(d["cvr"]), c["cvr"]))
+        else:
+            why.append("CVR held at %.2f%% (%s): the landing page is not the problem, the ad is"
+                       % (c["cvr"], _dd(d["cvr"])))
+
+        # the single dominant mechanism
+        if d["reach"] is not None and d["reach"] <= -10 and c["freq"] >= 2.5:
+            verdict = "AUDIENCE EXHAUSTED"
+        elif d["cvr"] is not None and d["cvr"] <= -20:
+            verdict = "CREATIVE AND INTENT BOTH DECAYING"
+        elif d["cpm"] is not None and d["cpm"] >= 15:
+            verdict = "AUCTION GOT EXPENSIVE"
+        else:
+            verdict = "CREATIVE WORN OUT"
+        out.append({"name": safe(c["ad_name"]), "seg": c["seg"], "freq": c["freq"], "pfreq": p.get("freq"),
+                    "octr": c["octr"], "poctr": p.get("octr"), "spend": c["spend"], "roas": c["roas"],
+                    "reach": c["reach"], "preach": p.get("reach"), "cpm": c["cpm"], "cvr": c["cvr"],
+                    "d": d, "why": why, "verdict": verdict,
+                    "score": abs(d["octr"]) + d["freq"] + (c["spend"] / 1000.0)})
     return sorted(out, key=lambda x: -x["score"])[:6]
+
+
+def _dd(v):
+    if v is None: return "n/a"
+    return ("+%.0f%%" % v) if v >= 0 else ("%.0f%%" % v)
 
 
 # ===================== VISUAL CARDS (multi image) =====================
@@ -1007,17 +1054,56 @@ def _k(v):
     return "{:,.0f}".format(v)
 
 
-# ---------- CARD 1: what moved revenue, and the lever that did it ----------
+# ---------- shared: period over period ----------
+def dpc(m, p, k):
+    """Percent change vs the previous period. None when there is nothing to compare to."""
+    if not p: return None
+    return pct(m.get(k) or 0, p.get(k) or 0)
+
+def m_cpc(m):
+    if m.get("cpc"): return m["cpc"]
+    lc = m.get("lc") or 0
+    return (m.get("spend") or 0) / lc if lc else 0
+
+
+def waterfall(s, p):
+    """Revenue = spend / CPC x CVR x AOV. That is an identity, so the log of each ratio
+    splits the revenue move across the four levers with nothing left over."""
+    if not p: return None
+    def g(d, k):
+        v = d.get(k)
+        try: v = float(v or 0)
+        except Exception: v = 0.0
+        return v
+    cur = {"spend": g(s, "spend"), "cpc": m_cpc(s), "cvr": g(s, "cvr"), "aov": g(s, "aov")}
+    pre = {"spend": g(p, "spend"), "cpc": m_cpc(p), "cvr": g(p, "cvr"), "aov": g(p, "aov")}
+    for k in cur:
+        if cur[k] <= 0 or pre[k] <= 0: return None
+    rev, prev_rev = g(s, "rev"), g(p, "rev")
+    if rev <= 0 or prev_rev <= 0: return None
+    w = {"SPEND": math.log(cur["spend"] / pre["spend"]),
+         "CPC": -math.log(cur["cpc"] / pre["cpc"]),
+         "CVR": math.log(cur["cvr"] / pre["cvr"]),
+         "AOV": math.log(cur["aov"] / pre["aov"])}
+    tot = sum(w.values())
+    d_rev = rev - prev_rev
+    if abs(tot) < 1e-9: return None
+    LK = {"SPEND": "spend", "CPC": "cpc", "CVR": "cvr", "AOV": "aov"}
+    steps = [{"k": k, "egp": d_rev * w[k] / tot,
+              "pct": round(abs(w[k]) / sum(abs(v) for v in w.values()) * 100),
+              "chg": pct(cur[LK[k]], pre[LK[k]])}
+             for k in ("SPEND", "CPC", "CVR", "AOV")]
+    return {"prev": prev_rev, "now": rev, "steps": steps, "d_rev": d_rev}
+
+
+# ---------- CARD 1: the revenue waterfall ----------
 def card_levers(A, win):
     s = A["summary"]; p = s.get("prev") or {}
-    fig = _fig(13.6)
+    fig = _fig(13.0)
     dr = pct(s["rev"], p.get("rev") or 0)
-    _head(fig, A, win, "What moved revenue", "%s vs %s  ·  revenue %s %s" % (
-        DATES.get("label", ("", ""))[0] if isinstance(DATES.get("label"), tuple) else DATES.get("label", ""),
-        DATES.get("p_label", ("", ""))[0] if isinstance(DATES.get("p_label"), tuple) else DATES.get("p_label", ""),
-        _n(s["rev"]), ("(%s)" % _d(dr)) if dr is not None else ""))
+    _head(fig, A, win, "What moved revenue",
+          "Revenue = spend / CPC x CVR x AOV. Every EGP of the move is charged to one of those four.")
 
-    # KPI strip, every metric he asked for
     ax = fig.add_axes([.055, .800, .89, .078]); ax.set_axis_off()
     ax.set_xlim(0, 100); ax.set_ylim(0, 100)
     ax.add_patch(plt.Rectangle((0, 0), 100, 100, facecolor=PAPER, edgecolor=LINE, lw=1))
@@ -1025,181 +1111,224 @@ def card_levers(A, win):
          ("REVENUE", _k(s["rev"]), dr, True),
          ("ROAS", "%.2f" % r2(s["roas"]), s.get("d_roas"), True),
          ("CPA", _k(s.get("cpa")), s.get("d_cpa"), False),
-         ("AOV", _k(s.get("aov")), pct(s.get("aov") or 0, p.get("aov") or 0), True),
+         ("AOV", _k(s.get("aov")), dpc(s, p, "aov"), True),
          ("CVR", "%.2f%%" % r2(s.get("cvr")), s.get("d_cvr"), True),
-         ("CPC", "%.2f" % r2(s.get("cpc")), pct(s.get("cpc") or 0, p.get("cpc") or 0), False),
-         ("CTR OUT", _pctv(s.get("octr")), pct(s.get("octr") or 0, p.get("octr") or 0), True),
-         ("CTR LINK", _pctv(s.get("lctr")), pct(s.get("lctr") or 0, p.get("lctr") or 0), True),
+         ("CPC", "%.2f" % r2(m_cpc(s)), pct(m_cpc(s), m_cpc(p)), False),
+         ("CTR OUT", _pctv(s.get("octr")), dpc(s, p, "octr"), True),
          ("CPM", _k(s.get("cpm")), s.get("d_cpm"), False),
-         ("CPMR", _k(s.get("cpmr")), s.get("d_cpmr"), False)]
+         ("CPMR", _k(s.get("cpmr")), s.get("d_cpmr"), False),
+         ("REACH", _k(s.get("reach")), dpc(s, p, "reach"), True)]
     for i, (k, v, d, ug) in enumerate(K):
         x = 2.0 + i * 8.95
         ax.text(x, 66, v, fontsize=17, color=INK, family="DejaVu Sans", weight="bold")
         ax.text(x, 36, k, fontsize=F_KL, color=MUTED, family="DejaVu Sans")
         ax.text(x, 14, _d(d), fontsize=F_KL, color=_dc(d, ug), family="DejaVu Sans", weight="bold")
 
-    # THE LEVER. one identity, three levers, shares always sum to 100.
-    ax = _panel(fig, .600, .175, "the lever that moved it")
-    C = contrib(s, p) if p else None
-    if C:
-        ax.text(1.6, 78, "ROAS = CVR x AOV / CPC.  Each lever's share of the move.",
-                fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
-        top = C[0]
-        ax.text(56, 78, "MAIN REASON:  %s, %d%% of the move" % (top["k"], top["pct"]),
-                fontsize=F_H, color=(GREEN if top["help"] else RED), family="DejaVu Sans", weight="bold")
-        for i, c in enumerate(C):
-            y = 56 - i * 20
-            ax.text(1.6, y, c["k"], fontsize=F_H + 2, color=INK, family="DejaVu Sans", weight="bold")
-            ax.add_patch(plt.Rectangle((11, y - 4.5), 52, 11, facecolor=BONE, edgecolor="none"))
-            ax.add_patch(plt.Rectangle((11, y - 4.5), 52 * c["pct"] / 100.0, 11,
-                                       facecolor=(GREEN if c["help"] else RED), edgecolor="none"))
-            ax.text(65, y, "%d%%" % c["pct"], fontsize=F_H, color=INK, family="DejaVu Sans", weight="bold")
-            ax.text(73, y, "%s revenue by %s" % ("helped" if c["help"] else "hurt", _n(abs(c["egp"]))),
-                    fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
-    else:
-        ax.text(1.6, 50, "No comparable prior window.", fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
-
-    # AUDIENCE, straight from Meta
-    ax = _panel(fig, .330, .235, "audience  ·  meta's breakdown by audience segment")
-    segs = A.get("segs") or {}
-    sp_ = A.get("segs_prev") or {}
-    # a segment holding a rounding error's worth of spend is noise, not a segment
-    order = [k for k in ("NEW", "ENGAGED", "EXISTING", "UNKNOWN")
-             if segs.get(k) and segs[k].get("share", 0) >= 1.0]
-    hdr = ["SEGMENT", "SPEND", "SHARE", "ROAS", "CPA", "AOV", "CVR", "CPC", "PURCH"]
-    xs = [1.6, 36, 46, 56, 65, 74, 83, 91, 98]
-    for j, (x, h) in enumerate(zip(xs, hdr)):
-        ax.text(x, 80, h, fontsize=F_HD, color=FAINT, family="DejaVu Sans",
-                weight="bold", ha=("left" if j == 0 else "right"))
-    for i, k in enumerate(order):
-        m = segs[k]; q = sp_.get(k) or {}
-        y = 62 - i * 18
-        ax.add_patch(plt.Rectangle((0.8, y - 4), 1.4, 9, facecolor=SEGC.get(k, FAINT), edgecolor="none"))
-        ax.text(3.6, y, SEGN.get(k, k), fontsize=F_ROW + 3, color=INK,
+    ax = _panel(fig, .360, .410, "revenue waterfall  ·  who is accountable for the move")
+    W = waterfall(s, p)
+    if W:
+        bars = [("BEFORE", W["prev"], None)] + [(x["k"], x["egp"], x) for x in W["steps"]] + \
+               [("NOW", W["now"], None)]
+        top = max(W["prev"], W["now"]) * 1.30 or 1
+        base_y, height = 21.0, 46.0
+        def h(v): return abs(v) / top * height
+        x, cum = 3.0, 0.0
+        bw = 12.0
+        for name, val, meta in bars:
+            if name in ("BEFORE", "NOW"):
+                y0 = base_y; hh = h(val)
+                ax.add_patch(plt.Rectangle((x, y0), bw, hh, facecolor=INK, edgecolor="none"))
+                ax.text(x + bw / 2, y0 + hh + 3.5, _k(val), fontsize=F_ROW + 2, color=INK,
+                        family="DejaVu Sans", weight="bold", ha="center")
+                cum = val
+            else:
+                up = val >= 0
+                y0 = base_y + h(cum) - (0 if up else h(abs(val)))
+                col = GREEN if up else RED
+                ax.add_patch(plt.Rectangle((x, y0), bw, h(val), facecolor=col, edgecolor="none"))
+                ax.text(x + bw / 2, base_y + h(cum) + (h(abs(val)) if up else 0) + 3.5,
+                        ("+" if up else "-") + _k(abs(val)), fontsize=F_ROW + 1, color=col,
+                        family="DejaVu Sans", weight="bold", ha="center")
+                ax.text(x + bw / 2, 8.5, "%s%% of the move" % meta["pct"], fontsize=10.5,
+                        color=MUTED, family="DejaVu Sans", ha="center")
+                ax.text(x + bw / 2, 2.5, "%s %s" % (name.lower(), _d(meta["chg"])), fontsize=10.5,
+                        color=FAINT, family="DejaVu Sans", ha="center")
+                cum += val
+            ax.text(x + bw / 2, base_y - 5.0, name, fontsize=F_ROW + 1, color=INK,
+                    family="DejaVu Sans", weight="bold", ha="center")
+            x += bw + 2.4
+        top_lever = max(W["steps"], key=lambda z: abs(z["egp"]))
+        ax.text(3.0, 84, "MAIN REASON:  %s, %s%% of the move, worth %s%s EGP" % (
+                top_lever["k"], top_lever["pct"],
+                "+" if top_lever["egp"] >= 0 else "-", _k(abs(top_lever["egp"]))),
+                fontsize=F_H + 3, color=(GREEN if top_lever["egp"] >= 0 else RED),
                 family="DejaVu Sans", weight="bold")
-        vals = [_k(m["spend"]), "%d%%" % round(m.get("share", 0)), "%.2f" % r2(m["roas"]),
-                _k(m.get("cpa")), _k(m.get("aov")), "%.1f%%" % r2(m.get("cvr")),
-                "%.2f" % r2(m.get("cpc")), _n(m.get("purch"))]
-        for j, (x, v) in enumerate(zip(xs[1:], vals)):
-            ax.text(x, y, v, fontsize=F_ROW + 1, color=(INK if j in (0, 2) else MUTED),
-                    family="DejaVu Sans", weight=("bold" if j in (0, 2) else "normal"), ha="right")
-        d = pct(m["spend"], q.get("spend") or 0)
-        dr_ = pct(m["roas"], q.get("roas") or 0)
-        sub = "CTR out %s   CTR link %s   CPM %s   CPMR %s   Freq %.1f   Reach %s" % (
-            _pctv(m.get("octr")), _pctv(m.get("lctr")), _k(m.get("cpm")), _k(m.get("cpmr")),
-            r2(m.get("freq")), _k(m.get("reach")))
-        ax.text(3.6, y - 8, sub, fontsize=11, color=FAINT, family="DejaVu Sans")
-        if d is not None:
-            ax.text(98, y - 8, "spend %s   ROAS %s" % (_d(d), _d(dr_)), fontsize=11,
-                    color=_dc(d, True), family="DejaVu Sans", ha="right")
+        ax.text(3.0, 76, "Bars add up exactly: before %s, the four levers, after %s." % (
+                _k(W["prev"]), _k(W["now"])), fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
+    else:
+        ax.text(3.0, 50, "No comparable prior period.", fontsize=F_ROW + 2, color=MUTED,
+                family="DejaVu Sans")
 
-    # ANOMALY OR NORMAL
-    ax = _panel(fig, .075, .215, "is this an anomaly, or just a tuesday")
+    ax = _panel(fig, .075, .265, "is this an anomaly, or just a tuesday")
     H = A.get("hist") or []
-    checks = [("rev", "Revenue", s["rev"]), ("roas", "ROAS", s["roas"]),
-              ("cpc", "CPC", s.get("cpc")), ("cvr", "CVR", s.get("cvr")), ("aov", "AOV", s.get("aov"))]
-    zs = [z for z in (zscore(H, k, v) for k, lab, v in checks) if z]
     lab = {"rev": "Revenue", "roas": "ROAS", "cpc": "CPC", "cvr": "CVR", "aov": "AOV"}
+    checks = [("rev", s["rev"]), ("roas", s["roas"]), ("cpc", m_cpc(s)),
+              ("cvr", s.get("cvr")), ("aov", s.get("aov"))]
+    zs = [z for z in (zscore(H, k, v) for k, v in checks) if z]
     if zs:
         worst = max(zs, key=lambda z: abs(z["z"]))
-        verdict = ("TODAY IS AN ANOMALY" if worst["verdict"] == "ANOMALY"
+        verdict = ("THIS IS AN ANOMALY" if worst["verdict"] == "ANOMALY"
                    else "UNUSUAL, BUT NOT AN ANOMALY" if worst["verdict"] == "UNUSUAL"
                    else "IN LINE WITH THE LAST 30 DAYS")
         col = RED if worst["verdict"] == "ANOMALY" else (AMBER if worst["verdict"] == "UNUSUAL" else GREEN)
-        ax.text(1.6, 74, verdict, fontsize=F_H + 6, color=col, family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 58, "Measured against this account's own last 30 days, not a benchmark.",
+        ax.text(1.6, 76, verdict, fontsize=F_H + 6, color=col, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 62, "Measured against this account's own last 30 days, not a benchmark.",
                 fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
         for i, z in enumerate(sorted(zs, key=lambda z: -abs(z["z"]))):
             x = 1.6 + i * 19.6
             c = RED if z["verdict"] == "ANOMALY" else (AMBER if z["verdict"] == "UNUSUAL" else MUTED)
             zz = max(-9.9, min(9.9, z["z"]))
             dp = 2 if z["key"] in ("roas", "cpc", "cvr") else 0
-            ax.text(x, 43, lab.get(z["key"], z["key"]), fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
-            ax.text(x, 29, z["verdict"].title(), fontsize=F_ROW + 3, color=c,
+            ax.text(x, 42, lab.get(z["key"], z["key"]), fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
+            ax.text(x, 28, z["verdict"].title(), fontsize=F_ROW + 3, color=c,
                     family="DejaVu Sans", weight="bold")
-            ax.text(x, 17, "%s sd from normal" % (("+" if zz >= 0 else "") + ("%.1f" % zz)),
+            ax.text(x, 16, "%s sd from normal" % (("+" if zz >= 0 else "") + ("%.1f" % zz)),
                     fontsize=10.5, color=c, family="DejaVu Sans")
-            ax.text(x, 6, "normal %s   now %s" % (_k(z["mean"]) if dp == 0 else ("%.2f" % z["mean"]),
-                                                  _k(z["val"]) if dp == 0 else ("%.2f" % z["val"])),
+            ax.text(x, 6, "normal %s   now %s" % (
+                    _k(z["mean"]) if dp == 0 else ("%.2f" % z["mean"]),
+                    _k(z["val"]) if dp == 0 else ("%.2f" % z["val"])),
                     fontsize=10, color=FAINT, family="DejaVu Sans")
     else:
-        ax.text(1.6, 50, "Not enough history yet to call it.", fontsize=F_ROW, color=MUTED,
-                family="DejaVu Sans")
+        ax.text(1.6, 50, "Not enough history yet to call it.", fontsize=F_ROW + 2,
+                color=MUTED, family="DejaVu Sans")
     _foot(fig, win)
     return _png(fig)
 
 
-# ---------- CARDS 2-4: campaigns / adsets / ads, every metric, split by Meta's segment ----------
+# ---------- CARD 2: audience, Meta's own segments, period over period ----------
+def card_audience(A, win):
+    segs = A.get("segs") or {}
+    prev = A.get("segs_prev") or {}
+    order = [k for k in ("NEW", "ENGAGED", "EXISTING", "UNKNOWN")
+             if segs.get(k) and segs[k].get("share", 0) >= 1.0]
+    if not order: return None
+    fig = _fig(13.0)
+    _head(fig, A, win, "Audience", "Meta's own breakdown by audience segment. Every metric against the period before.")
+    COLS = [("SPEND", "spend", _k, False),
+            ("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPA", "cpa", _k, False),
+            ("AOV", "aov", _k, True), ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True),
+            ("CPC", "cpc", lambda v: "%.2f" % r2(v), False), ("CTR-O", "octr", _pctv, True),
+            ("CPM", "cpm", _k, False), ("CPMR", "cpmr", _k, False),
+            ("REACH", "reach", _k, True), ("FREQ", "freq", lambda v: "%.1f" % r2(v), False),
+            ("PUR", "purch", _n, True)]
+    xs = [.400, .452, .502, .560, .618, .664, .722, .770, .818, .888, .936, .988]
+    top = .845
+    for x, c in zip(xs, COLS):
+        fig.text(x, top, c[0], fontsize=F_HD, color=FAINT, family="DejaVu Sans",
+                 weight="bold", ha="right")
+    fig.lines.append(plt.Line2D([.055, .988], [top - .012, top - .012], color=LINE, lw=1,
+                                transform=fig.transFigure, figure=fig))
+    y = top - .062
+    for k in order:
+        m = segs[k]; q = prev.get(k) or {}
+        fig.patches.append(plt.Rectangle((.048, y - .008), .006, .030, transform=fig.transFigure,
+                                         facecolor=SEGC.get(k, FAINT), edgecolor="none", figure=fig))
+        fig.text(.062, y, SEGN.get(k, k), fontsize=F_H + 4, color=INK,
+                 family="DejaVu Sans", weight="bold")
+        for x, (nm_, key, fmt, ug) in zip(xs, COLS):
+            v = m_cpc(m) if key == "cpc" else m.get(key)
+            fig.text(x, y, fmt(v), fontsize=F_ROW + 2, color=INK, family="DejaVu Sans",
+                     weight="bold", ha="right")
+            pv = m_cpc(q) if key == "cpc" else q.get(key)
+            d = pct(v or 0, pv or 0) if q else None
+            fig.text(x, y - .020, _d(d), fontsize=11, color=_dc(d, ug),
+                     family="DejaVu Sans", weight="bold", ha="right")
+        ds = pct(m["spend"], (q.get("spend") or 0)) if q else None
+        fig.text(.062, y - .020, "%d%% of account spend   ·   spend %s vs the period before" % (
+                 round(m.get("share", 0)), _d(ds)), fontsize=11, color=FAINT, family="DejaVu Sans")
+        fig.lines.append(plt.Line2D([.055, .988], [y - .036, y - .036], color=LINE, lw=.7,
+                                    transform=fig.transFigure, figure=fig))
+        y -= .086
+    fig.text(.055, .115, "Every second line is the change against the period before. Green is better, red is worse.",
+             fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
+    fig.text(.055, .085, "CPC and CPM rising while reach falls means Meta is paying more to reach the same people. "
+                         "That is saturation, not a creative problem.",
+             fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
+    _foot(fig, win)
+    return _png(fig)
+
+
+# ---------- CARDS 3-5: campaigns / adsets / ads, every metric, with period over period ----------
 def card_table(A, win, level):
-    LV = {"campaign": ("CAMPAIGNS", "seg_campaigns", "campaign"),
-          "adset": ("AD SETS", "seg_adsets", "adset"),
-          "ad": ("ADS", "seg_ads", "ad_name")}
-    title, key, _ = LV[level]
+    LV = {"campaign": ("Campaigns", "seg_campaigns"),
+          "adset": ("Ad sets", "seg_adsets"),
+          "ad": ("Ads", "seg_ads")}
+    title, key = LV[level]
     roll = A.get(key) or {}
-    ents = sorted(roll.values(), key=lambda e: -e["total"]["spend"])[:10]
+    proll = A.get(key + "_prev") or {}
+    ents = sorted(roll.values(), key=lambda e: -e["total"]["spend"])[:8]
     if not ents: return None
     acc = A["summary"]
-    fig = _fig(13.6)                      # fixed canvas. Row count never touches the header.
-    n = len(ents)
-    _head(fig, A, win, "%s view" % title.title(),
-          "Every metric, and the audience segment Meta actually served it to. Account ROAS %.2f." % r2(acc["roas"]))
+    fig = _fig(13.6)
+    _head(fig, A, win, "%s view" % title,
+          "Top line is this period. Second line is the change against the period before. Account ROAS %.2f." % r2(acc["roas"]))
 
-    # who is the main reason: biggest absolute revenue swing at this level
     prevmap = {}
-    for c in A["creatives"]:
-        pk = {"campaign": c["campaign"], "adset": c["adset"], "ad": c["ad_name"]}[level]
-        pv = (c.get("prev") or {})
-        prevmap.setdefault(pk, {"rev": 0.0, "prev": 0.0})
-        prevmap[pk]["rev"] += c["rev"]; prevmap[pk]["prev"] += pv.get("rev") or 0
+    for k2, e in proll.items():
+        prevmap[e["name"]] = e["total"]
+
     def swing(e):
-        d = prevmap.get(e["name"])
-        return (d["rev"] - d["prev"]) if d else 0
+        q = prevmap.get(e["name"])
+        return (e["total"]["rev"] - (q["rev"] if q else 0)) if q else 0
     main = max(ents, key=lambda e: abs(swing(e))) if prevmap else None
 
-    top = .862
-    hdr = ["NAME", "SPEND", "SHR", "ROAS", "CPA", "AOV", "CVR", "CPC", "CTR-O", "CTR-L", "CPM", "CPMR", "FRQ", "PUR"]
-    xs = [.055, .392, .437, .492, .545, .598, .652, .700, .756, .812, .852, .902, .942, .980]
-    for j, (x, h) in enumerate(zip(xs, hdr)):
-        fig.text(x, top, h, fontsize=F_HD, color=FAINT, family="DejaVu Sans", weight="bold",
-                 ha=("left" if j == 0 else "right"))
-    fig.lines.append(plt.Line2D([.055, .980], [top - .010, top - .010], color=LINE, lw=1,
+    COLS = [("SPEND", "spend", _k, False), ("ROAS", "roas", lambda v: "%.2f" % r2(v), True),
+            ("CPA", "cpa", _k, False), ("AOV", "aov", _k, True),
+            ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True), ("CPC", "cpc", lambda v: "%.2f" % r2(v), False),
+            ("CTR-O", "octr", _pctv, True), ("CPM", "cpm", _k, False), ("CPMR", "cpmr", _k, False),
+            ("REACH", "reach", _k, True), ("FREQ", "freq", lambda v: "%.1f" % r2(v), False),
+            ("PUR", "purch", _n, True)]
+    xs = [.375, .428, .478, .535, .592, .638, .694, .742, .786, .866, .916, .965]
+    top = .855
+    for x, c in zip(xs, COLS):
+        fig.text(x, top, c[0], fontsize=F_HD, color=FAINT, family="DejaVu Sans",
+                 weight="bold", ha="right")
+    fig.lines.append(plt.Line2D([.055, .965], [top - .011, top - .011], color=LINE, lw=1,
                                 transform=fig.transFigure, figure=fig))
-    rh = min(.098, max(.056, (top - .095) / max(n, 1)))   # fill the page, whatever the row count
-    y = top - .046
+    rh = .0905
+    y = top - .052
     for e in ents:
-        m = e["total"]; sg = e["lead"]
+        m = e["total"]; sg = e["lead"]; q = prevmap.get(e["name"])
         is_main = main is not None and e["name"] == main["name"]
         if is_main:
-            fig.patches.append(plt.Rectangle((.045, y - .048), .950, .070, transform=fig.transFigure,
+            fig.patches.append(plt.Rectangle((.045, y - .058), .950, .086, transform=fig.transFigure,
                                              facecolor=PAPER, edgecolor=INK, lw=1.6, figure=fig, zorder=0))
-        d = swing(e)
-        fig.text(.055, y, _clip(e["name"], 23), fontsize=F_ROW + 3, color=INK,
+        fig.text(.055, y, _clip(e["name"], 21), fontsize=F_ROW + 3, color=INK,
                  family="DejaVu Sans", weight="bold", zorder=2)
-        vals = [_k(m["spend"]), "%d%%" % round(m["spend"] / (acc["spend"] or 1) * 100),
-                "%.2f" % r2(m["roas"]), _k(m.get("cpa")), _k(m.get("aov")),
-                "%.1f%%" % r2(m.get("cvr")), "%.2f" % r2(m.get("cpc")),
-                _pctv(m.get("octr")), _pctv(m.get("lctr")),
-                _k(m.get("cpm")), _k(m.get("cpmr")), "%.1f" % r2(m.get("freq")), _n(m.get("purch"))]
-        for j, (x, v) in enumerate(zip(xs[1:], vals)):
-            fig.text(x, y, v, fontsize=F_ROW + 1, color=(INK if j in (0, 2) else MUTED),
-                     family="DejaVu Sans", weight=("bold" if j in (0, 2) else "normal"),
-                     ha="right", zorder=2)
-        # segment split under every row, because one entity can serve all three
-        parts = [(k, v) for k, v in sorted(e["segments"].items(), key=lambda kv: -kv[1]["spend"])
+        for x, (nm_, k2, fmt, ug) in zip(xs, COLS):
+            v = m_cpc(m) if k2 == "cpc" else m.get(k2)
+            fig.text(x, y, fmt(v), fontsize=F_ROW + 1, color=INK, family="DejaVu Sans",
+                     weight="bold", ha="right", zorder=2)
+            pv = (m_cpc(q) if k2 == "cpc" else q.get(k2)) if q else None
+            d = pct(v or 0, pv or 0) if q else None
+            fig.text(x, y - .020, _d(d), fontsize=10.5, color=_dc(d, ug),
+                     family="DejaVu Sans", weight="bold", ha="right", zorder=2)
+        parts = [(k3, v) for k3, v in sorted(e["segments"].items(), key=lambda kv: -kv[1]["spend"])
                  if v["spend"] > 0]
-        txt = "   ".join("%s %d%% @ %.2fx" % (SEGN.get(k, k), round(v["spend"] / (m["spend"] or 1) * 100),
-                                              r2(v["roas"])) for k, v in parts[:3])
-        fig.text(.055, y - .019, txt, fontsize=11, color=SEGC.get(sg, FAINT),
+        txt = "   ".join("%s %d%% @ %.2fx" % (SEGN.get(k3, k3), round(v["spend"] / (m["spend"] or 1) * 100),
+                                              r2(v["roas"])) for k3, v in parts[:2])
+        fig.text(.055, y - .020, _clip(txt, 46), fontsize=11, color=SEGC.get(sg, FAINT),
                  family="DejaVu Sans", zorder=2)
         if is_main:
-            fig.text(.055, y - .037, "MAIN REASON  ·  revenue %s %s here  ·  %s" % (
-                     "up" if d >= 0 else "down", _k(abs(d)),
+            d_rev = swing(e)
+            fig.text(.055, y - .040, "MAIN REASON  ·  revenue %s %s here  ·  %s" % (
+                     "up" if d_rev >= 0 else "down", _k(abs(d_rev)),
                      "above account ROAS, fund it" if m["roas"] >= acc["roas"]
                      else "below account ROAS, this is where it leaked"),
-                     fontsize=F_NOTE, color=(GREEN if d >= 0 else RED), family="DejaVu Sans",
-                     weight="bold", zorder=2)
+                     fontsize=F_NOTE, color=(GREEN if d_rev >= 0 else RED),
+                     family="DejaVu Sans", weight="bold", zorder=2)
         else:
-            fig.lines.append(plt.Line2D([.055, .980], [y - .036, y - .036], color=LINE, lw=.7,
+            fig.lines.append(plt.Line2D([.055, .965], [y - .040, y - .040], color=LINE, lw=.7,
                                         transform=fig.transFigure, figure=fig))
         y -= rh
     _foot(fig, win)
@@ -1228,59 +1357,53 @@ def plan(A):
             "rev_now": round(rev), "rev_then": round(rev + gain)}
 
 
-# ---------- CARD 5: fatigue + the move ----------
+# ---------- CARD 6: fatigue, with the exact mechanism ----------
 def card_action(A, win):
     fig = _fig(13.6)
-    acc = A["summary"]
-    _head(fig, A, win, "What is fatiguing, and what to do", "Frequency climbing while outbound CTR falls. Then the money move.")
+    _head(fig, A, win, "What is fatiguing, and exactly why",
+          "Not a label. The mechanism, named, with the numbers behind it.")
 
-    ax = _panel(fig, .500, .380, "fatiguing now")
+    ax = _panel(fig, .430, .450, "fatiguing now")
     F = fatiguing(A["creatives"])
     if F:
-        hdr = ["AD", "SEGMENT", "SPEND", "ROAS", "FREQ", "CTR OUT"]
-        xs = [1.6, 42, 62, 72, 84, 98]
-        for j, (x, h) in enumerate(zip(xs, hdr)):
-            ax.text(x, 84, h, fontsize=F_HD, color=FAINT, family="DejaVu Sans", weight="bold",
-                    ha=("right" if j >= 2 else "left"))
-        for i, e in enumerate(F[:4]):
-            y = 68 - i * 16
-            ax.text(1.6, y, _clip(safe(e["name"]), 38), fontsize=F_ROW + 2, color=INK,
+        for i, e in enumerate(F[:3]):
+            y = 84 - i * 28
+            ax.text(1.6, y, _clip(e["name"], 46), fontsize=F_ROW + 4, color=INK,
                     family="DejaVu Sans", weight="bold")
-            ax.text(42, y, SEGN.get(e["seg"], e["seg"]), fontsize=F_ROW,
+            ax.text(70, y, SEGN.get(e["seg"], e["seg"]), fontsize=F_ROW,
                     color=SEGC.get(e["seg"], MUTED), family="DejaVu Sans")
-            ax.text(62, y, _k(e["spend"]), fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans", ha="right")
-            ax.text(72, y, "%.2f" % r2(e["roas"]), fontsize=F_ROW + 1, color=INK,
-                    family="DejaVu Sans", weight="bold", ha="right")
-            ax.text(84, y, "%.1f" % r2(e["freq"]), fontsize=F_ROW + 1, color=RED,
-                    family="DejaVu Sans", weight="bold", ha="right")
-            ax.text(98, y, _pctv(e["octr"]), fontsize=F_ROW + 1, color=RED,
-                    family="DejaVu Sans", weight="bold", ha="right")
-            ax.text(1.6, y - 7.0, "frequency %.1f from %.1f (%s)   ·   outbound CTR %s from %s (%s)" % (
-                    r2(e["freq"]), r2(e["pfreq"]), _d(e["d_freq"]),
-                    _pctv(e["octr"]), _pctv(e["poctr"]), _d(e["d_octr"])),
-                    fontsize=10.5, color=FAINT, family="DejaVu Sans")
-        ax.text(1.6, 4, "These are burning. The audience has seen them and stopped clicking out. Refresh the creative, do not raise the budget.",
-                fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
+            ax.text(86, y, "%s spend" % _k(e["spend"]), fontsize=F_ROW, color=MUTED,
+                    family="DejaVu Sans")
+            ax.text(1.6, y - 6.5, e["verdict"], fontsize=F_ROW + 2, color=RED,
+                    family="DejaVu Sans", weight="bold")
+            ax.text(30, y - 6.5, "ROAS %.2f (%s)   ·   freq %.1f   ·   outbound CTR %s   ·   reach %s" % (
+                    r2(e["roas"]), _dd(e["d"]["roas"]), r2(e["freq"]), _pctv(e["octr"]), _k(e["reach"])),
+                    fontsize=11, color=MUTED, family="DejaVu Sans")
+            for j, w in enumerate(e["why"][:3]):
+                ax.text(3.0, y - 13.0 - j * 4.4, "·  " + w, fontsize=10.5, color=FAINT,
+                        family="DejaVu Sans")
+        fig.text(.055, .404, "Refresh the creative or open a fresh audience. Raising the budget on these buys the same tired impressions for more money.",
+                 fontsize=F_NOTE, color=MUTED, family="DejaVu Sans", style="italic")
     else:
-        ax.text(1.6, 50, "Nothing is fatiguing on this window. Frequency and outbound CTR are moving together.",
+        ax.text(1.6, 50, "Nothing is fatiguing on this window. Frequency and outbound CTR are still moving together.",
                 fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
 
-    ax = _panel(fig, .075, .395, "do this next")
+    ax = _panel(fig, .075, .325, "do this next")
     S = plan(A)
     if S:
-        ax.text(1.6, 84, "Cut the leaks by 30%, move that money to what is already working. Same total spend, no new budget.",
+        ax.text(1.6, 83, "Cut the leaks by 30%, move that money to what is already working. Same total spend, no new budget.",
                 fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
-        ax.text(1.6, 73, "CUT 30%", fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
-        ax.text(52, 73, "FUND", fontsize=F_H, color=GREEN, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 72, "CUT 30%", fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
+        ax.text(52, 72, "FUND", fontsize=F_H, color=GREEN, family="DejaVu Sans", weight="bold")
         for i, c in enumerate(S["cut"][:5]):
-            y = 61 - i * 9.5
-            ax.text(1.6, y, _clip(safe(c["ad_name"]), 30), fontsize=F_ROW, color=INK, family="DejaVu Sans")
+            y = 60 - i * 9.5
+            ax.text(1.6, y, _clip(safe(c["ad_name"]), 28), fontsize=F_ROW, color=INK, family="DejaVu Sans")
             ax.text(38, y, "%.2fx" % r2(c["roas"]), fontsize=F_ROW, color=RED,
                     family="DejaVu Sans", weight="bold", ha="right")
             ax.text(48, y, "-%s" % _k(c["spend"] * .3), fontsize=F_ROW, color=MUTED,
                     family="DejaVu Sans", ha="right")
         for i, c in enumerate(S["fund"][:5]):
-            y = 61 - i * 9.5
+            y = 60 - i * 9.5
             ax.text(52, y, _clip(safe(c["ad_name"]), 24), fontsize=F_ROW, color=INK, family="DejaVu Sans")
             ax.text(84, y, "%.2fx" % r2(c["roas"]), fontsize=F_ROW, color=GREEN,
                     family="DejaVu Sans", weight="bold", ha="right")
@@ -1289,7 +1412,7 @@ def card_action(A, win):
         ax.text(1.6, 12, "Moves %s. Revenue %s to %s at the same spend." % (
             _k(S["freed"]), _k(S["rev_now"]), _k(S["rev_then"])),
             fontsize=F_H + 4, color=INK, family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 2, "Modelled at each ad's own current ROAS. It assumes the winners hold, which is why frequency is shown next to them.",
+        ax.text(1.6, 3, "Modelled at each ad's own current ROAS. It assumes the winners hold, which is why frequency is shown next to them.",
                 fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
     else:
         ax.text(1.6, 50, "No clean reallocation this window. Nothing is far enough below account ROAS to cut with confidence.",
@@ -1298,16 +1421,128 @@ def card_action(A, win):
     return _png(fig)
 
 
+# ---------- CARD 7: the strategic read ----------
+def card_advisor(A, win):
+    s = A["summary"]; p = s.get("prev") or {}
+    fig = _fig(13.0)
+    _head(fig, A, win, "The strategic read", "What actually happened, what it means, and what to do about it.")
+
+    W = waterfall(s, p)
+    segs = A.get("segs") or {}
+    psegs = A.get("segs_prev") or {}
+    F = fatiguing(A["creatives"])
+    S = plan(A)
+    H = A.get("hist") or []
+    z = zscore(H, "rev", s["rev"])
+
+    lines = []
+    dr = pct(s["rev"], p.get("rev") or 0)
+    if W:
+        top = max(W["steps"], key=lambda x: abs(x["egp"]))
+        lines.append(("WHAT HAPPENED",
+                      "Revenue %s %s to %s. The single biggest cause is %s, which moved %s%s EGP on its own, %s%% of the whole change." % (
+                          "rose" if (dr or 0) >= 0 else "fell", _d(dr), _k(s["rev"]), top["k"],
+                          "+" if top["egp"] >= 0 else "-", _k(abs(top["egp"])), top["pct"])))
+        others = [x for x in W["steps"] if x["k"] != top["k"]]
+        lines.append(("THE REST OF IT", "   ".join(
+            "%s %s%s EGP (%s)" % (x["k"], "+" if x["egp"] >= 0 else "-", _k(abs(x["egp"])), _d(x["chg"]))
+            for x in others)))
+
+    # where the money actually sits
+    if segs:
+        parts = []
+        for k in ("NEW", "ENGAGED", "EXISTING"):
+            m = segs.get(k)
+            if not m or m.get("share", 0) < 1: continue
+            q = psegs.get(k) or {}
+            ds = pct(m["spend"], q.get("spend") or 0)
+            parts.append("%s %d%% of spend at %.2fx (spend %s)" % (
+                SEGN.get(k, k), round(m.get("share", 0)), r2(m["roas"]), _d(ds)))
+        if parts:
+            lines.append(("WHERE THE MONEY SITS", "   ·   ".join(parts)))
+        new_m, ex_m = segs.get("NEW"), segs.get("EXISTING")
+        if new_m and ex_m and new_m.get("roas") and ex_m.get("roas"):
+            if ex_m["roas"] > new_m["roas"] * 1.5 and ex_m.get("freq", 0) >= 6:
+                lines.append(("THE TRAP",
+                              "Existing customers return %.2fx against %.2fx on new audience, but they sit at frequency %.1f on only %s reach. "
+                              "That pool is finite. Blended ROAS improving while new-audience spend falls is mix shift, not improvement. "
+                              "It is harvesting, and it borrows from next month." % (
+                                  r2(ex_m["roas"]), r2(new_m["roas"]), r2(ex_m.get("freq")), _k(ex_m.get("reach")))))
+    if F:
+        lines.append(("WHAT IS BURNING",
+                      "%d ads are fatiguing. The worst is %s: %s." % (
+                          len(F), _clip(F[0]["name"], 34), F[0]["verdict"].lower())))
+    if z:
+        lines.append(("IS THIS NORMAL",
+                      "Revenue is %.1f standard deviations from this account's own 30 day normal of %s. Verdict: %s." % (
+                          max(-9.9, min(9.9, z["z"])), _k(z["mean"]), z["verdict"].lower())))
+
+    ax = _panel(fig, .430, .450, "the read")
+    yy = 84
+    for title, body in lines[:6]:
+        ax.text(1.6, yy, title, fontsize=F_ROW + 1, color=MUTED, family="DejaVu Sans", weight="bold")
+        for j, chunk in enumerate(_wrap(body, 92)[:3]):
+            ax.text(1.6, yy - 6.0 - j * 5.0, chunk, fontsize=F_ROW + 1, color=INK, family="DejaVu Sans")
+        yy -= 6.0 + 5.0 * min(3, len(_wrap(body, 92))) + 4.5
+
+    ax = _panel(fig, .075, .325, "what i would do on monday, in order")
+    acts = []
+    if S:
+        acts.append("Cut %s by 30%% (%.2fx against account %.2fx) and put the %s into %s (%.2fx, frequency %.1f)." % (
+            _clip(safe(S["cut"][0]["ad_name"]), 30), r2(S["cut"][0]["roas"]), r2(s["roas"]),
+            _k(S["freed"]), _clip(safe(S["fund"][0]["ad_name"]), 30), r2(S["fund"][0]["roas"]),
+            r2(S["fund"][0]["freq"])))
+    if F:
+        acts.append("Refresh the creative on %s. Do not raise its budget: %s." % (
+            _clip(F[0]["name"], 34), F[0]["verdict"].lower()))
+    new_m = segs.get("NEW"); ex_m = segs.get("EXISTING")
+    if new_m and ex_m and new_m.get("reach") and ex_m.get("reach"):
+        if (new_m.get("freq") or 9) < 5 and (ex_m.get("freq") or 0) >= 6:
+            acts.append("New audience is the only segment with room: frequency %.1f on %s reach. Existing is at frequency %.1f on %s reach and cannot absorb more. Hold or raise new-audience spend." % (
+                r2(new_m.get("freq")), _k(new_m.get("reach")), r2(ex_m.get("freq")), _k(ex_m.get("reach"))))
+    if W:
+        top = max(W["steps"], key=lambda x: abs(x["egp"]))
+        fixes = {"CVR": "CVR is the lever. That is the offer, the price, or the landing page, not the ad account.",
+                 "CPC": "CPC is the lever. That is auction cost and click rate, so it is a creative and audience problem.",
+                 "AOV": "AOV is the lever. That is basket size: bundles, upsells, or the mix of what is selling.",
+                 "SPEND": "SPEND is the lever. The account did not get better or worse, you simply bought more or less."}
+        acts.append(fixes.get(top["k"], ""))
+    acts.append("Do not optimise to blended ROAS. It moves with the audience mix, so it will look better every time you cut prospecting.")
+
+    for i, a in enumerate(acts[:6]):
+        yb = 84 - i * 15
+        ax.text(1.6, yb, str(i + 1), fontsize=F_H + 2, color=BLUE, family="DejaVu Sans", weight="bold")
+        for j, chunk in enumerate(_wrap(a, 88)[:2]):
+            ax.text(5.5, yb - j * 5.2, chunk, fontsize=F_ROW + 1, color=INK, family="DejaVu Sans")
+    ax.text(1.6, 3, "Margin, LTV, landing page quality and offer strength are unknown from the ad data alone. Nothing above assumes them.",
+            fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
+    _foot(fig, win)
+    return _png(fig)
+
+
+def _wrap(t, n):
+    words = (t or "").split(); out, cur = [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > n:
+            out.append(cur); cur = w
+        else:
+            cur = (cur + " " + w).strip()
+    if cur: out.append(cur)
+    return out
+
+
 def render_cards(A, win):
     """The whole board: levers, campaigns, ad sets, ads, and the move."""
     out = []
     try:
         _mpl()
         for suf, fn in (("levers", lambda: card_levers(A, win)),
+                        ("audience", lambda: card_audience(A, win)),
                         ("campaigns", lambda: card_table(A, win, "campaign")),
                         ("adsets", lambda: card_table(A, win, "adset")),
                         ("ads", lambda: card_table(A, win, "ad")),
-                        ("action", lambda: card_action(A, win))):
+                        ("action", lambda: card_action(A, win)),
+                        ("advisor", lambda: card_advisor(A, win))):
             try:
                 png = fn()
                 if png: out.append((suf, png))
@@ -2341,16 +2576,21 @@ def main():
                 AW["seg_campaigns"] = seg_rollup(sr, "campaign_id", "campaign_name")
                 AW["seg_adsets"] = seg_rollup(sr, "adset_id", "adset_name")
                 AW["seg_ads"] = seg_rollup(sr, "ad_id", "ad_name")
+                AW["seg_campaigns_prev"] = seg_rollup(sp, "campaign_id", "campaign_name")
+                AW["seg_adsets_prev"] = seg_rollup(sp, "adset_id", "adset_name")
+                AW["seg_ads_prev"] = seg_rollup(sp, "ad_id", "ad_name")
                 DATES["label"], DATES["p_label"], DATES["win"] = lab, plab, win
                 A["windows"][win] = strat_payload(AW)      # feeds the visual dashboard
                 wch = channel_window_for(acct["name"], win)
                 if wch:
                     AW["hist"] = HIST
-                    CAP = {"levers": "*1 · WHAT MOVED REVENUE* — the lever, the audience, and whether this is an anomaly.",
-                           "campaigns": "*2 · CAMPAIGNS* — every metric, split by Meta's audience segment.",
-                           "adsets": "*3 · AD SETS* — every metric, split by Meta's audience segment.",
-                           "ads": "*4 · ADS* — every metric, split by Meta's audience segment.",
-                           "action": "*5 · FATIGUE AND THE MOVE* — what is burning, what to cut, what to fund."}
+                    CAP = {"levers": "*1 · WHAT MOVED REVENUE* — the waterfall. Every EGP of the move charged to spend, CPC, CVR or AOV.",
+                           "audience": "*2 · AUDIENCE* — Meta's own segments, every metric against the period before.",
+                           "campaigns": "*3 · CAMPAIGNS* — every metric, with the change against the period before.",
+                           "adsets": "*4 · AD SETS* — every metric, with the change against the period before.",
+                           "ads": "*5 · ADS* — every metric, with the change against the period before.",
+                           "action": "*6 · FATIGUE* — what is burning, the exact mechanism, and the money move.",
+                           "advisor": "*7 · THE STRATEGIC READ* — what happened, what it means, what to do first."}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
@@ -2361,7 +2601,7 @@ def main():
                         CARDS.append({"ch": wch, "png": png, "fn": fn,
                                       "title": "%s-%s-%s" % (slug(acct["name"]), win, suf),
                                       "comment": head + CAP.get(suf, ""),
-                                      "memo": msg_advisor(AW) if suf == "action" else None})
+                                      "memo": msg_advisor(AW) if suf == "advisor" else None})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
