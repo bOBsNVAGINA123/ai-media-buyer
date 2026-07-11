@@ -1333,6 +1333,64 @@ def msg_advisor(A, overlaps=None):
     return "\n".join(L)
 
 
+# ----------------------- payload for the visual dashboard -----------------------
+def strat_payload(A):
+    """Everything the Strategic dashboard renders, per account per window."""
+    s = A["summary"]; rows = A["creatives"]; prev = s.get("prev") or {}
+    tot = sum(c["spend"] for c in rows) or 1
+    segs = {}
+    for sg in ("NEW", "ENGAGED", "EXISTING"):
+        g = [c for c in rows if c["seg"] == sg]
+        spd = sum(c["spend"] for c in g); rv = sum(c["rev"] for c in g); pu = sum(c["purch"] for c in g)
+        segs[sg] = {"name": SEGN[sg], "spend": round(spd), "share": round(spd / tot * 100, 1),
+                    "roas": round(rv / spd, 2) if spd else 0, "rev": round(rv), "purch": int(pu),
+                    "cpa": round(spd / pu) if pu else None}
+    def cd(c):
+        return {"name": c["ad_name"], "seg": c["seg"], "segn": SEGN[c["seg"]], "spend": round(c["spend"]),
+                "share": c.get("spend_share"), "roas": c["roas"], "cpa": c["cpa"], "cvr": c["cvr"],
+                "aov": c["aov"], "cpm": c["cpm"], "cpmr": c["cpmr"], "octr": c["octr"], "freq": c["freq"],
+                "type": c["type"], "hook": c.get("hold"), "r50": c.get("r50"), "purch": int(c["purch"]),
+                "rev": round(c["rev"]), "status": statuslabel(c)}
+    scal = [c for c in rows if c.get("significant") and c["roas"] and c["roas"] >= s["roas"]
+            and c["freq"] < freq_ceiling(c) and (c["purch"] or 0) >= 2]
+    scal.sort(key=lambda c: -((c["roas"] or 0) * (c["spend"] ** 0.4)))
+    bleed = sorted([c for c in rows if c.get("waste", 0) > 0], key=lambda c: -c["waste"])[:5]
+    if not bleed:
+        bleed = sorted([c for c in rows if c.get("significant") and c["roas"] and c["roas"] < s["roas"] * 0.8],
+                       key=lambda c: c["roas"])[:5]
+    fat = [c for c in rows if c.get("significant") and c.get("d_freq") is not None and c["d_freq"] > 10
+           and c.get("d_octr") is not None and c["d_octr"] < -8]
+    fat.sort(key=lambda c: -((c.get("d_freq") or 0) - (c.get("d_octr") or 0)))
+    vids = sorted([c for c in rows if c["type"] == "VIDEO" and c["impr"] >= 1000 and c.get("hold")],
+                  key=lambda c: -(c["hold"] or 0))
+    fmt = {}
+    for f in ("VIDEO", "IMAGE", "CATALOGUE"):
+        g = [c for c in rows if c["type"] == f]; spd = sum(c["spend"] for c in g)
+        if spd:
+            fmt[f] = {"spend": round(spd), "share": round(spd / tot * 100, 1),
+                      "roas": round(sum(c["rev"] for c in g) / spd, 2), "purch": int(sum(c["purch"] for c in g))}
+    def fatd(c):
+        p = c.get("prev") or {}
+        d = cd(c); d.update({"d_freq": round(c.get("d_freq") or 0), "d_octr": round(c.get("d_octr") or 0),
+                             "freq_prev": p.get("freq"), "octr_prev": p.get("octr")})
+        return d
+    return {
+        "summary": {k: s.get(k) for k in ("spend", "revenue", "purchases", "roas", "cpa", "aov", "cpm",
+                                          "cpmr", "cvr", "ctr", "cpc", "cold_roas", "reach", "lc")},
+        "prev": {k: prev.get(k) for k in ("spend", "rev", "purch", "roas", "cpa", "aov", "cpm", "cpmr", "cvr", "ctr", "cpc")},
+        "delta": {k: (round(s["d_" + k]) if s.get("d_" + k) is not None else None)
+                  for k in ("spend", "roas", "cpa", "cpm", "cpmr", "cvr")},
+        "audience": segs,
+        "contrib": contrib(s, prev) or [],
+        "formats": fmt,
+        "top": [cd(c) for c in sorted([c for c in rows if c.get("significant")], key=lambda c: -c["spend"])[:8]],
+        "scalable": [cd(c) for c in scal[:5]],
+        "bleeders": [cd(c) for c in bleed],
+        "fatiguing": [fatd(c) for c in fat[:5]],
+        "videos": [cd(c) for c in vids[:8]],
+    }
+
+
 # ----------------------- main -----------------------
 def main():
     ap = argparse.ArgumentParser()
@@ -1385,48 +1443,24 @@ def main():
         ach = channel_advisor_for(acct["name"])
         sm = A["summary"]
         if a.daily or a.dry_run:
-            # ---- THE MEMO, written three times: 1 day, 3 days, 7 days. Each to its own channel. ----
+            # ---- ONE memo per window, per brand. Nothing else. No duplicate digests, pulses or side channels. ----
             save7 = (DATES["label"], DATES["p_label"])
+            A["windows"] = {}
             for win, cw, pw, lab, plab in WINDOWS:
-                wch = channel_window_for(acct["name"], win)
-                if not wch: continue
                 cr = get_insights(acct["id"], cw)
                 if not cr: continue
                 pr = get_insights(acct["id"], pw)
                 AW = analyze(acct, cr, pr, STATUS)
                 if AW["summary"]["spend"] <= 0: continue
                 DATES["label"], DATES["p_label"], DATES["win"] = lab, plab, win
-                slack(wch, msg_advisor(AW))
-                time.sleep(1)
+                A["windows"][win] = strat_payload(AW)      # feeds the visual dashboard
+                wch = channel_window_for(acct["name"], win)
+                if wch:
+                    slack(wch, msg_advisor(AW))
+                    time.sleep(1)
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
-
-            # DAILY = rolling 3 days, not L7D. Build a 3-day analysis for the action digest + hook report.
-            c3rows = get_insights(acct["id"], l3); p3rows = get_insights(acct["id"], prev3)
-            A3 = analyze(acct, c3rows, p3rows, STATUS)
-            DATES["label"], DATES["p_label"] = DATES["l3"], DATES["p3"]
-            if A3["summary"]["spend"] > 0:
-                slack(ch, msg_digest(A3))
-                t3 = channel_3sec_for(acct["name"])
-                if t3: slack(t3, msg_3sec(A3))
-            a3 = get_insights(acct["id"], l3, level="account", fields=ACC)
-            ap3 = get_insights(acct["id"], prev3, level="account", fields=ACC)
-            m3 = metric(a3[0]) if a3 else None; p3m = metric(ap3[0]) if ap3 else None
-            p3 = pulse_3day(acct, get_insights(acct["id"], l3, level="ad", fields=LITE_FIELDS, extra="ad_name,ad_id"),
-                            get_insights(acct["id"], l3, level="adset", fields=LITE_FIELDS, extra="adset_name,adset_id"), m3, p3m)
-            if p3: slack(ch, p3)
-            DATES["label"], DATES["p_label"] = save7
-            if lch:
-                prev_ids = set(r.get("ad_id") for r in prev_rows)
-                slack(lch, msg_launches(acct, A["creatives"], prev_ids, sm["roas"], sm["cpmr"], sm["cvr"]))
-        if a.weekly or a.dry_run:
-            aset_ins = get_insights(acct["id"], last, level="adset", fields=LITE_FIELDS, extra="adset_id,adset_name")
-            spend_by = {}
-            for r in aset_ins:
-                sid = r.get("adset_id")
-                if sid: spend_by[sid] = spend_by.get(sid, 0) + f(r.get("spend"))
-            overlaps = audience_overlap(get_adset_targeting(acct["id"]), spend_by)
-            slack(ach, msg_advisor(A, overlaps))
+        # --weekly is retired: the 7day memo already ships every day to the 7day channel.
         time.sleep(1)
 
     for A in report["accounts"]:
