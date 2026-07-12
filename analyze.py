@@ -3270,22 +3270,42 @@ def msg_short(A, win):
 
     # 3 · WHICH ADS DID IT. Named, priced in EGP, spend then and now, the stage that broke,
     # and a link that opens that exact ad. No hunting.
-    B = attribution(A, "ad", n=4)
-    if B and B["rows"]:
+    B = attribution(A, "ad", n=40)
+    if B and B["all"]:
         acct_id = A["account"].get("id") or ""
-        L.append("\n*3 · WHICH ADS DID IT*   (shares are of ALL movement, so they add to 100)")
-        for r in B["rows"]:
-            m_ = r["now"] or {}; q_ = r["pre"] or {}
+        live = [r for r in B["all"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
+        losers = sorted([r for r in live if r["d_rev"] < 0], key=lambda r: r["d_rev"])[:3]
+        gainers = sorted([r for r in live if r["d_rev"] > 0], key=lambda r: -r["d_rev"])[:3]
+
+        def _line(r):
+            m_ = r["now"] or {}; q_ = r["pre"] or {}; DD = r.get("dec")
             cause = r["dx"][0] if r.get("dx") else ("new" if r["new"] else "")
-            L.append("• %s — *%s%s EGP* (%+.0f%% of all movement)  ·  *%s*" % (
+            out = ["• %s — *%s%s EGP* (%+.0f%% of all movement)  ·  *%s*" % (
                 ads_link(_clip(safe(r["name"]), 38), acct_id, r["ent_id"]),
-                "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause))
-            L.append("     spend %s → %s  ·  rev %s → %s  ·  ROAS %.2fx  ·  CPMR %s  ·  CVR %s" % (
+                "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause)]
+            out.append("     spend %s → %s  ·  rev %s → %s  ·  ROAS %.2fx  ·  CPMR %s  ·  CVR %s" % (
                 _k(q_.get("spend") or 0), _k(m_.get("spend") or 0),
                 _k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"]), _k(m_.get("cpmr") or 0),
                 ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a"))
-        top = B["rows"][0]
-        if top.get("dx"):
+            if DD:
+                out.append("     _budget %s%s · performance %s%s — %s_" % (
+                    "+" if DD["spend_eff"] >= 0 else "-", _k(abs(DD["spend_eff"])),
+                    "+" if DD["perf_eff"] >= 0 else "-", _k(abs(DD["perf_eff"])),
+                    "mostly the budget you set" if DD["driver"] == "SPEND"
+                    else "a real performance change"))
+            return out
+
+        if losers:
+            L.append("\n*3 · WHAT PULLED IT DOWN*")
+            for r in losers: L.extend(_line(r))
+        # ALWAYS show what is fighting back. Cutting one of these by mistake makes the hole
+        # bigger, and the old memo never mentioned they existed.
+        if gainers:
+            L.append("\n*WHAT FOUGHT BACK*  (do not cut these by accident)")
+            for r in gainers: L.extend(_line(r))
+
+        if losers and losers[0].get("dx"):
+            top = losers[0]
             L.append("\n*4 · WHAT TO DO ABOUT THE BIGGEST ONE*")
             L.append("_%s_" % top["dx"][1])
             L.append("*Go and do:* %s" % top["dx"][2])
@@ -3456,7 +3476,7 @@ def card_exec(A, win):
         for lab, val, sh, col, sub in rows_:
             ax.text(1.6, y, lab, fontsize=F_ROW + 1, color=col, family="DejaVu Sans", weight="bold")
             ax.text(1.6, y - 8, sub, fontsize=10, color=MUTED, family="DejaVu Sans")
-            bx, bw = 40.0, 24.0
+            bx, bw = 52.0, 20.0     # clear of the label, which is long
             ax.plot([bx, bx + bw], [y - 1, y - 1], color=LINE, lw=7, solid_capstyle="butt")
             ln = abs(val) / mx * bw
             ax.plot([bx, bx + ln], [y - 1, y - 1], color=col, lw=7, solid_capstyle="butt")
@@ -3479,30 +3499,45 @@ def card_exec(A, win):
 def card_movers(A, win, level="campaign"):
     """SCREEN 2. What specifically caused it. Ranked, and each one decomposed so an ad that
     lost revenue because YOU CUT ITS BUDGET is never confused with one that broke."""
-    B = attribution(A, level, n=6)
+    B = attribution(A, level, n=40)
     if not B or not B["rows"]: return None
-    rows = [r for r in B["rows"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
-    if not rows: return None
-    LVN = {"campaign": "campaign", "adset": "ad set", "ad": "ad"}[level]
-    fig = _fig(15.6)
-    _head(fig, A, win, "What caused it",
-          "Each one split into the budget you changed and the performance that changed. Ranked by size of move.")
+    live = [r for r in B["all"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
+    if not live: return None
 
-    ax = _panel(fig, .795, .075, "the shown %ss cover %.0f%% of all revenue movement" % (
-        LVN, B["shown_share"]))
-    ax.text(1.6, 45, "TOTAL %s%s EGP" % ("+" if B["d_tot"] >= 0 else "-", _k(abs(B["d_tot"]))),
+    # BOTH SIDES. Ranking by size of move alone showed six losers and made it look like
+    # nothing in the account was fighting back. Something almost always is, and if you cut it
+    # by mistake you make the hole bigger. Losers AND gainers, always, side clearly labelled.
+    losers = sorted([r for r in live if r["d_rev"] < 0], key=lambda r: r["d_rev"])[:4]
+    gainers = sorted([r for r in live if r["d_rev"] > 0], key=lambda r: -r["d_rev"])[:2]
+    rows = losers + gainers
+    if not rows: return None
+
+    tot_gain = sum(r["d_rev"] for r in live if r["d_rev"] > 0)
+    tot_loss = sum(r["d_rev"] for r in live if r["d_rev"] < 0)
+    LVN = {"campaign": "campaign", "adset": "ad set", "ad": "ad"}[level]
+    fig = _fig(16.4)
+    _head(fig, A, win, "What caused it",
+          "What pulled it down, AND what fought back. Each one split into budget versus performance.")
+
+    ax = _panel(fig, .812, .078, "both sides of the move")
+    ax.text(1.6, 50, "NET %s%s EGP" % ("+" if B["d_tot"] >= 0 else "-", _k(abs(B["d_tot"]))),
             fontsize=F_H + 4, color=(GREEN if B["d_tot"] >= 0 else RED),
             family="DejaVu Sans", weight="bold")
-    ax.text(98.4, 45, "gained %s   ·   lost %s   ·   everything else %s%s (%d more)" % (
-        _k(B["gain"]), _k(B["loss"]),
-        "+" if B["rest"] >= 0 else "-", _k(abs(B["rest"])), B["n_rest"]),
-        fontsize=F_ROW, color=MUTED, family="DejaVu Sans", weight="bold", ha="right")
-    ax.text(1.6, 18, "Gained and lost are the %d shown below, so the panel and the rows always agree." % len(rows),
-            fontsize=9.5, color=FAINT, family="DejaVu Sans", style="italic")
+    ax.text(30, 50, "PULLED DOWN %s" % _k(tot_loss), fontsize=F_H + 1, color=RED,
+            family="DejaVu Sans", weight="bold")
+    ax.text(60, 50, "FOUGHT BACK +%s" % _k(tot_gain), fontsize=F_H + 1, color=GREEN,
+            family="DejaVu Sans", weight="bold")
+    ax.text(1.6, 20, "Every %s in the account, not just the ones shown. The net is what the two sides leave behind."
+            % LVN, fontsize=9.5, color=FAINT, family="DejaVu Sans", style="italic")
 
-    H = .118
+    H = .108
     for i, r in enumerate(rows):
-        y0 = .655 - i * (H + .010)
+        # a clear break between the ones that hurt and the ones that helped
+        if gainers and i == len(losers):
+            fig.text(.055, .812 - len(losers) * (H + .010) - .012,
+                     "WHAT FOUGHT BACK  ·  do not cut these by accident",
+                     fontsize=F_HD, color=GREEN, family="DejaVu Sans", weight="bold")
+        y0 = .690 - i * (H + .010) - (.022 if (gainers and i >= len(losers)) else 0)
         ax = _panel(fig, y0, H, "")
         m_ = r["now"] or {}; q_ = r["pre"] or {}; D = r.get("dec")
         col = GREEN if r["d_rev"] >= 0 else RED
