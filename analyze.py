@@ -1870,7 +1870,10 @@ def fatigue_scan(A, min_spend=500.0):
             return pct(a_, b_) if (p and b_) else None
 
         d_octr, d_cpm = dl("octr"), dl("cpm")
-        d_hook, d_cpp = dl("hook"), dl("cpa")
+        d_cpp = dl("cpa")
+        # A hook rate on a catalogue or image ad is not a hook rate. The test must not fire on it.
+        is_vid = k.get("type") == "VIDEO"
+        d_hook = dl("hook") if is_vid else None
         def T(name, ok, v): return {"t": name, "ok": bool(ok), "v": v}
         NA = "no prior period"
         tests = [
@@ -1883,7 +1886,7 @@ def fatigue_scan(A, min_spend=500.0):
               if d_cpm is not None else NA),
             T("hook rate down over 15%", d_hook is not None and d_hook < FATG["hook"],
               ("%s  (%.1f%% -> %.1f%%)" % (_d(d_hook), p.get("hook") or 0, k.get("hook") or 0))
-              if d_hook is not None else NA),
+              if d_hook is not None else ("not a video" if not is_vid else NA)),
             T("CPP up over 20%", d_cpp is not None and d_cpp > FATG["cpp"],
               ("%s  (%s -> %s)" % (_d(d_cpp), _k(p.get("cpa") or 0), _k(k.get("cpa") or 0)))
               if d_cpp is not None else NA),
@@ -4020,12 +4023,17 @@ def card_fatigue(A, win):
     ax = _panel(fig, .845, .070, "the state of the creative")
     ax.text(1.6, 48, "%d FATIGUED" % n_fat, fontsize=F_H + 4, color=(RED if n_fat else FAINT),
             family="DejaVu Sans", weight="bold")
-    ax.text(22, 48, "%d FATIGUING" % n_ing, fontsize=F_H + 2, color=(AMBER if n_ing else FAINT),
+    ax.text(20, 48, "%d FATIGUING" % n_ing, fontsize=F_H + 2, color=(AMBER if n_ing else FAINT),
             family="DejaVu Sans", weight="bold")
-    ax.text(45, 48, "%s EGP/day is behind tiring creative" % _k(burn), fontsize=F_H + 1,
-            color=INK, family="DejaVu Sans", weight="bold")
-    ax.text(1.6, 16, "Account video hook rate for reference: %s. Hook rate is 3 second views divided by impressions."
-            % (("%.1f%%" % (acc.get("hook") or 0)) if acc.get("hook") else "not enough video"),
+    ax.text(38, 48, "of %d ads with real money" % len(F), fontsize=F_H - 1, color=MUTED,
+            family="DejaVu Sans")
+    ax.text(98.4, 48, "%s EGP/day is behind tiring creative" % _k(burn), fontsize=F_H + 1,
+            color=INK, family="DejaVu Sans", weight="bold", ha="right")
+    vids = [r for r in F if (r["k"].get("type") == "VIDEO")]
+    vh = med([r["hook"] for r in vids if r["hook"]]) if vids else None
+    ax.text(1.6, 16, "Hook rate is 3 second views over impressions and only means anything on VIDEO. "
+                     "The account's video ads run at %s. Catalogue and image ads show n/a."
+            % (("%.1f%%" % vh) if vh else "not enough video"),
             fontsize=9.5, color=FAINT, family="DejaVu Sans", style="italic")
 
     ax = _panel(fig, .400, .420, "every ad with real money behind it  ·  the actual numbers, not a verdict")
@@ -4040,24 +4048,30 @@ def card_fatigue(A, win):
     ax.text(1.6, PTOP - 3, "Δ = THIS AD vs ITS OWN PREVIOUS PERIOD", fontsize=8.0,
             color=FAINT, family="DejaVu Sans", weight="bold")
     for i, r in enumerate(rows):
-        y = PTOP - 17 - i * 10.6
+        y = PTOP - 16 - i * 8.9          # 7 rows must FIT. The last one was falling off the panel.
         col = FATCOL[r["state"]]
-        ax.add_patch(plt.Rectangle((1.4, y - 6.0), .8, 9.0, facecolor=col, edgecolor="none"))
+        ax.add_patch(plt.Rectangle((1.4, y - 5.6), .8, 8.4, facecolor=col, edgecolor="none"))
         ax.text(3.4, y, _clip(r["name"], 26), fontsize=F_ROW, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(3.4, y - 5, "%s   ·   %d of 5 tests fired" % (r["state"], r["hits"]),
-                fontsize=8.8, color=col, family="DejaVu Sans", weight="bold")
+        ax.text(3.4, y - 4.6, "%s   ·   %d of 5 tests fired" % (r["state"], r["hits"]),
+                fontsize=8.6, color=col, family="DejaVu Sans", weight="bold")
+        # HOOK RATE ONLY MEANS SOMETHING ON VIDEO. A catalogue ad reading "hook 0.1%" is not a
+        # broken hook, it is not a video, and printing a number there invents a problem.
+        vid = r["k"].get("type") == "VIDEO"
+        hk = ("%.1f%%" % r["hook"]) if vid else "n/a"
+        hd = (_d(r["d_hook"]) or "n/a") if vid else "n/a"
+        hl = ("%.0f%%" % r["hold"]) if vid else "n/a"
         # every fatigue number, side by side, with its direction. Nothing is hidden in prose.
         cells = [(_k(r["spend"]), INK), ("%.2fx" % r2(r["roas"]), INK),
                  ("%.2f" % r["freq"], RED if r["freq"] > FATG["freq"] else INK),
-                 ("%.1f%%" % r["hook"], INK),
-                 (_d(r["d_hook"]) or "n/a", RED if (r["d_hook"] or 0) < FATG["hook"] else INK),
-                 ("%.0f%%" % r["hold"], INK),
+                 (hk, INK if vid else FAINT),
+                 (hd, RED if (vid and (r["d_hook"] or 0) < FATG["hook"]) else (INK if vid else FAINT)),
+                 (hl, INK if vid else FAINT),
                  (_d(r["d_octr"]) or "n/a", RED if (r["d_octr"] or 0) < FATG["octr"] else INK),
                  (_d(r["d_cpm"]) or "n/a", RED if (r["d_cpm"] or 0) > FATG["cpm"] else INK),
                  (_d(r["d_cpp"]) or "n/a", RED if (r["d_cpp"] or 0) > FATG["cpp"] else INK)]
         for j, (v, c) in enumerate(cells):
-            ax.text(X0 + j * XS, y - 2.2, v, fontsize=9.6, color=c,
+            ax.text(X0 + j * XS, y - 2.0, v, fontsize=9.5, color=c,
                     family="DejaVu Sans", weight="bold")
 
     ax = _panel(fig, .075, .300, "the five fatigue tests  ·  this is the whole rulebook, there is nothing else")
