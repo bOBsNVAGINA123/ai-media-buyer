@@ -3563,12 +3563,15 @@ def card_movers(A, win, level="campaign"):
                 "+" if D["spend_eff"] >= 0 else "-", _k(abs(D["spend_eff"])),
                 "+" if D["perf_eff"] >= 0 else "-", _k(abs(D["perf_eff"]))),
                 fontsize=F_ROW, color=MUTED, family="DejaVu Sans", weight="bold")
+            up = D["d_rev"] >= 0
             concl = ("Mostly the budget you set. Efficiency %s." % (
                         "held or improved" if D["efficient"] else "also slipped")
                      if D["driver"] == "SPEND" else
-                     "A real performance change, not a budget change.")
+                     ("The account genuinely got better, not more money."
+                      if up else "A real performance change, not a budget change."))
+            # colour by OUTCOME, not by driver. A performance gain is not a warning.
             ax.text(98.4, 16, concl, fontsize=F_ROW,
-                    color=(BLUE if D["driver"] == "SPEND" else RED),
+                    color=(BLUE if D["driver"] == "SPEND" else (GREEN if up else RED)),
                     family="DejaVu Sans", weight="bold", ha="right")
         if r.get("dx"):
             ax.text(98.4, 74, r["dx"][0], fontsize=F_ROW + 1, color=DXCOL.get(r["dx"][0], MUTED),
