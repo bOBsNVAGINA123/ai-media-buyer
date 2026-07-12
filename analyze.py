@@ -241,6 +241,56 @@ def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
         if not after: break
     return out
 
+def get_ad_daily(acct, days=14):
+    """Per ad, per DAY. This is what makes a real weekly graph possible: without it you
+    cannot say whether today is an anomaly for THAT AD or just its normal swing."""
+    out, after = {}, None
+    end = datetime.date.today() - datetime.timedelta(days=1)
+    start = end - datetime.timedelta(days=days - 1)
+    tr = {"since": start.isoformat(), "until": end.isoformat()}
+    while True:
+        p = {"level": "ad", "time_increment": 1, "limit": 500,
+             "fields": "ad_id,ad_name,spend,reach,impressions,actions,action_values",
+             "time_range": json.dumps(tr)}
+        if after: p["after"] = after
+        d = api_get("%s/insights" % acct, p)
+        if "error" in d:
+            sys.stderr.write("[ad_daily] %s\n" % str(d.get("error"))[:140])
+            break
+        for r in d.get("data", []):
+            aid = str(r.get("ad_id"))
+            sp = f(r.get("spend")); rv = pick(r.get("action_values"), PURCH)
+            rch = f(r.get("reach"))
+            out.setdefault(aid, []).append({
+                "date": r.get("date_start"), "spend": sp, "rev": rv,
+                "roas": (rv / sp) if sp else 0,
+                "cpmr": (sp / rch * 1000) if rch else 0,
+                "purch": pick(r.get("actions"), PURCH)})
+        after = d.get("paging", {}).get("cursors", {}).get("after")
+        if not after: break
+    for aid in out:
+        out[aid].sort(key=lambda x: x["date"] or "")
+    return out
+
+
+def get_ad_previews(acct, ad_ids):
+    """Meta's own shareable preview link, so the memo can show him the actual creative
+    instead of just naming it."""
+    out = {}
+    ids = [str(i) for i in ad_ids if i][:50]
+    if not ids: return out
+    for i in range(0, len(ids), 25):
+        chunk = ids[i:i + 25]
+        d = api_get("", {"ids": ",".join(chunk), "fields": "preview_shareable_link"})
+        if "error" in d:
+            sys.stderr.write("[preview] %s\n" % str(d.get("error"))[:120])
+            break
+        for k, v in (d or {}).items():
+            if isinstance(v, dict) and v.get("preview_shareable_link"):
+                out[str(k)] = v["preview_shareable_link"]
+    return out
+
+
 def get_ad_statuses(acct, max_pages=12):
     """{ad_id: effective_status} for every ad in the account (delivery state)."""
     out, after, pages = {}, None, 0
@@ -746,8 +796,11 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
 
 # ===================== VISUAL BRIEFING CARD =====================
 # Taste palette: warm bone canvas, ink, hairlines, muted pastels. No gradients, no emoji, no chartjunk.
-BONE, INK, MUTED, FAINT, LINE = "#F7F6F3", "#1A1A18", "#787774", "#9B9A96", "#E4E2DE"
-BLUE, AMBER, GREEN, RED, PAPER = "#8FB6D4", "#D9BC72", "#8CB392", "#D08C86", "#FFFFFF"
+# CONTRAST. The old greys (#787774 / #9B9A96) failed on a bright screen and were unreadable.
+# These clear WCAG AA on the paper background. A number you cannot read is not a number.
+BONE, INK, MUTED, FAINT, LINE = "#F7F6F3", "#111110", "#4A4945", "#67655F", "#D8D5CF"
+# Colour is also darkened: the old pastels were decoration, not signal.
+BLUE, AMBER, GREEN, RED, PAPER = "#3E7CA6", "#A67C1F", "#2F7D46", "#B4342B", "#FFFFFF"
 SEGC = {"NEW": BLUE, "ENGAGED": AMBER, "EXISTING": GREEN, "MIXED": FAINT}
 
 def r2(x): return round(x or 0, 2)
@@ -1124,6 +1177,22 @@ def _png(fig):
     plt.close(fig)
     return buf.getvalue()
 
+def _fmt_range(lab):
+    """('2026-07-05','2026-07-11') -> '5 Jul – 11 Jul'. One day -> '11 Jul'."""
+    try:
+        a = datetime.date.fromisoformat(lab[0]); b = datetime.date.fromisoformat(lab[1])
+    except Exception:
+        return " to ".join(str(x) for x in (lab or ("", "")))
+    f_ = lambda d: "%d %s" % (d.day, d.strftime("%b"))
+    return f_(a) if a == b else "%s – %s" % (f_(a), f_(b))
+
+
+def _period_line():
+    cur = DATES.get("label"); pre = DATES.get("p_label")
+    if not cur or not pre: return ""
+    return "THIS PERIOD  %s      vs      PREVIOUS  %s" % (_fmt_range(cur), _fmt_range(pre))
+
+
 def _head(fig, A, win, title, sub):
     # The figure is 13in wide with .055/.945 margins, so a subtitle longer than ~115 chars
     # runs off the canvas. Clip it rather than let it bleed off the edge.
@@ -1131,6 +1200,10 @@ def _head(fig, A, win, title, sub):
     def y(px): return 1.0 - (px / (h * 110.0))     # px from the top, at 110 dpi
     fig.text(.055, y(38), "%s  ·  %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO")),
              fontsize=F_SUB, color=MUTED, family="DejaVu Sans")
+    # NAME BOTH PERIODS, WITH DATES. "vs the period before" is worthless if you cannot see
+    # which two windows are actually being compared.
+    fig.text(.945, y(38), _period_line(), fontsize=F_NOTE, color=INK, family="DejaVu Sans",
+             weight="bold", ha="right")
     fig.text(.055, y(76), title, fontsize=F_TITLE, color=INK, family="DejaVu Serif",
              weight="bold")
     fig.text(.055, y(103), _clip(sub, 113), fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
@@ -1552,13 +1625,16 @@ def attribution(A, level="ad", n=8):
                      "now": m, "pre": q, "new": not q})
     if not rows: return None
 
-    # Share of the TOTAL MOVE. Signed, so a mover fighting the tide reads as negative share.
-    denom = abs(d_tot) if abs(d_tot) > 1 else sum(abs(r["d_rev"]) for r in rows) or 1
+    # SHARE OF ALL MOVEMENT, NOT OF THE NET.
+    # Dividing by the NET is what produced shares over 100%: if one ad loses 18.6k and another
+    # gains 11.7k, the net is only 6.9k, so the loser reads as 270% of "the move". Nonsense.
+    # Divide by the GROSS (the sum of every absolute move) and the shares always sum to 100.
+    gross = sum(abs(r["d_rev"]) for r in rows) or 1.0
     for r in rows:
-        r["share"] = r["d_rev"] / denom * 100.0
+        r["share"] = r["d_rev"] / gross * 100.0        # signed, and |shares| sum to exactly 100
         r["dx"] = dx_stage(r["now"], r["pre"]) if r["pre"] else None
     rows.sort(key=lambda r: -abs(r["d_rev"]))
-    return {"rows": rows[:n], "d_tot": d_tot, "all": rows,
+    return {"rows": rows[:n], "d_tot": d_tot, "all": rows, "gross": gross,
             "gain": sum(r["d_rev"] for r in rows if r["d_rev"] > 0),
             "loss": sum(r["d_rev"] for r in rows if r["d_rev"] < 0)}
 
@@ -2227,14 +2303,15 @@ def card_decay(A, win):
 
     D = D[:3]
     # The card is sized to the number of decayers. Three panels of dead space is not a design.
-    PH = 3.55                                     # inches per ad panel
-    fig = _fig(3.2 + PH * len(D))
+    PH = 4.30                                     # inches per ad panel
+    figh = 3.2 + PH * len(D)
+    fig = _fig(figh)
     _head(fig, A, win, "It was working, now it is not",
           "Every percent on this card is against THAT AD'S OWN PREVIOUS PERIOD, never the account.")
 
     acc7 = A.get("b7_acc") or A["summary"]
     b7 = A.get("b7") or {}
-    figh = 3.2 + PH * len(D)
+    DAILY = A.get("ad_daily") or {}
     H = PH / figh * .93                            # panel height in figure units
     top = 1 - (2.05 / figh)                        # first panel starts under the headline
     for i, e in enumerate(D):
@@ -2242,58 +2319,66 @@ def card_decay(A, win):
         ax = _panel(fig, y0, H, "")
         b = e.get("now") or {}
 
-        ax.text(1.6, 90, _clip(e["name"], 32), fontsize=F_H + 3, color=INK,
+        # ---- TOP BAND: who it is, what it did, and the absolute card (spend + CPMR always)
+        ax.text(1.6, 93, _clip(e["name"], 30), fontsize=F_H + 3, color=INK,
                 family="DejaVu Serif", weight="bold")
-        ax.text(1.6, 82, "%s  ·  7 day spend %s  ·  revenue %s%s EGP vs prev" % (
-            SEGN.get(e["seg"], e["seg"]), _k(e["spend"]),
+        ax.text(1.6, 86, "%s  ·  SPEND %s  ·  CPMR %s  ·  revenue %s%s EGP vs prev" % (
+            SEGN.get(e["seg"], e["seg"]), _k(e["spend"]), _k(b.get("cpmr") or 0),
             "+" if e.get("d_rev", 0) >= 0 else "-", _k(abs(e.get("d_rev", 0)))),
-            fontsize=10.5, color=FAINT, family="DejaVu Sans")
+            fontsize=10.5, color=MUTED, family="DejaVu Sans")
 
-        # ROAS and the worst metric each get their OWN LINE. They were colliding because a long
-        # ROAS string ran straight through a fixed x offset. Never place two strings of unknown
-        # length on the same baseline.
+        # ROAS and the worst metric each get their OWN LINE. Two strings of unknown length must
+        # never share a baseline.
         cul = e["culprit"]
-        ax.text(1.6, 70, "ROAS %.2fx  →  %.2fx   (%s)" % (
+        ax.text(1.6, 76, "ROAS %.2fx  →  %.2fx   (%s)" % (
             r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"])),
             fontsize=F_H + 2, color=RED, family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 61, "WORST METRIC:  %s %+.0f%%" % (cul["lab"], cul["chg"]),
+        ax.text(1.6, 68, "WORST METRIC:  %s %+.0f%%" % (cul["lab"], cul["chg"]),
                 fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
 
         # the diagnosis: what broke, and the place to actually go and look
         dx = e.get("dx")
         if dx:
             cause, what, todo = dx
-            ax.text(55, 90, cause, fontsize=F_H + 1, color=DXCOL.get(cause, MUTED),
+            ax.text(50, 93, cause, fontsize=F_H + 1, color=DXCOL.get(cause, MUTED),
                     family="DejaVu Sans", weight="bold")
-            yy = 81
-            for ln in _wrap(what, 44)[:3]:
-                ax.text(55, yy, ln, fontsize=9.6, color=MUTED, family="DejaVu Sans")
-                yy -= 5.2
-            yy -= 2.0
-            for ln in _wrap("DO: " + todo, 44)[:4]:
-                ax.text(55, yy, ln, fontsize=9.8, color=INK, family="DejaVu Sans", style="italic")
-                yy -= 5.2
+            yy = 85
+            for ln in _wrap(what, 50)[:3]:
+                ax.text(50, yy, ln, fontsize=9.6, color=MUTED, family="DejaVu Sans")
+                yy -= 5.0
+            yy -= 1.5
+            for ln in _wrap("DO: " + todo, 50)[:4]:
+                ax.text(50, yy, ln, fontsize=9.8, color=INK, family="DejaVu Sans", style="italic")
+                yy -= 5.0
 
-        # every metric against its own past. One row, evenly spaced, never overlapping.
-        ax.plot([1.6, 98.4], [52, 52], color=LINE, lw=1)
-        ax.text(1.6, 45, "EVERY METRIC vs THIS AD'S OWN PREVIOUS PERIOD", fontsize=9,
-                color=FAINT, family="DejaVu Sans", weight="bold")
+        # ---- MIDDLE BAND: every metric against its own past
+        ax.plot([1.6, 98.4], [60, 60], color=LINE, lw=1)
+        ax.text(1.6, 54, "EVERY METRIC vs THIS AD'S OWN PREVIOUS PERIOD  (%s vs %s)" % (
+            _fmt_range(DATES.get("label") or ("", "")), _fmt_range(DATES.get("p_label") or ("", ""))),
+            fontsize=9, color=MUTED, family="DejaVu Sans", weight="bold")
         rws = e["rows"][:11]
         step = 96.0 / max(len(rws), 1)
         for j, r in enumerate(rws):
             x = 2.0 + j * step
-            col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else FAINT)
-            ax.text(x, 33, r["lab"], fontsize=8.6, color=FAINT, family="DejaVu Sans")
-            ax.text(x, 22, "%+.0f%%" % r["chg"], fontsize=15, color=col,
+            col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else MUTED)
+            ax.text(x, 44, r["lab"], fontsize=8.6, color=MUTED, family="DejaVu Sans")
+            ax.text(x, 35, "%+.0f%%" % r["chg"], fontsize=14, color=col,
                     family="DejaVu Sans", weight="bold")
-        # and the absolute card, so the percent always has a number behind it
-        ax.text(1.6, 10, "SPEND %s   ·   ROAS %.2fx   ·   CPP %s   ·   CPMR %s   ·   CVR %s   ·   AOV %s   ·   FRQ %.1f   ·   PUR %d" % (
+        ax.text(1.6, 27, "ABSOLUTE, last 7 days:   SPEND %s   ·   ROAS %.2fx   ·   CPP %s   ·   CPMR %s   ·   CVR %s   ·   AOV %s   ·   FRQ %.1f   ·   PUR %d" % (
             _k(b.get("spend") or 0), r2(b.get("roas") or 0), _k(b.get("cpa") or 0),
             _k(b.get("cpmr") or 0), ("%.2f%%" % r2(b.get("cvr") or 0)), _k(b.get("aov") or 0),
             r2(b.get("freq") or 0), int(b.get("purch") or 0)),
             fontsize=10.5, color=INK, family="DejaVu Sans", weight="bold")
-        ax.text(1.6, 3, "Absolute numbers, this ad's last 7 days.", fontsize=9, color=FAINT,
-                family="DejaVu Sans", style="italic")
+
+        # ---- BOTTOM BAND: THIS AD's own daily history. Is today an anomaly, or a Tuesday?
+        ser = DAILY.get(str(e.get("ad_id") or "")) or []
+        ax.plot([1.6, 98.4], [22, 22], color=LINE, lw=1)
+        if len(ser) >= 4:
+            ad_week_chart(fig, [.075, y0 + H * .035, .40, H * .135], ser, "rev", "REVENUE / DAY")
+            ad_week_chart(fig, [.545, y0 + H * .035, .40, H * .135], ser, "cpmr", "CPMR / DAY")
+        else:
+            ax.text(1.6, 10, "No daily history for this ad yet, so today cannot be called an anomaly.",
+                    fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
     _foot(fig, win)
     return _png(fig)
 
@@ -2636,6 +2721,36 @@ DXCOL = {"FATIGUE": AMBER, "CREATIVE — HOOK": RED, "CREATIVE — THE CLICK": R
          "MIXED": MUTED}
 
 
+def ad_week_chart(fig, rect, series, key="rev", label="REVENUE / DAY"):
+    """That ad's own last 14 days, with its normal band and today marked. This is the only
+    honest way to answer 'is today an anomaly or just a Tuesday' FOR THAT AD."""
+    if not series or len(series) < 4:
+        return None
+    xs = list(range(len(series)))
+    ys = [(p.get(key) or 0) for p in series]
+    hist = ys[:-1] or ys
+    lo, mid, hi = pctile(hist, .10), pctile(hist, .50), pctile(hist, .90)
+    ax = fig.add_axes(rect)
+    ax.set_facecolor(PAPER)
+    for sp_ in ax.spines.values(): sp_.set_visible(False)
+    ax.axhspan(lo, hi, color=LINE, alpha=.85, zorder=1)          # where this ad normally lives
+    ax.axhline(mid, color=FAINT, lw=1, ls="--", zorder=2)
+    ax.plot(xs, ys, color=INK, lw=1.8, zorder=3)
+    today = ys[-1]
+    out = today > hi or today < lo
+    ax.plot([xs[-1]], [today], marker="o", ms=9, zorder=4,
+            color=(RED if today < lo else (GREEN if today > hi else INK)))
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xlim(-.4, len(xs) - .6)
+    pad = (max(ys) - min(ys)) * .18 or 1
+    ax.set_ylim(min(ys) - pad, max(ys) + pad)
+    ax.text(0, 1.10, "%s  ·  LAST %d DAYS  ·  %s" % (
+        label, len(series), "OUTSIDE ITS NORMAL BAND" if out else "inside its normal band"),
+        transform=ax.transAxes, fontsize=8.6,
+        color=(RED if out else MUTED), family="DejaVu Sans", weight="bold")
+    return out
+
+
 def card_blame(A, win, level="ad"):
     """Who is accountable for the revenue move. In EGP, and as a share of the whole move.
     Every bar is one entity. The bars add up to the account. Nothing hides."""
@@ -2646,8 +2761,7 @@ def card_blame(A, win, level="ad"):
 
     fig = _fig(15.4)
     _head(fig, A, win, "Who moved the revenue",
-          "Bars are EGP gained or lost vs the period before. The percent is that %s's share of "
-          "the account's whole move." % LVN)
+          "EGP gained or lost vs the previous period. Percents are share of ALL movement, so they add to 100.")
 
     # ---- the diverging bar chart. Right of zero made money, left of zero lost it.
     AX0, AY0, AW_, AH = .300, .420, .350, .430
@@ -2681,10 +2795,16 @@ def card_blame(A, win, level="ad"):
         yc = AY0 + AH * ((n - 1 - i) + .5) / n
         fig.text(AX0 - .014, yc + .010, _clip(r["name"], 26), fontsize=F_ROW, color=INK,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
-        sub = ("NEW — no prior period to compare" if r["new"]
-               else "%s to %s  ·  ROAS %.2fx" % (_k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"])))
-        fig.text(AX0 - .014, yc - .008, sub, fontsize=10, color=FAINT,
+        m_ = r["now"] or {}
+        sub = ("NEW — no prior period" if r["new"]
+               else "rev %s → %s  ·  ROAS %.2fx" % (_k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"])))
+        fig.text(AX0 - .014, yc - .006, sub, fontsize=10, color=MUTED,
                  family="DejaVu Sans", ha="right", va="center")
+        # spend and CPMR on every single line, every level. He asked for this everywhere.
+        fig.text(AX0 - .014, yc - .019, "spend %s  ·  CPMR %s  ·  CVR %s" % (
+            _k(m_.get("spend") or 0), _k(m_.get("cpmr") or 0),
+            ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a"),
+            fontsize=9.5, color=MUTED, family="DejaVu Sans", ha="right", va="center")
         if r.get("dx"):
             fig.text(AX0 - .014, yc - .024, r["dx"][0], fontsize=9.5,
                      color=DXCOL.get(r["dx"][0], MUTED), family="DejaVu Sans",
@@ -2721,7 +2841,7 @@ def card_blame(A, win, level="ad"):
         mcol = GREEN if r["d_rev"] >= 0 else RED
         ax.text(1.6, y, _clip(r["name"], 34), fontsize=F_ROW + 1, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(98.4, y, "%s%s EGP   ·   %+.0f%% of the move" % (
+        ax.text(98.4, y, "%s%s EGP   ·   %+.0f%% of all movement" % (
             "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"]),
             fontsize=F_ROW + 1, color=mcol, family="DejaVu Sans", weight="bold", ha="right")
         ax.text(1.6, y - 5.6, cause, fontsize=10, color=col, family="DejaVu Sans", weight="bold")
@@ -2745,13 +2865,9 @@ def card_bars(A, win, level):
     acc = A["summary"]["roas"] or 0
     prevmap = {k_: e["total"] for k_, e in proll.items()}   # match on ID, never on name
 
-    # each entity's share of the ACCOUNT's total revenue move, so the bars mean something
-    d_all = 0.0
-    for k_, e in roll_.items():
-        d_all += (e["total"].get("rev") or 0) - ((prevmap.get(k_) or {}).get("rev") or 0)
-    denom = abs(d_all) if abs(d_all) > 1 else (sum(
-        abs((e["total"].get("rev") or 0) - ((prevmap.get(k_) or {}).get("rev") or 0))
-        for k_, e in roll_.items()) or 1)
+    # Share of ALL movement (gross), never of the net. Net-based shares exceed 100%.
+    denom = sum(abs((e["total"].get("rev") or 0) - ((prevmap.get(k_) or {}).get("rev") or 0))
+                for k_, e in roll_.items()) or 1.0
 
     fig = _fig(14.4)
     _head(fig, A, win, "%s: where the money is and what it returns" % title,
@@ -2800,7 +2916,7 @@ def card_bars(A, win, level):
     RX = .530
     fig.text(RX, AY0 + AH + .040, "REVENUE Δ", fontsize=10.5, color=INK,
              family="DejaVu Sans", weight="bold", ha="right")
-    fig.text(RX, AY0 + AH + .022, "EGP · share of move", fontsize=8.6, color=FAINT,
+    fig.text(RX, AY0 + AH + .022, "EGP · share of all movement", fontsize=8.6, color=FAINT,
              family="DejaVu Sans", style="italic", ha="right")
     # ONE legend line for the whole grid. Repeating "vs prev" under ten columns made the
     # headers collide with each other, which is worse than not labelling them at all.
@@ -2819,7 +2935,7 @@ def card_bars(A, win, level):
         col = GREEN if d >= 0 else RED
         fig.text(RX, y, "%s%s" % ("+" if d >= 0 else "-", _k(abs(d))), fontsize=13,
                  color=col, family="DejaVu Sans", weight="bold", ha="right")
-        fig.text(RX, y - .018, "%+.0f%% of move" % (d / denom * 100.0), fontsize=9.5,
+        fig.text(RX, y - .018, "%+.0f%% of all movement" % (d / denom * 100.0), fontsize=9.5,
                  color=col, family="DejaVu Sans", weight="bold", ha="right")
 
     # CPM is dropped. CPMR is the one that matters and two near-identical columns were what
@@ -2947,7 +3063,7 @@ def msg_short(A, win):
         L.append("*WHO MOVED IT* — revenue change vs the period before, and each one's share of the account's move:")
         for r in B["rows"]:
             cause = (" · %s" % r["dx"][0]) if r.get("dx") else (" · new" if r["new"] else "")
-            L.append("• %s — *%s%s EGP* (%+.0f%% of the move)%s" % (
+            L.append("• %s — *%s%s EGP* (%+.0f%% of all movement)%s" % (
                 ads_link(_clip(safe(r["name"]), 40), acct_id, r["ent_id"]),
                 "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause))
         top = B["rows"][0]
@@ -2956,6 +3072,68 @@ def msg_short(A, win):
 
     L.append("_Margin and LTV are unknown from ad data. Nothing above assumes them._")
     return "\n".join(x for x in L if x)
+
+
+def action_plan(A, win):
+    """The last thing in the channel: short, mentions him, and every line is an action with the
+    reason, the money, a preview of the creative and a link that opens it for editing."""
+    acct_id = A["account"].get("id") or ""
+    prev = A.get("previews") or {}
+    L = ["%s  *%s — WHAT TO DO*  ·  %s" % (MENTION, A["account"]["name"].upper(), _period_line())]
+
+    def links(aid):
+        bits = []
+        if prev.get(str(aid)): bits.append("<%s|preview>" % prev[str(aid)])
+        a = str(acct_id).replace("act_", "")
+        if a and aid:
+            bits.append("<https://adsmanager.facebook.com/adsmanager/manage/ads?act=%s&selected_ad_ids=%s|edit>"
+                        % (a, aid))
+        return "  ".join(bits)
+
+    V = classify(A) or []
+    B = attribution(A, "ad", n=12)
+    dmap = {str(r["ad_id"]): r for r in (decay_watch(A) or [])}
+    bmap = {str(r["ent_id"]): r for r in ((B or {}).get("all") or [])}
+    acc = A["summary"]["roas"] or 0
+
+    def money(aid):
+        r = bmap.get(str(aid))
+        if not r: return ""
+        return "  ·  rev %s%s EGP" % ("+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])))
+
+    def line(e, verb):
+        c = e["c"]; k = e["k"]; aid = c["ad_id"]
+        dx = dmap.get(str(aid), {}).get("dx")
+        why = dx[0] if dx else e["verdict"]
+        return "• *%s* — %s\n   %.2fx vs account %.2fx  ·  spend %s  ·  CPMR %s  ·  CVR %.2f%%%s\n   _%s_  →  %s\n   %s" % (
+            _clip(safe(c["ad_name"]), 40), verb,
+            r2(k["roas"]), r2(acc), _k(k["spend"]), _k(k["cpmr"]),
+            r2(k["cvr"] or 0), money(aid),
+            why, (dx[2] if dx else e.get("trigger") or ""), links(aid))
+
+    kills = [e for e in V if e["verdict"] == "KILL"][:2]
+    scale = [e for e in V if e["verdict"] in ("SCALE", "SCALE CAREFULLY")][:2]
+    iterate = [e for e in V if e["verdict"] == "ITERATE"][:1]
+
+    if kills:
+        L.append("\n*CUT TODAY*")
+        for e in kills: L.append(line(e, "cut 30%"))
+    if scale:
+        L.append("\n*FUND TODAY*")
+        for e in scale: L.append(line(e, "raise 15 to 20%"))
+    if iterate:
+        L.append("\n*FIX*")
+        for e in iterate: L.append(line(e, "iterate"))
+
+    if B and B["rows"]:
+        top = B["rows"][0]
+        if top.get("dx"):
+            L.append("\n*BIGGEST SINGLE MOVER:* %s, %s%s EGP (%+.0f%% of all movement) — %s.\n%s" % (
+                _clip(safe(top["name"]), 40),
+                "+" if top["d_rev"] >= 0 else "-", _k(abs(top["d_rev"])), top["share"],
+                top["dx"][0], top["dx"][2]))
+    L.append("\n_Numbers are the last 7 days per ad. Margin and LTV are unknown from ad data._")
+    return "\n".join(L)
 
 
 def ads_link(label, acct_id, ad_id):
@@ -4004,6 +4182,12 @@ def main():
             m = metric(r)
             if m["ad_id"]: B7[str(m["ad_id"])] = m
         B7_ACC = agg(list(B7.values())) if B7 else None
+        # Per ad, per day. Without this you cannot tell an anomaly from a Tuesday.
+        AD_DAILY = get_ad_daily(acct["id"], days=14)
+        # Meta's own shareable preview for the ads that carry the money, so the plan can show
+        # him the actual creative and not just name it.
+        TOPIDS = [m["ad_id"] for m in sorted(B7.values(), key=lambda x: -(x.get("spend") or 0))[:30]]
+        PREVIEWS = get_ad_previews(acct["id"], TOPIDS)
         A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
@@ -4040,6 +4224,8 @@ def main():
                     AW["hist"] = HIST
                     AW["b7"] = B7            # each ad's own last 7 days
                     AW["b7_acc"] = B7_ACC    # the account's last 7 days
+                    AW["ad_daily"] = AD_DAILY   # each ad's own daily series, for the weekly graph
+                    AW["previews"] = PREVIEWS   # Meta's shareable creative previews
                     CAP = {"pulse": "*1 · IS THIS NORMAL* — today against this account's own 30 days, and the lever that moved it.",
                            "trend": "*2 · THE TREND* — rolling 7 day. Frequency, CPMR and CPM are never judged on one day.",
                            "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
@@ -4062,10 +4248,13 @@ def main():
                         with open(os.path.join(IMG_DIR, fn), "wb") as fh: fh.write(png)
                         head = ("%s  *%s — %s*\n" % (MENTION, acct["name"].upper(),
                                                      WIN_TITLE.get(win, "MEMO"))) if i == 0 else ""
+                        last = (suf == cards[-1][0])
                         CARDS.append({"ch": wch, "png": png, "fn": fn,
                                       "title": "%s-%s-%s" % (slug(acct["name"]), win, suf),
                                       "comment": head + CAP.get(suf, ""),
-                                      "memo": msg_short(AW, win) if suf == "ads" else None})
+                                      # the memo, then the action plan, both AFTER every image
+                                      "memo": msg_short(AW, win) if last else None,
+                                      "plan": action_plan(AW, win) if last else None})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
@@ -4089,6 +4278,9 @@ def main():
             time.sleep(1)
             if c.get("memo"):
                 slack(c["ch"], c["memo"])
+                time.sleep(1)
+            if c.get("plan"):
+                slack(c["ch"], c["plan"])
                 time.sleep(1)
             time.sleep(1)
 
