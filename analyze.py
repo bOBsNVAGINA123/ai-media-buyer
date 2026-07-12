@@ -2738,16 +2738,22 @@ def ad_week_chart(fig, rect, series, key="rev", label="REVENUE / DAY"):
     ax.plot(xs, ys, color=INK, lw=1.8, zorder=3)
     today = ys[-1]
     out = today > hi or today < lo
-    ax.plot([xs[-1]], [today], marker="o", ms=9, zorder=4,
-            color=(RED if today < lo else (GREEN if today > hi else INK)))
+    # Colour by BUSINESS OUTCOME, not direction. A CPMR below its band is cheap reach, which
+    # is good news, and must never be painted red just because the line went down.
+    low_good = key in LOWER_IS_BETTER
+    if today < lo:   dot = GREEN if low_good else RED
+    elif today > hi: dot = RED if low_good else GREEN
+    else:            dot = INK
+    ax.plot([xs[-1]], [today], marker="o", ms=9, zorder=4, color=dot)
     ax.set_xticks([]); ax.set_yticks([])
     ax.set_xlim(-.4, len(xs) - .6)
     pad = (max(ys) - min(ys)) * .18 or 1
     ax.set_ylim(min(ys) - pad, max(ys) + pad)
-    ax.text(0, 1.10, "%s  ·  LAST %d DAYS  ·  %s" % (
-        label, len(series), "OUTSIDE ITS NORMAL BAND" if out else "inside its normal band"),
-        transform=ax.transAxes, fontsize=8.6,
-        color=(RED if out else MUTED), family="DejaVu Sans", weight="bold")
+    good = (dot == GREEN)
+    tag = ("OUTSIDE ITS NORMAL BAND — %s" % ("GOOD" if good else "BAD")) if out else "inside its normal band"
+    ax.text(0, 1.10, "%s  ·  LAST %d DAYS  ·  %s" % (label, len(series), tag),
+            transform=ax.transAxes, fontsize=8.6,
+            color=(dot if out else MUTED), family="DejaVu Sans", weight="bold")
     return out
 
 
