@@ -1,8 +1,8 @@
 {
   "timezone": "Africa/Cairo",
   "accounts": {
-    "mode": "auto",
-    "_comment": "auto = analyze every ACTIVE ad account the token can see (new spending accounts get picked up automatically). Switch to manual to restrict to the include list.",
+    "mode": "manual",
+    "_comment": "MANUAL ON PURPOSE. The token can see 17 ad accounts and five of them are called some variant of Playmore. On auto the run walked all 17, burned its Meta rate limit on dead accounts, and by the time it reached Playmore 26 EGP Clean (which is last in the list and is the one that actually spends) the API returned nothing. Worse, the empty account called 'Playmore $' matched the playmore channel first and posted 'NO SPEND' over the top of it. Two accounts spend money. These are those two.",
     "include": [
       {
         "id": "336343742536460",
@@ -12,26 +12,6 @@
       {
         "id": "2619321185136291",
         "name": "Playmore 26 EGP Clean",
-        "currency": "EGP"
-      },
-      {
-        "id": "652528128810469",
-        "name": "Ourkids Basic",
-        "currency": "EGP"
-      },
-      {
-        "id": "1397910036891062",
-        "name": "Ourkids EGP alt",
-        "currency": "EGP"
-      },
-      {
-        "id": "1268624288045194",
-        "name": "Decohome",
-        "currency": "EGP"
-      },
-      {
-        "id": "1456670305318182",
-        "name": "PLAYMORE EGP 26",
         "currency": "EGP"
       }
     ]

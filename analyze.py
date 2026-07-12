@@ -217,9 +217,14 @@ def _strip3(f):
     return ",".join(x for x in f.split(",") if x != "video_3_sec_watched_actions")
 
 
+INS_ERR = [None]      # the last insights error. An empty list can mean "no spend" OR "Meta said no",
+                      # and reporting one as the other is how Playmore silently vanished for two days.
+
+
 def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
     """If Meta will not give up the 3 second field for this token, drop it and carry on.
     One deprecated field must never take the whole report down."""
+    INS_ERR[0] = None
     out, after = [], None
     ff = fields + ("," + extra if extra else "")
     if not HAS_3SEC[0]:
@@ -239,6 +244,7 @@ def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
                 ff = _strip3(ff); after = None; out = []
                 continue
             sys.stderr.write("[insights] %s\n" % msg[:160])
+            INS_ERR[0] = msg[:300]
             break
         out += d.get("data", [])
         after = d.get("paging", {}).get("cursors", {}).get("after")
@@ -5198,10 +5204,13 @@ def main():
         cur_rows = get_insights(acct["id"], last)
         if not cur_rows:
             # AN ACCOUNT WITH NO SPEND IS NOT A REASON TO SAY NOTHING.
-            # Playmore posted nothing for two days and it read like the automation was broken.
-            # It was not broken, the account was simply not spending. That is itself the report.
+            # But it is also NOT the same thing as Meta refusing the call. The first version of
+            # this said "NO SPEND" when the truth was a throttled API, which is a lie that reads
+            # like a fact. Carry the error and print it.
             b_ = brand_of(acct["name"])
-            if b_ and b_ not in QUIET: QUIET[b_] = (acct["name"], last_spend_date(acct["id"]))
+            err = INS_ERR[0]
+            if b_ and (b_ not in QUIET or err):
+                QUIET[b_] = (acct["name"], (None if err else last_spend_date(acct["id"])), err)
             continue
         prev_rows = get_insights(acct["id"], prev)
         STATUS = get_ad_statuses(acct["id"])
@@ -5306,17 +5315,22 @@ def main():
 
     # ---- A BRAND THAT DID NOT SPEND STILL GETS A REPORT. SILENCE IS INDISTINGUISHABLE FROM A BUG. ----
     served = set(c["ch"] for c in CARDS)
-    for brand, (aname, lastday) in QUIET.items():
+    for brand, (aname, lastday, err) in QUIET.items():
         for w_ in ("daily", "3day", "7day"):
             ch_ = CH.get("%s_%s" % (brand, w_))
             if not ch_ or ch_ in served: continue
-            when = ("It last spent on *%s*." % lastday) if lastday \
-                   else "It has not spent in the last 90 days."
-            slack(ch_, "%s  *%s — %s*\n\n*NO SPEND IN THIS WINDOW.* There is nothing to report because "
-                       "the account did not run. %s\n\nThis is not a broken report. Nothing is wrong with the "
-                       "automation. The ads are off. If that is deliberate, ignore this. If it is not, the "
-                       "budget or the campaigns are paused and no amount of analysis will change that."
-                  % (MENTION, aname.upper(), WIN_TITLE.get(w_, "MEMO"), when))
+            if err:
+                body = ("*META REFUSED THE DATA.* This is a broken read, not a quiet account. "
+                        "Meta returned:\n```%s```\nNothing below is missing because the ads stopped. "
+                        "It is missing because the API call failed." % err)
+            else:
+                when = ("It last spent on *%s*." % lastday) if lastday \
+                       else "It has not spent in the last 90 days."
+                body = ("*NO SPEND IN THIS WINDOW.* There is nothing to report because the account did "
+                        "not run. %s\n\nThis is not a broken report. The ads are off. If that is "
+                        "deliberate, ignore this. If it is not, the budget or the campaigns are paused "
+                        "and no amount of analysis will change that." % when)
+            slack(ch_, "%s  *%s — %s*\n\n%s" % (MENTION, aname.upper(), WIN_TITLE.get(w_, "MEMO"), body))
             time.sleep(1)
 
     # ---- ship the cards. Try a native upload; if the app lacks files:write, push + link the image. ----
