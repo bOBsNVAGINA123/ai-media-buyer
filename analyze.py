@@ -1479,7 +1479,21 @@ def allocate(A):
            "%s gives budget up: %.2fx at frequency %.1f." % (
                SEGN[up], r2(m_up["roas"]), r2(acc), r2(m_up.get("freq")),
                SEGN[dn], r2(m_dn["roas"]), r2(m_dn.get("freq"))))
-    return {"now": now, "target": target, "order": ks, "why": why, "up": up, "dn": dn}
+
+    # THE MOVE, IN MONEY, NOT IN PERCENTAGE POINTS. "Shift 7 points" is not an instruction.
+    # "Move 1,850 EGP a day from Existing to New, worth +4,200 a day" is an instruction.
+    nd = WIN_DAYS.get(DATES.get("win") or "daily", 1)
+    move_egp = abs(target[dn] - now[dn]) * tot / nd            # EGP per day
+    gain_day = move_egp * ((m_up["roas"] or 0) - (m_dn["roas"] or 0))
+    prev = A.get("segs_prev") or {}
+    for k in ks:                                               # each segment's own decomposition
+        segs[k]["dec"] = decompose(segs[k], prev.get(k))
+        segs[k]["sat"] = ("SATURATED" if (segs[k].get("freq") or 0) > FREQ_SAT
+                          else ("HEADROOM" if (segs[k].get("freq") or 0) < FREQ_HEAD
+                                and (segs[k].get("roas") or 0) >= acc else "OK"))
+    return {"now": now, "target": target, "order": ks, "why": why, "up": up, "dn": dn,
+            "move_egp": move_egp, "gain_day": gain_day, "tot": tot, "nd": nd,
+            "up_roas": m_up["roas"] or 0, "dn_roas": m_dn["roas"] or 0}
 
 
 # ---------- what a winner actually is. Printed on the card, never assumed. ----------
@@ -1602,6 +1616,113 @@ def dx_stage(now, pre):
 
 
 # ======================= WHO IS ACCOUNTABLE FOR THE REVENUE MOVE =======================
+def decompose(now, pre):
+    """REVENUE CHANGE = SPEND EFFECT + PERFORMANCE EFFECT. An exact identity, no residual.
+
+        spend_effect = prev_ROAS x (spend_now - spend_prev)   money you chose to add or remove
+        perf_effect  = spend_now x (ROAS_now - ROAS_prev)     the account getting better or worse
+
+    Proof they sum exactly:
+        r_prev/s_prev*(s_now-s_prev) + s_now*(r_now/s_now - r_prev/s_prev) = r_now - r_prev
+
+    This is THE number. Revenue down 250k on spend down 25% is not a collapse, it is a smaller
+    bet. Revenue down 250k on flat spend is a collapse. Never print one without the other."""
+    if not pre: return None
+    s0 = pre.get("spend") or 0; s1 = now.get("spend") or 0
+    r0 = pre.get("rev") or 0;   r1 = now.get("rev") or 0
+    if not s0 or not s1: return None
+    roas0 = r0 / s0; roas1 = r1 / s1
+    spend_eff = roas0 * (s1 - s0)
+    perf_eff  = s1 * (roas1 - roas0)
+    tot = r1 - r0
+    den = abs(spend_eff) + abs(perf_eff) or 1.0
+    return {"d_rev": tot, "spend_eff": spend_eff, "perf_eff": perf_eff,
+            "d_spend": s1 - s0, "spend_pct": ((s1 / s0 - 1) * 100.0) if s0 else None,
+            "roas0": roas0, "roas1": roas1,
+            "roas_pct": ((roas1 / roas0 - 1) * 100.0) if roas0 else None,
+            "spend_share": abs(spend_eff) / den * 100.0,
+            "perf_share": abs(perf_eff) / den * 100.0,
+            # the one-line verdict a media buyer actually needs
+            "driver": "SPEND" if abs(spend_eff) >= abs(perf_eff) else "PERFORMANCE",
+            "efficient": roas1 >= roas0}
+
+
+def verdict_line(D):
+    """Turn the decomposition into the sentence he keeps asking for."""
+    if not D: return ""
+    if D["driver"] == "SPEND":
+        return ("You %s the budget. Revenue %s %s EGP, and %s of that is purely the money, "
+                "not the account getting %s. Efficiency %s (ROAS %.2fx to %.2fx)." % (
+                    "raised" if D["d_spend"] >= 0 else "cut",
+                    "rose" if D["d_rev"] >= 0 else "fell", _k(abs(D["d_rev"])),
+                    _k(abs(D["spend_eff"])),
+                    "better" if D["d_rev"] >= 0 else "worse",
+                    "IMPROVED" if D["efficient"] else "got worse",
+                    r2(D["roas0"]), r2(D["roas1"])))
+    return ("This is real performance, not budget. Spend %s %s but ROAS went %.2fx to %.2fx, "
+            "and that is worth %s EGP of the move." % (
+                "moved" if abs(D.get("spend_pct") or 0) >= 3 else "was roughly flat",
+                ("%+.0f%%" % D["spend_pct"]) if D.get("spend_pct") is not None else "",
+                r2(D["roas0"]), r2(D["roas1"]), _k(abs(D["perf_eff"]))))
+
+
+# ================= LABELS. EVERY ONE HAS PRINTED CRITERIA. NO EXCEPTIONS. =================
+# A label with no stated rule is an opinion. These are rules, and each card prints the ad's
+# actual value against every threshold so the call can be checked, not trusted.
+CRIT = {
+    "SCALE":     ["ROAS above the account", "CPP below the account",
+                  "frequency under 2.5", "at least 5 purchases", "spend over 1,500"],
+    "HEADROOM":  ["ROAS above the account", "frequency under 2.0",
+                  "CPP stable or better", "no decline in the last 7 days"],
+    "SATURATED": ["frequency over 4.0", "outbound CTR falling",
+                  "CPM rising", "CPP rising"],
+    "CUT":       ["ROAS below 60% of the account", "CPP above the account",
+                  "at least 5 purchases of evidence"],
+}
+FREQ_SCALE, FREQ_HEAD, FREQ_SAT = 2.5, 2.0, 4.0
+
+
+def label_with_reasons(k, acc, d=None):
+    """Return (label, [(test, passed, actual)]) so the card can PRINT why."""
+    roas = k.get("roas") or 0; a_roas = acc.get("roas") or 0
+    cpp = k.get("cpp") or k.get("cpa") or 0; a_cpp = acc.get("cpa") or 0
+    freq = k.get("freq") or 0; pur = k.get("purch") or 0; sp = k.get("spend") or 0
+    d_octr = (d or {}).get("octr"); d_cpm = (d or {}).get("cpm"); d_cpp = (d or {}).get("cpp")
+
+    def T(name, ok, actual): return {"t": name, "ok": bool(ok), "v": actual}
+
+    sat = [T("frequency over %.1f" % FREQ_SAT, freq > FREQ_SAT, "%.1f" % freq),
+           T("outbound CTR falling", (d_octr or 0) < 0, _d(d_octr) if d_octr is not None else "n/a"),
+           T("CPM rising", (d_cpm or 0) > 0, _d(d_cpm) if d_cpm is not None else "n/a"),
+           T("CPP rising", (d_cpp or 0) > 0, _d(d_cpp) if d_cpp is not None else "n/a")]
+    if sum(1 for x in sat if x["ok"]) >= 3 and freq > FREQ_SAT:
+        return "SATURATED", sat
+
+    sc = [T("ROAS above the account (%.2fx)" % r2(a_roas), roas > a_roas, "%.2fx" % r2(roas)),
+          T("CPP below the account (%s)" % _k(a_cpp), cpp and a_cpp and cpp < a_cpp, _k(cpp)),
+          T("frequency under %.1f" % FREQ_SCALE, freq < FREQ_SCALE, "%.1f" % freq),
+          T("at least 5 purchases", pur >= 5, "%d" % pur),
+          T("spend over 1,500", sp >= 1500, _k(sp))]
+    if all(x["ok"] for x in sc):
+        return "SCALE", sc
+
+    hd = [T("ROAS above the account (%.2fx)" % r2(a_roas), roas > a_roas, "%.2fx" % r2(roas)),
+          T("frequency under %.1f" % FREQ_HEAD, freq < FREQ_HEAD, "%.1f" % freq),
+          T("at least 5 purchases", pur >= 5, "%d" % pur)]
+    if all(x["ok"] for x in hd):
+        return "HEADROOM", hd
+
+    ct = [T("ROAS below 60%% of the account (%.2fx)" % r2(a_roas * .6),
+            roas < a_roas * .6, "%.2fx" % r2(roas)),
+          T("CPP above the account (%s)" % _k(a_cpp), cpp and a_cpp and cpp > a_cpp, _k(cpp)),
+          T("at least 5 purchases of evidence", pur >= 5, "%d" % pur)]
+    if all(x["ok"] for x in ct):
+        return "CUT", ct
+
+    return "MONITOR", [T("does not clear SCALE, CUT or SATURATED", True,
+                         "ROAS %.2fx vs account %.2fx" % (r2(roas), r2(a_roas)))]
+
+
 def attribution(A, level="ad", n=8):
     """Every entity's share of the ACCOUNT'S TOTAL REVENUE CHANGE, in EGP and in percent.
     The shares sum to the whole move, so nothing hides. This answers the only question that
@@ -1634,10 +1755,75 @@ def attribution(A, level="ad", n=8):
     for r in rows:
         r["share"] = r["d_rev"] / gross * 100.0        # signed, and |shares| sum to exactly 100
         r["dx"] = dx_stage(r["now"], r["pre"]) if r["pre"] else None
+        r["dec"] = decompose(r["now"], r["pre"])       # investment, or performance?
     rows.sort(key=lambda r: -abs(r["d_rev"]))
-    return {"rows": rows[:n], "d_tot": d_tot, "all": rows, "gross": gross,
-            "gain": sum(r["d_rev"] for r in rows if r["d_rev"] > 0),
-            "loss": sum(r["d_rev"] for r in rows if r["d_rev"] < 0)}
+    shown = rows[:n]
+    # THE GAINED/LOST TOTALS MUST MATCH THE BARS ON THE CARD.
+    # They used to sum EVERY entity while the chart only drew the top n, so the panel said
+    # "+18.8k gained" next to bars adding to 12.3k. Two denominators, one card, no chance.
+    # Everything below is computed from the SHOWN rows, and the remainder is stated explicitly.
+    g_shown = sum(r["d_rev"] for r in shown if r["d_rev"] > 0)
+    l_shown = sum(r["d_rev"] for r in shown if r["d_rev"] < 0)
+    rest = sum(r["d_rev"] for r in rows[n:])
+    return {"rows": shown, "d_tot": d_tot, "all": rows, "gross": gross,
+            "gain": g_shown, "loss": l_shown, "rest": rest, "n_rest": len(rows) - len(shown),
+            "shown_share": sum(abs(r["d_rev"]) for r in shown) / gross * 100.0}
+
+
+def proposals(A, win):
+    """Every recommendation as an INVESTMENT PROPOSAL, priced in money per day.
+    'Raise budget' is not an instruction. 'Current 220/day, go to 320, that is +100/day at
+    7.1x, worth +710/day' is an instruction."""
+    b7 = A.get("b7") or {}
+    acc = A.get("b7_acc") or A["summary"]
+    nd = 7.0                                   # b7 is always a 7 day window
+    a_roas = acc.get("roas") or 0
+    out = {"scale": [], "cut": []}
+    for aid, k in b7.items():
+        sp_day = (k.get("spend") or 0) / nd
+        if sp_day < 50: continue               # too small to be worth an instruction
+        pre = k.get("prev") or {}
+        d = {"octr": pct(k.get("octr") or 0, pre.get("octr") or 0),
+             "cpm": pct(k.get("cpm") or 0, pre.get("cpm") or 0),
+             "cpp": pct(k.get("cpa") or 0, pre.get("cpa") or 0)} if pre else {}
+        lab, tests = label_with_reasons(k, acc, d)
+        roas = k.get("roas") or 0
+        # CONFIDENCE from evidence, not vibes: purchases and spend behind the number
+        pur = k.get("purch") or 0; sp = k.get("spend") or 0
+        conf = ("HIGH" if pur >= 20 and sp >= 5000 else
+                "MEDIUM" if pur >= 8 and sp >= 2000 else "LOW")
+        row = {"ad_id": aid, "name": safe(k.get("ad_name") or ""), "k": k, "label": lab,
+               "tests": tests, "conf": conf, "roas": roas, "freq": k.get("freq") or 0,
+               "cpp": k.get("cpa") or 0, "sp_day": sp_day}
+        if lab in ("SCALE", "HEADROOM"):
+            step = 0.20 if lab == "SCALE" else 0.15
+            add = sp_day * step
+            row.update({"new_day": sp_day + add, "add_day": add,
+                        # incremental revenue at ITS OWN roas, not the account's
+                        "inc_rev": add * roas,
+                        # and what that is worth ABOVE simply leaving the money where it is
+                        "inc_vs_acct": add * (roas - a_roas)})
+            out["scale"].append(row)
+        elif lab in ("CUT", "SATURATED"):
+            cut = sp_day * (1.0 if lab == "CUT" else 0.30)
+            row.update({"new_day": sp_day - cut, "cut_day": cut,
+                        "lost_rev": cut * roas,
+                        # the freed money, redeployed at the account rate
+                        "redeploy": cut * a_roas,
+                        "net": cut * (a_roas - roas)})
+            out["cut"].append(row)
+    out["scale"].sort(key=lambda r: -r["inc_vs_acct"])
+    out["cut"].sort(key=lambda r: -r["net"])
+    out["acc_roas"] = a_roas
+    # THE WHOLE BOARD, IN MONEY
+    freed = sum(r["cut_day"] for r in out["cut"][:4])
+    added = sum(r["add_day"] for r in out["scale"][:4])
+    out["freed"] = freed
+    out["added"] = added
+    out["net_spend"] = added - freed
+    out["net_rev"] = (sum(r["inc_rev"] for r in out["scale"][:4])
+                      - sum(r["lost_rev"] for r in out["cut"][:4]))
+    return out
 
 
 def quality(k):
@@ -3001,22 +3187,21 @@ def msg_short(A, win):
                                  _period_line().replace("THIS PERIOD  ", "").replace("      vs      PREVIOUS  ", " vs "))]
 
     sp_now = s.get("spend") or 0; sp_pre = p.get("spend") or 0
-    L.append("*1 · DID ANYTHING ACTUALLY HAPPEN*")
+    DEC = decompose(s, p)
+    L.append("*1 · WHAT HAPPENED*")
+    L.append("Spend %s → %s   ·   Revenue %s → %s   ·   ROAS %.2fx → %.2fx" % (
+        _k(sp_pre), _k(sp_now), _k(p.get("rev") or 0), _k(s.get("rev") or 0),
+        r2((p.get("roas") or 0)), r2((s.get("roas") or 0))))
+    if DEC:
+        L.append("*%s*" % ("EFFICIENCY IMPROVED." if DEC["efficient"] else "EFFICIENCY GOT WORSE."))
+        L.append("Revenue moved *%s%s EGP*. Of that, *%s* is the budget you changed and *%s* is the account itself changing.\n%s" % (
+            "+" if DEC["d_rev"] >= 0 else "-", _k(abs(DEC["d_rev"])),
+            ("%s%s" % ("+" if DEC["spend_eff"] >= 0 else "-", _k(abs(DEC["spend_eff"])))),
+            ("%s%s" % ("+" if DEC["perf_eff"] >= 0 else "-", _k(abs(DEC["perf_eff"])))),
+            verdict_line(DEC)))
     if B:
-        if B["inside"]:
-            L.append("Revenue *%+.0f%%* vs a typical day. Inside the normal swing of %+.0f%% to %+.0f%%, so this is noise, not a trend." % (
-                B["vs"], B["lo_p"], B["hi_p"]))
-        else:
-            L.append("Revenue *%+.0f%%* vs a typical day. Outside the normal swing of %+.0f%% to %+.0f%%, so this is a real move." % (
-                B["vs"], B["lo_p"], B["hi_p"]))
-    else:
-        L.append("Revenue %s, %s against the period before." % (
-            money(s["rev"]), _d(pct(s["rev"], p.get("rev") or 0))))
-    # spend first, always: most revenue moves are just a budget you changed
-    dsp = _safe_pct(sp_now, sp_pre)
-    if dsp is not None:
-        L.append("Spend went %s → %s (*%+.0f%%*). Revenue %s → %s." % (
-            _k(sp_pre), _k(sp_now), dsp, _k(p.get("rev") or 0), _k(s.get("rev") or 0)))
+        L.append("Against a typical day revenue is *%+.0f%%*, %s the normal swing of %+.0f%% to %+.0f%%." % (
+            B["vs"], "inside" if B["inside"] else "OUTSIDE", B["lo_p"], B["hi_p"]))
 
     L.append("\n*2 · WHICH METRIC MOVED IT*")
 
@@ -3188,25 +3373,437 @@ def ads_link(label, acct_id, ad_id):
     return "<%s|%s>" % (url, label)
 
 
+# =========================== THE FIVE SCREENS ===========================
+# One question per screen. Nothing repeats. If a number does not change a decision it is
+# not on the card.
+#   1 EXECUTIVE   what happened, and was it the budget or the account
+#   2 MOVERS      what specifically caused it, ranked, decomposed
+#   3 WINNERS     what is working and what stopped, with the criteria printed
+#   4 MONEY       what to do, priced as an investment proposal
+#   5 AUDIENCE    where the money sits, and exactly how much to move
+
+def _kpi(ax, x, y, label, now, pre, fmt, kind, w=15.0):
+    """One KPI: the number, the previous number, and the change, colour by business outcome."""
+    d = _safe_pct(now or 0, pre or 0, floor=0.001) if pre else None
+    ax.text(x, y, label, fontsize=10, color=MUTED, family="DejaVu Sans", weight="bold")
+    ax.text(x, y - 9, fmt(now), fontsize=19, color=INK, family="DejaVu Sans", weight="bold")
+    if pre:
+        ax.text(x, y - 16, "was %s" % fmt(pre), fontsize=9.5, color=FAINT, family="DejaVu Sans")
+        ax.text(x + w - 1.5, y - 9, _d(d) if d is not None else "", fontsize=12.5,
+                color=impact(kind, d, now), family="DejaVu Sans", weight="bold", ha="right")
+
+
+def card_exec(A, win):
+    """SCREEN 1. What happened. Spend and revenue TOGETHER, and the decomposition that says
+    whether it was the money or the account."""
+    s = A["summary"]; p = s.get("prev") or {}
+    D = decompose(s, p)
+    fig = _fig(13.4)
+    _head(fig, A, win, "What happened",
+          "Revenue is never read without spend. The bar below splits the move into the two things that cause it.")
+
+    # ---- the headline verdict
+    ax = _panel(fig, .700, .175, "the call")
+    if D:
+        eff = D["efficient"]
+        head = ("REVENUE %+.0f%%   ·   SPEND %+.0f%%   ·   ROAS %.2fx → %.2fx" % (
+            _safe_pct(s.get("rev") or 0, p.get("rev") or 0, floor=1) or 0,
+            D["spend_pct"] or 0, r2(D["roas0"]), r2(D["roas1"])))
+        ax.text(1.6, 62, head, fontsize=F_H + 5, color=INK, family="DejaVu Sans", weight="bold")
+        tag = ("EFFICIENCY IMPROVED" if eff else "EFFICIENCY GOT WORSE")
+        ax.text(1.6, 40, tag, fontsize=F_H + 2, color=(GREEN if eff else RED),
+                family="DejaVu Sans", weight="bold")
+        for j, ln in enumerate(_wrap(verdict_line(D), 104)[:2]):
+            ax.text(1.6, 24 - j * 9, ln, fontsize=F_ROW + 1, color=INK, family="DejaVu Sans")
+    else:
+        ax.text(1.6, 45, "No comparable prior period.", fontsize=F_ROW + 2, color=MUTED,
+                family="DejaVu Sans")
+
+    # ---- every KPI, with spend first
+    ax = _panel(fig, .470, .205, "the whole card  ·  this period vs the previous period")
+    KP = [("SPEND", s.get("spend"), p.get("spend"), _k, "spend"),
+          ("REVENUE", s.get("rev"), p.get("rev"), _k, "rev"),
+          ("ROAS", s.get("roas"), p.get("roas"), lambda v: "%.2fx" % r2(v), "roas"),
+          ("CPP", s.get("cpa"), p.get("cpa"), _k, "cpa"),
+          ("AOV", s.get("aov"), p.get("aov"), _k, "aov"),
+          ("CVR", s.get("cvr"), p.get("cvr"), lambda v: "%.2f%%" % r2(v), "cvr"),
+          ("CPMR", s.get("cpmr"), p.get("cpmr"), _k, "cpmr"),
+          ("OUT CTR", s.get("octr"), p.get("octr"), lambda v: "%.2f%%" % r2(v), "octr")]
+    for i, (lab, nv, pv, fmt, kind) in enumerate(KP):
+        _kpi(ax, 2.0 + (i % 4) * 24.5, PTOP - 6 - (i // 4) * 38, lab, nv, pv, fmt, kind, w=22)
+
+    # ---- THE DECOMPOSITION. The whole point of the screen.
+    ax = _panel(fig, .075, .355, "why revenue moved  ·  the budget, or the account")
+    if D:
+        ax.text(1.6, PTOP - 8, "REVENUE %s%s EGP" % (
+            "+" if D["d_rev"] >= 0 else "-", _k(abs(D["d_rev"]))),
+            fontsize=F_H + 8, color=(GREEN if D["d_rev"] >= 0 else RED),
+            family="DejaVu Sans", weight="bold")
+        ax.text(98.4, PTOP - 8, "SPLITS INTO EXACTLY TWO THINGS", fontsize=F_ROW,
+                color=MUTED, family="DejaVu Sans", weight="bold", ha="right")
+
+        mx = max(abs(D["spend_eff"]), abs(D["perf_eff"])) or 1
+        rows_ = [("BECAUSE YOU CHANGED THE BUDGET", D["spend_eff"], D["spend_share"], BLUE,
+                  "spend %s → %s  (%s)" % (_k(p.get("spend") or 0), _k(s.get("spend") or 0),
+                                           _d(D["spend_pct"]))),
+                 ("BECAUSE THE ACCOUNT CHANGED", D["perf_eff"], D["perf_share"],
+                  (GREEN if D["perf_eff"] >= 0 else RED),
+                  "ROAS %.2fx → %.2fx  (%s)" % (r2(D["roas0"]), r2(D["roas1"]),
+                                                _d(D["roas_pct"])))]
+        # Bar in the middle, money to the right of it, share UNDER the money. Nothing shares
+        # a baseline with anything of unknown length.
+        y = PTOP - 30
+        for lab, val, sh, col, sub in rows_:
+            ax.text(1.6, y, lab, fontsize=F_ROW + 1, color=col, family="DejaVu Sans", weight="bold")
+            ax.text(1.6, y - 8, sub, fontsize=10, color=MUTED, family="DejaVu Sans")
+            bx, bw = 40.0, 24.0
+            ax.plot([bx, bx + bw], [y - 1, y - 1], color=LINE, lw=7, solid_capstyle="butt")
+            ln = abs(val) / mx * bw
+            ax.plot([bx, bx + ln], [y - 1, y - 1], color=col, lw=7, solid_capstyle="butt")
+            ax.text(bx + bw + 3, y + 1, "%s%s EGP" % ("+" if val >= 0 else "-", _k(abs(val))),
+                    fontsize=F_H + 2, color=col, family="DejaVu Sans", weight="bold", va="center")
+            ax.text(bx + bw + 3, y - 8, "%.0f%% of the move" % sh, fontsize=10.5, color=MUTED,
+                    family="DejaVu Sans", weight="bold", va="center")
+            y -= 26
+        ax.plot([1.6, 98.4], [y + 10, y + 10], color=LINE, lw=1)
+        drv = ("The move is mostly the BUDGET. The account did not really get better or worse."
+               if D["driver"] == "SPEND" else
+               "The move is mostly PERFORMANCE. This is a real change in the account.")
+        ax.text(1.6, y + 1, drv, fontsize=F_H + 1, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, y - 8, "These two add up to the revenue change exactly. There is no third thing.",
+                fontsize=10, color=FAINT, family="DejaVu Sans", style="italic")
+    _foot(fig, win)
+    return _png(fig)
+
+
+def card_movers(A, win, level="campaign"):
+    """SCREEN 2. What specifically caused it. Ranked, and each one decomposed so an ad that
+    lost revenue because YOU CUT ITS BUDGET is never confused with one that broke."""
+    B = attribution(A, level, n=6)
+    if not B or not B["rows"]: return None
+    rows = [r for r in B["rows"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
+    if not rows: return None
+    LVN = {"campaign": "campaign", "adset": "ad set", "ad": "ad"}[level]
+    fig = _fig(15.6)
+    _head(fig, A, win, "What caused it",
+          "Each one split into the budget you changed and the performance that changed. Ranked by size of move.")
+
+    ax = _panel(fig, .795, .075, "the shown %ss cover %.0f%% of all revenue movement" % (
+        LVN, B["shown_share"]))
+    ax.text(1.6, 45, "TOTAL %s%s EGP" % ("+" if B["d_tot"] >= 0 else "-", _k(abs(B["d_tot"]))),
+            fontsize=F_H + 4, color=(GREEN if B["d_tot"] >= 0 else RED),
+            family="DejaVu Sans", weight="bold")
+    ax.text(98.4, 45, "gained %s   ·   lost %s   ·   everything else %s%s (%d more)" % (
+        _k(B["gain"]), _k(B["loss"]),
+        "+" if B["rest"] >= 0 else "-", _k(abs(B["rest"])), B["n_rest"]),
+        fontsize=F_ROW, color=MUTED, family="DejaVu Sans", weight="bold", ha="right")
+    ax.text(1.6, 18, "Gained and lost are the %d shown below, so the panel and the rows always agree." % len(rows),
+            fontsize=9.5, color=FAINT, family="DejaVu Sans", style="italic")
+
+    H = .118
+    for i, r in enumerate(rows):
+        y0 = .655 - i * (H + .010)
+        ax = _panel(fig, y0, H, "")
+        m_ = r["now"] or {}; q_ = r["pre"] or {}; D = r.get("dec")
+        col = GREEN if r["d_rev"] >= 0 else RED
+        ax.text(1.6, 74, _clip(r["name"], 34), fontsize=F_H + 1, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 55, "%s%s EGP" % ("+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"]))),
+                fontsize=F_H + 4, color=col, family="DejaVu Sans", weight="bold")
+        ax.text(24, 55, "%.0f%% of all movement" % abs(r["share"]), fontsize=F_ROW,
+                color=col, family="DejaVu Sans", weight="bold")
+
+        # the full card, always with spend
+        ax.text(1.6, 34, "SPEND %s → %s   ·   REV %s → %s   ·   ROAS %.2fx   ·   CPP %s   ·   AOV %s   ·   CVR %s   ·   CPMR %s   ·   FRQ %.1f" % (
+            _k(q_.get("spend") or 0), _k(m_.get("spend") or 0),
+            _k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"]),
+            _k(m_.get("cpa") or 0), _k(m_.get("aov") or 0),
+            ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a",
+            _k(m_.get("cpmr") or 0), r2(m_.get("freq") or 0)),
+            fontsize=10.5, color=INK, family="DejaVu Sans", weight="bold")
+
+        # THE DECOMPOSITION, per entity. This is the line he keeps asking for.
+        if D:
+            ax.text(1.6, 16, "BUDGET %s%s   ·   PERFORMANCE %s%s" % (
+                "+" if D["spend_eff"] >= 0 else "-", _k(abs(D["spend_eff"])),
+                "+" if D["perf_eff"] >= 0 else "-", _k(abs(D["perf_eff"]))),
+                fontsize=F_ROW, color=MUTED, family="DejaVu Sans", weight="bold")
+            concl = ("Mostly the budget you set. Efficiency %s." % (
+                        "held or improved" if D["efficient"] else "also slipped")
+                     if D["driver"] == "SPEND" else
+                     "A real performance change, not a budget change.")
+            ax.text(98.4, 16, concl, fontsize=F_ROW,
+                    color=(BLUE if D["driver"] == "SPEND" else RED),
+                    family="DejaVu Sans", weight="bold", ha="right")
+        if r.get("dx"):
+            ax.text(98.4, 74, r["dx"][0], fontsize=F_ROW + 1, color=DXCOL.get(r["dx"][0], MUTED),
+                    family="DejaVu Sans", weight="bold", ha="right")
+            ax.text(98.4, 55, _clip(r["dx"][1], 58), fontsize=9.6, color=MUTED,
+                    family="DejaVu Sans", ha="right")
+    _foot(fig, win)
+    return _png(fig)
+
+
+LABCOL = {"SCALE": GREEN, "HEADROOM": GREEN, "MONITOR": BLUE, "SATURATED": AMBER, "CUT": RED}
+
+
+def _adrow(ax, y, r, acc):
+    """One ad, its whole card, and the printed reason for its label. No naked verdicts."""
+    k = r["k"]; lab = r["label"]; col = LABCOL.get(lab, MUTED)
+    ax.add_patch(plt.Rectangle((1.4, y - 12), 0.9, 16, facecolor=col, edgecolor="none"))
+    ax.text(3.6, y, _clip(r["name"], 30), fontsize=F_ROW + 1, color=INK,
+            family="DejaVu Sans", weight="bold")
+    ax.text(3.6, y - 6, lab, fontsize=10, color=col, family="DejaVu Sans", weight="bold")
+    ax.text(13, y - 6, "confidence %s" % r["conf"], fontsize=9, color=FAINT,
+            family="DejaVu Sans")
+    ax.text(30, y, "SPEND %s · ROAS %.2fx · CPP %s · AOV %s · CVR %s · CTR-O %s · CPMR %s · FRQ %.1f · PUR %d" % (
+        _k(k.get("spend") or 0), r2(k.get("roas") or 0), _k(k.get("cpa") or 0),
+        _k(k.get("aov") or 0), ("%.2f%%" % r2(k.get("cvr") or 0)),
+        ("%.2f%%" % r2(k.get("octr") or 0)), _k(k.get("cpmr") or 0),
+        r2(k.get("freq") or 0), int(k.get("purch") or 0)),
+        fontsize=9.2, color=INK, family="DejaVu Sans", weight="bold")
+    # WHY. Every test, its threshold, and this ad's actual value.
+    bits = ["%s %s (%s)" % ("PASS" if t["ok"] else "FAIL", t["t"], t["v"]) for t in r["tests"][:3]]
+    ax.text(30, y - 6, _clip("  ·  ".join(bits), 96), fontsize=8.6, color=MUTED,
+            family="DejaVu Sans")
+
+
+def card_winners(A, win):
+    """SCREEN 3. What is working, what stopped, and the printed criteria for every label."""
+    P = proposals(A, win)
+    if not P: return None
+    acc = A.get("b7_acc") or A["summary"]
+    scale = P["scale"][:4]
+    cut = P["cut"][:4]
+    if not scale and not cut: return None
+    fig = _fig(14.6)
+    _head(fig, A, win, "What is working, and what stopped",
+          "Every label has printed criteria and this ad's actual value against each one. Nothing is asserted.")
+
+    ax = _panel(fig, .620, .240, "working  ·  scale or headroom")
+    if scale:
+        for i, r in enumerate(scale):
+            _adrow(ax, PTOP - 10 - i * 18, r, acc)
+    else:
+        ax.text(1.6, 45, "Nothing clears the SCALE or HEADROOM bar.", fontsize=F_ROW + 2,
+                color=MUTED, family="DejaVu Sans")
+
+    ax = _panel(fig, .355, .240, "not working  ·  cut or saturated")
+    if cut:
+        for i, r in enumerate(cut):
+            _adrow(ax, PTOP - 10 - i * 18, r, acc)
+    else:
+        ax.text(1.6, 45, "Nothing is bleeding badly enough to cut.", fontsize=F_ROW + 2,
+                color=GREEN, family="DejaVu Sans", weight="bold")
+
+    ax = _panel(fig, .075, .255, "the criteria  ·  this is the whole rulebook, there is nothing else")
+    x = 1.6
+    for lab in ("SCALE", "HEADROOM", "SATURATED", "CUT"):
+        ax.text(x, PTOP - 8, lab, fontsize=F_ROW + 1, color=LABCOL[lab],
+                family="DejaVu Sans", weight="bold")
+        for j, c in enumerate(CRIT[lab]):
+            ax.text(x, PTOP - 20 - j * 8, "· " + c, fontsize=9.5, color=MUTED,
+                    family="DejaVu Sans")
+        x += 24.5
+    ax.text(1.6, 6, "An ad must pass EVERY line of a label to get it. SATURATED needs 3 of 4 plus frequency over %.1f."
+            % FREQ_SAT, fontsize=10, color=INK, family="DejaVu Sans", weight="bold")
+    _foot(fig, win)
+    return _png(fig)
+
+
+def card_money(A, win):
+    """SCREEN 4. Every action as an investment proposal, priced per day."""
+    P = proposals(A, win)
+    if not P or (not P["scale"] and not P["cut"]): return None
+    fig = _fig(14.8)
+    _head(fig, A, win, "What to do with the money",
+          "Current budget, recommended budget, the extra spend, and what that spend buys at that ad's own ROAS.")
+
+    ax = _panel(fig, .800, .095, "the whole board, per day")
+    ax.text(1.6, 58, "SPEND %s%s / DAY" % (
+        "+" if P["net_spend"] >= 0 else "", _k(P["net_spend"])),
+        fontsize=F_H + 6, color=BLUE, family="DejaVu Sans", weight="bold")
+    ax.text(98.4, 58, "EXPECTED REVENUE %s%s / DAY" % (
+        "+" if P["net_rev"] >= 0 else "-", _k(abs(P["net_rev"]))),
+        fontsize=F_H + 6, color=(GREEN if P["net_rev"] >= 0 else RED),
+        family="DejaVu Sans", weight="bold", ha="right")
+    ax.text(1.6, 24, "Add %s/day to the winners, take %s/day off the losers. Every ad is priced at ITS OWN 7 day ROAS, never the account's."
+            % (_k(P["added"]), _k(P["freed"])),
+            fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
+
+    def prop(ax, y, r, up=True):
+        """Name and money on the top line. The budget instruction on its own line, full width.
+        Nothing is squeezed against a column boundary."""
+        col = GREEN if up else RED
+        ax.add_patch(plt.Rectangle((1.4, y - 21), 0.9, 26, facecolor=col, edgecolor="none"))
+        ax.text(3.6, y, _clip(r["name"], 30), fontsize=F_ROW + 2, color=INK,
+                family="DejaVu Sans", weight="bold")
+        if up:
+            line = "NOW %s/day   →   GO TO %s/day   =   +%s/day extra spend" % (
+                _k(r["sp_day"]), _k(r["new_day"]), _k(r["add_day"]))
+            worth = "EXPECTED  +%s revenue/day" % _k(r["inc_rev"])
+            edge = "+%s/day better than leaving that money at the account average" % _k(r["inc_vs_acct"])
+        else:
+            line = "NOW %s/day   →   GO TO %s/day   =   %s/day of spend freed" % (
+                _k(r["sp_day"]), _k(r["new_day"]), _k(r["cut_day"]))
+            worth = "GIVES BACK  -%s revenue/day" % _k(r["lost_rev"])
+            edge = "redeployed at the account's %.2fx that is +%s/day net" % (
+                r2(P["acc_roas"]), _k(r["net"]))
+        ax.text(98.4, y, worth, fontsize=F_H + 1, color=col, family="DejaVu Sans",
+                weight="bold", ha="right")
+        ax.text(3.6, y - 7, "confidence %s  ·  ROAS %.2fx  ·  frequency %.1f  ·  CPP %s" % (
+            r["conf"], r2(r["roas"]), r2(r["freq"]), _k(r["cpp"])),
+            fontsize=9.8, color=MUTED, family="DejaVu Sans")
+        ax.text(98.4, y - 7, edge, fontsize=9.8, color=MUTED, family="DejaVu Sans", ha="right")
+        ax.text(3.6, y - 15, line, fontsize=F_ROW + 2, color=INK, family="DejaVu Sans",
+                weight="bold")
+        rs = [t["t"] for t in r["tests"] if t["ok"]][:3]
+        ax.text(3.6, y - 21, "WHY: " + _clip(", ".join(rs), 96), fontsize=9.5, color=FAINT,
+                family="DejaVu Sans")
+
+    ax = _panel(fig, .445, .330, "put money in")
+    if P["scale"]:
+        for i, r in enumerate(P["scale"][:3]):
+            prop(ax, PTOP - 12 - i * 26, r, True)
+    else:
+        ax.text(1.6, 45, "Nothing has earned more budget this period.", fontsize=F_ROW + 2,
+                color=MUTED, family="DejaVu Sans")
+
+    ax = _panel(fig, .075, .330, "take money out")
+    if P["cut"]:
+        for i, r in enumerate(P["cut"][:3]):
+            prop(ax, PTOP - 12 - i * 26, r, False)
+    else:
+        ax.text(1.6, 45, "Nothing is bad enough to cut.", fontsize=F_ROW + 2, color=GREEN,
+                family="DejaVu Sans", weight="bold")
+    _foot(fig, win)
+    return _png(fig)
+
+
+def card_audience2(A, win):
+    """SCREEN 5. Where the money sits, whether the move was allocation or performance, and
+    exactly how much to shift, in EGP per day."""
+    segs = A.get("segs") or {}
+    prev = A.get("segs_prev") or {}
+    L = allocate(A)
+    ks = [k for k in ("NEW", "ENGAGED", "EXISTING") if segs.get(k) and segs[k].get("spend")]
+    if not ks: return None
+    acc = A["summary"]
+    tot_s = sum(segs[k]["spend"] for k in ks) or 1
+    tot_r = sum(segs[k].get("rev") or 0 for k in ks) or 1
+    gross = sum(abs((segs[k].get("rev") or 0) - ((prev.get(k) or {}).get("rev") or 0))
+                for k in ks) or 1
+
+    fig = _fig(14.4)
+    _head(fig, A, win, "Where the money is",
+          "Meta's own segments. Spend share, revenue share, and whether the move was allocation or performance.")
+
+    ax = _panel(fig, .530, .355, "every segment  ·  the whole card, and its share of the move")
+    xs = [2.0, 34.0, 66.0]
+    for i, k in enumerate(ks[:3]):
+        m = segs[k]; q = prev.get(k) or {}
+        D = decompose(m, q)
+        x = xs[i]
+        d_rev = (m.get("rev") or 0) - (q.get("rev") or 0)
+        ax.add_patch(plt.Rectangle((x, PTOP - 6), 2.0, 2.0, facecolor=SEGC.get(k, BLUE),
+                                   edgecolor="none"))
+        ax.text(x + 3.5, PTOP - 6, SEGN.get(k, k), fontsize=F_H + 1, color=INK,
+                family="DejaVu Sans", weight="bold")
+        rows_ = [("SPEND", "%s  (%.0f%% of spend)" % (_k(m["spend"]), m["spend"] / tot_s * 100)),
+                 ("REVENUE", "%s  (%.0f%% of revenue)" % (_k(m.get("rev") or 0),
+                                                          (m.get("rev") or 0) / tot_r * 100)),
+                 ("ROAS", "%.2fx" % r2(m.get("roas") or 0)),
+                 ("CPP", _k(m.get("cpa") or 0)),
+                 ("AOV", _k(m.get("aov") or 0)),
+                 ("CVR", "%.2f%%" % r2(m.get("cvr") or 0)),
+                 ("CPMR", _k(m.get("cpmr") or 0)),
+                 ("FREQUENCY", "%.1f" % r2(m.get("freq") or 0))]
+        y = PTOP - 15
+        for lab, val in rows_:
+            ax.text(x, y, lab, fontsize=9, color=MUTED, family="DejaVu Sans")
+            ax.text(x + 28, y, val, fontsize=10.5, color=INK, family="DejaVu Sans",
+                    weight="bold", ha="right")
+            y -= 6.6
+        ax.plot([x, x + 28], [y + 2, y + 2], color=LINE, lw=1)
+        ax.text(x, y - 4, "%s%s EGP  ·  %.0f%% of the move" % (
+            "+" if d_rev >= 0 else "-", _k(abs(d_rev)), abs(d_rev) / gross * 100),
+            fontsize=10.5, color=(GREEN if d_rev >= 0 else RED),
+            family="DejaVu Sans", weight="bold")
+        if D:
+            ax.text(x, y - 12, "budget %s%s  ·  performance %s%s" % (
+                "+" if D["spend_eff"] >= 0 else "-", _k(abs(D["spend_eff"])),
+                "+" if D["perf_eff"] >= 0 else "-", _k(abs(D["perf_eff"]))),
+                fontsize=9.5, color=MUTED, family="DejaVu Sans")
+            sat = m.get("sat") or "OK"
+            # driver and saturation on ONE line: two short facts, not two rows of chrome
+            ax.text(x, y - 19, "%s  ·  %s" % (
+                ("BUDGET you set" if D["driver"] == "SPEND" else "real PERFORMANCE"), sat),
+                fontsize=9.8, color=(BLUE if D["driver"] == "SPEND" else RED),
+                family="DejaVu Sans", weight="bold")
+            ax.text(x, y - 26, {"SATURATED": "frequency over %.1f: more budget buys repeats" % FREQ_SAT,
+                                "HEADROOM": "frequency under %.1f and beating the account" % FREQ_HEAD,
+                                "OK": "neither saturated nor underfunded"}[sat],
+                    fontsize=9, color=FAINT, family="DejaVu Sans")
+
+    # ---- the move, in money
+    ax = _panel(fig, .070, .420, "the budget move  ·  in EGP per day, not in percentage points")
+    if L:
+        ax.text(1.6, PTOP - 9, "MOVE %s / DAY" % _k(L["move_egp"]), fontsize=F_H + 10,
+                color=BLUE, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, PTOP - 24, "FROM  %s  (%.2fx)      →      TO  %s  (%.2fx)" % (
+            SEGN[L["dn"]], r2(L["dn_roas"]), SEGN[L["up"]], r2(L["up_roas"])),
+            fontsize=F_H + 2, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, PTOP - 37, "EXPECTED  %s%s revenue / day at the SAME total budget" % (
+            "+" if L["gain_day"] >= 0 else "-", _k(abs(L["gain_day"]))),
+            fontsize=F_H + 2, color=(GREEN if L["gain_day"] >= 0 else RED),
+            family="DejaVu Sans", weight="bold")
+        for j, ln in enumerate(_wrap(L["why"], 100)[:2]):
+            ax.text(1.6, PTOP - 50 - j * 7.5, ln, fontsize=F_ROW - 1, color=MUTED,
+                    family="DejaVu Sans")
+        # allocation bars, now and target
+        y = 15
+        for lab, alloc in (("NOW", L["now"]), ("TARGET", L["target"])):
+            ax.text(1.6, y, lab, fontsize=F_ROW - 1, color=INK, family="DejaVu Sans",
+                    weight="bold", va="center")
+            x = 15.0
+            for k in L["order"]:
+                w = alloc[k] * 76.0
+                ax.add_patch(plt.Rectangle((x, y - 3.4), w, 6.8, facecolor=SEGC.get(k, BLUE),
+                                           edgecolor=PAPER, lw=1.2))
+                if w > 7:
+                    ax.text(x + w / 2, y, "%.0f%%" % (alloc[k] * 100), fontsize=9.5,
+                            color=PAPER, family="DejaVu Sans", weight="bold",
+                            ha="center", va="center")
+                x += w
+            y -= 11
+    else:
+        ax.text(1.6, 45, "Not enough segments with spend to recommend a shift.",
+                fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
+    _foot(fig, win)
+    return _png(fig)
+
+
 def render_cards(A, win):
-    """The whole board: levers, campaigns, ad sets, ads, and the move."""
+    """FIVE SCREENS. One question each. Nothing repeats.
+
+    The old board had fourteen cards and printed revenue, ROAS, winners, losers, creative and
+    audience on nearly every one of them. Fourteen cards that each answer a bit of everything
+    is not a dashboard, it is a filing cabinet. These five each answer exactly one question:
+
+      1 EXECUTIVE   what happened, and was it the budget or the account
+      2 CAUSE       which campaigns did it, each split into budget vs performance
+      3 WINNERS     what is working and what stopped, with the rulebook printed
+      4 MONEY       what to do, priced as an investment proposal per day
+      5 AUDIENCE    where the money sits and exactly how much to move
+    """
     out = []
     try:
         _mpl()
-        for suf, fn in (("pulse", lambda: card_pulse(A, win)),
-                        ("trend", lambda: card_trend(A, win)),
-                        ("audience", lambda: card_audience(A, win)),
-                        ("funnel", lambda: card_funnel(A, win)),
-                        ("blame", lambda: card_blame(A, win, "ad")),
-                        ("blame_camp", lambda: card_blame(A, win, "campaign")),
-                        ("decay", lambda: card_decay(A, win)),
-                        ("retention", lambda: card_retention(A, win)),
-                        ("verdicts", lambda: card_verdicts(A, win)),
-                        ("scenarios", lambda: card_scenarios(A, win)),
-                        ("plan", lambda: card_plan(A, win)),
-                        ("campaigns", lambda: card_bars(A, win, "campaign")),
-                        ("adsets", lambda: card_bars(A, win, "adset")),
-                        ("ads", lambda: card_bars(A, win, "ad"))):
+        for suf, fn in (("1-executive", lambda: card_exec(A, win)),
+                        ("2-cause", lambda: card_movers(A, win, "campaign")),
+                        ("3-winners", lambda: card_winners(A, win)),
+                        ("4-money", lambda: card_money(A, win)),
+                        ("5-audience", lambda: card_audience2(A, win))):
             try:
                 png = fn()
                 if png: out.append((suf, png))
@@ -4267,21 +4864,11 @@ def main():
                     AW["b7_acc"] = B7_ACC    # the account's last 7 days
                     AW["ad_daily"] = AD_DAILY   # each ad's own daily series, for the weekly graph
                     AW["previews"] = PREVIEWS   # Meta's shareable creative previews
-                    CAP = {"pulse": "*1 · IS THIS NORMAL* — today against this account's own 30 days, and the lever that moved it.",
-                           "trend": "*2 · THE TREND* — rolling 7 day. Frequency, CPMR and CPM are never judged on one day.",
-                           "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
-                           "funnel": "*4 · THE FUNNEL* — hook to hold to CTR to ATC to CVR to ROAS, and the first stage that broke.",
-                           "blame": "*5 · WHO MOVED THE REVENUE — ADS* — every ad's share of the account's revenue change, in EGP, with the stage that broke and where to go.",
-                           "blame_camp": "*6 · WHO MOVED THE REVENUE — CAMPAIGNS* — same, one level up.",
-                           "decay": "*7 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, the metric responsible, and the place to go and look.",
-                           "retention": "*8 · WHERE EVERY VIDEO LOSES THEM* — hook rate, the drop-off curve, the biggest cliff, and CPMR.",
-                           "verdicts": "*9 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
-                           "scenarios": "*10 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
-                           "plan": "*11 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
-                           "decide_unused": "*x* — the decision map and the money move.",
-                           "campaigns": "*12 · CAMPAIGNS* — every metric, plus revenue Δ in EGP and share of the move.",
-                           "adsets": "*13 · AD SETS* — every metric, plus revenue Δ in EGP and share of the move.",
-                           "ads": "*14 · ADS* — every metric, plus revenue Δ in EGP and share of the move."}
+                    CAP = {"1-executive": "*1 · WHAT HAPPENED* — spend and revenue together, and whether the move was the budget or the account.",
+                           "2-cause": "*2 · WHAT CAUSED IT* — every campaign, split into the budget you changed and the performance that changed.",
+                           "3-winners": "*3 · WHAT IS WORKING, WHAT STOPPED* — with the criteria for every label printed on the card.",
+                           "4-money": "*4 · WHAT TO DO WITH THE MONEY* — current budget, recommended budget, extra spend, expected revenue.",
+                           "5-audience": "*5 · WHERE THE MONEY IS* — every segment, and exactly how much to shift, in EGP per day."}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
