@@ -2371,9 +2371,9 @@ def card_decay(A, win):
         if len(ser) >= 4:
             # SPEND sits in the middle on purpose: if revenue fell and spend fell with it,
             # you did that, and nothing is broken.
-            ad_week_chart(fig, [.070, y0 + H * .035, .265, H * .135], ser, "rev", "REVENUE / DAY")
-            ad_week_chart(fig, [.375, y0 + H * .035, .265, H * .135], ser, "spend", "SPEND / DAY")
-            ad_week_chart(fig, [.680, y0 + H * .035, .265, H * .135], ser, "cpmr", "CPMR / DAY")
+            ad_week_chart(fig, [.070, y0 + H * .035, .245, H * .135], ser, "rev", "REVENUE/DAY")
+            ad_week_chart(fig, [.385, y0 + H * .035, .245, H * .135], ser, "spend", "SPEND/DAY")
+            ad_week_chart(fig, [.700, y0 + H * .035, .245, H * .135], ser, "cpmr", "CPMR/DAY")
         else:
             ax.text(1.6, 10, "No daily history for this ad yet, so today cannot be called an anomaly.",
                     fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
@@ -2749,11 +2749,12 @@ def ad_week_chart(fig, rect, series, key="rev", label="REVENUE / DAY"):
     ax.set_xlim(-.4, len(xs) - .6)
     pad = (max(ys) - min(ys)) * .18 or 1
     ax.set_ylim(min(ys) - pad, max(ys) + pad)
-    if not out:                      tag = "inside its normal band"
-    elif key in NEUTRAL:             tag = "OUTSIDE ITS NORMAL BAND — you changed this"
-    else:                            tag = "OUTSIDE ITS NORMAL BAND — %s" % ("GOOD" if dot == GREEN else "BAD")
-    ax.text(0, 1.10, "%s  ·  LAST %d DAYS  ·  %s" % (label, len(series), tag),
-            transform=ax.transAxes, fontsize=8.6,
+    # KEEP IT SHORT. Three of these sit side by side; a long tag ran into the next chart's title.
+    if not out:                      tag = "in band"
+    elif key in NEUTRAL:             tag = "OUT — you changed this"
+    else:                            tag = "OUT — %s" % ("GOOD" if dot == GREEN else "BAD")
+    ax.text(0, 1.10, "%s · %dd · %s" % (label, len(series), tag),
+            transform=ax.transAxes, fontsize=8.4,
             color=(dot if out else MUTED), family="DejaVu Sans", weight="bold")
     return out
 
