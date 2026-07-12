@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-12T21:25:02.412770+03:00",
+  "generated_at": "2026-07-12T21:33:08.835603+03:00",
   "timezone": "Africa/Cairo",
   "sample": false,
   "accounts": [
@@ -68,6 +68,15 @@
         "diagnosis": "*Jul 5→Jul 11 vs Jun 28→Jul 4* · Revenue -19% (1,055,778 vs 1,306,156 EGP) · Spend -19% · ROAS 5.55 (+0%).\n   • CPC: 2.54 → 2.17 EGP (-15%, down (good))\n   • CVR: 1.28% → 1.07% (-16%, down (drag))\n   • AOV: 1,098 → 1,130 EGP (+3%, ~flat)\n   *Who moved it:* *CVR 49%* of the move (hurt, -207,799 EGP)  ·  *CPC 43%* of the move (helped, +32,400 EGP)  ·  *AOV 8%* of the move (helped, +29,888 EGP).\n   *Read:* *CVR* fell -16%, the biggest of the three.\n     Worth about *-207,799 EGP of revenue at the same clicks*.\n     That drove ROAS +0%.\n     Revenue -19% because spend -19%.\n   *Deeper:* biggest single mover was *BBG PJS lebleb*, its CVR went 3.7%→0.86% on 3,552 EGP spend (~23% of the swing)."
       },
       "benchmarks": {
+        "COLD/IMAGE": {
+          "cpa_med": 234.76,
+          "roas_med": 4.9,
+          "cpmr_med": 224.91,
+          "cvr_med": 0.75,
+          "hook_med": 0.4,
+          "hold_med": 20.1,
+          "n": 8
+        },
         "WARM/IMAGE": {
           "cpa_med": 170.68,
           "roas_med": 4.89,
@@ -103,15 +112,6 @@
           "hook_med": 0.1,
           "hold_med": 23.6,
           "n": 10
-        },
-        "COLD/IMAGE": {
-          "cpa_med": 234.76,
-          "roas_med": 4.9,
-          "cpmr_med": 224.91,
-          "cvr_med": 0.75,
-          "hook_med": 0.4,
-          "hold_med": 20.1,
-          "n": 8
         }
       },
       "creatives": [
