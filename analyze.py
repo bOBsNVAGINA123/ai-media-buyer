@@ -1841,24 +1841,16 @@ def spark(fig, x, y, w, h, series, key, title, fmt, up_good, invert=False):
     if lo is not None and hi is not None:
         ax.axhspan(lo, hi, color=LINE, alpha=.55, zorder=1)
         ax.axhline(mid, color=MUTED, lw=.8, ls=(0, (3, 3)), zorder=2)
-    # annotate the days that actually explain the line
-    if key == "rev" and len(series) >= 10:
-        sp_ = [d.get("spend") or 0 for d in series]
-        for i in range(1, len(sp_)):
-            if not sp_[i - 1]: continue
-            ch = (sp_[i] / sp_[i - 1] - 1) * 100
-            if abs(ch) >= 35:
-                ax.annotate("budget %+.0f%%" % ch, (i, xs[i]), textcoords="offset points",
-                            xytext=(0, 11), fontsize=8.5, color=MUTED, family="DejaVu Sans",
-                            ha="center",
-                            arrowprops=dict(arrowstyle="-", color=FAINT, lw=.7))
-        for i, v in enumerate(xs):
-            if lo is not None and (v < lo or v > hi) and i < len(xs) - 1:
-                ax.plot([i], [v], "o", color=(RED if v < lo else GREEN), ms=4, zorder=3)
+    # The "budget +81%" callouts used to be stamped on this line. Five of them piled on top of
+    # each other and on the axis label. A chart you cannot read is worth less than no chart.
+    # The budget story lives in the waterfall below, where it has room. Removed.
     now = xs[-1]
     outside = (lo is not None and (now < lo or now > hi))
-    good = (now >= mid) if up_good else (now <= mid)
-    col = (GREEN if good else RED) if outside else INK
+    if up_good is None:
+        col = BLUE if outside else INK          # spend is an input, never good or bad on its own
+    else:
+        good = (now >= mid) if up_good else (now <= mid)
+        col = (GREEN if good else RED) if outside else INK
     ax.plot([n - 1], [now], "o", color=col, ms=9, zorder=4)
     pad = (max(xs) - min(xs)) * .18 or 1
     ax.set_ylim(min(xs) - pad, max(xs) + pad)
@@ -1905,9 +1897,9 @@ def card_pulse(A, win):
     s = A["summary"]; p = s.get("prev") or {}
     H = A.get("hist") or []
     nd = WIN_DAYS.get(win, 1)
-    fig = _fig(13.8)
+    fig = _fig(14.6)
     _head(fig, A, win, "Is this normal, and what moved it",
-          "TWO DIFFERENT COMPARISONS. Top: against a typical day over 30 days. Bottom: against the period immediately before. They will not match, and they are not meant to.")
+          "TWO BASELINES. Top: vs a typical day over 30 days. Bottom: vs the period immediately before.")
 
     # THE VERDICT. Not a z score. A percentage, and whether it is inside the usual swing.
     ax = _panel(fig, .775, .105, "the verdict  ·  vs a typical day over the last 30 days")
@@ -1934,13 +1926,16 @@ def card_pulse(A, win):
     # SIX SPARKLINES. Each one says: is this metric normal for us, right now.
     fig.text(.055, .742, "EVERY METRIC AGAINST ITS OWN NORMAL BAND  ·  the shaded band is where this account lives 8 days out of 10",
              fontsize=F_HD, color=FAINT, family="DejaVu Sans", weight="bold")
-    SP = [("rev", "REVENUE PER DAY", _k, True), ("roas", "ROAS", lambda v: "%.2f" % r2(v), True),
-          ("cpc", "CPC", lambda v: "%.2f" % r2(v), False), ("cvr", "CVR", lambda v: "%.2f%%" % r2(v), True),
+    # SPEND is the first thing to look at, because it explains most revenue moves on its own.
+    # CPMR sits next to it, because that is what the money actually bought.
+    SP = [("rev", "REVENUE PER DAY", _k, True), ("spend", "SPEND PER DAY", _k, None),
+          ("roas", "ROAS", lambda v: "%.2f" % r2(v), True), ("cpmr", "CPMR", _k, False),
+          ("cvr", "CVR", lambda v: "%.2f%%" % r2(v), True), ("cpc", "CPC", lambda v: "%.2f" % r2(v), False),
           ("aov", "AOV", _k, True), ("octr", "OUTBOUND CTR", lambda v: "%.2f%%" % r2(v), True)]
     for i, (k, t, fmt, ug) in enumerate(SP):
-        cx = .055 + (i % 3) * .308
-        cy = .565 - (i // 3) * .142
-        spark(fig, cx, cy, .268, .125, H, k, t, fmt, ug)
+        cx = .055 + (i % 4) * .231
+        cy = .565 - (i // 4) * .142
+        spark(fig, cx, cy, .196, .125, H, k, t, fmt, ug)
 
     # THE WATERFALL, in percent of last period's revenue.
     ax = _panel(fig, .075, .270, "what moved it  ·  vs the period immediately before, not vs the 30 day average")
@@ -2374,8 +2369,11 @@ def card_decay(A, win):
         ser = DAILY.get(str(e.get("ad_id") or "")) or []
         ax.plot([1.6, 98.4], [22, 22], color=LINE, lw=1)
         if len(ser) >= 4:
-            ad_week_chart(fig, [.075, y0 + H * .035, .40, H * .135], ser, "rev", "REVENUE / DAY")
-            ad_week_chart(fig, [.545, y0 + H * .035, .40, H * .135], ser, "cpmr", "CPMR / DAY")
+            # SPEND sits in the middle on purpose: if revenue fell and spend fell with it,
+            # you did that, and nothing is broken.
+            ad_week_chart(fig, [.070, y0 + H * .035, .265, H * .135], ser, "rev", "REVENUE / DAY")
+            ad_week_chart(fig, [.375, y0 + H * .035, .265, H * .135], ser, "spend", "SPEND / DAY")
+            ad_week_chart(fig, [.680, y0 + H * .035, .265, H * .135], ser, "cpmr", "CPMR / DAY")
         else:
             ax.text(1.6, 10, "No daily history for this ad yet, so today cannot be called an anomaly.",
                     fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
@@ -2741,16 +2739,19 @@ def ad_week_chart(fig, rect, series, key="rev", label="REVENUE / DAY"):
     # Colour by BUSINESS OUTCOME, not direction. A CPMR below its band is cheap reach, which
     # is good news, and must never be painted red just because the line went down.
     low_good = key in LOWER_IS_BETTER
-    if today < lo:   dot = GREEN if low_good else RED
-    elif today > hi: dot = RED if low_good else GREEN
-    else:            dot = INK
+    if key in NEUTRAL:                    # spend is a decision, not a result. Never red or green.
+        dot = BLUE if out else INK
+    elif today < lo:   dot = GREEN if low_good else RED
+    elif today > hi:   dot = RED if low_good else GREEN
+    else:              dot = INK
     ax.plot([xs[-1]], [today], marker="o", ms=9, zorder=4, color=dot)
     ax.set_xticks([]); ax.set_yticks([])
     ax.set_xlim(-.4, len(xs) - .6)
     pad = (max(ys) - min(ys)) * .18 or 1
     ax.set_ylim(min(ys) - pad, max(ys) + pad)
-    good = (dot == GREEN)
-    tag = ("OUTSIDE ITS NORMAL BAND — %s" % ("GOOD" if good else "BAD")) if out else "inside its normal band"
+    if not out:                      tag = "inside its normal band"
+    elif key in NEUTRAL:             tag = "OUTSIDE ITS NORMAL BAND — you changed this"
+    else:                            tag = "OUTSIDE ITS NORMAL BAND — %s" % ("GOOD" if dot == GREEN else "BAD")
     ax.text(0, 1.10, "%s  ·  LAST %d DAYS  ·  %s" % (label, len(series), tag),
             transform=ax.transAxes, fontsize=8.6,
             color=(dot if out else MUTED), family="DejaVu Sans", weight="bold")
@@ -2760,9 +2761,11 @@ def ad_week_chart(fig, rect, series, key="rev", label="REVENUE / DAY"):
 def card_blame(A, win, level="ad"):
     """Who is accountable for the revenue move. In EGP, and as a share of the whole move.
     Every bar is one entity. The bars add up to the account. Nothing hides."""
-    B = attribution(A, level, n=9)
+    B = attribution(A, level, n=7)     # 7 rows so four lines of text per row actually fit
     if not B or not B["rows"]: return None
-    rows = B["rows"]
+    # an entity with no spend and no revenue is not a mover, it is noise
+    rows = [r for r in B["rows"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
+    if not rows: return None
     LVN = {"campaign": "campaign", "adset": "ad set", "ad": "ad"}[level]
 
     fig = _fig(15.4)
@@ -2796,24 +2799,30 @@ def card_blame(A, win, level="ad"):
                   family="DejaVu Sans")
     ax.tick_params(colors=FAINT, labelsize=9)
 
-    # names in their own gutter so a long name can never collide with a bar
-    for i, r in enumerate(rows):
+    # THE GUTTER. Three lines, evenly pitched, nothing stacked on top of anything else.
+    # The old version crammed four lines into one row band and they collided.
+    row_h = AH / n
+    g = row_h * .22                      # the four lines are CENTRED in the row band, so the
+    for i, r in enumerate(rows):         # last line of one row cannot drift into the next name
         yc = AY0 + AH * ((n - 1 - i) + .5) / n
-        fig.text(AX0 - .014, yc + .010, _clip(r["name"], 26), fontsize=F_ROW, color=INK,
+        m_ = r["now"] or {}; q_ = r["pre"] or {}
+        cause = r["dx"][0] if r.get("dx") else ("new" if r["new"] else "")
+        fig.text(AX0 - .014, yc + 1.5 * g, _clip(r["name"], 24), fontsize=F_ROW, color=INK,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
-        m_ = r["now"] or {}
-        sub = ("NEW — no prior period" if r["new"]
-               else "rev %s → %s  ·  ROAS %.2fx" % (_k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"])))
-        fig.text(AX0 - .014, yc - .006, sub, fontsize=10, color=MUTED,
+        # SPEND THEN → NOW first: most revenue moves are just a budget you changed
+        l2 = ("NEW — no prior period" if r["new"]
+              else "spend %s → %s   ·   rev %s → %s" % (
+                  _k(q_.get("spend") or 0), _k(m_.get("spend") or 0),
+                  _k(r["prev_rev"]), _k(r["rev"])))
+        fig.text(AX0 - .014, yc + .5 * g, l2, fontsize=9.8, color=MUTED,
                  family="DejaVu Sans", ha="right", va="center")
-        # spend and CPMR on every single line, every level. He asked for this everywhere.
-        fig.text(AX0 - .014, yc - .019, "spend %s  ·  CPMR %s  ·  CVR %s" % (
-            _k(m_.get("spend") or 0), _k(m_.get("cpmr") or 0),
+        fig.text(AX0 - .014, yc - .5 * g, "ROAS %.2fx  ·  CPMR %s  ·  CVR %s" % (
+            r2(r["roas"]), _k(m_.get("cpmr") or 0),
             ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a"),
             fontsize=9.5, color=MUTED, family="DejaVu Sans", ha="right", va="center")
-        if r.get("dx"):
-            fig.text(AX0 - .014, yc - .024, r["dx"][0], fontsize=9.5,
-                     color=DXCOL.get(r["dx"][0], MUTED), family="DejaVu Sans",
+        if cause:
+            fig.text(AX0 - .014, yc - 1.5 * g, cause, fontsize=9.5,
+                     color=DXCOL.get(cause, MUTED), family="DejaVu Sans",
                      weight="bold", ha="right", va="center")
 
     # ---- the totals, stated plainly
@@ -2980,18 +2989,30 @@ def msg_short(A, win):
     W = waterfall(s, p); M = mix_split(A); S = plan(A); F = fatiguing(A["creatives"])
     B = normal_band(H, "rev", (s["rev"] or 0) / nd)
     segs = A.get("segs") or {}
-    L = ["*%s — %s*" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"))]
+    # A WALKTHROUGH, IN ORDER. Not a pile of numbers.
+    #   1 did anything actually happen   2 which metric did it   3 which ad did it   4 what to do
+    L = ["*%s — %s*   ·   %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
+                                 _period_line().replace("THIS PERIOD  ", "").replace("      vs      PREVIOUS  ", " vs "))]
 
+    sp_now = s.get("spend") or 0; sp_pre = p.get("spend") or 0
+    L.append("*1 · DID ANYTHING ACTUALLY HAPPEN*")
     if B:
         if B["inside"]:
-            L.append("Revenue is *%+.0f%%* against a typical day.\nThat sits inside this account's normal swing of %+.0f%% to %+.0f%%, so treat it as noise, not a trend." % (
+            L.append("Revenue *%+.0f%%* vs a typical day. Inside the normal swing of %+.0f%% to %+.0f%%, so this is noise, not a trend." % (
                 B["vs"], B["lo_p"], B["hi_p"]))
         else:
-            L.append("Revenue is *%+.0f%%* against a typical day.\nThat is outside the normal swing of %+.0f%% to %+.0f%%, so this is a real move. Act on it." % (
+            L.append("Revenue *%+.0f%%* vs a typical day. Outside the normal swing of %+.0f%% to %+.0f%%, so this is a real move." % (
                 B["vs"], B["lo_p"], B["hi_p"]))
     else:
         L.append("Revenue %s, %s against the period before." % (
             money(s["rev"]), _d(pct(s["rev"], p.get("rev") or 0))))
+    # spend first, always: most revenue moves are just a budget you changed
+    dsp = _safe_pct(sp_now, sp_pre)
+    if dsp is not None:
+        L.append("Spend went %s → %s (*%+.0f%%*). Revenue %s → %s." % (
+            _k(sp_pre), _k(sp_now), dsp, _k(p.get("rev") or 0), _k(s.get("rev") or 0)))
+
+    L.append("\n*2 · WHICH METRIC MOVED IT*")
 
     if W:
         # The lever that MOVED revenue must push the SAME WAY revenue went. A lever that
@@ -3052,29 +3073,37 @@ def msg_short(A, win):
         L.append("Budget: %s." % "; ".join(bits))
 
     if F:
-        L.append("*Burning:* %s, %s.\nOutbound CTR %+.0f%% while frequency %+.0f%%." % (
+        L.append("*Burning:* %s, %s. Outbound CTR %+.0f%% while frequency %+.0f%%." % (
             _clip(F[0]["name"], 36), F[0]["verdict"].lower(),
             F[0]["d"]["octr"] or 0, F[0]["d"]["freq"] or 0))
-    if S:
-        L.append("*Do this:* cut %s (%.2fx, %.0f%% under the account) by 30%%, fund %s (%.2fx).\nSame budget, revenue *%+.1f%%*." % (
-            _clip(safe(S["cut"][0]["ad_name"]), 32), r2(S["cut"][0]["roas"]),
-            (1 - (S["cut"][0]["roas"] or 0) / (s["roas"] or 1)) * 100,
-            _clip(safe(S["fund"][0]["ad_name"]), 32), r2(S["fund"][0]["roas"]), S["gain_pct"]))
 
-    # WHO IS ACCOUNTABLE. Named, priced in EGP, share of the move, cause, and a link that
-    # opens that exact ad in Ads Manager. No hunting.
+    # 3 · WHICH ADS DID IT. Named, priced in EGP, spend then and now, the stage that broke,
+    # and a link that opens that exact ad. No hunting.
     B = attribution(A, "ad", n=4)
     if B and B["rows"]:
         acct_id = A["account"].get("id") or ""
-        L.append("*WHO MOVED IT* — revenue change vs the period before, and each one's share of the account's move:")
+        L.append("\n*3 · WHICH ADS DID IT*   (shares are of ALL movement, so they add to 100)")
         for r in B["rows"]:
-            cause = (" · %s" % r["dx"][0]) if r.get("dx") else (" · new" if r["new"] else "")
-            L.append("• %s — *%s%s EGP* (%+.0f%% of all movement)%s" % (
-                ads_link(_clip(safe(r["name"]), 40), acct_id, r["ent_id"]),
+            m_ = r["now"] or {}; q_ = r["pre"] or {}
+            cause = r["dx"][0] if r.get("dx") else ("new" if r["new"] else "")
+            L.append("• %s — *%s%s EGP* (%+.0f%% of all movement)  ·  *%s*" % (
+                ads_link(_clip(safe(r["name"]), 38), acct_id, r["ent_id"]),
                 "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause))
+            L.append("     spend %s → %s  ·  rev %s → %s  ·  ROAS %.2fx  ·  CPMR %s  ·  CVR %s" % (
+                _k(q_.get("spend") or 0), _k(m_.get("spend") or 0),
+                _k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"]), _k(m_.get("cpmr") or 0),
+                ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a"))
         top = B["rows"][0]
         if top.get("dx"):
-            L.append("_%s_\n*Go and do:* %s" % (top["dx"][1], top["dx"][2]))
+            L.append("\n*4 · WHAT TO DO ABOUT THE BIGGEST ONE*")
+            L.append("_%s_" % top["dx"][1])
+            L.append("*Go and do:* %s" % top["dx"][2])
+
+    if S:
+        L.append("\n*THE BUDGET MOVE:* cut %s (%.2fx, %.0f%% under the account) by 30%%, fund %s (%.2fx). Same budget, revenue *%+.1f%%*." % (
+            _clip(safe(S["cut"][0]["ad_name"]), 32), r2(S["cut"][0]["roas"]),
+            (1 - (S["cut"][0]["roas"] or 0) / (s["roas"] or 1)) * 100,
+            _clip(safe(S["fund"][0]["ad_name"]), 32), r2(S["fund"][0]["roas"]), S["gain_pct"]))
 
     L.append("_Margin and LTV are unknown from ad data. Nothing above assumes them._")
     return "\n".join(x for x in L if x)
