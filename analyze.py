@@ -796,9 +796,10 @@ def analyze(acct, cur_rows, prev_rows, statuses=None):
 
 # ===================== VISUAL BRIEFING CARD =====================
 # Taste palette: warm bone canvas, ink, hairlines, muted pastels. No gradients, no emoji, no chartjunk.
-# CONTRAST. The old greys (#787774 / #9B9A96) failed on a bright screen and were unreadable.
-# These clear WCAG AA on the paper background. A number you cannot read is not a number.
-BONE, INK, MUTED, FAINT, LINE = "#F7F6F3", "#111110", "#4A4945", "#67655F", "#D8D5CF"
+# CONTRAST. Grey is not a design choice here, it is a readability failure. Every one of these
+# is now dark enough to read on a bright screen at arm's length. FAINT is barely lighter than
+# MUTED on purpose: if a thing is worth printing, it is worth being able to read.
+BONE, INK, MUTED, FAINT, LINE = "#F7F6F3", "#0D0D0C", "#33322F", "#494740", "#CFCCC5"
 # Colour is also darkened: the old pastels were decoration, not signal.
 BLUE, AMBER, GREEN, RED, PAPER = "#3E7CA6", "#A67C1F", "#2F7D46", "#B4342B", "#FFFFFF"
 SEGC = {"NEW": BLUE, "ENGAGED": AMBER, "EXISTING": GREEN, "MIXED": FAINT}
@@ -2889,7 +2890,7 @@ def card_bars(A, win, level):
     _head(fig, A, win, "%s: where the money is and what it returns" % title,
           "Bars are spend. Green beats the account's %.2fx, red loses to it." % r2(acc))
 
-    AX0, AY0, AW, AH = .255, .150, .175, .660
+    AX0, AY0, AW, AH = .250, .150, .155, .660
     ax = fig.add_axes([AX0, AY0, AW, AH])
     ax.set_facecolor(BONE)
     for sp in ax.spines.values(): sp.set_visible(False)
@@ -2920,16 +2921,17 @@ def card_bars(A, win, level):
         parts = sorted(e["segments"].items(), key=lambda kv: -kv[1]["spend"])[:3]
         seg_t = "  ".join("%s %d%%" % (SEGN.get(k2, k2).split()[0], round(v["spend"] / (m["spend"] or 1) * 100))
                           for k2, v in parts)
-        fig.text(AX0 - .012, yc + .001, seg_t, fontsize=10, color=FAINT, family="DejaVu Sans",
+        fig.text(AX0 - .012, yc + .001, seg_t, fontsize=10.5, color=MUTED, family="DejaVu Sans",
                  ha="right", va="center")
-        d_sp = _safe_pct(m["spend"], (q or {}).get("spend") or 0) if q else None
-        lab_sp = ("spend %s vs prev" % _d(d_sp)) if d_sp is not None else "new or restarted"
-        fig.text(AX0 - .012, yc - .014, lab_sp, fontsize=10, color=BLUE,
+        # SPEND THEN → NOW, spelled out. Not a percent you have to reverse engineer.
+        sp_pre = (q or {}).get("spend") or 0
+        lab_sp = ("spend %s → %s" % (_k(sp_pre), _k(m["spend"]))) if q else "new or restarted"
+        fig.text(AX0 - .012, yc - .015, lab_sp, fontsize=10.5, color=BLUE,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
 
     # THE ACCOUNTABILITY COLUMN. What this entity did to revenue, in EGP, and what share of
     # the whole account's move that is. This is the number he actually asked for.
-    RX = .530
+    RX = .505
     fig.text(RX, AY0 + AH + .040, "REVENUE Δ", fontsize=10.5, color=INK,
              family="DejaVu Sans", weight="bold", ha="right")
     fig.text(RX, AY0 + AH + .022, "EGP · share of all movement", fontsize=8.6, color=FAINT,
@@ -2951,18 +2953,21 @@ def card_bars(A, win, level):
         col = GREEN if d >= 0 else RED
         fig.text(RX, y, "%s%s" % ("+" if d >= 0 else "-", _k(abs(d))), fontsize=13,
                  color=col, family="DejaVu Sans", weight="bold", ha="right")
-        fig.text(RX, y - .018, "%+.0f%% of all movement" % (d / denom * 100.0), fontsize=9.5,
+        fig.text(RX, y - .018, "%+.0f%% of move" % (d / denom * 100.0), fontsize=9.8,
                  color=col, family="DejaVu Sans", weight="bold", ha="right")
 
     # CPM is dropped. CPMR is the one that matters and two near-identical columns were what
     # squeezed the grid until the numbers touched each other.
-    COLS = [("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPP", "cpa", _k, False),
+    # SPEND IS A COLUMN, NOT JUST A BAR. A bar tells you the shape; it does not tell you the
+    # number. It is the first column because it is the first thing that explains a revenue move.
+    COLS = [("SPEND", "spend", _k, None),
+            ("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPP", "cpa", _k, False),
             ("AOV", "aov", _k, True), ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True),
             ("CPC", "cpc", lambda v: "%.2f" % r2(v), False), ("CTR-O", "octr", _pctv, True),
             ("CPMR", "cpmr", _k, False),
             ("FRQ", "freq", lambda v: "%.1f" % r2(v), False),
             ("PUR", "purch", lambda v: "%d" % int(v or 0), True)]
-    xs = [.600 + i * .0485 for i in range(9)]      # evenly spaced, so nothing can collide
+    xs = [.560 + i * .0476 for i in range(10)]     # evenly spaced, so nothing can collide
     for x, c in zip(xs, COLS):
         fig.text(x, AY0 + AH + .040, c[0], fontsize=10.5, color=INK, family="DejaVu Sans",
                  weight="bold", ha="right")
@@ -2975,7 +2980,7 @@ def card_bars(A, win, level):
                      weight="bold", ha="right")
             pv = (m_cpc(q) if k2 == "cpc" else q.get(k2)) if q else None
             d = _safe_pct(v or 0, pv or 0, floor=(0.01 if k2 not in ("spend",) else 50)) if q else None
-            fig.text(x, y - .018, _d(d) if d is not None else "n/a", fontsize=9.8,
+            fig.text(x, y - .018, _d(d) if d is not None else "n/a", fontsize=10.5,
                      color=impact(k2, d, v), family="DejaVu Sans", weight="bold", ha="right")
     _foot(fig, win)
     return _png(fig)
