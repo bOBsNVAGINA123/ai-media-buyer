@@ -168,6 +168,14 @@ def aset_link(name, sid):
 
 
 # ----------------------- Graph API -----------------------
+def _tr(tr):
+    """Meta accepts time_range as JSON *usually*. On some ad accounts it rejects the JSON form
+    outright with "(#100) param time_range must be non-empty", which is a lie: the param is
+    there. The bracket form is the documented one and it is accepted everywhere, so use it and
+    stop guessing. This single line is why Playmore reported nothing for two days."""
+    return {"time_range[since]": tr["since"], "time_range[until]": tr["until"]}
+
+
 def api_get(path, params):
     params = dict(params); params["access_token"] = TOKEN
     url = "%s/%s?%s" % (GRAPH, path, urllib.parse.urlencode(params))
@@ -230,7 +238,8 @@ def get_insights(acct, tr, level="ad", fields=AD_FIELDS, extra=""):
     if not HAS_3SEC[0]:
         ff = _strip3(ff)
     while True:
-        p = {"level": level, "fields": ff, "time_range": json.dumps(tr), "limit": 400}
+        p = {"level": level, "fields": ff, "limit": 400}
+        p.update(_tr(tr))
         if after: p["after"] = after
         d = api_get("%s/insights" % acct, p)
         if "error" in d:
@@ -260,8 +269,8 @@ def get_ad_daily(acct, days=14):
     tr = {"since": start.isoformat(), "until": end.isoformat()}
     while True:
         p = {"level": "ad", "time_increment": 1, "limit": 500,
-             "fields": "ad_id,ad_name,spend,reach,impressions,actions,action_values",
-             "time_range": json.dumps(tr)}
+             "fields": "ad_id,ad_name,spend,reach,impressions,actions,action_values"}
+        p.update(_tr(tr))
         if after: p["after"] = after
         d = api_get("%s/insights" % acct, p)
         if "error" in d:
@@ -325,8 +334,9 @@ def get_seg_insights(acct, tr, level, extra=""):
     out, after = [], None
     ff = SEG_FIELDS + ("," + extra if extra else "")
     while True:
-        p = {"level": level, "fields": ff, "time_range": json.dumps(tr), "limit": 400,
+        p = {"level": level, "fields": ff, "limit": 400,
              "breakdowns": "user_segment_key"}
+        p.update(_tr(tr))
         if after: p["after"] = after
         d = api_get("%s/insights" % acct, p)
         if "error" in d:
