@@ -108,10 +108,14 @@ def channel_3sec_for(name):
     if "playmore" in n: return CH.get("playmore_3sec")
     if "kids" in n: return CH.get("ourkids_3sec")
     return None
+def brand_of(name):
+    n = (name or "").lower()
+    return "playmore" if "playmore" in n else ("ourkids" if "kids" in n else None)
+
+
 def channel_window_for(name, win):
     """win = daily | 3day | 7day. Each brand has its own channel per read."""
-    n = (name or "").lower()
-    brand = "playmore" if "playmore" in n else ("ourkids" if "kids" in n else None)
+    brand = brand_of(name)
     if not brand: return None
     return CH.get("%s_%s" % (brand, win))
 
@@ -991,6 +995,15 @@ IMG_DIR = os.path.join(DOCS, "img")
 WIN_DAYS = {"daily": 1, "3day": 3, "7day": 7}
 
 
+def last_spend_date(acct):
+    """The last day this account actually spent money. So 'nothing to report' can say WHY."""
+    d = api_get("%s/insights" % acct, {"level": "account", "time_increment": 1,
+                                       "date_preset": "last_90d", "limit": 100,
+                                       "fields": "spend"})
+    days = [r.get("date_start") for r in (d.get("data") or []) if f(r.get("spend")) > 0]
+    return max(days) if days else None
+
+
 def get_daily_series(acct, days=30):
     """This account's own daily history. It is the only honest definition of normal."""
     p = {"level": "account", "time_increment": 1, "date_preset": "last_30d", "limit": 60,
@@ -1823,6 +1836,137 @@ def proposals(A, win):
     out["net_spend"] = added - freed
     out["net_rev"] = (sum(r["inc_rev"] for r in out["scale"][:4])
                       - sum(r["lost_rev"] for r in out["cut"][:4]))
+    return out
+
+
+# ================= CREATIVE FATIGUE. FIVE TESTS, EXACT NUMBERS, NO OPINIONS. =================
+# Fatigue is not "the ROAS went down". Fatigue is a specific, mechanical thing: the same people
+# are seeing the same ad again, they are reacting to it less, and the auction is charging you
+# more to keep showing it. Each of those is a measurable change against the SAME ad's previous
+# 7 days. Five tests. The card prints the ad's actual value for every one of them.
+FATG = {"freq": 3.0, "octr": -15.0, "cpm": 15.0, "hook": -15.0, "cpp": 20.0}
+FATG_CRIT = [
+    ("frequency over 3.0", "the same people are seeing it again"),
+    ("outbound CTR down over 15%", "they are reacting to it less than they did"),
+    ("CPM up over 15%", "the auction is charging more to keep showing it"),
+    ("hook rate down over 15%", "the first 3 seconds stopped stopping them"),
+    ("CPP up over 20%", "each purchase now costs more than it did"),
+]
+FATCOL = {"FATIGUED": RED, "FATIGUING": AMBER, "FRESH": GREEN, "NO PRIOR": FAINT}
+
+
+def fatigue_scan(A, min_spend=500.0):
+    """Every ad that got real money, scored against all five fatigue tests, with the numbers."""
+    b7 = A.get("b7") or {}
+    out = []
+    for aid, k in b7.items():
+        if (k.get("spend") or 0) < min_spend: continue
+        p = k.get("prev") or {}
+        fq = k.get("freq") or 0
+
+        def dl(now_key, prev_key=None):
+            pk = prev_key or now_key
+            a_, b_ = k.get(now_key) or 0, p.get(pk) or 0
+            return pct(a_, b_) if (p and b_) else None
+
+        d_octr, d_cpm = dl("octr"), dl("cpm")
+        d_hook, d_cpp = dl("hook"), dl("cpa")
+        def T(name, ok, v): return {"t": name, "ok": bool(ok), "v": v}
+        NA = "no prior period"
+        tests = [
+            T("frequency over %.1f" % FATG["freq"], fq > FATG["freq"], "%.2f" % fq),
+            T("outbound CTR down over 15%", d_octr is not None and d_octr < FATG["octr"],
+              ("%s  (%.2f%% -> %.2f%%)" % (_d(d_octr), r2(p.get("octr") or 0), r2(k.get("octr") or 0)))
+              if d_octr is not None else NA),
+            T("CPM up over 15%", d_cpm is not None and d_cpm > FATG["cpm"],
+              ("%s  (%s -> %s)" % (_d(d_cpm), _k(p.get("cpm") or 0), _k(k.get("cpm") or 0)))
+              if d_cpm is not None else NA),
+            T("hook rate down over 15%", d_hook is not None and d_hook < FATG["hook"],
+              ("%s  (%.1f%% -> %.1f%%)" % (_d(d_hook), p.get("hook") or 0, k.get("hook") or 0))
+              if d_hook is not None else NA),
+            T("CPP up over 20%", d_cpp is not None and d_cpp > FATG["cpp"],
+              ("%s  (%s -> %s)" % (_d(d_cpp), _k(p.get("cpa") or 0), _k(k.get("cpa") or 0)))
+              if d_cpp is not None else NA),
+        ]
+        hits = sum(1 for t in tests if t["ok"])
+        if not p:
+            state = "NO PRIOR"
+        elif hits >= 3 and fq > FATG["freq"]:
+            state = "FATIGUED"
+        elif hits >= 2:
+            state = "FATIGUING"
+        else:
+            state = "FRESH"
+        out.append({"ad_id": aid, "name": safe(k.get("ad_name") or ""), "k": k, "prev": p,
+                    "state": state, "hits": hits, "tests": tests, "freq": fq,
+                    "d_octr": d_octr, "d_cpm": d_cpm, "d_hook": d_hook, "d_cpp": d_cpp,
+                    "spend": k.get("spend") or 0, "roas": k.get("roas") or 0,
+                    "hook": k.get("hook") or 0, "hold": k.get("hold") or 0})
+    ORD = {"FATIGUED": 0, "FATIGUING": 1, "FRESH": 2, "NO PRIOR": 3}
+    out.sort(key=lambda r: (ORD[r["state"]], -r["spend"]))
+    return out
+
+
+def winning_pattern(A, min_spend=1000.0):
+    """What the ads that ACTUALLY MADE MONEY have in common, so the next brief is not a guess.
+    Winners are measured against this account's own average, never against a blog post."""
+    b7 = A.get("b7") or {}
+    acc = A.get("b7_acc") or A["summary"]
+    a_roas = acc.get("roas") or 0
+    live = [k for k in b7.values() if (k.get("spend") or 0) >= min_spend and (k.get("purch") or 0) >= 3]
+    if len(live) < 2: return None
+    win = [k for k in live if (k.get("roas") or 0) >= a_roas]
+    los = [k for k in live if (k.get("roas") or 0) < a_roas]
+    if not win: return None
+    vids = [k for k in live if k.get("type") == "VIDEO" and (k.get("impr") or 0) >= 2000]
+    v_hook = med([k["hook"] for k in vids]) if vids else None
+
+    def avg(rows, key):
+        xs = [(r.get(key) or 0) for r in rows if (r.get(key) or 0)]
+        return round(sum(xs) / len(xs), 2) if xs else None
+
+    W = {k: avg(win, k) for k in ("hook", "hold", "r50", "r75", "octr", "cvr", "freq", "roas", "cpmr", "aov")}
+    L = {k: avg(los, k) for k in ("hook", "hold", "r50", "r75", "octr", "cvr", "freq", "roas", "cpmr", "aov")}
+    win.sort(key=lambda k: -(k.get("rev") or 0))
+    return {"winners": win, "losers": los, "W": W, "L": L, "acc_roas": a_roas,
+            "n_win": len(win), "n_live": len(live), "vid_hook": v_hook,
+            "top": win[:3]}
+
+
+def brief_lines(P):
+    """The actual instruction. Not 'test more creative'. What to shoot, and why, from the data."""
+    if not P: return []
+    W, L = P["W"], P["L"]
+    out = []
+    top = P["top"][0]
+    out.append("Brief 3 new videos off %s. It is the highest revenue ad that beats the account (%.2fx vs %.2fx)."
+               % (safe(top.get("ad_name") or ""), r2(top.get("roas") or 0), r2(P["acc_roas"])))
+
+    def gap(key, thresh=0.08):
+        """Only say something separates the winners if something actually does. A 0.1% gap is
+        not a finding, and printing it as one is how a dashboard starts lying quietly."""
+        w_, l_ = W.get(key), L.get(key)
+        if not w_ or not l_: return False
+        return abs(w_ - l_) / max(w_, l_) >= thresh
+
+    if gap("hook"):
+        out.append("Keep the first 3 seconds. Winners hook %.1f%% of impressions, the losers hook %.1f%%. "
+                   "That gap is the whole difference, everything after it is downstream."
+                   % (W["hook"], L["hook"]))
+    if gap("hold"):
+        out.append("Hold the middle. Winners keep %.0f%% of the 3 second viewers to a thruplay, losers keep %.0f%%. "
+                   "Cut the setup, get to the product faster." % (W["hold"], L["hold"]))
+    if gap("octr"):
+        out.append("The CTA is earning the click: winners run %.2f%% outbound CTR against %.2f%% on the losers. "
+                   "Reuse the same offer wording." % (W["octr"], L["octr"]))
+    if gap("cvr"):
+        out.append("Winners convert %.2f%% of clicks, losers %.2f%%. Send the new cuts to the same landing page."
+                   % (W["cvr"], L["cvr"]))
+    if len(out) == 1:
+        out.append("The winners are not separated by hook, hold, CTR or CVR. They are winning on the offer and "
+                   "the audience, not the edit. Re-run the same creative to a fresh audience before you reshoot.")
+    out.append("Change the body, the angle and the opening line. Do not re-upload the same video with a new name, "
+               "Meta will treat it as the same creative and it will fatigue on the same curve.")
     return out
 
 
@@ -3316,6 +3460,44 @@ def msg_short(A, win):
             (1 - (S["cut"][0]["roas"] or 0) / (s["roas"] or 1)) * 100,
             _clip(safe(S["fund"][0]["ad_name"]), 32), r2(S["fund"][0]["roas"]), S["gain_pct"]))
 
+    # ---- CREATIVE FATIGUE. Named ads, named tests, actual numbers. Never "some ads are tired".
+    acct_id = A["account"].get("id") or ""
+    FS = fatigue_scan(A)
+    tired = [r for r in FS if r["state"] in ("FATIGUED", "FATIGUING")]
+    if tired:
+        L.append("\n*5 · CREATIVE FATIGUE*  (5 tests: frequency over 3.0, outbound CTR down over 15%, "
+                 "CPM up over 15%, hook down over 15%, CPP up over 20%)")
+        for r in tired[:4]:
+            L.append("• %s — *%s*, %d of 5 tests fired  ·  spend %s  ·  ROAS %.2fx" % (
+                ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]), r["state"], r["hits"],
+                _k(r["spend"]), r2(r["roas"])))
+            fired = [t["t"] for t in r["tests"] if t["ok"]]
+            L.append("     frq *%.2f* · hook *%.1f%%* (%s) · CTR-O %s · CPM %s · CPP %s" % (
+                r["freq"], r["hook"], _d(r["d_hook"]) or "no prior",
+                _d(r["d_octr"]) or "no prior", _d(r["d_cpm"]) or "no prior",
+                _d(r["d_cpp"]) or "no prior"))
+            L.append("     _fired: %s_" % ("; ".join(fired) if fired else "none"))
+    elif FS:
+        L.append("\n*5 · CREATIVE FATIGUE*  none. No ad fires 2 or more of the five tests.")
+
+    # ---- MAKE MORE OF WHAT WORKED. The hit rate says how many, the winners say what.
+    P = winning_pattern(A)
+    if P:
+        HR = hit_rate(A)
+        L.append("\n*6 · MAKE MORE OF WHAT WORKED*")
+        if HR:
+            L.append("Hit rate *%.0f%%* (%d of %d proven ads won). Launch *%d* to get 1 more winner, *%d* for 3."
+                     % (HR["hr"], HR["winners"], HR["tested"], HR["need_1"], HR["need_3"]))
+        for k in P["top"][:2]:
+            pv = (A.get("previews") or {}).get(str(k.get("ad_id")))
+            nm = _clip(safe(k.get("ad_name") or ""), 34)
+            nm = ("<%s|%s>" % (pv, nm)) if pv else nm
+            L.append("• %s — ROAS *%.2fx* · hook *%.1f%%* · hold *%.0f%%* · rev %s" % (
+                nm, r2(k.get("roas") or 0), k.get("hook") or 0, k.get("hold") or 0,
+                _k(k.get("rev") or 0)))
+        for ln in brief_lines(P)[1:4]:
+            L.append("_%s_" % ln)
+
     L.append("_Margin and LTV are unknown from ad data. Nothing above assumes them._")
     return "\n".join(x for x in L if x)
 
@@ -3821,6 +4003,162 @@ def card_audience2(A, win):
     return _png(fig)
 
 
+def card_fatigue(A, win):
+    """SCREEN 6. Creative fatigue and hook rate, with the ad's actual number against every
+    threshold. A creative does not 'feel tired'. It fails specific tests, and here they are."""
+    F = fatigue_scan(A)
+    if not F: return None
+    acc = A.get("b7_acc") or A["summary"]
+    rows = F[:7]
+    fig = _fig(15.6)
+    _head(fig, A, win, "Creative fatigue and hook rate",
+          "Each ad against all five fatigue tests, with its actual value. Same ad, its own last 7 days vs the 7 before.")
+
+    n_fat = sum(1 for r in F if r["state"] == "FATIGUED")
+    n_ing = sum(1 for r in F if r["state"] == "FATIGUING")
+    burn = sum(r["spend"] for r in F if r["state"] in ("FATIGUED", "FATIGUING")) / 7.0
+    ax = _panel(fig, .845, .070, "the state of the creative")
+    ax.text(1.6, 48, "%d FATIGUED" % n_fat, fontsize=F_H + 4, color=(RED if n_fat else FAINT),
+            family="DejaVu Sans", weight="bold")
+    ax.text(22, 48, "%d FATIGUING" % n_ing, fontsize=F_H + 2, color=(AMBER if n_ing else FAINT),
+            family="DejaVu Sans", weight="bold")
+    ax.text(45, 48, "%s EGP/day is behind tiring creative" % _k(burn), fontsize=F_H + 1,
+            color=INK, family="DejaVu Sans", weight="bold")
+    ax.text(1.6, 16, "Account video hook rate for reference: %s. Hook rate is 3 second views divided by impressions."
+            % (("%.1f%%" % (acc.get("hook") or 0)) if acc.get("hook") else "not enough video"),
+            fontsize=9.5, color=FAINT, family="DejaVu Sans", style="italic")
+
+    ax = _panel(fig, .400, .420, "every ad with real money behind it  ·  the actual numbers, not a verdict")
+    # ONE header row for the whole table. Repeating the column names on every line is the
+    # clutter he keeps calling out, and it steals the space the numbers need.
+    COLS = ["SPEND", "ROAS", "FRQ", "HOOK", "HOOK Δ", "HOLD", "CTR-O Δ", "CPM Δ", "CPP Δ"]
+    X0, XS = 31.0, 7.6
+    for j, lab in enumerate(COLS):
+        ax.text(X0 + j * XS, PTOP - 3, lab, fontsize=8.0, color=FAINT,
+                family="DejaVu Sans", weight="bold")
+    ax.plot([1.6, 98.4], [PTOP - 7, PTOP - 7], color=LINE, lw=.8)
+    ax.text(1.6, PTOP - 3, "Δ = THIS AD vs ITS OWN PREVIOUS PERIOD", fontsize=8.0,
+            color=FAINT, family="DejaVu Sans", weight="bold")
+    for i, r in enumerate(rows):
+        y = PTOP - 17 - i * 10.6
+        col = FATCOL[r["state"]]
+        ax.add_patch(plt.Rectangle((1.4, y - 6.0), .8, 9.0, facecolor=col, edgecolor="none"))
+        ax.text(3.4, y, _clip(r["name"], 26), fontsize=F_ROW, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(3.4, y - 5, "%s   ·   %d of 5 tests fired" % (r["state"], r["hits"]),
+                fontsize=8.8, color=col, family="DejaVu Sans", weight="bold")
+        # every fatigue number, side by side, with its direction. Nothing is hidden in prose.
+        cells = [(_k(r["spend"]), INK), ("%.2fx" % r2(r["roas"]), INK),
+                 ("%.2f" % r["freq"], RED if r["freq"] > FATG["freq"] else INK),
+                 ("%.1f%%" % r["hook"], INK),
+                 (_d(r["d_hook"]) or "n/a", RED if (r["d_hook"] or 0) < FATG["hook"] else INK),
+                 ("%.0f%%" % r["hold"], INK),
+                 (_d(r["d_octr"]) or "n/a", RED if (r["d_octr"] or 0) < FATG["octr"] else INK),
+                 (_d(r["d_cpm"]) or "n/a", RED if (r["d_cpm"] or 0) > FATG["cpm"] else INK),
+                 (_d(r["d_cpp"]) or "n/a", RED if (r["d_cpp"] or 0) > FATG["cpp"] else INK)]
+        for j, (v, c) in enumerate(cells):
+            ax.text(X0 + j * XS, y - 2.2, v, fontsize=9.6, color=c,
+                    family="DejaVu Sans", weight="bold")
+
+    ax = _panel(fig, .075, .300, "the five fatigue tests  ·  this is the whole rulebook, there is nothing else")
+    for j, (c, why) in enumerate(FATG_CRIT):
+        ax.text(2.0, PTOP - 12 - j * 11, "%d." % (j + 1), fontsize=10, color=FAINT,
+                family="DejaVu Sans", weight="bold")
+        ax.text(5.4, PTOP - 12 - j * 11, c, fontsize=10.6, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(38.0, PTOP - 12 - j * 11, why, fontsize=10.2, color=MUTED,
+                family="DejaVu Sans")
+    ax.text(2.0, 16, "FATIGUED = 3 or more of the five fire AND frequency is over %.1f." % FATG["freq"],
+            fontsize=10.6, color=RED, family="DejaVu Sans", weight="bold")
+    ax.text(2.0, 7, "FATIGUING = 2 of the five fire.   FRESH = 1 or none.   "
+                    "An ad with no previous period cannot be judged for fatigue at all.",
+            fontsize=10.2, color=MUTED, family="DejaVu Sans")
+    _foot(fig, win)
+    return _png(fig)
+
+
+def card_makemore(A, win):
+    """SCREEN 7. What to shoot next. The hit rate says how many, the winners say what."""
+    P = winning_pattern(A)
+    if not P: return None
+    HR = hit_rate(A)
+    W, L = P["W"], P["L"]
+    fig = _fig(16.0)
+    _head(fig, A, win, "Make more of what worked",
+          "How many creatives you must launch, what the winners have in common, and the brief.")
+
+    # ---- how many to shoot. This is arithmetic, not ambition.
+    ax = _panel(fig, .845, .072, "how many creatives to launch")
+    if HR:
+        ax.text(1.6, 48, "HIT RATE %.0f%%" % HR["hr"], fontsize=F_H + 4, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(21, 48, "%d of %d proven ads" % (HR["winners"], HR["tested"]),
+                fontsize=F_H, color=MUTED, family="DejaVu Sans")
+        ax.text(98.4, 48, "LAUNCH %d TO GET 1   ·   %d TO GET 3" % (HR["need_1"], HR["need_3"]),
+                fontsize=F_H + 2, color=GREEN, family="DejaVu Sans", weight="bold", ha="right")
+        ax.text(1.6, 16, "Winner here means it clears the full SCALE bar, which is stricter than simply "
+                         "beating the account. At this rate, shooting fewer than %d new creatives is not "
+                         "a plan, it is a hope." % HR["need_1"],
+                fontsize=9.6, color=FAINT, family="DejaVu Sans", style="italic")
+    else:
+        ax.text(1.6, 40, "Not enough proven ads yet to compute a hit rate. Keep launching.",
+                fontsize=F_ROW + 2, color=MUTED, family="DejaVu Sans")
+
+    # ---- what the winners share, against the ads that did not work. Same account, same week.
+    ax = _panel(fig, .655, .160, "what the winners have in common  ·  winners vs the ads that lost to the account")
+    METS = [("HOOK RATE", "hook", "%.1f%%"), ("HOLD", "hold", "%.0f%%"),
+            ("WATCHED 50%", "r50", "%.0f%%"), ("OUTBOUND CTR", "octr", "%.2f%%"),
+            ("CVR", "cvr", "%.2f%%"), ("FREQUENCY", "freq", "%.2f"),
+            ("ROAS", "roas", "%.2fx"), ("AOV", "aov", "%s")]
+    x = 2.0
+    for lab, key, f_ in METS:
+        wv, lv = W.get(key), L.get(key)
+        ax.text(x, PTOP - 12, lab, fontsize=8.4, color=FAINT, family="DejaVu Sans", weight="bold")
+        sw = (_k(wv) if f_ == "%s" else (f_ % wv)) if wv else "n/a"
+        sl = (_k(lv) if f_ == "%s" else (f_ % lv)) if lv else "n/a"
+        good = wv is not None and lv is not None and (wv < lv if key in LOWER_IS_BETTER else wv > lv)
+        ax.text(x, PTOP - 32, sw, fontsize=13.5, color=(GREEN if good else INK),
+                family="DejaVu Sans", weight="bold")
+        ax.text(x, PTOP - 47, "losers %s" % sl, fontsize=8.8, color=MUTED, family="DejaVu Sans")
+        x += 12.2
+    ax.text(2.0, 8, "Winners are the %d ads that beat the account's %.2fx on at least 3 purchases. "
+                    "Losers are the %d that did not. Same week, same account, same offer."
+            % (P["n_win"], r2(P["acc_roas"]), len(P["losers"])),
+            fontsize=9.6, color=FAINT, family="DejaVu Sans", style="italic")
+
+    # ---- the winners' own 14 day revenue history, so it is a pattern and not one lucky day
+    daily = A.get("ad_daily") or {}
+    tops = P["top"][:3]
+    for i, k in enumerate(tops):
+        ser = daily.get(str(k.get("ad_id"))) or []
+        rect = [.055 + i * .303, .430, .255, .120]
+        if ser and len(ser) >= 4:
+            ad_week_chart(fig, rect, ser, "rev", _clip(safe(k.get("ad_name") or ""), 22).upper())
+        else:
+            axx = fig.add_axes(rect); axx.set_axis_off()
+            axx.text(0, .5, "no daily history yet", fontsize=9, color=FAINT,
+                     family="DejaVu Sans", style="italic")
+
+    ax = _panel(fig, .285, .115, "these three, in money  ·  the ones to model the next shoot on")
+    for i, k in enumerate(tops):
+        y = PTOP - 12 - i * 20
+        ax.text(1.6, y, _clip(safe(k.get("ad_name") or ""), 34), fontsize=F_ROW + 1, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(45, y, "SPEND %s · REV %s · ROAS %.2fx · HOOK %.1f%% · HOLD %.0f%% · FRQ %.2f · PUR %d" % (
+            _k(k.get("spend") or 0), _k(k.get("rev") or 0), r2(k.get("roas") or 0),
+            k.get("hook") or 0, k.get("hold") or 0, r2(k.get("freq") or 0), int(k.get("purch") or 0)),
+            fontsize=9.4, color=INK, family="DejaVu Sans", weight="bold")
+
+    ax = _panel(fig, .070, .195, "the brief  ·  give this to the editor")
+    for j, ln in enumerate(brief_lines(P)[:5]):
+        for m, seg in enumerate(_wrap(ln, 118)[:2]):
+            ax.text(2.0, PTOP - 10 - j * 15 - m * 7, seg, fontsize=10.2,
+                    color=(INK if m == 0 else MUTED), family="DejaVu Sans",
+                    weight=("bold" if m == 0 else "normal"))
+    _foot(fig, win)
+    return _png(fig)
+
+
 def render_cards(A, win):
     """FIVE SCREENS. One question each. Nothing repeats.
 
@@ -3841,7 +4179,9 @@ def render_cards(A, win):
                         ("2-cause", lambda: card_movers(A, win, "campaign")),
                         ("3-winners", lambda: card_winners(A, win)),
                         ("4-money", lambda: card_money(A, win)),
-                        ("5-audience", lambda: card_audience2(A, win))):
+                        ("5-audience", lambda: card_audience2(A, win)),
+                        ("6-fatigue", lambda: card_fatigue(A, win)),
+                        ("7-makemore", lambda: card_makemore(A, win))):
             try:
                 png = fn()
                 if png: out.append((suf, png))
@@ -4837,11 +5177,18 @@ def main():
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
     CARDS = []
+    QUIET = {}          # brand -> (account name, last date it spent). A silent channel is a bug.
     global SEGMAP, ADSEG
     SEGX = ",".join(["ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"])
     for acct in get_accounts():
         cur_rows = get_insights(acct["id"], last)
-        if not cur_rows: continue
+        if not cur_rows:
+            # AN ACCOUNT WITH NO SPEND IS NOT A REASON TO SAY NOTHING.
+            # Playmore posted nothing for two days and it read like the automation was broken.
+            # It was not broken, the account was simply not spending. That is itself the report.
+            b_ = brand_of(acct["name"])
+            if b_ and b_ not in QUIET: QUIET[b_] = (acct["name"], last_spend_date(acct["id"]))
+            continue
         prev_rows = get_insights(acct["id"], prev)
         STATUS = get_ad_statuses(acct["id"])
         # AUDIENCE TRUTH: Meta's own breakdown by audience segment (user_segment_key).
@@ -4857,6 +5204,16 @@ def main():
         for r in (cur_rows or []):
             m = metric(r)
             if m["ad_id"]: B7[str(m["ad_id"])] = m
+        # AND THE 7 DAYS BEFORE THAT, ATTACHED TO EACH AD.
+        # Without this every fatigue and saturation test had nothing to compare against and
+        # printed "n/a", which is why the account never once reported a fatiguing creative.
+        # Fatigue is a CHANGE. No previous period, no fatigue, ever. This is that period.
+        P7 = {}
+        for r in (prev_rows or []):
+            m = metric(r)
+            if m["ad_id"]: P7[str(m["ad_id"])] = m
+        for aid, m in B7.items():
+            m["prev"] = P7.get(aid)
         B7_ACC = agg(list(B7.values())) if B7 else None
         # Per ad, per day. Without this you cannot tell an anomaly from a Tuesday.
         AD_DAILY = get_ad_daily(acct["id"], days=14)
@@ -4906,7 +5263,9 @@ def main():
                            "2-cause": "*2 · WHAT CAUSED IT* — every campaign, split into the budget you changed and the performance that changed.",
                            "3-winners": "*3 · WHAT IS WORKING, WHAT STOPPED* — with the criteria for every label printed on the card.",
                            "4-money": "*4 · WHAT TO DO WITH THE MONEY* — current budget, recommended budget, extra spend, expected revenue.",
-                           "5-audience": "*5 · WHERE THE MONEY IS* — every segment, and exactly how much to shift, in EGP per day."}
+                           "5-audience": "*5 · WHERE THE MONEY IS* — every segment, and exactly how much to shift, in EGP per day.",
+                           "6-fatigue": "*6 · CREATIVE FATIGUE AND HOOK RATE* — every ad against all five fatigue tests, with its actual number for each.",
+                           "7-makemore": "*7 · MAKE MORE OF WHAT WORKED* — the hit rate, what the winners share, and the brief for the next shoot."}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
@@ -4930,6 +5289,21 @@ def main():
         for c in A["creatives"]:
             c.pop("prev", None)
     save_json(DATA_PATH, report)
+
+    # ---- A BRAND THAT DID NOT SPEND STILL GETS A REPORT. SILENCE IS INDISTINGUISHABLE FROM A BUG. ----
+    served = set(c["ch"] for c in CARDS)
+    for brand, (aname, lastday) in QUIET.items():
+        for w_ in ("daily", "3day", "7day"):
+            ch_ = CH.get("%s_%s" % (brand, w_))
+            if not ch_ or ch_ in served: continue
+            when = ("It last spent on *%s*." % lastday) if lastday \
+                   else "It has not spent in the last 90 days."
+            slack(ch_, "%s  *%s — %s*\n\n*NO SPEND IN THIS WINDOW.* There is nothing to report because "
+                       "the account did not run. %s\n\nThis is not a broken report. Nothing is wrong with the "
+                       "automation. The ads are off. If that is deliberate, ignore this. If it is not, the "
+                       "budget or the campaigns are paused and no amount of analysis will change that."
+                  % (MENTION, aname.upper(), WIN_TITLE.get(w_, "MEMO"), when))
+            time.sleep(1)
 
     # ---- ship the cards. Try a native upload; if the app lacks files:write, push + link the image. ----
     if CARDS:
