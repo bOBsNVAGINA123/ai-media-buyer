@@ -5306,13 +5306,18 @@ def main():
                         with open(os.path.join(IMG_DIR, fn), "wb") as fh: fh.write(png)
                         head = ("%s  *%s — %s*\n" % (MENTION, acct["name"].upper(),
                                                      WIN_TITLE.get(win, "MEMO"))) if i == 0 else ""
-                        last = (suf == cards[-1][0])
+                        # NOT `last`. `last` is the 7 day time_range dict used by every account
+                        # after this one. Naming this flag `last` overwrote it with True, so the
+                        # SECOND account onwards asked Meta for time_range=true and got nothing
+                        # back. That one shadowed variable is why Playmore reported silence for
+                        # two days while its ads were live and spending.
+                        is_last = (suf == cards[-1][0])
                         CARDS.append({"ch": wch, "png": png, "fn": fn,
                                       "title": "%s-%s-%s" % (slug(acct["name"]), win, suf),
                                       "comment": head + CAP.get(suf, ""),
                                       # the memo, then the action plan, both AFTER every image
-                                      "memo": msg_short(AW, win) if last else None,
-                                      "plan": action_plan(AW, win) if last else None})
+                                      "memo": msg_short(AW, win) if is_last else None,
+                                      "plan": action_plan(AW, win) if is_last else None})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
