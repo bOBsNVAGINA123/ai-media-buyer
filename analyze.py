@@ -296,7 +296,8 @@ def seg_rollup(rows, keyfield, namefield):
             segs[sg] = full_metrics(g)
         # the segment this entity actually leans on
         lead = max(segs, key=lambda s: segs[s]["spend"]) if segs else "UNKNOWN"
-        out[k] = {"name": e["name"], "total": tot, "segments": segs, "lead": lead}
+        # carry the id so we can deep link straight into Ads Manager
+        out[k] = {"name": e["name"], "total": tot, "segments": segs, "lead": lead, "id": k}
     return out
 
 def account_segments(rows):
@@ -1124,11 +1125,16 @@ def _png(fig):
     return buf.getvalue()
 
 def _head(fig, A, win, title, sub):
-    fig.text(.055, .965, "%s  ·  %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO")),
+    # The figure is 13in wide with .055/.945 margins, so a subtitle longer than ~115 chars
+    # runs off the canvas. Clip it rather than let it bleed off the edge.
+    h = fig.get_size_inches()[1]
+    def y(px): return 1.0 - (px / (h * 110.0))     # px from the top, at 110 dpi
+    fig.text(.055, y(38), "%s  ·  %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO")),
              fontsize=F_SUB, color=MUTED, family="DejaVu Sans")
-    fig.text(.055, .932, title, fontsize=F_TITLE, color=INK, family="DejaVu Serif", weight="bold")
-    fig.text(.055, .908, sub, fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
-    fig.lines.append(plt.Line2D([.055, .945], [.897, .897], color=LINE, lw=1,
+    fig.text(.055, y(76), title, fontsize=F_TITLE, color=INK, family="DejaVu Serif",
+             weight="bold")
+    fig.text(.055, y(103), _clip(sub, 113), fontsize=F_NOTE, color=MUTED, family="DejaVu Sans")
+    fig.lines.append(plt.Line2D([.055, .945], [y(115), y(115)], color=LINE, lw=1,
                                 transform=fig.transFigure, figure=fig))
 
 def _foot(fig, win):
@@ -1137,12 +1143,18 @@ def _foot(fig, win):
     fig.text(.945, .022, "Audience is Meta's own breakdown by audience segment.", fontsize=10.5,
              color=FAINT, family="DejaVu Sans", style="italic", ha="right")
 
+# A panel's title owns the top band. NOTHING else may be drawn above PTOP. Every overlap
+# bug in this file came from a caller writing a row at the same y as the panel title.
+PTOP = 84.0
+
 def _panel(fig, y0, h, title, x0=.055, w=.89):  # x0/w let a panel sit beside a chart
     ax = fig.add_axes([x0, y0, w, h]); ax.set_axis_off()
     ax.set_xlim(0, 100); ax.set_ylim(0, 100)
     ax.add_patch(plt.Rectangle((0, 0), 100, 100, facecolor=PAPER, edgecolor=LINE, lw=1))
-    ax.text(1.6, 93, title.upper(), fontsize=F_H, color=INK, family="DejaVu Sans",
-            weight="bold", va="center")
+    if title:
+        ax.text(1.6, 94.5, title.upper(), fontsize=F_H, color=INK, family="DejaVu Sans",
+                weight="bold", va="center")
+        ax.plot([1.6, 98.4], [89.5, 89.5], color=LINE, lw=1, zorder=1)
     return ax
 
 def _d(v):
@@ -1357,6 +1369,9 @@ def decay_watch(A):
                     "roas": c["roas"], "proas": p.get("roas"),
                     "d_roas": pct(c["roas"], p.get("roas") or 0),
                     "rows": rows, "culprit": culprit,
+                    # both periods, so the card can name the stage that broke without guessing
+                    "now": c, "pre": p, "dx": dx_stage(c, p),
+                    "d_rev": (c.get("rev") or 0) - (p.get("rev") or 0),
                     "loss": (p.get("roas") or 0) - (c["roas"] or 0)})
     return sorted(out, key=lambda x: -(x["loss"] * x["spend"]))[:3]
 
@@ -1428,6 +1443,124 @@ def card_of(c, b, acc):
         "v_cpc": rel(m_cpc(b), m_cpc(acc), True),
         "v_hook": rel(b.get("hook"), acc.get("hook")),
     }
+
+
+# ======================= WHY DID IT MOVE. NAME THE CAUSE. =======================
+# A number tells you WHAT. It does not tell you WHERE TO GO. Every drop is one of five
+# things, and each one sends you to a different place. The funnel decides which.
+#
+#   AD  -> hook, hold, CTR      : they are not clicking. The creative is the problem.
+#   AUCTION -> CPM, CPC, freq   : the same people cost more. Fatigue or competition.
+#   SITE -> ATC rate            : they clicked and did not add to cart. The page.
+#   CHECKOUT -> CVR with ATC ok : they added to cart and did not buy. Price, shipping, checkout.
+#   BASKET -> AOV               : same buyers, smaller order. Mix or discounting.
+
+def _ch(now, pre, k, lower_better=False):
+    a, b = now.get(k), (pre or {}).get(k)
+    if not a or not b: return None
+    d = (a / b - 1) * 100.0
+    return -d if lower_better else d
+
+def dx_stage(now, pre):
+    """Return (CAUSE, headline, what to actually go and do). Ordered by where in the funnel
+    the break happens: earliest break wins, because it explains everything after it."""
+    if not pre: return None
+    hook = _ch(now, pre, "hook"); hold = _ch(now, pre, "hold")
+    octr = _ch(now, pre, "octr"); atcr = _ch(now, pre, "atc_rate")
+    cvr = _ch(now, pre, "cvr");   aov = _ch(now, pre, "aov")
+    cpm = _ch(now, pre, "cpm");   freq = _ch(now, pre, "freq")
+    cpc = _ch(now, pre, "cpc")
+    f_now = now.get("freq") or 0
+
+    # FATIGUE has a signature: the same people, seen more often, costing more, clicking less.
+    if (freq is not None and freq >= 8 and f_now >= FREQ_HEALTHY
+            and ((cpm is not None and cpm >= 8) or (octr is not None and octr <= -8))):
+        return ("FATIGUE",
+                "Frequency %+.0f%% to %.1f, CPM %s, outbound CTR %s. Same people, more often, clicking less."
+                % (freq, f_now, _d(cpm), _d(octr)),
+                "This is saturation, not a bad ad. Refresh the creative or widen the audience. "
+                "Do not cut the budget of a winner that has simply run out of new people.")
+
+    if octr is not None and octr <= -10 and (hook is not None and hook <= -8):
+        return ("CREATIVE — HOOK",
+                "Hook rate %s and outbound CTR %s. The first 3 seconds stopped earning the view."
+                % (_d(hook), _d(octr)),
+                "The thumbnail and the opening line are the problem. Re-cut the first 3 seconds, "
+                "or test a new hook against the same body.")
+
+    if octr is not None and octr <= -10:
+        return ("CREATIVE — THE CLICK",
+                "Outbound CTR %s while the hook held (%s). They watch and do not click."
+                % (_d(octr), _d(hook)),
+                "The promise is not landing. Sharpen the offer in the copy and the CTA.")
+
+    # They clicked. So from here the ad is doing its job and the SITE is not.
+    if atcr is not None and atcr <= -12:
+        return ("LANDING PAGE",
+                "Add to cart rate %s while outbound CTR held (%s). They click the ad and do not add to cart."
+                % (_d(atcr), _d(octr)),
+                "The ad is fine, the page is losing them. Check the landing page the ad points to: "
+                "the product or collection page, price shown, sizes in stock, and load speed on mobile.")
+
+    if cvr is not None and cvr <= -12:
+        return ("CHECKOUT",
+                "CVR %s but add to cart held (%s). They add to cart and do not buy."
+                % (_d(cvr), _d(atcr)),
+                "The problem is after the cart. Check shipping cost and delivery time at checkout, "
+                "payment options, and whether a discount code that was running has expired.")
+
+    if aov is not None and aov <= -12:
+        return ("BASKET",
+                "AOV %s while CVR held (%s). Same number of buyers, smaller orders." % (_d(aov), _d(cvr)),
+                "Mix moved to cheaper items, or a discount is deeper than you think. "
+                "Check which products these orders contain and what is discounted.")
+
+    if cpc is not None and cpc >= 12:
+        return ("AUCTION",
+                "CPC %s and CPM %s with the funnel intact. You are paying more for the same click."
+                % (_d(cpc), _d(cpm)),
+                "Competition or delivery, not your creative. Check whether a competitor entered, "
+                "or you narrowed the audience and drove the price up.")
+
+    return ("MIXED",
+            "No single stage broke. The move is spread across the funnel.",
+            "Nothing is clearly broken. Leave it alone and let it collect more data.")
+
+
+# ======================= WHO IS ACCOUNTABLE FOR THE REVENUE MOVE =======================
+def attribution(A, level="ad", n=8):
+    """Every entity's share of the ACCOUNT'S TOTAL REVENUE CHANGE, in EGP and in percent.
+    The shares sum to the whole move, so nothing hides. This answers the only question that
+    matters: who did this to me, and by how much."""
+    LV = {"campaign": "seg_campaigns", "adset": "seg_adsets", "ad": "seg_ads"}
+    roll_ = A.get(LV[level]) or {}
+    proll = A.get(LV[level] + "_prev") or {}
+    if not roll_: return None
+    # match on the real Meta ID, never on the name. Names get edited; IDs do not.
+    prevmap = {k: e["total"] for k, e in proll.items()}
+
+    rows, d_tot = [], 0.0
+    for k_, e in roll_.items():
+        m = e["total"]
+        q = prevmap.get(k_)
+        pre_rev = (q or {}).get("rev") or 0
+        d = (m.get("rev") or 0) - pre_rev
+        d_tot += d
+        rows.append({"name": e["name"], "ent_id": k_, "d_rev": d,
+                     "rev": m.get("rev") or 0, "prev_rev": pre_rev,
+                     "spend": m.get("spend") or 0, "roas": m.get("roas") or 0,
+                     "now": m, "pre": q, "new": not q})
+    if not rows: return None
+
+    # Share of the TOTAL MOVE. Signed, so a mover fighting the tide reads as negative share.
+    denom = abs(d_tot) if abs(d_tot) > 1 else sum(abs(r["d_rev"]) for r in rows) or 1
+    for r in rows:
+        r["share"] = r["d_rev"] / denom * 100.0
+        r["dx"] = dx_stage(r["now"], r["pre"]) if r["pre"] else None
+    rows.sort(key=lambda r: -abs(r["d_rev"]))
+    return {"rows": rows[:n], "d_tot": d_tot, "all": rows,
+            "gain": sum(r["d_rev"] for r in rows if r["d_rev"] > 0),
+            "loss": sum(r["d_rev"] for r in rows if r["d_rev"] < 0)}
 
 
 def quality(k):
@@ -2082,40 +2215,85 @@ def card_funnel(A, win):
 # ---------- CARD: it was working, now it is not ----------
 def card_decay(A, win):
     D = decay_watch(A)
-    fig = _fig(11.0)
-    _head(fig, A, win, "It was working, now it is not",
-          "Creatives that used to beat the account and no longer do. Measured against their own past, with the metric responsible named.")
-    ax = _panel(fig, .380, .420, "flagged  ·  the whole card, and every metric against its own past")
     if not D:
+        fig = _fig(8.0)
+        _head(fig, A, win, "It was working, now it is not",
+              "Creatives that used to beat the account and no longer do.")
+        ax = _panel(fig, .380, .420, "flagged")
         ax.text(1.6, 45, "Nothing that was beating the account has fallen below it. No decay to report.",
                 fontsize=F_H + 2, color=GREEN, family="DejaVu Sans", weight="bold")
         _foot(fig, win)
         return _png(fig)
 
+    D = D[:3]
+    # The card is sized to the number of decayers. Three panels of dead space is not a design.
+    PH = 3.55                                     # inches per ad panel
+    fig = _fig(3.2 + PH * len(D))
+    _head(fig, A, win, "It was working, now it is not",
+          "Every percent on this card is against THAT AD'S OWN PREVIOUS PERIOD, never the account.")
+
     acc7 = A.get("b7_acc") or A["summary"]
     b7 = A.get("b7") or {}
-    _mhead(ax, 92)
-    for i, e in enumerate(D[:3]):
-        y = 82 - i * 30
-        ax.text(1.6, y, _clip(e["name"], 22), fontsize=F_ROW + 2, color=INK,
-                family="DejaVu Sans", weight="bold")
-        b = b7.get(str(e.get("ad_id") or "")) or {}
-        if b:
-            _mrow(ax, card_of(b, b, acc7), y)
-        ax.text(1.6, y - 6, "%s  ·  7 day spend %s" % (SEGN.get(e["seg"], e["seg"]), _k(e["spend"])),
-                fontsize=9.5, color=MUTED, family="DejaVu Sans")
+    figh = 3.2 + PH * len(D)
+    H = PH / figh * .93                            # panel height in figure units
+    top = 1 - (2.05 / figh)                        # first panel starts under the headline
+    for i, e in enumerate(D):
+        y0 = top - (i + 1) * H - i * (0.30 / figh)
+        ax = _panel(fig, y0, H, "")
+        b = e.get("now") or {}
+
+        ax.text(1.6, 90, _clip(e["name"], 32), fontsize=F_H + 3, color=INK,
+                family="DejaVu Serif", weight="bold")
+        ax.text(1.6, 82, "%s  ·  7 day spend %s  ·  revenue %s%s EGP vs prev" % (
+            SEGN.get(e["seg"], e["seg"]), _k(e["spend"]),
+            "+" if e.get("d_rev", 0) >= 0 else "-", _k(abs(e.get("d_rev", 0)))),
+            fontsize=10.5, color=FAINT, family="DejaVu Sans")
+
+        # ROAS and the worst metric each get their OWN LINE. They were colliding because a long
+        # ROAS string ran straight through a fixed x offset. Never place two strings of unknown
+        # length on the same baseline.
         cul = e["culprit"]
-        ax.text(1.6, y - 12, "ROAS %.2fx to %.2fx (%s)   ·   THE CAUSE: %s %+.0f%%" % (
-            r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"]), cul["lab"], cul["chg"]),
-            fontsize=F_ROW, color=RED, family="DejaVu Sans", weight="bold")
-        # every metric against its own past, so nothing has to be chased manually
-        x = 1.6
-        for r in e["rows"]:
-            col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else FAINT)
-            ax.text(x, y - 18, r["lab"], fontsize=8, color=FAINT, family="DejaVu Sans")
-            ax.text(x, y - 23, "%+.0f%%" % r["chg"], fontsize=10, color=col,
+        ax.text(1.6, 70, "ROAS %.2fx  →  %.2fx   (%s)" % (
+            r2(e["proas"]), r2(e["roas"]), _d(e["d_roas"])),
+            fontsize=F_H + 2, color=RED, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 61, "WORST METRIC:  %s %+.0f%%" % (cul["lab"], cul["chg"]),
+                fontsize=F_H, color=RED, family="DejaVu Sans", weight="bold")
+
+        # the diagnosis: what broke, and the place to actually go and look
+        dx = e.get("dx")
+        if dx:
+            cause, what, todo = dx
+            ax.text(55, 90, cause, fontsize=F_H + 1, color=DXCOL.get(cause, MUTED),
                     family="DejaVu Sans", weight="bold")
-            x += 8.9
+            yy = 81
+            for ln in _wrap(what, 44)[:3]:
+                ax.text(55, yy, ln, fontsize=9.6, color=MUTED, family="DejaVu Sans")
+                yy -= 5.2
+            yy -= 2.0
+            for ln in _wrap("DO: " + todo, 44)[:4]:
+                ax.text(55, yy, ln, fontsize=9.8, color=INK, family="DejaVu Sans", style="italic")
+                yy -= 5.2
+
+        # every metric against its own past. One row, evenly spaced, never overlapping.
+        ax.plot([1.6, 98.4], [52, 52], color=LINE, lw=1)
+        ax.text(1.6, 45, "EVERY METRIC vs THIS AD'S OWN PREVIOUS PERIOD", fontsize=9,
+                color=FAINT, family="DejaVu Sans", weight="bold")
+        rws = e["rows"][:11]
+        step = 96.0 / max(len(rws), 1)
+        for j, r in enumerate(rws):
+            x = 2.0 + j * step
+            col = RED if r["hurt"] >= 5 else (GREEN if r["hurt"] <= -5 else FAINT)
+            ax.text(x, 33, r["lab"], fontsize=8.6, color=FAINT, family="DejaVu Sans")
+            ax.text(x, 22, "%+.0f%%" % r["chg"], fontsize=15, color=col,
+                    family="DejaVu Sans", weight="bold")
+        # and the absolute card, so the percent always has a number behind it
+        ax.text(1.6, 10, "SPEND %s   ·   ROAS %.2fx   ·   CPP %s   ·   CPMR %s   ·   CVR %s   ·   AOV %s   ·   FRQ %.1f   ·   PUR %d" % (
+            _k(b.get("spend") or 0), r2(b.get("roas") or 0), _k(b.get("cpa") or 0),
+            _k(b.get("cpmr") or 0), ("%.2f%%" % r2(b.get("cvr") or 0)), _k(b.get("aov") or 0),
+            r2(b.get("freq") or 0), int(b.get("purch") or 0)),
+            fontsize=10.5, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(1.6, 3, "Absolute numbers, this ad's last 7 days.", fontsize=9, color=FAINT,
+                family="DejaVu Sans", style="italic")
     _foot(fig, win)
     return _png(fig)
 
@@ -2161,14 +2339,14 @@ def retention(A):
 def card_retention(A, win):
     R = retention(A)
     if not R: return None
-    fig = _fig(13.6)
-    src = {"3s": "3 second video views / impressions (Meta action type video_view)",
-           "2s": "2 second continuous plays / impressions (Meta would not return 3 second for this account)",
+    fig = _fig(16.2)
+    src = {"3s": "3 second video views / impressions",
+           "2s": "2 second continuous plays / impressions (Meta withheld the 3 second field)",
            "play": "video plays / impressions (Meta returned neither 3 second nor 2 second)"}[R["src"]]
     _head(fig, A, win, "Where every video loses them",
-          "Hook rate = %s. The curve after that is measured off the people who actually started watching." % src)
+          "Hook rate = %s. The curve after it is measured off the people who actually started." % src)
 
-    ax = fig.add_axes([.075, .420, .60, .400])
+    ax = fig.add_axes([.075, .505, .60, .355])
     ax.set_facecolor(PAPER)
     for sp_ in ax.spines.values(): sp_.set_color(LINE)
     X = [0, 1, 2, 3, 4, 5]
@@ -2191,7 +2369,7 @@ def card_retention(A, win):
     lg = ax.legend(loc="upper right", frameon=False, fontsize=11)
     for t in lg.get_texts(): t.set_color(INK)
 
-    ax = _panel(fig, .420, .400, "", x0=.700, w=.245)
+    ax = _panel(fig, .505, .355, "", x0=.700, w=.245)
     ax.text(4, 94, "THE ACCOUNT CURVE", fontsize=F_HD, color=INK, family="DejaVu Sans", weight="bold")
     ax.text(4, 86, "HOOK  %.1f%%" % R["acc"]["hook"], fontsize=F_H + 5, color=INK,
             family="DejaVu Sans", weight="bold")
@@ -2206,40 +2384,39 @@ def card_retention(A, win):
     ax.text(4, 16, "Every step after the hook is the share of\npeople who started and were still\nthere at that point.",
             fontsize=9.5, color=FAINT, family="DejaVu Sans")
 
-    ax = _panel(fig, .245, .150, "every drop, and what it means")
+    ax = _panel(fig, .310, .155, "every drop, and what it means")
     for i, (lab, d) in enumerate(R["drops"]):
         x = 1.6 + i * 19.6
         col = RED if d >= R["worst"][1] * .9 else MUTED
         ax.text(x, 62, "-%.0f" % d, fontsize=22, color=col, family="DejaVu Sans", weight="bold")
-        ax.text(x, 40, lab, fontsize=10, color=MUTED, family="DejaVu Sans")
-        ax.text(x, 26, "points lost", fontsize=9, color=FAINT, family="DejaVu Sans")
+        ax.text(x, 44, lab, fontsize=10, color=MUTED, family="DejaVu Sans")
+        ax.text(x, 33, "points lost", fontsize=9, color=FAINT, family="DejaVu Sans")
     FIX = {"start to 25%": "They started and bailed inside the first quarter. The hook earned the view and the next line did not keep it. Cut straight to the payoff, kill the intro.",
            "25% to 50%": "You lose them in the setup. The middle is too slow. Tighten it, or move the proof earlier.",
            "50% to 75%": "They made it halfway and left before the offer. The offer is arriving too late. Move it forward.",
            "75% to 95%": "Almost everyone who got here finished. This is not where the problem is.",
            "95% to the end": "They finished. Nothing to fix here."}
-    for j, ln in enumerate(_wrap("FIX THIS FIRST: " + FIX[R["worst"][0]], 96)[:2]):
-        ax.text(1.6, 14 - j * 7, ln, fontsize=F_ROW, color=INK, family="DejaVu Sans",
+    for j, ln in enumerate(_wrap("FIX THIS FIRST: " + FIX[R["worst"][0]], 98)[:2]):
+        ax.text(1.6, 18 - j * 8, ln, fontsize=F_ROW, color=INK, family="DejaVu Sans",
                 weight="bold")
 
-    ax = _panel(fig, .060, .175, "the videos, by spend  ·  the whole card, plus where each one drops")
+    ax = _panel(fig, .055, .225, "the videos, by spend  ·  the whole card, plus where each one drops")
     acc7 = A.get("b7_acc") or A["summary"]
     b7 = A.get("b7") or {}
     acc_cpmr = acc7.get("cpmr") or 0
-    _mhead(ax, 88)
-    for j, (lab, x) in enumerate((("HOOK", 24), ("25%", 21), ("50%", 18))):
-        pass
+    _mhead(ax, PTOP, vs="acct")
     for i, r in enumerate(R["rows"][:5]):
-        y = 76 - i * 15
-        ax.text(1.6, y, _clip(r["name"], 20), fontsize=10, color=INK, family="DejaVu Sans",
+        y = PTOP - 14 - i * 13.5
+        ax.text(1.6, y, _clip(r["name"], 20), fontsize=11, color=INK, family="DejaVu Sans",
                 weight="bold")
         b = b7.get(str(r.get("ad_id") or "")) or {}
         if b: _mrow(ax, card_of(b, b, acc7), y)
         hc = GREEN if r["hook"] >= R["acc"]["hook"] * 1.1 else (RED if r["hook"] <= R["acc"]["hook"] * .9 else MUTED)
-        ax.text(1.6, y - 6, "hook %.1f%%   ·   25%% %.0f%%   ·   50%% %.0f%%   ·   100%% %.0f%%" % (
+        # this line lives in the NAME gutter only. It used to run under the metric grid.
+        ax.text(1.6, y - 6.4, "hook %.1f%%  ·  25%% %.0f%%  ·  50%% %.0f%%  ·  100%% %.0f%%" % (
             r["hook"], r["curve"][1], r["curve"][2], r["curve"][5]),
             fontsize=9, color=hc, family="DejaVu Sans", weight="bold")
-    ax.text(1.6, 5, "CPMR green means it reaches people cheaper than the account's %s. Red means a premium for the same reach." % _k(acc_cpmr),
+    ax.text(1.6, 4, "CPMR green means it reaches people cheaper than the account's %s. Red means a premium for the same reach." % _k(acc_cpmr),
             fontsize=10, color=MUTED, family="DejaVu Sans", style="italic")
     _foot(fig, win)
     return _png(fig)
@@ -2260,74 +2437,80 @@ def _mrow(ax, k, y, x0=30.0, step=7.0, vcol=None):
           "cpc": "v_cpc"}
     for j, (lab, key, fmt, ik) in enumerate(MCOLS):
         x = x0 + j * step
-        ax.text(x, y, fmt(k.get(key)), fontsize=10.5, color=INK, family="DejaVu Sans",
+        ax.text(x, y, fmt(k.get(key)), fontsize=11.5, color=INK, family="DejaVu Sans",
                 weight="bold", ha="right")
         vk = VS.get(key)
         if vk and k.get(vk) is not None:
             v = k[vk]
             c = MUTED if abs(v) < 5 else (GREEN if v > 0 else RED)
-            ax.text(x, y - 4.6, "%+.0f%%" % v, fontsize=8.5, color=c, family="DejaVu Sans",
+            ax.text(x, y - 4.8, "%+.0f%%" % v, fontsize=9.5, color=c, family="DejaVu Sans",
                     weight="bold", ha="right")
 
 
-def _mhead(ax, y, x0=30.0, step=7.0):
+def _mhead(ax, y, x0=30.0, step=7.0, vs="acct"):
+    """A percentage with no stated baseline is worthless. The baseline is printed in the
+    header of every single column, so no number on this card is ever ambiguous."""
     for j, (lab, _k2, _f, _i) in enumerate(MCOLS):
-        ax.text(x0 + j * step, y, lab, fontsize=8.5, color=FAINT, family="DejaVu Sans",
+        x = x0 + j * step
+        ax.text(x, y, lab, fontsize=9.5, color=MUTED, family="DejaVu Sans",
                 weight="bold", ha="right")
+        if _k2 in ("roas", "cpp", "cpmr", "cvr", "octr", "cpc"):
+            ax.text(x, y - 4.2, "vs %s" % vs, fontsize=7.8, color=FAINT,
+                    family="DejaVu Sans", style="italic", ha="right")
 
 
 def card_verdicts(A, win):
     V = classify(A)
     if not V: return None
     H = hit_rate(A)
-    fig = _fig(14.6)
+    fig = _fig(16.0)
     _head(fig, A, win, "The verdict on every ad",
-          "Judged on the whole card over the LAST 7 DAYS, never on one day. Percentages under each metric are against the account.")
+          "Judged on the whole card over the LAST 7 DAYS, never one day. Small percents are VS THE ACCOUNT.")
 
     counts = {}
     for e in V: counts[e["verdict"]] = counts.get(e["verdict"], 0) + 1
-    ax = _panel(fig, .820, .085, "the call")
+    ax = _panel(fig, .790, .080, "the call")
     x = 1.6
     for v in ("SCALE", "SCALE CAREFULLY", "ITERATE", "MONITOR", "KILL"):
         n = counts.get(v, 0)
         sp_ = sum(e["k"]["spend"] for e in V if e["verdict"] == v)
-        ax.text(x, 44, str(n), fontsize=22, color=VCOL[v], family="DejaVu Sans", weight="bold")
-        ax.text(x, 22, v, fontsize=9.5, color=VCOL[v], family="DejaVu Sans", weight="bold")
-        ax.text(x, 8, "%s of 7 day spend" % _k(sp_), fontsize=9, color=FAINT, family="DejaVu Sans")
+        ax.text(x, 46, str(n), fontsize=24, color=VCOL[v], family="DejaVu Sans", weight="bold")
+        ax.text(x, 26, v, fontsize=9.5, color=VCOL[v], family="DejaVu Sans", weight="bold")
+        ax.text(x, 10, "%s of 7 day spend" % _k(sp_), fontsize=9, color=FAINT, family="DejaVu Sans")
         x += 19.6
 
-    ax = _panel(fig, .300, .530, "every ad, its whole card, and the reason")
-    _mhead(ax, 90)
-    for i, e in enumerate(V[:7]):
-        y = 80 - i * 11.6
+    ax = _panel(fig, .300, .460, "every ad, its whole card, and the reason")
+    _mhead(ax, PTOP, vs="acct")
+    for i, e in enumerate(V[:5]):
+        y = PTOP - 12 - i * 13.6
         col = VCOL[e["verdict"]]
-        ax.add_patch(plt.Rectangle((1.4, y - 7.6), 0.9, 11.0, facecolor=col, edgecolor="none"))
-        ax.text(3.4, y, _clip(safe(e["c"]["ad_name"]), 18), fontsize=10.5, color=INK,
+        ax.add_patch(plt.Rectangle((1.4, y - 8.4), 0.9, 12.0, facecolor=col, edgecolor="none"))
+        ax.text(3.4, y, _clip(safe(e["c"]["ad_name"]), 18), fontsize=11.5, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(3.4, y - 4.8, e["verdict"], fontsize=8.5, color=col, family="DejaVu Sans",
+        ax.text(3.4, y - 5.0, e["verdict"], fontsize=9, color=col, family="DejaVu Sans",
                 weight="bold")
         _mrow(ax, e["k"], y)
-        ax.text(3.4, y - 9.4, _clip(e["why"], 118), fontsize=8.5, color=MUTED, family="DejaVu Sans")
-    ax.text(1.6, 2, "All numbers are the ad's own last 7 days. Today is used only to spot volatility, never to kill.",
+        ax.text(3.4, y - 10.0, _clip(e["why"], 112), fontsize=9, color=MUTED, family="DejaVu Sans")
+    ax.text(1.6, 3, "All numbers are the ad's own last 7 days. Today is used only to spot volatility, never to kill.",
             fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
 
-    ax = _panel(fig, .075, .235, "hit rate  ·  and how many creatives that means launching")
+    ax = _panel(fig, .050, .225, "hit rate  ·  and how many creatives that means launching")
     if H:
-        ax.text(1.6, 74, "%.0f%%" % H["hr"], fontsize=34,
+        ax.text(1.6, 66, "%.0f%%" % H["hr"], fontsize=34,
                 color=(GREEN if H["hr"] >= 25 else (AMBER if H["hr"] >= 12 else RED)),
                 family="DejaVu Sans", weight="bold")
-        ax.text(13, 78, "HIT RATE", fontsize=F_H, color=INK, family="DejaVu Sans", weight="bold")
-        ax.text(13, 68, "%d winners out of the %d ads that got a real chance." % (
-            H["winners"], H["tested"]), fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
-        ax.text(46, 74, "LAUNCH %d" % H["need_1"], fontsize=F_H + 4, color=INK,
+        ax.text(14, 72, "HIT RATE", fontsize=F_H, color=INK, family="DejaVu Sans", weight="bold")
+        ax.text(14, 63, "%d winners of %d ads given a real chance" % (
+            H["winners"], H["tested"]), fontsize=10.5, color=MUTED, family="DejaVu Sans")
+        ax.text(56, 72, "LAUNCH %d" % H["need_1"], fontsize=F_H + 4, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(46, 64, "for 1 expected winner", fontsize=10.5, color=MUTED, family="DejaVu Sans")
-        ax.text(72, 74, "LAUNCH %d" % H["need_3"], fontsize=F_H + 4, color=INK,
+        ax.text(56, 63, "for 1 expected winner", fontsize=10.5, color=MUTED, family="DejaVu Sans")
+        ax.text(80, 72, "LAUNCH %d" % H["need_3"], fontsize=F_H + 4, color=INK,
                 family="DejaVu Sans", weight="bold")
-        ax.text(72, 64, "for 3 expected winners", fontsize=10.5, color=MUTED, family="DejaVu Sans")
+        ax.text(80, 63, "for 3 expected winners", fontsize=10.5, color=MUTED, family="DejaVu Sans")
         for j, ln in enumerate(_wrap(H["definition"], 104)[:3]):
-            ax.text(1.6, 44 - j * 8, ln, fontsize=10.5, color=INK, family="DejaVu Sans")
-        ax.text(1.6, 6, "That is the definition, printed, so the number is not something you have to take on trust.",
+            ax.text(1.6, 45 - j * 9, ln, fontsize=10.5, color=INK, family="DejaVu Sans")
+        ax.text(1.6, 8, "That is the definition, printed, so the number is not something you have to take on trust.",
                 fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
     else:
         ax.text(1.6, 45, "Not enough ads have cleared the evidence bar to compute a hit rate.",
@@ -2355,17 +2538,17 @@ def card_plan(A, win):
             ax.text(1.6, 45, "Nothing qualifies.", fontsize=F_ROW + 2, color=MUTED,
                     family="DejaVu Sans")
             continue
-        _mhead(ax, 82)
+        _mhead(ax, PTOP, vs="acct")
         for i, e in enumerate(items):
-            y = 70 - i * 25
+            y = PTOP - 14 - i * 24
             k = e["k"]
             ax.add_patch(plt.Rectangle((1.4, y - 15), 0.9, 20, facecolor=col, edgecolor="none"))
-            ax.text(3.4, y, _clip(safe(e["c"]["ad_name"]), 18), fontsize=11, color=INK,
+            ax.text(3.4, y, _clip(safe(e["c"]["ad_name"]), 18), fontsize=11.5, color=INK,
                     family="DejaVu Sans", weight="bold")
             _mrow(ax, k, y)
-            ax.text(3.4, y - 10.5, _clip(e["why"], 116), fontsize=8.5, color=MUTED,
+            ax.text(3.4, y - 10.5, _clip(e["why"], 112), fontsize=9, color=MUTED,
                     family="DejaVu Sans")
-            ax.text(3.4, y - 15.5, "DO: " + _clip(e["trigger"], 106), fontsize=9.5, color=col,
+            ax.text(3.4, y - 15.5, "DO: " + _clip(e["trigger"], 104), fontsize=9.8, color=col,
                     family="DejaVu Sans", weight="bold")
     ax = _panel(fig, .060, .095, "what this is worth, at today's spend")
     if S:
@@ -2436,9 +2619,11 @@ def card_scenarios(A, win):
         S["net_pct"], "+" if S["net_spend"] >= 0 else "-", _k(abs(S["net_spend"]))),
         fontsize=F_H + 6, color=(GREEN if S["net"] >= 0 else RED),
         family="DejaVu Sans", weight="bold")
-    ax.text(1.6, 38, "Kills give back %s of revenue a day but free %s of spend. Redeployed into the scale list at their own ROAS that is worth %s." % (
-        _k(S["lost"]), _k(S["freed"]), _k(S["redeploy"])), fontsize=F_ROW, color=MUTED,
-        family="DejaVu Sans")
+    for j, ln in enumerate(_wrap(
+            "Kills give back %s of revenue a day but free %s of spend. Redeployed into the scale "
+            "list at their own ROAS that is worth %s." % (
+                _k(S["lost"]), _k(S["freed"]), _k(S["redeploy"])), 104)[:2]):
+        ax.text(1.6, 42 - j * 9, ln, fontsize=F_ROW, color=MUTED, family="DejaVu Sans")
     ax.text(1.6, 14, "A pause is only worth doing if the money lands somewhere better. That is why the redeployment is priced, not assumed.",
             fontsize=F_NOTE, color=FAINT, family="DejaVu Sans", style="italic")
     _foot(fig, win)
@@ -2446,73 +2631,219 @@ def card_scenarios(A, win):
 
 
 # ---------- CARDS 5-7: campaigns / ad sets / ads, as bars. Ranked, not tabulated. ----------
+DXCOL = {"FATIGUE": AMBER, "CREATIVE — HOOK": RED, "CREATIVE — THE CLICK": RED,
+         "LANDING PAGE": BLUE, "CHECKOUT": BLUE, "BASKET": AMBER, "AUCTION": AMBER,
+         "MIXED": MUTED}
+
+
+def card_blame(A, win, level="ad"):
+    """Who is accountable for the revenue move. In EGP, and as a share of the whole move.
+    Every bar is one entity. The bars add up to the account. Nothing hides."""
+    B = attribution(A, level, n=9)
+    if not B or not B["rows"]: return None
+    rows = B["rows"]
+    LVN = {"campaign": "campaign", "adset": "ad set", "ad": "ad"}[level]
+
+    fig = _fig(15.4)
+    _head(fig, A, win, "Who moved the revenue",
+          "Bars are EGP gained or lost vs the period before. The percent is that %s's share of "
+          "the account's whole move." % LVN)
+
+    # ---- the diverging bar chart. Right of zero made money, left of zero lost it.
+    AX0, AY0, AW_, AH = .300, .420, .350, .430
+    ax = fig.add_axes([AX0, AY0, AW_, AH])
+    ax.set_facecolor(BONE)
+    for sp in ax.spines.values(): sp.set_visible(False)
+    ax.set_yticks([])
+    n = len(rows)
+    mx = max(abs(r["d_rev"]) for r in rows) or 1
+    for i, r in enumerate(rows):
+        y = n - 1 - i
+        col = GREEN if r["d_rev"] >= 0 else RED
+        ax.barh([y], [r["d_rev"]], height=.62, color=col, alpha=.9, edgecolor="none")
+        # The label goes on the OPPOSITE side of zero to the bar. That half is always empty,
+        # so a long label can never run into the name gutter or into another bar.
+        off = mx * .05
+        pos = r["d_rev"] >= 0
+        ax.text(-off if pos else off, y,
+                "%s%s  ·  %+.0f%%" % ("+" if pos else "-", _k(abs(r["d_rev"])), r["share"]),
+                fontsize=11.5, color=col, family="DejaVu Sans", weight="bold",
+                ha="right" if pos else "left", va="center", zorder=3)
+    ax.axvline(0, color=INK, lw=1.4, zorder=4)
+    ax.set_ylim(-.6, n - .4)
+    ax.set_xlim(-mx * 1.30, mx * 1.30)
+    ax.set_xlabel("REVENUE CHANGE, EGP, VS THE PERIOD BEFORE", fontsize=F_HD, color=MUTED,
+                  family="DejaVu Sans")
+    ax.tick_params(colors=FAINT, labelsize=9)
+
+    # names in their own gutter so a long name can never collide with a bar
+    for i, r in enumerate(rows):
+        yc = AY0 + AH * ((n - 1 - i) + .5) / n
+        fig.text(AX0 - .014, yc + .010, _clip(r["name"], 26), fontsize=F_ROW, color=INK,
+                 family="DejaVu Sans", weight="bold", ha="right", va="center")
+        sub = ("NEW — no prior period to compare" if r["new"]
+               else "%s to %s  ·  ROAS %.2fx" % (_k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"])))
+        fig.text(AX0 - .014, yc - .008, sub, fontsize=10, color=FAINT,
+                 family="DejaVu Sans", ha="right", va="center")
+        if r.get("dx"):
+            fig.text(AX0 - .014, yc - .024, r["dx"][0], fontsize=9.5,
+                     color=DXCOL.get(r["dx"][0], MUTED), family="DejaVu Sans",
+                     weight="bold", ha="right", va="center")
+
+    # ---- the totals, stated plainly
+    ax = _panel(fig, .420, .430, "the move", x0=.680, w=.265)
+    ax.text(4, PTOP - 4, "TOTAL", fontsize=F_HD, color=MUTED, family="DejaVu Sans", weight="bold")
+    tc = GREEN if B["d_tot"] >= 0 else RED
+    ax.text(4, PTOP - 16, "%s%s" % ("+" if B["d_tot"] >= 0 else "-", _k(abs(B["d_tot"]))),
+            fontsize=30, color=tc, family="DejaVu Sans", weight="bold")
+    ax.text(4, PTOP - 24, "EGP of revenue, against the period before", fontsize=9.5,
+            color=FAINT, family="DejaVu Sans")
+    ax.text(4, PTOP - 36, "WHAT GAINED", fontsize=F_HD, color=MUTED, family="DejaVu Sans", weight="bold")
+    ax.text(4, PTOP - 45, "+%s" % _k(B["gain"]), fontsize=20, color=GREEN,
+            family="DejaVu Sans", weight="bold")
+    ax.text(4, PTOP - 56, "WHAT LOST", fontsize=F_HD, color=MUTED, family="DejaVu Sans", weight="bold")
+    ax.text(4, PTOP - 65, "%s" % _k(B["loss"]), fontsize=20, color=RED,
+            family="DejaVu Sans", weight="bold")
+    for j, ln in enumerate(_wrap(
+            "Gainers and losers are both real. The account only shows you the net, which is how "
+            "a good %s gets hidden by a bad one." % LVN, 32)[:3]):
+        ax.text(4, 11 - j * 3.9, ln, fontsize=8.6, color=FAINT, family="DejaVu Sans", style="italic")
+
+    # ---- the cause, per entity, in words. Name left, money right, cause on its own line.
+    # Nothing shares a horizontal band with anything else, so nothing can collide.
+    ax = _panel(fig, .055, .330, "why each one moved  ·  the stage that broke, and where to go")
+    y = PTOP - 6
+    for r in rows[:5]:
+        if not r.get("dx"):
+            continue
+        cause, what, todo = r["dx"]
+        col = DXCOL.get(cause, MUTED)
+        mcol = GREEN if r["d_rev"] >= 0 else RED
+        ax.text(1.6, y, _clip(r["name"], 34), fontsize=F_ROW + 1, color=INK,
+                family="DejaVu Sans", weight="bold")
+        ax.text(98.4, y, "%s%s EGP   ·   %+.0f%% of the move" % (
+            "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"]),
+            fontsize=F_ROW + 1, color=mcol, family="DejaVu Sans", weight="bold", ha="right")
+        ax.text(1.6, y - 5.6, cause, fontsize=10, color=col, family="DejaVu Sans", weight="bold")
+        ax.text(24, y - 5.6, _clip(what, 96), fontsize=10, color=MUTED, family="DejaVu Sans")
+        ax.text(1.6, y - 10.8, "DO: " + _clip(todo, 116), fontsize=10, color=INK,
+                family="DejaVu Sans", style="italic")
+        y -= 16.0
+    _foot(fig, win)
+    return _png(fig)
+
+
 def card_bars(A, win, level):
     LV = {"campaign": ("Campaigns", "seg_campaigns"), "adset": ("Ad sets", "seg_adsets"),
           "ad": ("Ads", "seg_ads")}
     title, key = LV[level]
     roll_ = A.get(key) or {}
     proll = A.get(key + "_prev") or {}
-    ents = [e for e in roll_.values() if e["total"]["spend"] > 0]
-    ents = sorted(ents, key=lambda e: -e["total"]["spend"])[:8]
+    ents = [(k_, e) for k_, e in roll_.items() if e["total"]["spend"] > 0]
+    ents = sorted(ents, key=lambda kv: -kv[1]["total"]["spend"])[:8]
     if not ents: return None
     acc = A["summary"]["roas"] or 0
-    prevmap = {e["name"]: e["total"] for e in proll.values()}
-    fig = _fig(12.6)
-    _head(fig, A, win, "%s: where the money is and what it returns" % title,
-          "Bars are spend. Green beats the account's %.2fx, red loses to it. Everything else is percent change against the period before." % r2(acc))
+    prevmap = {k_: e["total"] for k_, e in proll.items()}   # match on ID, never on name
 
-    AX0, AY0, AW, AH = .270, .150, .250, .690
+    # each entity's share of the ACCOUNT's total revenue move, so the bars mean something
+    d_all = 0.0
+    for k_, e in roll_.items():
+        d_all += (e["total"].get("rev") or 0) - ((prevmap.get(k_) or {}).get("rev") or 0)
+    denom = abs(d_all) if abs(d_all) > 1 else (sum(
+        abs((e["total"].get("rev") or 0) - ((prevmap.get(k_) or {}).get("rev") or 0))
+        for k_, e in roll_.items()) or 1)
+
+    fig = _fig(14.4)
+    _head(fig, A, win, "%s: where the money is and what it returns" % title,
+          "Bars are spend. Green beats the account's %.2fx, red loses to it." % r2(acc))
+
+    AX0, AY0, AW, AH = .255, .150, .175, .660
     ax = fig.add_axes([AX0, AY0, AW, AH])
     ax.set_facecolor(BONE)
     for sp in ax.spines.values(): sp.set_visible(False)
     ax.set_yticks([]); ax.tick_params(colors=FAINT, labelsize=10)
-    ms = max(e["total"]["spend"] for e in ents) or 1
+    ms = max(e["total"]["spend"] for _k_, e in ents) or 1
     n = len(ents)
-    for i, e in enumerate(ents):
+    for i, (k_, e) in enumerate(ents):
         m = e["total"]; y = n - 1 - i
         col = GREEN if (m["roas"] or 0) >= acc else RED
         ax.barh([y], [m["spend"]], height=.58, color=col, alpha=.9, edgecolor="none")
-        ax.text(m["spend"] - ms * .015, y, _k(m["spend"]), fontsize=F_ROW + 1, color=PAPER,
-                family="DejaVu Sans", weight="bold", ha="right", va="center", zorder=3)
+        # A label only goes INSIDE the bar if the bar is actually long enough to hold it.
+        # Otherwise white text spills out of the bar and lands on the name gutter.
+        if m["spend"] >= ms * .32:
+            ax.text(m["spend"] - ms * .02, y, _k(m["spend"]), fontsize=F_ROW + 1, color=PAPER,
+                    family="DejaVu Sans", weight="bold", ha="right", va="center", zorder=3)
+        else:
+            ax.text(m["spend"] + ms * .02, y, _k(m["spend"]), fontsize=F_ROW + 1, color=INK,
+                    family="DejaVu Sans", weight="bold", ha="left", va="center", zorder=3)
     ax.set_ylim(-.6, n - .4); ax.set_xlim(0, ms * 1.02)
     ax.set_xlabel("SPEND", fontsize=F_HD, color=MUTED, family="DejaVu Sans")
 
     # names live in their own gutter, so they can never be clipped by the plot
-    for i, e in enumerate(ents):
-        m = e["total"]; q = prevmap.get(e["name"])
+    for i, (k_, e) in enumerate(ents):
+        m = e["total"]; q = prevmap.get(k_)
         yc = AY0 + AH * ((n - 1 - i) + .5) / n
-        fig.text(AX0 - .012, yc + .014, _clip(e["name"], 21), fontsize=F_ROW + 1, color=INK,
+        fig.text(AX0 - .012, yc + .016, _clip(e["name"], 21), fontsize=F_ROW + 1, color=INK,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
         parts = sorted(e["segments"].items(), key=lambda kv: -kv[1]["spend"])[:3]
         seg_t = "  ".join("%s %d%%" % (SEGN.get(k2, k2).split()[0], round(v["spend"] / (m["spend"] or 1) * 100))
                           for k2, v in parts)
-        fig.text(AX0 - .012, yc - .002, seg_t, fontsize=10, color=FAINT, family="DejaVu Sans",
+        fig.text(AX0 - .012, yc + .001, seg_t, fontsize=10, color=FAINT, family="DejaVu Sans",
                  ha="right", va="center")
         d_sp = _safe_pct(m["spend"], (q or {}).get("spend") or 0) if q else None
-        lab_sp = ("spend %s" % _d(d_sp)) if d_sp is not None else "new or restarted"
-        fig.text(AX0 - .012, yc - .018, lab_sp, fontsize=10.5, color=BLUE,
+        lab_sp = ("spend %s vs prev" % _d(d_sp)) if d_sp is not None else "new or restarted"
+        fig.text(AX0 - .012, yc - .014, lab_sp, fontsize=10, color=BLUE,
                  family="DejaVu Sans", weight="bold", ha="right", va="center")
 
+    # THE ACCOUNTABILITY COLUMN. What this entity did to revenue, in EGP, and what share of
+    # the whole account's move that is. This is the number he actually asked for.
+    RX = .530
+    fig.text(RX, AY0 + AH + .040, "REVENUE Δ", fontsize=10.5, color=INK,
+             family="DejaVu Sans", weight="bold", ha="right")
+    fig.text(RX, AY0 + AH + .022, "EGP · share of move", fontsize=8.6, color=FAINT,
+             family="DejaVu Sans", style="italic", ha="right")
+    # ONE legend line for the whole grid. Repeating "vs prev" under ten columns made the
+    # headers collide with each other, which is worse than not labelling them at all.
+    fig.text(.055, AY0 + AH + .062,
+             "EVERY SMALL PERCENT BELOW A NUMBER = THAT %s vs ITS OWN PREVIOUS PERIOD"
+             % title.rstrip("s").upper(),
+             fontsize=9.5, color=INK, family="DejaVu Sans", weight="bold")
+    for i, (k_, e) in enumerate(ents):
+        m = e["total"]; q = prevmap.get(k_)
+        y = AY0 + AH * ((n - 1 - i) + .5) / n + .008
+        if not q:
+            fig.text(RX, y, "new", fontsize=11.5, color=MUTED, family="DejaVu Sans",
+                     weight="bold", ha="right")
+            continue
+        d = (m.get("rev") or 0) - (q.get("rev") or 0)
+        col = GREEN if d >= 0 else RED
+        fig.text(RX, y, "%s%s" % ("+" if d >= 0 else "-", _k(abs(d))), fontsize=13,
+                 color=col, family="DejaVu Sans", weight="bold", ha="right")
+        fig.text(RX, y - .018, "%+.0f%% of move" % (d / denom * 100.0), fontsize=9.5,
+                 color=col, family="DejaVu Sans", weight="bold", ha="right")
+
+    # CPM is dropped. CPMR is the one that matters and two near-identical columns were what
+    # squeezed the grid until the numbers touched each other.
     COLS = [("ROAS", "roas", lambda v: "%.2f" % r2(v), True), ("CPP", "cpa", _k, False),
             ("AOV", "aov", _k, True), ("CVR", "cvr", lambda v: "%.2f%%" % r2(v), True),
             ("CPC", "cpc", lambda v: "%.2f" % r2(v), False), ("CTR-O", "octr", _pctv, True),
-            ("CPM", "cpm", _k, False), ("CPMR", "cpmr", _k, False),
+            ("CPMR", "cpmr", _k, False),
             ("FRQ", "freq", lambda v: "%.1f" % r2(v), False),
             ("PUR", "purch", lambda v: "%d" % int(v or 0), True)]
-    xs = [.578, .624, .672, .724, .766, .818, .858, .906, .942, .980]
+    xs = [.600 + i * .0485 for i in range(9)]      # evenly spaced, so nothing can collide
     for x, c in zip(xs, COLS):
-        fig.text(x, AY0 + AH + .022, c[0], fontsize=10.5, color=FAINT, family="DejaVu Sans",
+        fig.text(x, AY0 + AH + .040, c[0], fontsize=10.5, color=INK, family="DejaVu Sans",
                  weight="bold", ha="right")
-    for i, e in enumerate(ents):
-        m = e["total"]; q = prevmap.get(e["name"])
-        y = AY0 + AH * ((n - 1 - i) + .5) / n + .006
+    for i, (k_, e) in enumerate(ents):
+        m = e["total"]; q = prevmap.get(k_)
+        y = AY0 + AH * ((n - 1 - i) + .5) / n + .008
         for x, (nm_, k2, fmt, ug) in zip(xs, COLS):
             v = m_cpc(m) if k2 == "cpc" else m.get(k2)
-            fig.text(x, y, fmt(v), fontsize=11.5, color=INK, family="DejaVu Sans",
+            fig.text(x, y, fmt(v), fontsize=12, color=INK, family="DejaVu Sans",
                      weight="bold", ha="right")
             pv = (m_cpc(q) if k2 == "cpc" else q.get(k2)) if q else None
             d = _safe_pct(v or 0, pv or 0, floor=(0.01 if k2 not in ("spend",) else 50)) if q else None
-            fig.text(x, y - .018, _d(d) if d is not None else "n/a", fontsize=10,
+            fig.text(x, y - .018, _d(d) if d is not None else "n/a", fontsize=9.8,
                      color=impact(k2, d, v), family="DejaVu Sans", weight="bold", ha="right")
     _foot(fig, win)
     return _png(fig)
@@ -2607,8 +2938,35 @@ def msg_short(A, win):
             _clip(safe(S["cut"][0]["ad_name"]), 32), r2(S["cut"][0]["roas"]),
             (1 - (S["cut"][0]["roas"] or 0) / (s["roas"] or 1)) * 100,
             _clip(safe(S["fund"][0]["ad_name"]), 32), r2(S["fund"][0]["roas"]), S["gain_pct"]))
+
+    # WHO IS ACCOUNTABLE. Named, priced in EGP, share of the move, cause, and a link that
+    # opens that exact ad in Ads Manager. No hunting.
+    B = attribution(A, "ad", n=4)
+    if B and B["rows"]:
+        acct_id = A["account"].get("id") or ""
+        L.append("*WHO MOVED IT* — revenue change vs the period before, and each one's share of the account's move:")
+        for r in B["rows"]:
+            cause = (" · %s" % r["dx"][0]) if r.get("dx") else (" · new" if r["new"] else "")
+            L.append("• %s — *%s%s EGP* (%+.0f%% of the move)%s" % (
+                ads_link(_clip(safe(r["name"]), 40), acct_id, r["ent_id"]),
+                "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause))
+        top = B["rows"][0]
+        if top.get("dx"):
+            L.append("_%s_\n*Go and do:* %s" % (top["dx"][1], top["dx"][2]))
+
     L.append("_Margin and LTV are unknown from ad data. Nothing above assumes them._")
     return "\n".join(x for x in L if x)
+
+
+def ads_link(label, acct_id, ad_id):
+    """A Slack link that opens THAT EXACT AD in Ads Manager, filtered to it. Named ads in a
+    memo are useless if he has to go and find them by hand."""
+    a = str(acct_id or "").replace("act_", "")
+    if not a or not ad_id:
+        return label
+    url = ("https://adsmanager.facebook.com/adsmanager/manage/ads"
+           "?act=%s&selected_ad_ids=%s" % (a, ad_id))
+    return "<%s|%s>" % (url, label)
 
 
 def render_cards(A, win):
@@ -2620,6 +2978,8 @@ def render_cards(A, win):
                         ("trend", lambda: card_trend(A, win)),
                         ("audience", lambda: card_audience(A, win)),
                         ("funnel", lambda: card_funnel(A, win)),
+                        ("blame", lambda: card_blame(A, win, "ad")),
+                        ("blame_camp", lambda: card_blame(A, win, "campaign")),
                         ("decay", lambda: card_decay(A, win)),
                         ("retention", lambda: card_retention(A, win)),
                         ("verdicts", lambda: card_verdicts(A, win)),
@@ -3455,6 +3815,9 @@ def full_metrics(g):
         "cpmr": round(spend / reach * 1000, 2) if reach else 0,
         "freq": round(impr / reach, 2) if reach else 0,
         "atc_rate": round(atc / lc * 100, 1) if lc else 0,
+        # the video funnel, so diagnose() can tell a hook problem from a page problem
+        "hook": round(sum(c.get("v3", 0) for c in g) / impr * 100, 1) if impr else 0,
+        "hold": round(sum(c.get("thru", 0) for c in g) / (sum(c.get("v3", 0) for c in g) or 1) * 100, 1),
         "reach": int(reach), "impr": int(impr), "lc": round(lc), "n": len(g),
     }
 
@@ -3681,15 +4044,17 @@ def main():
                            "trend": "*2 · THE TREND* — rolling 7 day. Frequency, CPMR and CPM are never judged on one day.",
                            "audience": "*3 · WHERE THE MONEY WENT* — spend allocation by audience, and whether the mix or the performance moved the account.",
                            "funnel": "*4 · THE FUNNEL* — hook to hold to CTR to ATC to CVR to ROAS, and the first stage that broke.",
-                           "decay": "*5 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, with the metric responsible.",
-                           "retention": "*6 · WHERE EVERY VIDEO LOSES THEM* — hook rate, the drop-off curve, the biggest cliff, and CPMR.",
-                           "verdicts": "*7 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
-                           "scenarios": "*8 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
-                           "plan": "*9 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
+                           "blame": "*5 · WHO MOVED THE REVENUE — ADS* — every ad's share of the account's revenue change, in EGP, with the stage that broke and where to go.",
+                           "blame_camp": "*6 · WHO MOVED THE REVENUE — CAMPAIGNS* — same, one level up.",
+                           "decay": "*7 · IT WAS WORKING, NOW IT IS NOT* — creatives that fell below the account, the metric responsible, and the place to go and look.",
+                           "retention": "*8 · WHERE EVERY VIDEO LOSES THEM* — hook rate, the drop-off curve, the biggest cliff, and CPMR.",
+                           "verdicts": "*9 · THE VERDICT ON EVERY AD* — scale, iterate, monitor or kill, plus the hit rate and how many creatives to launch.",
+                           "scenarios": "*10 · WHAT HAPPENS IF* — spend, CVR, CPM and frequency, each priced in revenue.",
+                           "plan": "*11 · DO TODAY / DO THIS WEEK / MONITOR* — every line with its expected impact.",
                            "decide_unused": "*x* — the decision map and the money move.",
-                           "campaigns": "*10 · CAMPAIGNS* — every metric, versus the account.",
-                           "adsets": "*11 · AD SETS* — every metric, versus the account.",
-                           "ads": "*12 · ADS* — every metric, versus the account."}
+                           "campaigns": "*12 · CAMPAIGNS* — every metric, plus revenue Δ in EGP and share of the move.",
+                           "adsets": "*13 · AD SETS* — every metric, plus revenue Δ in EGP and share of the move.",
+                           "ads": "*14 · ADS* — every metric, plus revenue Δ in EGP and share of the move."}
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
