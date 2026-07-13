@@ -4,10 +4,19 @@ name: AI Media Buyer
 # You do not run anything. Your laptop can be off. Nobody has to be online.
 on:
   schedule:
-    # GitHub cron is UTC only. Egypt is UTC+3 in summer, so 06:17 UTC ~= 9AM Cairo.
-    # Off the :00 minute on purpose: GitHub heavily throttles and often drops crons scheduled at exactly :00.
+    # GitHub cron is UTC only. Egypt is UTC+3, so:
+    #   06:17 UTC = 09:17 Cairo  -> the daily + 3 day read, and the new-launch feed
+    #   23:17 UTC = 02:17 Cairo the NEXT day -> the 7 day (Saturdays) and the 30 day (1st of month)
+    # analyze.py reads the Cairo clock and decides which of those it is actually writing.
+    # Off the :00 minute on purpose: GitHub throttles and often drops crons set to exactly :00.
     - cron: "17 6 * * *"
-  workflow_dispatch: {}   # lets you also trigger it by hand from the Actions tab
+    - cron: "17 23 * * *"
+  workflow_dispatch:      # trigger by hand from the Actions tab
+    inputs:
+      windows:
+        description: "Which reads to post. Blank = follow the schedule. e.g. 7day or daily,30day"
+        required: false
+        default: ""
 
 permissions:
   contents: write         # so it can commit data.json + state.json back
@@ -33,6 +42,7 @@ jobs:
         env:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          FORCE_WINDOWS: ${{ github.event.inputs.windows }}
         run: python analyze.py --daily
 
       - name: Commit dashboard data + alert state
