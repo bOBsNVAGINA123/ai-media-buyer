@@ -38,65 +38,64 @@ def _chrome():
     return None
 
 
-MAXH = 16000          # a canvas nothing can outgrow. The picture is then cropped to the content.
+MAXH = 9000           # the measuring canvas. Nothing is ever this tall.
+
+
+def _shot(html_path, png_path, height, scale):
+    exe = _chrome()
+    cmd = [exe, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+           "--force-device-scale-factor=%s" % scale, "--virtual-time-budget=2500",
+           "--window-size=%d,%d" % (W, int(height)),
+           "--screenshot=%s" % png_path, "file://" + html_path]
+    subprocess.run(cmd, capture_output=True, timeout=120)
+    return os.path.exists(png_path) and os.path.getsize(png_path) > 1000
+
+
+def _content_height(png_path):
+    """The last row of pixels that is not background, in CSS pixels."""
+    try:
+        from PIL import Image
+    except Exception:
+        return None
+    im = Image.open(png_path).convert("RGB")
+    w, h = im.size
+    bg = im.getpixel((2, 2))
+    px = im.load()
+    for y in range(h - 1, -1, -1):
+        for x in range(0, w, 8):
+            p = px[x, y]
+            if abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 12:
+                return y + 1
+    return None
 
 
 def shoot(html, height=None):
-    """HTML in, PNG bytes out — cropped to the content.
+    """HTML in, PNG bytes out, cropped to the content — in two cheap passes.
 
-    Declaring a fixed pixel height for every card was a guess, and every guess was wrong in one
-    of two ways: too short and the last row is sliced in half, too tall and a third of the image
-    is dead white space. So render onto a canvas taller than any card can ever be, then measure
-    where the content actually ends and cut there. No more guessing, ever.
+    Declaring a pixel height per card was a guess, and every guess was wrong one of two ways:
+    too short and the last row is sliced in half, too tall and a third of the image is dead
+    white. So: pass one renders at 1x onto a tall canvas purely to MEASURE where the content
+    ends. Pass two renders at 2x to exactly that height. Measuring at 1x matters — a 9000px
+    canvas at 2x is a 60 megapixel screenshot, and doing that 66 times is how you turn a six
+    minute job into a twenty minute one.
     """
-    exe = _chrome()
-    if not exe: return None
+    if not _chrome(): return None
     d = tempfile.mkdtemp()
-    f = os.path.join(d, "c.html"); png = os.path.join(d, "c.png")
+    f = os.path.join(d, "c.html")
+    p1 = os.path.join(d, "m.png"); p2 = os.path.join(d, "c.png")
     with open(f, "w") as fh: fh.write(html)
-    cmd = [exe, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-           "--force-device-scale-factor=2", "--virtual-time-budget=3000",
-           "--window-size=%d,%d" % (W, MAXH),
-           "--screenshot=%s" % png, "file://" + f]
     try:
-        subprocess.run(cmd, capture_output=True, timeout=120)
-        if not (os.path.exists(png) and os.path.getsize(png) > 2000): return None
-        return _crop(png)
+        h = None
+        if _shot(f, p1, MAXH, 1):
+            h = _content_height(p1)
+        h = (h + 28) if h else int(height or 2200)      # a breath of margin under the last card
+        h = max(500, min(MAXH, h))
+        if _shot(f, p2, h, 2):
+            with open(p2, "rb") as fh: return fh.read()
     except Exception:
         import traceback
         sys.stderr.write("[shoot] %s\n" % traceback.format_exc())
     return None
-
-
-def _crop(path):
-    """Find the last row of pixels that is not the page background, and cut just below it."""
-    try:
-        from PIL import Image
-    except Exception:
-        with open(path, "rb") as fh: return fh.read()     # no Pillow: ship the tall image
-    im = Image.open(path).convert("RGB")
-    w, h = im.size
-    bg = im.getpixel((2, 2))                              # the page background, whatever it is
-    px = im.load()
-    step = 4                                              # sample every 4th column: fast, and a
-    last = 0                                              # card is never 4px of content wide
-    for y in range(h - 1, -1, -1):
-        row_has_ink = False
-        for x in range(0, w, step):
-            p = px[x, y]
-            if abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 12:
-                row_has_ink = True
-                break
-        if row_has_ink:
-            last = y
-            break
-    pad = 56                                              # a breath of margin under the last card
-    bottom = min(h, last + pad)
-    im = im.crop((0, 0, w, max(400, bottom)))
-    import io as _io
-    buf = _io.BytesIO()
-    im.save(buf, format="PNG", optimize=True)
-    return buf.getvalue()
 
 
 # ---------------------------------------------------------------- design system
