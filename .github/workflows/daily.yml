@@ -27,7 +27,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install the chart renderer
-        run: pip install --quiet matplotlib
+        run: pip install --quiet matplotlib pillow
 
       - name: Run the media buyer
         env:
