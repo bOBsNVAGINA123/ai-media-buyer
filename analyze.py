@@ -323,6 +323,55 @@ def get_ad_statuses(acct, max_pages=12):
         if not after: break
     return out
 
+def get_ad_created(acct, max_pages=12):
+    """{ad_id: (created_time, name)}. The hit rate is meaningless without launch dates: you
+    cannot say 'launch 10 to get 1' if you do not know how many you actually launched."""
+    out, after, pages = {}, None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,created_time,effective_status", "limit": 500}
+        if after: p["after"] = after
+        d = api_get("%s/ads" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []):
+            out[str(a["id"])] = {"created": (a.get("created_time") or "")[:10],
+                                 "name": a.get("name") or "",
+                                 "status": a.get("effective_status") or ""}
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    return out
+
+
+def launch_stats(A, days=30):
+    """HOW MANY CREATIVES DID YOU ACTUALLY LAUNCH, AND HOW MANY WON.
+    Counted on ads CREATED in the window, judged on their whole life in it. Catalogue and DPA
+    are excluded: a product feed is not a creative you shot."""
+    created = A.get("ad_created") or {}
+    m30 = A.get("b30") or {}
+    acc = A.get("b30_acc") or A.get("b7_acc") or A["summary"]
+    a_roas = acc.get("roas") or 0
+    if not created or not m30: return None
+    cut = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+
+    launched, spent, winners, losers, pending = [], [], [], [], []
+    for aid, meta in created.items():
+        if not meta.get("created") or meta["created"] < cut: continue
+        k = m30.get(aid)
+        if k and is_catalogue(k): continue
+        launched.append(aid)
+        if not k or (k.get("spend") or 0) < EVIDENCE["spend"] or (k.get("purch") or 0) < EVIDENCE["purch"]:
+            pending.append(aid)                    # launched, not yet judged
+            continue
+        spent.append(aid)
+        (winners if (k.get("roas") or 0) >= a_roas else losers).append(aid)
+    if not spent: return None
+    hr = max(0.02, min(0.9, len(winners) / len(spent)))
+    return {"days": days, "launched": len(launched), "judged": len(spent),
+            "winners": len(winners), "losers": len(losers), "pending": len(pending),
+            "hr": hr * 100, "need_1": int(math.ceil(1 / hr)), "need_3": int(math.ceil(3 / hr)),
+            "bar": a_roas, "min_spend": EVIDENCE["spend"], "min_pur": EVIDENCE["purch"],
+            "win_ids": winners}
+
+
 # ---------- Meta's OWN audience segment breakdown. The ground truth. No inference. ----------
 # user_segment_key returns: prospecting | engaged | existing | unknown
 SEGKEY = {"prospecting": "NEW", "engaged": "ENGAGED", "existing": "EXISTING", "unknown": "UNKNOWN"}
@@ -1865,7 +1914,7 @@ def proposals(A, win):
 # are seeing the same ad again, they are reacting to it less, and the auction is charging you
 # more to keep showing it. Each of those is a measurable change against the SAME ad's previous
 # 7 days. Five tests. The card prints the ad's actual value for every one of them.
-FATG = {"freq": 3.0, "octr": -15.0, "cpm": 15.0, "hook": -15.0, "cpp": 20.0}
+FATG = {"freq": 3.0, "sat": 4.0, "octr": -15.0, "cpm": 15.0, "hook": -15.0, "cpp": 20.0}
 FATG_CRIT = [
     ("frequency over 3.0", "the same people are seeing it again"),
     ("outbound CTR down over 15%", "they are reacting to it less than they did"),
@@ -1873,7 +1922,8 @@ FATG_CRIT = [
     ("hook rate down over 15%", "the first 3 seconds stopped stopping them"),
     ("CPP up over 20%", "each purchase now costs more than it did"),
 ]
-FATCOL = {"FATIGUED": RED, "FATIGUING": AMBER, "FRESH": GREEN, "NO PRIOR": FAINT}
+FATCOL = {"FATIGUED": RED, "SATURATED": RED, "FATIGUING": AMBER, "FRESH": GREEN,
+          "NO PRIOR": FAINT}
 
 
 def fatigue_scan(A, min_spend=500.0):
@@ -1913,10 +1963,18 @@ def fatigue_scan(A, min_spend=500.0):
               if d_cpp is not None else NA),
         ]
         hits = sum(1 for t in tests if t["ok"])
+        # A catalogue ad has no hook, so only four of the five tests can EVER fire on it. Under
+        # the old rule an ad being shown 5.3 times to the same people with a CPP up 33% came out
+        # as merely "FATIGUING", and the FATIGUED column sat empty forever. Frequency past 4.0 is
+        # saturation on its own: you are buying the same eyeballs again and paying more for them.
         if not p:
             state = "NO PRIOR"
+        elif fq > FATG["sat"] and hits >= 2:
+            state = "FATIGUED"
         elif hits >= 3 and fq > FATG["freq"]:
             state = "FATIGUED"
+        elif fq > FATG["sat"]:
+            state = "SATURATED"
         elif hits >= 2:
             state = "FATIGUING"
         else:
@@ -1926,7 +1984,7 @@ def fatigue_scan(A, min_spend=500.0):
                     "d_octr": d_octr, "d_cpm": d_cpm, "d_hook": d_hook, "d_cpp": d_cpp,
                     "spend": k.get("spend") or 0, "roas": k.get("roas") or 0,
                     "hook": k.get("hook") or 0, "hold": k.get("hold") or 0})
-    ORD = {"FATIGUED": 0, "FATIGUING": 1, "FRESH": 2, "NO PRIOR": 3}
+    ORD = {"FATIGUED": 0, "SATURATED": 1, "FATIGUING": 2, "FRESH": 3, "NO PRIOR": 4}
     out.sort(key=lambda r: (ORD[r["state"]], -r["spend"]))
     return out
 
@@ -2007,10 +2065,12 @@ def brief_lines(P):
                % (safe(top.get("ad_name") or ""), r2(top.get("roas") or 0), r2(P["acc_roas"])))
 
     def gap(key, thresh=0.08):
-        """Only say something separates the winners if something actually does. A 0.1% gap is
-        not a finding, and printing it as one is how a dashboard starts lying quietly."""
+        """Only say something separates the winners if something actually does, AND only if the
+        winners are the better side of it. Printing "winners hold 26%, losers hold 55%" under a
+        heading that says MAKE MORE OF WHAT WORKED is worse than saying nothing."""
         w_, l_ = W.get(key), L.get(key)
         if not w_ or not l_: return False
+        if w_ <= l_: return False
         return abs(w_ - l_) / max(w_, l_) >= thresh
 
     if gap("hook"):
@@ -5311,6 +5371,17 @@ def main():
         # him the actual creative and not just name it.
         TOPIDS = [m["ad_id"] for m in sorted(B7.values(), key=lambda x: -(x.get("spend") or 0))[:30]]
         PREVIEWS = get_ad_previews(acct["id"], TOPIDS)
+        # THE LAST 30 DAYS, AND WHEN EVERY AD WAS BORN. Without launch dates a "hit rate" is a
+        # made up number: you cannot divide winners by ads launched if you never counted the ads
+        # you launched.
+        d30 = {"since": str(y - datetime.timedelta(days=29)), "until": str(y)}
+        rows30 = get_insights(acct["id"], d30) or []
+        B30 = {}
+        for r in rows30:
+            m = metric(r)
+            if m["ad_id"]: B30[str(m["ad_id"])] = m
+        B30_ACC = agg(list(B30.values())) if B30 else None
+        AD_CREATED = get_ad_created(acct["id"])
         A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
@@ -5349,13 +5420,21 @@ def main():
                     AW["b7_acc"] = B7_ACC    # the account's last 7 days
                     AW["ad_daily"] = AD_DAILY   # each ad's own daily series, for the weekly graph
                     AW["previews"] = PREVIEWS   # Meta's shareable creative previews
-                    CAP = {"1-executive": "*1 · WHAT HAPPENED* — spend and revenue together, and whether the move was the budget or the account.",
-                           "2-cause": "*2 · WHAT CAUSED IT* — every campaign, split into the budget you changed and the performance that changed.",
-                           "3-winners": "*3 · WHAT IS WORKING, WHAT STOPPED* — with the criteria for every label printed on the card.",
-                           "4-money": "*4 · WHAT TO DO WITH THE MONEY* — current budget, recommended budget, extra spend, expected revenue.",
-                           "5-audience": "*5 · WHERE THE MONEY IS* — every segment, and exactly how much to shift, in EGP per day.",
-                           "6-fatigue": "*6 · CREATIVE FATIGUE AND HOOK RATE* — every ad against all five fatigue tests, with its actual number for each.",
-                           "7-makemore": "*7 · MAKE MORE OF WHAT WORKED* — the hit rate, what the winners share, and the brief for the next shoot."}
+                    AW["b30"] = B30            # the last 30 days per ad
+                    AW["b30_acc"] = B30_ACC
+                    AW["ad_created"] = AD_CREATED   # when each ad was launched
+                    CAP = {
+                        "1-account": "*1 · THE ACCOUNT* — what happened, and whether the move was the budget or the account.",
+                        "2-campaigns": "*2 · CAMPAIGNS* — which campaigns moved it, every metric against its own previous period.",
+                        "3-adsets": "*3 · AD SETS* — same read, one level down.",
+                        "4-ads": "*4 · ADS* — same read, at the ad.",
+                        "5-verdicts": "*5 · WHAT IS WORKING, WHAT STOPPED* — with the criteria for every label printed on the card.",
+                        "6-money": "*6 · WHAT TO DO WITH THE MONEY* — current budget, recommended budget, extra spend, expected revenue.",
+                        "7-audience": "*7 · WHERE THE MONEY IS* — every segment, and exactly how much to shift, in EGP per day.",
+                        "8-fatigue": "*8 · CREATIVE FATIGUE* — every ad against all five tests, the week AND today.",
+                        "9-makemore": "*9 · MAKE MORE OF WHAT WORKED* — how many you launched, how many won, and the brief.",
+                        "10-observations": "*10 · GENERAL OBSERVATIONS* — the account in plain sentences, money attached.",
+                    }
                     cards = render_cards(AW, win)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
