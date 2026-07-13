@@ -365,11 +365,15 @@ def launch_stats(A, days=30):
         (winners if (k.get("roas") or 0) >= a_roas else losers).append(aid)
     if not spent: return None
     hr = max(0.02, min(0.9, len(winners) / len(spent)))
+    # NAME THEM. "8 winners" is a number; "these are the eight, in order of revenue" is a brief.
+    best = sorted((m30[i] for i in winners), key=lambda k: -(k.get("rev") or 0))
+    worst = sorted((m30[i] for i in losers), key=lambda k: (k.get("roas") or 0))
     return {"days": days, "launched": len(launched), "judged": len(spent),
             "winners": len(winners), "losers": len(losers), "pending": len(pending),
             "hr": hr * 100, "need_1": int(math.ceil(1 / hr)), "need_3": int(math.ceil(3 / hr)),
             "bar": a_roas, "min_spend": EVIDENCE["spend"], "min_pur": EVIDENCE["purch"],
-            "win_ids": winners}
+            "win_ids": winners, "best": best[:5], "worst": worst[:3],
+            "created": created}
 
 
 def get_budgets(acct, max_pages=12):
@@ -3550,19 +3554,28 @@ def card_bars(A, win, level):
 
 
 def msg_short(A, win):
-    """SHORT. The images carry the detail; this is the headline you read on your phone.
-    Six lines, the biggest numbers, and nothing else."""
+    """SHORT, BUT NEVER MISSING A METRIC. Every line carries ROAS, CPP, AOV, CVR and CPMR,
+    because a ROAS with no CPP and no AOV underneath it is half a fact."""
     s = A["summary"]; p = s.get("prev") or {}
-    acct_id = A["account"].get("id") or ""
     D = decompose({"spend": s.get("spend"), "rev": s.get("rev")},
                   {"spend": p.get("spend"), "rev": p.get("rev")})
+
+    def mline(m, q):
+        """the five metrics, each with its own previous period, on one line"""
+        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · CPMR *%s* (%s)"
+                % (r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, (q or {}).get("roas") or 0)) or "n/a",
+                   _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, (q or {}).get("cpa") or 0)) or "n/a",
+                   _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, (q or {}).get("aov") or 0)) or "n/a",
+                   r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, (q or {}).get("cvr") or 0)) or "n/a",
+                   _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, (q or {}).get("cpmr") or 0)) or "n/a"))
+
     L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
                                        _fmt_range(DATES.get("label")),
                                        _fmt_range(DATES.get("p_label")))]
-    L.append("Revenue *%s* (%s)  ·  Spend *%s* (%s)  ·  ROAS *%.2fx* (%s)" % (
-        _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a",
+    L.append("Spend *%s* (%s) · Revenue *%s* (%s)" % (
         _k(s.get("spend") or 0), _d(pct(s.get("spend") or 0, p.get("spend") or 0)) or "n/a",
-        r2(s.get("roas") or 0), _d(pct(s.get("roas") or 0, p.get("roas") or 0)) or "n/a"))
+        _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a"))
+    L.append(mline(s, p))
     if D:
         L.append("_%s: %s%s of the move was the budget, %s%s was the account._" % (
             "BUDGET" if D["driver"] == "SPEND" else "PERFORMANCE",
@@ -3572,28 +3585,36 @@ def msg_short(A, win):
     S = adset_plan(A, win)
     if S and S["up"]:
         r = S["up"][0]
-        L.append("*RAISE:* %s — %s → *%s/day* (%.2fx) → *+%s rev/day*" % (
-            _clip(r["name"], 30),
-            ("CBO, change the campaign" if r["cbo"] else "%s" % _k(r["cur"])),
-            ("campaign %s" % _clip(r["campaign"], 22)) if r["cbo"] else _k(r["new"]),
-            r2(r["roas"]), _k(r["inc"])))
+        L.append("\n*RAISE THE AD SET* — %s" % _clip(r["name"], 40))
+        L.append("     %s → *%s/day* (%s%s) → *+%s rev/day*" % (
+            ("CBO: change the campaign %s" % _clip(r["campaign"], 26)) if r["cbo"] else _k(r["cur"]),
+            ("campaign" if r["cbo"] else _k(r["new"])),
+            "+" if r["delta"] >= 0 else "-", _k(abs(r["delta"])), _k(r["inc"])))
+        L.append("     %s" % mline(r["m"], r["prev"]))
     if S and S["down"]:
         r = S["down"][0]
-        L.append("*CUT:* %s — %s → *%s/day* (%.2fx, frq %.2f)" % (
-            _clip(r["name"], 30), _k(r["cur"]), _k(max(0, r["new"])), r2(r["roas"]), r2(r["freq"])))
+        L.append("\n*CUT THE AD SET* — %s" % _clip(r["name"], 40))
+        L.append("     %s → *%s/day* (frequency %.2f)" % (
+            _k(r["cur"]), _k(max(0, r["new"])), r2(r["freq"])))
+        L.append("     %s" % mline(r["m"], r["prev"]))
 
     F = fatigue_scan(A)
     tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED")]
     if tired:
-        L.append("*KILL:* %s — %.2fx, frequency *%.2f* (%s)" % (
-            _clip(tired[0]["name"], 30), r2(tired[0]["roas"]), tired[0]["freq"],
-            tired[0]["state"]))
+        t = tired[0]
+        L.append("\n*BURNING OUT* — %s (%s, frequency *%.2f*)" % (
+            _clip(t["name"], 40), t["state"], t["freq"]))
+        L.append("     %s" % mline(t["k"], t["k"].get("prev")))
 
     LS = launch_stats(A, 30)
     if LS:
-        L.append("*CREATIVE:* %d launched / 30d, %d won → *%.0f%% hit rate*, launch *%d* for the next winner."
-                 % (LS["launched"], LS["winners"], LS["hr"], LS["need_1"]))
-    L.append("_Full detail in the cards above._")
+        L.append("\n*CREATIVE* — %d launched / 30d, %d judged, %d won → *%.0f%% hit rate*. "
+                 "Launch *%d* for the next winner." % (
+                     LS["launched"], LS["judged"], LS["winners"], LS["hr"], LS["need_1"]))
+        if LS["best"]:
+            k = LS["best"][0]
+            L.append("     Best: *%s* — %s" % (_clip(safe(k.get("ad_name") or ""), 36),
+                                               mline(k, k.get("prev"))))
     return "\n".join(L)
 
 

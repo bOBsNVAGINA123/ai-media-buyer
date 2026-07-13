@@ -38,26 +38,65 @@ def _chrome():
     return None
 
 
-def shoot(html, height):
-    """HTML in, PNG bytes out. Chrome screenshots exactly the window, so the card declares its
-    own height and the body is clipped to it. No scrollbars, no half-cut panels."""
+MAXH = 16000          # a canvas nothing can outgrow. The picture is then cropped to the content.
+
+
+def shoot(html, height=None):
+    """HTML in, PNG bytes out — cropped to the content.
+
+    Declaring a fixed pixel height for every card was a guess, and every guess was wrong in one
+    of two ways: too short and the last row is sliced in half, too tall and a third of the image
+    is dead white space. So render onto a canvas taller than any card can ever be, then measure
+    where the content actually ends and cut there. No more guessing, ever.
+    """
     exe = _chrome()
     if not exe: return None
     d = tempfile.mkdtemp()
     f = os.path.join(d, "c.html"); png = os.path.join(d, "c.png")
     with open(f, "w") as fh: fh.write(html)
     cmd = [exe, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-           "--force-device-scale-factor=2", "--default-background-color=00000000",
-           "--virtual-time-budget=2500",
-           "--window-size=%d,%d" % (W, int(height)),
+           "--force-device-scale-factor=2", "--virtual-time-budget=3000",
+           "--window-size=%d,%d" % (W, MAXH),
            "--screenshot=%s" % png, "file://" + f]
     try:
-        subprocess.run(cmd, capture_output=True, timeout=90)
-        if os.path.exists(png) and os.path.getsize(png) > 2000:
-            with open(png, "rb") as fh: return fh.read()
+        subprocess.run(cmd, capture_output=True, timeout=120)
+        if not (os.path.exists(png) and os.path.getsize(png) > 2000): return None
+        return _crop(png)
     except Exception:
-        pass
+        import traceback
+        sys.stderr.write("[shoot] %s\n" % traceback.format_exc())
     return None
+
+
+def _crop(path):
+    """Find the last row of pixels that is not the page background, and cut just below it."""
+    try:
+        from PIL import Image
+    except Exception:
+        with open(path, "rb") as fh: return fh.read()     # no Pillow: ship the tall image
+    im = Image.open(path).convert("RGB")
+    w, h = im.size
+    bg = im.getpixel((2, 2))                              # the page background, whatever it is
+    px = im.load()
+    step = 4                                              # sample every 4th column: fast, and a
+    last = 0                                              # card is never 4px of content wide
+    for y in range(h - 1, -1, -1):
+        row_has_ink = False
+        for x in range(0, w, step):
+            p = px[x, y]
+            if abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 12:
+                row_has_ink = True
+                break
+        if row_has_ink:
+            last = y
+            break
+    pad = 56                                              # a breath of margin under the last card
+    bottom = min(h, last + pad)
+    im = im.crop((0, 0, w, max(400, bottom)))
+    import io as _io
+    buf = _io.BytesIO()
+    im.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 
 # ---------------------------------------------------------------- design system
@@ -610,26 +649,27 @@ def c_winners(A, win):
             tests = " &nbsp;·&nbsp; ".join(
                 "<b>%s</b> %s (%s)" % ("PASS" if t["ok"] else "FAIL", esc(t["t"]), esc(t["v"]))
                 for t in r["tests"][:4])
+            # EVERY METRIC AGAINST ITS OWN PREVIOUS PERIOD. A verdict with no baseline is a hunch.
+            q = k.get("prev") or {}
+            cells = ""
+            for lab_, key, f, lb in (("spend", "spend", "%s", False), ("roas", "roas", "%.2fx", False),
+                                     ("cpp", "cpa", "%s", True), ("aov", "aov", "%s", False),
+                                     ("cvr", "cvr", "%.2f%%", False), ("out ctr", "octr", "%.2f%%", False),
+                                     ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
+                a_, b_ = k.get(key) or 0, q.get(key) or 0
+                v = _k(a_) if f == "%s" else (f % r2(a_))
+                cells += ('<td>%s<div style="margin-top:5px">%s</div>'
+                          '<span class="s">%s · 7d</span></td>'
+                          % (v, pill(pct(a_, b_), lower_better=lb) if b_ else
+                             '<span class="pill nu">new</span>', lab_))
             tr += ('<tr><td class=l><div class="ncell"><span class="bar" style="background:%s"></span>'
                    '<span class="nm">%s</span>'
-                   '<span class="sn">%s &nbsp; %s &nbsp;·&nbsp; confidence %s</span></div></td>'
-                   '<td>%s<span class="s">spend · 7d</span></td>'
-                   '<td class="%s">%.2fx<span class="s">roas · 7d · acct %.2fx</span></td>'
-                   '<td>%s<span class="s">cpp · 7d</span></td><td>%s<span class="s">aov · 7d</span></td>'
-                   '<td>%.2f%%<span class="s">cvr · 7d</span></td><td>%.2f%%<span class="s">out ctr · 7d</span></td>'
-                   '<td class="%s">%.2f<span class="s">freq · 7d</span></td>'
-                   '<td>%d<span class="s">purchases · 7d</span></td>'
-                   '<td style="width:250px">%s</td></tr>'
+                   '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s &nbsp;·&nbsp; %d purchases</span>'
+                   '<span class="sn one">account ROAS %.2fx</span></div></td>%s'
+                   '<td style="width:260px">%s</td></tr>'
                    '<tr><td colspan=10 class="why" style="border:0">%s</td></tr>'
-                   % (col, esc(_clip(r["name"], 46)), status(lab), esc(r["kind"]), r["conf"],
-                      _k(k.get("spend") or 0),
-                      "g" if (k.get("roas") or 0) >= (acc.get("roas") or 0) else "r",
-                      r2(k.get("roas") or 0), r2(acc.get("roas") or 0),
-                      _k(k.get("cpa") or 0), _k(k.get("aov") or 0), r2(k.get("cvr") or 0),
-                      r2(k.get("octr") or 0),
-                      "r" if (k.get("freq") or 0) > 4.0 else "",
-                      r2(k.get("freq") or 0), int(k.get("purch") or 0),
-                      an, tests))
+                   % (col, esc(_clip(r["name"], 42)), status(lab), esc(r["kind"]), r["conf"],
+                      int(k.get("purch") or 0), r2(acc.get("roas") or 0), cells, an, tests))
         return tr
 
     def blk(title, ic, note, rs):
@@ -964,111 +1004,147 @@ def c_fatigue(A, win):
 
 # ---------------------------------------------------------------- 7 · MAKE MORE
 def c_makemore(A, win):
-    P = winning_pattern(A)
+    """THE CREATIVE SCREEN. How many you launched, how many won, the criteria, the winners by
+    name with every metric against the previous period, and the ones that are burning out."""
     LS = az.launch_stats(A, 30)
-    if not P and not LS: return None
+    P = winning_pattern(A)
+    F = fatigue_scan(A)
+    if not LS and not P and not F: return None
 
-    top = ""
+    body = ""
     if LS:
-        top = ('<div class="card">%s<div class="grid g4">%s%s%s%s</div>%s%s</div>'
-               % (head("star", "How many creatives to launch",
-                       "counted on ads you actually LAUNCHED in the last 30 days"),
-                  kpi("Launched · 30d", "%d" % LS["launched"], "pencil", "b",
-                      prev="new ads created in the last 30 days", big=True),
-                  kpi("Judged", "%d" % LS["judged"], "rules", "n",
-                      prev="%d still gathering data" % LS["pending"], big=True),
-                  kpi("Winners", "%d" % LS["winners"], "star", "g",
-                      prev="%d lost to the account" % LS["losers"], big=True),
-                  kpi("Hit rate", "%.0f%%" % LS["hr"], "target", "p",
-                      prev="launch %d to get 1  ·  %d to get 3"
-                           % (LS["need_1"], LS["need_3"]), big=True),
-                  call("c-b",
-                       "<b>THE CRITERIA.</b> An ad counts as JUDGED once it has spent at least "
-                       "<b>%s EGP</b> and taken at least <b>%d purchases</b> in the 30 days. It counts "
-                       "as a WINNER if its ROAS beats the account's <b>%.2fx over those same 30 days</b>. "
-                       "Catalogue and DPA are excluded on both sides: a product feed is not a creative "
-                       "you shot."
-                       % (_k(LS["min_spend"]), LS["min_pur"], r2(LS["bar"])), icon="rules"),
-                  call("c-a",
-                       "At a <b>%.0f%%</b> hit rate you must launch <b>%d</b> new creatives to get 1 more "
-                       "winner and <b>%d</b> to get 3. You launched <b>%d</b> in the last 30 days."
-                       % (LS["hr"], LS["need_1"], LS["need_3"], LS["launched"]), icon="warn")))
-    if not P:
-        return page(A, win, "Make more of what worked",
-                    "How many creatives you must launch, and against which bar.",
-                    top, 250 + 560 + 110)
+        body += ('<div class="card">%s<div class="grid g4">%s%s%s%s</div>%s%s</div>'
+                 % (head("star", "How many creatives to launch",
+                         "counted on ads you actually LAUNCHED in the last 30 days"),
+                    kpi("Launched · 30d", "%d" % LS["launched"], "pencil", "b",
+                        prev="new ads created in the last 30 days", big=True),
+                    kpi("Judged", "%d" % LS["judged"], "rules", "n",
+                        prev="%d still gathering data" % LS["pending"], big=True),
+                    kpi("Winners", "%d" % LS["winners"], "star", "g",
+                        prev="%d lost to the account" % LS["losers"], big=True),
+                    kpi("Hit rate", "%.0f%%" % LS["hr"], "target", "p",
+                        prev="launch %d to get 1  ·  %d to get 3" % (LS["need_1"], LS["need_3"]),
+                        big=True),
+                    call("c-b",
+                         "<b>THE CRITERIA.</b> An ad is <b>JUDGED</b> once it has spent at least "
+                         "<b>%s EGP</b> and taken at least <b>%d purchases</b> inside the 30 days. It is "
+                         "a <b>WINNER</b> if its ROAS beats the account's <b>%.2fx over those same 30 "
+                         "days</b>. Catalogue and DPA are excluded from both sides: a product feed is "
+                         "not a creative you shot."
+                         % (_k(LS["min_spend"]), LS["min_pur"], r2(LS["bar"])), icon="rules"),
+                    call("c-a",
+                         "At a <b>%.0f%%</b> hit rate you must launch <b>%d</b> new creatives for the next "
+                         "winner and <b>%d</b> for three. You launched <b>%d</b> in the last 30 days."
+                         % (LS["hr"], LS["need_1"], LS["need_3"], LS["launched"]), icon="warn")))
 
-    Wn, Ls = P["W"], P["L"]
-    MET = [("Hook rate", "hook", "%.1f%%"), ("Hold", "hold", "%.0f%%"),
-           ("Outbound CTR", "octr", "%.2f%%"), ("CVR", "cvr", "%.2f%%"),
-           ("Frequency", "freq", "%.2f"), ("ROAS", "roas", "%.2fx"),
-           ("AOV", "aov", "%s"), ("CPP", "cpa", "%s")]
-    for d in (Wn, Ls):
-        for kk in ("hold", "r50", "r75"):
-            if (d.get(kk) or 0) > 100: d[kk] = None   # Meta undercounts 3s views; never print >100%
-    tiles = ""
-    for lab, k, f in MET:
-        w_, l_ = Wn.get(k), Ls.get(k)
-        sw = (_k(w_) if f == "%s" else (f % w_)) if w_ else "n/a"
-        sl = (_k(l_) if f == "%s" else (f % l_)) if l_ else "n/a"
-        lb = k in ("freq", "cpa")
-        good = w_ is not None and l_ is not None and ((w_ < l_) if lb else (w_ > l_))
-        tiles += ('<div class="tile"><div class="kh">%s<span class="lb">%s · %s</span></div>'
-                  '<div class="kv"><span class="v %s">%s</span>%s</div>'
-                  '<div class="prev">losers %s</div></div>'
-                  % (gi("target", "g" if good else "n"), esc(lab), esc(WINN.get(win, "")),
-                     "g" if good else "", esc(sw), better(w_, l_, lower_better=lb), esc(sl)))
-    pat = ('<div class="card">%s<div class="grid g4">%s</div>%s</div>'
-           % (head("target", "What the winners have in common",
-                   "winners vs the shot creative that lost to the account"), tiles,
-              call("c-b", "Winners are the <b>%d</b> creative ads that beat the account's <b>%.2fx over "
-                          "the last 7 days</b> on "
-                          "at least 3 purchases. Losers are the <b>%d</b> that did not. Same window, same "
-                          "account, same offer. No catalogue on either side."
-                   % (P["n_win"], r2(P["acc_roas"]), len(P["losers"])), icon="info")))
+        # ---- THE BEST CREATIVES OF THE LAST 30 DAYS, BY NAME, WITH THE PREVIOUS PERIOD.
+        def crow(k, good):
+            col = "#0F7A43" if good else "#C0392B"
+            q = k.get("prev") or {}
+            cells = ""
+            for lab, key, f, lb in (("spend", "spend", "%s", False), ("revenue", "rev", "%s", False),
+                                    ("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
+                                    ("aov", "aov", "%s", False), ("cvr", "cvr", "%.2f%%", False),
+                                    ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
+                a_, b_ = k.get(key) or 0, q.get(key) or 0
+                v = _k(a_) if f == "%s" else (f % r2(a_))
+                cells += ('<td>%s<div style="margin-top:5px">%s</div>'
+                          '<span class="s">%s · 30d</span></td>'
+                          % (v, pill(pct(a_, b_), lower_better=lb) if b_ else
+                             '<span class="pill nu">new</span>', lab))
+            born = ((LS.get("created") or {}).get(str(k.get("ad_id"))) or {}).get("created") or ""
+            return ('<tr><td class=l><div class="ncell">'
+                    '<span class="bar" style="background:%s"></span>'
+                    '<span class="nm">%s</span>'
+                    '<span class="sn one">%s &nbsp;·&nbsp; %s &nbsp;·&nbsp; launched %s</span>'
+                    '<span class="sn one">%s</span></div></td>%s</tr>'
+                    % (col, esc(_clip(safe(k.get("ad_name") or ""), 40)),
+                       status("WINNER" if good else "LOSER"), esc(k.get("type") or ""),
+                       esc(born or "n/a"),
+                       esc(_clip(safe(k.get("campaign") or ""), 44)), cells))
 
-    daily = A.get("ad_daily") or {}
-    prev = A.get("previews") or {}
-    tr = ""
-    for k in P["top"][:3]:
-        aid = str(k.get("ad_id"))
-        dw = daywk(A, aid)
-        sp = spark(daily.get(aid) or [], "rev", 220, 54,
-                   dw["lo"] if dw else None, dw["hi"] if dw else None)
-        # NAME THE THING. And name where it lives, so it can actually be found.
-        nm = safe(k.get("ad_name") or "(unnamed ad)")
-        tr += ('<tr><td class=l><div class="ncell">'
-               '<span class="bar" style="background:#0F7A43"></span>'
-               '<span class="nm">%s</span>'
-               '<span class="sn">CAMPAIGN &nbsp;%s</span>'
-               '<span class="sn">AD SET &nbsp;%s</span>'
-               '<span class="sn one">%s &nbsp;·&nbsp; all numbers are the last 7 days</span></div></td>'
-               '<td>%s<span class="s">spend · 7d</span></td><td>%s<span class="s">revenue · 7d</span></td>'
-               '<td class=g>%.2fx<span class="s">roas · 7d</span></td><td>%.1f%%<span class="s">hook · 7d</span></td>'
-               '<td>%.0f%%<span class="s">hold · 7d</span></td><td>%.2f<span class="s">freq · 7d</span></td>'
-               '<td>%d<span class="s">purchases · 7d</span></td>'
-               '<td style="width:300px">%s</td><td style="width:240px">%s</td></tr>'
-               % (esc(_clip(nm, 46)),
-                  esc(_clip(safe(k.get("campaign") or "(unknown campaign)"), 44)),
-                  esc(_clip(safe(k.get("adset") or "(unknown ad set)"), 44)),
-                  esc(k.get("type") or ""),
-                  _k(k.get("spend") or 0), _k(k.get("rev") or 0), r2(k.get("roas") or 0),
-                  k.get("hook") or 0, k.get("hold") or 0, r2(k.get("freq") or 0),
-                  int(k.get("purch") or 0), today_vs(dw), sp))
-    tops = ('<div class="card">%s<table>%s</table></div>'
-            % (head("star", "Model the next shoot on these",
-                    "named, with their campaign and ad set, and their own 14 day history"), tr))
+        TH = ('<tr><th class=l>Creative · last 30 days</th><th>Spend</th><th>Revenue</th><th>ROAS</th>'
+              '<th>CPP</th><th>AOV</th><th>CVR</th><th>CPMR</th><th>Freq</th></tr>')
+        if LS["best"]:
+            body += ('<div class="card">%s<table>%s%s</table></div>'
+                     % (head("target", "The winning creatives — last 30 days, by name",
+                             "every metric against the same ad's previous period"),
+                        TH, "".join(crow(k, True) for k in LS["best"])))
+        if LS["worst"]:
+            body += ('<div class="card">%s<table>%s%s</table></div>'
+                     % (head("down", "The losing creatives — last 30 days",
+                             "shot creative that never cleared the account"),
+                        TH, "".join(crow(k, False) for k in LS["worst"])))
 
-    lis = "".join(call("c-g", esc(l)) for l in brief_lines(P)[:5])
-    brief = '<div class="card">%s%s</div>' % (
-        head("pencil", "The brief · give this to the editor"), lis)
+    # ---- WHAT SEPARATES THEM
+    if P:
+        Wn, Ls = P["W"], P["L"]
+        for d in (Wn, Ls):
+            for kk in ("hold", "r50", "r75"):
+                if (d.get(kk) or 0) > 100: d[kk] = None
+        MET = [("Hook rate", "hook", "%.1f%%"), ("Hold", "hold", "%.0f%%"),
+               ("Outbound CTR", "octr", "%.2f%%"), ("CVR", "cvr", "%.2f%%"),
+               ("Frequency", "freq", "%.2f"), ("ROAS", "roas", "%.2fx"),
+               ("AOV", "aov", "%s"), ("CPMR", "cpmr", "%s")]
+        tiles = ""
+        for lab, k, f in MET:
+            w_, l_ = Wn.get(k), Ls.get(k)
+            sw = (_k(w_) if f == "%s" else (f % w_)) if w_ else "n/a"
+            sl = (_k(l_) if f == "%s" else (f % l_)) if l_ else "n/a"
+            lb = k in ("freq", "cpa", "cpmr")
+            good = w_ is not None and l_ is not None and ((w_ < l_) if lb else (w_ > l_))
+            tiles += ('<div class="tile"><div class="kh">%s<span class="lb">%s</span></div>'
+                      '<div class="kv"><span class="v %s">%s</span>%s</div>'
+                      '<div class="prev">losers %s</div></div>'
+                      % (gi("target", "g" if good else "n"), esc(lab),
+                         "g" if good else "", esc(sw), better(w_, l_, lower_better=lb), esc(sl)))
+        body += ('<div class="card">%s<div class="grid g4">%s</div>%s</div>'
+                 % (head("target", "What the winners have in common",
+                         "winners vs the shot creative that lost to the account"), tiles,
+                    call("c-b", "Winners are the <b>%d</b> creative ads that beat the account's "
+                                "<b>%.2fx over the last 7 days</b> on at least 3 purchases. Losers are "
+                                "the <b>%d</b> that did not. No catalogue on either side."
+                         % (P["n_win"], r2(P["acc_roas"]), len(P["losers"])), icon="info")))
+        body += ('<div class="card">%s%s</div>'
+                 % (head("pencil", "The brief · give this to the editor"),
+                    "".join(call("c-g", esc(l)) for l in brief_lines(P)[:5])))
 
-    nb = len(brief_lines(P)[:5])
-    h = (250 + (560 if LS else 0) + 480 + 150 + 230 * len(P["top"][:3]) + 120 + 92 * nb + 110)
-    return page(A, win, "Make more of what worked",
-                "How many creatives you launched, how many won, what the winners share, and the brief.",
-                top + pat + tops + brief, h)
+    # ---- AND THE ONES THAT ARE BURNING OUT
+    tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED", "FATIGUING")][:5]
+    if tired:
+        tr = ""
+        for r in tired:
+            k = r["k"]; vid = k.get("type") == "VIDEO"
+            col = {"FATIGUED": "#C0392B", "SATURATED": "#C0392B",
+                   "FATIGUING": "#B45309"}[r["state"]]
+            cells = ""
+            for lab, v, lb in (("hook Δ", r["d_hook"] if vid else None, False),
+                               ("out ctr Δ", r["d_octr"], False),
+                               ("cpm Δ", r["d_cpm"], True), ("cpp Δ", r["d_cpp"], True)):
+                cells += '<td>%s<span class="s">%s · 7d vs prior 7d</span></td>' % (
+                    pill(v, lower_better=lb), lab)
+            tr += ('<tr><td class=l><div class="ncell">'
+                   '<span class="bar" style="background:%s"></span>'
+                   '<span class="nm">%s</span>'
+                   '<span class="sn one">%s &nbsp; %d of 5 tests fired</span>'
+                   '<span class="sn one">frequency <b>%.2f</b> (7d) · hook %s · hold %s</span></div></td>'
+                   '<td>%s<span class="s">spend · 7d</span></td>'
+                   '<td>%.2fx<span class="s">roas · 7d</span></td>%s</tr>'
+                   % (col, esc(_clip(r["name"], 40)), status(r["state"]), r["hits"], r["freq"],
+                      ("%.1f%%" % r["hook"]) if vid else "n/a",
+                      ("%.0f%%" % r["hold"]) if vid else "n/a",
+                      _k(r["spend"]), r2(r["roas"]), cells))
+        body += ('<div class="card">%s<table>%s</table>%s</div>'
+                 % (head("clock", "Creatives that are burning out — replace these first",
+                         "these are the slots your new creatives are for"), tr,
+                    call("c-r", "FATIGUED = 3+ of the five tests fire and frequency is over %.1f, or "
+                                "frequency is over %.1f with 2 firing. SATURATED = frequency over %.1f "
+                                "on its own. FATIGUING = 2 fire."
+                         % (FATG["freq"], FATG["sat"], FATG["sat"]), icon="warn")))
 
+    return page(A, win, "Creative — what to make next",
+                "How many you launched, how many won, the criteria, the winners by name, and what "
+                "is burning out.", body, 0)
 
 
 # ---------------------------------------------------------------- 8 · OBSERVATIONS
