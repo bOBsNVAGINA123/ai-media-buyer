@@ -930,13 +930,14 @@ def c_makemore(A, win):
                   kpi("Winners", "%d" % LS["winners"], "star", "g",
                       prev="%d lost to the account" % LS["losers"], big=True),
                   kpi("Hit rate", "%.0f%%" % LS["hr"], "target", "p",
-                      prev="launch %d to get 1 &nbsp;·&nbsp; %d to get 3"
+                      prev="launch %d to get 1  ·  %d to get 3"
                            % (LS["need_1"], LS["need_3"]), big=True),
                   call("c-b",
                        "<b>THE CRITERIA.</b> An ad counts as JUDGED once it has spent at least "
                        "<b>%s EGP</b> and taken at least <b>%d purchases</b> in the 30 days. It counts "
-                       "as a WINNER if its ROAS beats the account's <b>%.2fx</b>. Catalogue and DPA are "
-                       "excluded on both sides: a product feed is not a creative you shot."
+                       "as a WINNER if its ROAS beats the account's <b>%.2fx over those same 30 days</b>. "
+                       "Catalogue and DPA are excluded on both sides: a product feed is not a creative "
+                       "you shot."
                        % (_k(LS["min_spend"]), LS["min_pur"], r2(LS["bar"])), icon="rules"),
                   call("c-a",
                        "At a <b>%.0f%%</b> hit rate you must launch <b>%d</b> new creatives to get 1 more "
@@ -970,7 +971,8 @@ def c_makemore(A, win):
     pat = ('<div class="card">%s<div class="grid g4">%s</div>%s</div>'
            % (head("target", "What the winners have in common",
                    "winners vs the shot creative that lost to the account"), tiles,
-              call("c-b", "Winners are the <b>%d</b> creative ads that beat the account's <b>%.2fx</b> on "
+              call("c-b", "Winners are the <b>%d</b> creative ads that beat the account's <b>%.2fx over "
+                          "the last 7 days</b> on "
                           "at least 3 purchases. Losers are the <b>%d</b> that did not. Same window, same "
                           "account, same offer. No catalogue on either side."
                    % (P["n_win"], r2(P["acc_roas"]), len(P["losers"])), icon="info")))
@@ -1046,10 +1048,12 @@ def c_observations(A, win):
     if bad:
         burn = sum(r["spend"] for r in bad) / 7.0
         obs.append(("c-r", "warn",
-                    "<b>%d ads are fatigued or saturated</b> and they are carrying <b>%s EGP a day</b>. "
+                    "<b>%d %s fatigued or saturated</b> and %s carrying <b>%s EGP a day</b>. "
                     "The worst is <b>%s</b> at frequency %.2f. Refresh the creative or the audience; "
                     "more budget on a saturated ad buys repeats, not customers."
-                    % (len(bad), _k(burn), esc(_clip(bad[0]["name"], 40)), bad[0]["freq"])))
+                    % (len(bad), "ad is" if len(bad) == 1 else "ads are",
+                       "it is" if len(bad) == 1 else "they are",
+                       _k(burn), esc(_clip(bad[0]["name"], 40)), bad[0]["freq"])))
     else:
         obs.append(("c-g", "check",
                     "<b>No ad is fatigued or saturated.</b> Nothing in the account is being shown to "
@@ -1098,7 +1102,7 @@ def c_observations(A, win):
                  icon="info")
     return page(A, win, "General observations",
                 "The account in plain sentences, with the money attached to each one.",
-                body, 250 + 150 + 130 * len(obs) + 180)
+                body, 250 + 130 + 118 * len(obs) + 150)
 
 
 # ---------------------------------------------------------------- driver
