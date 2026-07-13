@@ -1816,6 +1816,10 @@ def proposals(A, win):
              "cpm": pct(k.get("cpm") or 0, pre.get("cpm") or 0),
              "cpp": pct(k.get("cpa") or 0, pre.get("cpa") or 0)} if pre else {}
         lab, tests = label_with_reasons(k, acc, d)
+        # A catalogue / DPA ad is re-serving people who already saw the product. It can be
+        # scaled as a BUDGET decision, but it is not a creative winner and must never be the
+        # thing the next shoot is modelled on. Tag it so the cards can separate the two.
+        cat = is_catalogue(k)
         roas = k.get("roas") or 0
         # CONFIDENCE from evidence, not vibes: purchases and spend behind the number
         pur = k.get("purch") or 0; sp = k.get("spend") or 0
@@ -1823,7 +1827,8 @@ def proposals(A, win):
                 "MEDIUM" if pur >= 8 and sp >= 2000 else "LOW")
         row = {"ad_id": aid, "name": safe(k.get("ad_name") or ""), "k": k, "label": lab,
                "tests": tests, "conf": conf, "roas": roas, "freq": k.get("freq") or 0,
-               "cpp": k.get("cpa") or 0, "sp_day": sp_day}
+               "cpp": k.get("cpa") or 0, "sp_day": sp_day, "cat": cat,
+               "kind": "CATALOGUE" if cat else (k.get("type") or "IMAGE")}
         if lab in ("SCALE", "HEADROOM"):
             step = 0.20 if lab == "SCALE" else 0.15
             add = sp_day * step
@@ -1926,13 +1931,53 @@ def fatigue_scan(A, min_spend=500.0):
     return out
 
 
+def daywk(A, aid):
+    """TODAY against THIS AD'S OWN LAST WEEK. A daily number with no weekly context is a
+    coin flip: you cannot tell a broken ad from a Tuesday. This says which one it is."""
+    ser = (A.get("ad_daily") or {}).get(str(aid)) or []
+    if len(ser) < 5: return None
+    today = ser[-1]
+    hist = ser[-8:-1] if len(ser) >= 8 else ser[:-1]
+    if not hist: return None
+
+    def avg(k):
+        xs = [(p.get(k) or 0) for p in hist]
+        return (sum(xs) / len(xs)) if xs else 0.0
+
+    revs = [(p.get("rev") or 0) for p in hist]
+    lo, hi = pctile(revs, .10), pctile(revs, .90)
+    rev_now = today.get("rev") or 0
+    rev_avg, roas_avg, sp_avg = avg("rev"), avg("roas"), avg("spend")
+    state = "ABOVE BAND" if rev_now > hi else ("BELOW BAND" if rev_now < lo else "NORMAL")
+    return {"state": state, "n": len(hist),
+            "rev_now": rev_now, "rev_avg": rev_avg, "rev_d": pct(rev_now, rev_avg),
+            "roas_now": today.get("roas") or 0, "roas_avg": roas_avg,
+            "roas_d": pct(today.get("roas") or 0, roas_avg),
+            "spend_now": today.get("spend") or 0, "spend_avg": sp_avg,
+            "spend_d": pct(today.get("spend") or 0, sp_avg),
+            "lo": lo, "hi": hi, "series": ser}
+
+
+def is_catalogue(k):
+    """A catalogue / DPA ad is not a creative win. It is a feed re-serving people who already
+    looked at the product. Ranking it next to a shot video and calling both 'winners' is how a
+    creative brief ends up telling the editor to make more of something nobody filmed."""
+    if (k or {}).get("type") == "CATALOGUE": return True
+    blob = (" %s %s %s " % (k.get("ad_name") or "", k.get("campaign") or "",
+                            k.get("adset") or "")).lower()
+    return any(w in blob for w in CAT_KW)
+
+
 def winning_pattern(A, min_spend=1000.0):
     """What the ads that ACTUALLY MADE MONEY have in common, so the next brief is not a guess.
     Winners are measured against this account's own average, never against a blog post."""
     b7 = A.get("b7") or {}
     acc = A.get("b7_acc") or A["summary"]
     a_roas = acc.get("roas") or 0
-    live = [k for k in b7.values() if (k.get("spend") or 0) >= min_spend and (k.get("purch") or 0) >= 3]
+    # CREATIVE ONLY. Catalogue and DPA are excluded on purpose: they are a feed, not a shoot,
+    # and "make more like this" is meaningless advice for a product feed.
+    live = [k for k in b7.values() if (k.get("spend") or 0) >= min_spend
+            and (k.get("purch") or 0) >= 3 and not is_catalogue(k)]
     if len(live) < 2: return None
     win = [k for k in live if (k.get("roas") or 0) >= a_roas]
     los = [k for k in live if (k.get("roas") or 0) < a_roas]
@@ -2095,7 +2140,9 @@ def hit_rate(A):
     """Of the ads that got a real chance, how many became winners. That number, and only that
     number, tells you how many creatives you must launch."""
     V = classify(A)
-    tested = [e for e in V if e["proven"]]
+    # the hit rate is a CREATIVE hit rate. Counting the catalogue in it flatters the number
+    # and tells you to shoot fewer videos than you actually need.
+    tested = [e for e in V if e["proven"] and not is_catalogue(e.get("b") or e.get("c") or {})]
     if len(tested) < 4: return None
     winners = [e for e in tested if e["verdict"] == "SCALE"]
     hr = max(0.03, min(0.9, len(winners) / len(tested)))
@@ -4202,6 +4249,16 @@ def render_cards(A, win):
       4 MONEY       what to do, priced as an investment proposal per day
       5 AUDIENCE    where the money sits and exactly how much to move
     """
+    # HTML FIRST. Chrome lays the cards out; matplotlib only exists now as a parachute.
+    try:
+        import cards as _cards
+        if _cards.available():
+            got = _cards.render(A, win)
+            if got: return got
+            sys.stderr.write("[html] renderer produced nothing, falling back to matplotlib\n")
+    except Exception as e:
+        sys.stderr.write("[html] unavailable (%s), falling back to matplotlib\n" % e)
+
     out = []
     try:
         _mpl()
