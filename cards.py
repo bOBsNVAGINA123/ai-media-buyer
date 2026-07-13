@@ -98,6 +98,30 @@ def shoot(html, height=None):
     return None
 
 
+def to_pdf(pngs):
+    """Every card for a brand and window, in order, as one PDF. Pillow does it; it is free."""
+    if not pngs: return None
+    try:
+        from PIL import Image
+    except Exception:
+        return None
+    import io as _io
+    ims = []
+    for p in pngs:
+        try:
+            im = Image.open(_io.BytesIO(p)).convert("RGB")
+            # a 3520px wide page is pointless in a PDF. Halve it: same picture, a tenth the file.
+            if im.width > 1800:
+                im = im.resize((1760, int(im.height * 1760 / im.width)), Image.LANCZOS)
+            ims.append(im)
+        except Exception:
+            continue
+    if not ims: return None
+    buf = _io.BytesIO()
+    ims[0].save(buf, format="PDF", save_all=True, append_images=ims[1:], resolution=110.0)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------- design system
 CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
@@ -432,14 +456,15 @@ def c_exec(A, win):
            ("AOV", "aov", "%s", False, False, "bag", "a"),
            ("CVR", "cvr", "%.2f%%", False, False, "pie", "p"),
            ("CPMR", "cpmr", "%s", True, False, "mega", "b"),
-           ("Out CTR", "octr", "%.2f%%", False, False, "click", "g")]
+           ("Out CTR", "octr", "%.2f%%", False, False, "click", "g"),
+           ("ATC rate", "atc_rate", "%.1f%%", False, False, "bag", "g")]
     tiles = ""
     for lab, k, f, lb, nu, ic, tn in MET:
         a_, b_ = s.get(k) or 0, p.get(k) or 0
         fv = (lambda v: _k(v)) if f == "%s" else (lambda v: f % r2(v))
         tiles += tile(lab, fv(a_), fv(b_), pct(a_, b_), lower_better=lb, neutral=nu,
                       icon=ic, tint=tn)
-    matrix = ('<div class="card">%s<div class="grid g4">%s</div></div>'
+    matrix = ('<div class="card">%s<div class="grid g3">%s</div></div>'
               % (head("grid", "Detailed metrics matrix",
                       "every number, and what it was in the previous period"), tiles))
 
@@ -577,6 +602,7 @@ def c_cause(A, win, level="campaign"):
     COLS = [("Spend", "spend", "%s", True), ("Revenue", "rev", "%s", False),
             ("ROAS", "roas", "%.2fx", False), ("CPP", "cpa", "%s", False),
             ("AOV", "aov", "%s", False), ("CVR", "cvr", "%.2f%%", False),
+            ("ATC", "atc_rate", "%.1f%%", False),
             ("CPMR", "cpmr", "%s", False), ("Out CTR", "octr", "%.2f%%", False),
             ("Freq", "freq", "%.2f", False)]
     LOWER = {"cpa", "cpmr", "cpm"}
@@ -653,7 +679,8 @@ def c_winners(A, win):
             cells = ""
             for lab_, key, f, lb in (("spend", "spend", "%s", False), ("roas", "roas", "%.2fx", False),
                                      ("cpp", "cpa", "%s", True), ("aov", "aov", "%s", False),
-                                     ("cvr", "cvr", "%.2f%%", False), ("out ctr", "octr", "%.2f%%", False),
+                                     ("cvr", "cvr", "%.2f%%", False), ("atc", "atc_rate", "%.1f%%", False),
+                                     ("out ctr", "octr", "%.2f%%", False),
                                      ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
                 a_, b_ = k.get(key) or 0, q.get(key) or 0
                 v = _k(a_) if f == "%s" else (f % r2(a_))
@@ -728,6 +755,7 @@ def c_budget(A, win):
         m, q = r["m"], r["prev"] or {}
         cells = ""
         for lab, key, f, lb in (("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
+                                ("cvr", "cvr", "%.2f%%", False), ("atc", "atc_rate", "%.1f%%", False),
                                 ("freq", "freq", "%.2f", True)):
             a_, b_ = m.get(key) or 0, q.get(key) or 0
             v = _k(a_) if f == "%s" else (f % r2(a_))
@@ -761,7 +789,7 @@ def c_budget(A, win):
                    "+" if r["inc"] >= 0 else "-", _k(abs(r["inc"])), why))
 
     TH = ('<tr><th class=l>Ad set</th><th>Now</th><th>Set to</th><th>Change</th>'
-          '<th>ROAS</th><th>CPP</th><th>Freq</th><th>Revenue</th></tr>')
+          '<th>ROAS</th><th>CPP</th><th>CVR</th><th>ATC</th><th>Freq</th><th>Revenue</th></tr>')
     if up:
         body += ('<div class="card">%s<table>%s%s</table></div>'
                  % (head("up", "Raise these ad set budgets", "this is the number to change"),
@@ -804,17 +832,20 @@ def c_adverdict(A, win):
                 '<td>%s<span class="s">spend · 7d</span></td>'
                 '<td class="%s">%.2fx<span class="s">roas · acct %.2fx</span></td>'
                 '<td>%s<span class="s">cpp · 7d</span></td>'
+                '<td>%.2f%%<span class="s">cvr · 7d</span></td>'
+                '<td>%.1f%%<span class="s">atc · 7d</span></td>'
                 '<td>%.2f<span class="s">freq · 7d</span></td>'
                 '<td>%d<span class="s">purchases</span></td>'
-                '<td style="width:380px"><span class="sn" style="margin:0">%s</span></td></tr>'
-                '<tr><td colspan=7 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
+                '<td style="width:340px"><span class="sn" style="margin:0">%s</span></td></tr>'
+                '<tr><td colspan=9 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
                 % (col, esc(_clip(r["name"], 40)), status(act), esc(r["kind"]), r["conf"],
                    esc(_clip(safe(k.get("adset") or "(unknown ad set)"), 40)),
                    _k(k.get("spend") or 0), "g" if ok else "r", r2(r["roas"]), r2(P["acc_roas"]),
-                   _k(r["cpp"]), r2(r["freq"]), int(k.get("purch") or 0), esc(note), why))
+                   _k(r["cpp"]), r2(k.get("cvr") or 0), (k.get("atc_rate") or 0),
+                   r2(r["freq"]), int(k.get("purch") or 0), esc(note), why))
 
-    TH = ('<tr><th class=l>Ad</th><th>Spend</th><th>ROAS</th><th>CPP</th><th>Freq</th>'
-          '<th>Purchases</th><th class=l>What to do</th></tr>')
+    TH = ('<tr><th class=l>Ad</th><th>Spend</th><th>ROAS</th><th>CPP</th><th>CVR</th><th>ATC</th>'
+          '<th>Freq</th><th>Purchases</th><th class=l>What to do</th></tr>')
     body = ""
     if good:
         body += ('<div class="card">%s<table>%s%s</table></div>'
@@ -860,6 +891,8 @@ def c_audience(A, win):
                 pct(m.get("aov") or 0, q.get("aov") or 0), False, False),
                ("CVR", "%.2f%%" % r2(m.get("cvr") or 0), "%.2f%%" % r2(q.get("cvr") or 0),
                 pct(m.get("cvr") or 0, q.get("cvr") or 0), False, False),
+               ("ATC rate", "%.1f%%" % (m.get("atc_rate") or 0), "%.1f%%" % (q.get("atc_rate") or 0),
+                pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0), False, False),
                ("CPMR", _k(m.get("cpmr") or 0), _k(q.get("cpmr") or 0),
                 pct(m.get("cpmr") or 0, q.get("cpmr") or 0), True, False),
                ("Frequency", "%.2f" % r2(m.get("freq") or 0), "%.2f" % r2(q.get("freq") or 0),
@@ -1044,6 +1077,7 @@ def c_makemore(A, win):
             for lab, key, f, lb in (("spend", "spend", "%s", False), ("revenue", "rev", "%s", False),
                                     ("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
                                     ("aov", "aov", "%s", False), ("cvr", "cvr", "%.2f%%", False),
+                                    ("atc", "atc_rate", "%.1f%%", False),
                                     ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
                 a_, b_ = k.get(key) or 0, q.get(key) or 0
                 v = _k(a_) if f == "%s" else (f % r2(a_))
@@ -1063,7 +1097,7 @@ def c_makemore(A, win):
                        esc(_clip(safe(k.get("campaign") or ""), 44)), cells))
 
         TH = ('<tr><th class=l>Creative · last 30 days</th><th>Spend</th><th>Revenue</th><th>ROAS</th>'
-              '<th>CPP</th><th>AOV</th><th>CVR</th><th>CPMR</th><th>Freq</th></tr>')
+              '<th>CPP</th><th>AOV</th><th>CVR</th><th>ATC</th><th>CPMR</th><th>Freq</th></tr>')
         if LS["best"]:
             body += ('<div class="card">%s<table>%s%s</table></div>'
                      % (head("target", "The winning creatives — last 30 days, by name",
@@ -1083,8 +1117,8 @@ def c_makemore(A, win):
                 if (d.get(kk) or 0) > 100: d[kk] = None
         MET = [("Hook rate", "hook", "%.1f%%"), ("Hold", "hold", "%.0f%%"),
                ("Outbound CTR", "octr", "%.2f%%"), ("CVR", "cvr", "%.2f%%"),
-               ("Frequency", "freq", "%.2f"), ("ROAS", "roas", "%.2fx"),
-               ("AOV", "aov", "%s"), ("CPMR", "cpmr", "%s")]
+               ("ATC rate", "atc_rate", "%.1f%%"), ("Frequency", "freq", "%.2f"),
+               ("ROAS", "roas", "%.2fx"), ("AOV", "aov", "%s"), ("CPMR", "cpmr", "%s")]
         tiles = ""
         for lab, k, f in MET:
             w_, l_ = Wn.get(k), Ls.get(k)
@@ -1230,6 +1264,77 @@ def c_observations(A, win):
                 body, 250 + 130 + 118 * len(obs) + 150)
 
 
+# ---------------------------------------------------------------- NEW LAUNCHES
+def c_launches(A, win):
+    """Every ad born in the last 3 days, and how it is doing since. A launch nobody follows is
+    a launch nobody made."""
+    L = az.new_launches(A, 3)
+    if not L: return None
+    if not L["rows"]:
+        body = ('<div class="card">%s%s</div>'
+                % (head("pencil", "New launches", "ads created in the last 3 days"),
+                   call("c-b", "<b>No new ads were created in the last 3 days.</b> The creative "
+                               "pipeline is empty, and an account with no new creative is an account "
+                               "waiting for its winners to fatigue.", icon="warn")))
+        return page(A, win, "New launches — the last 3 days",
+                    "Every ad born in the last 3 days, followed daily until it earns a verdict.",
+                    body, 0)
+
+    board = '<div class="grid g4">%s%s%s%s</div>' % (
+        kpi("Launched · 3d", "%d" % L["n"], "pencil", "b",
+            prev="new ads created in the last 3 days", big=True),
+        kpi("Winning", "%d" % L["win"], "star", "g",
+            prev="already beating the account's %.2fx" % r2(L["acc_roas"]), big=True),
+        kpi("Failing", "%d" % L["fail"], "warn", "r",
+            prev="under 60%% of the account", big=True),
+        kpi("Still learning", "%d" % L["early"], "clock", "n",
+            prev="not enough data to judge yet", big=True))
+    body = ('<div class="card">%s%s%s</div>'
+            % (head("pencil", "New launches", "ads created in the last 3 days, followed daily"),
+               board,
+               call("c-b", "An ad is only <b>judged</b> once it clears <b>%s spend</b> and <b>%d "
+                           "purchases</b>. Before that it reads TOO EARLY or LEARNING, and that is not "
+                           "a hedge — killing an ad on day one is how you never find a winner."
+                    % (_k(az.EVIDENCE["spend"]), L["min_pur"]), icon="rules")))
+
+    COL = {"WINNING": "#0F7A43", "BEHIND": "#B45309", "FAILING": "#C0392B",
+           "LEARNING": "#475569", "TOO EARLY": "#94A3B8"}
+    tr = ""
+    for r in L["rows"][:10]:
+        k = r["k"]; q = k.get("prev") or {}
+        cells = ""
+        for lab, key, f, lb in (("spend", "spend", "%s", False), ("revenue", "rev", "%s", False),
+                                ("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
+                                ("aov", "aov", "%s", False), ("cvr", "cvr", "%.2f%%", False),
+                                ("atc", "atc_rate", "%.1f%%", False),
+                                ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
+            a_, b_ = k.get(key) or 0, q.get(key) or 0
+            v = _k(a_) if f == "%s" else (f % r2(a_))
+            cells += ('<td>%s<div style="margin-top:5px">%s</div><span class="s">%s</span></td>'
+                      % (v, pill(pct(a_, b_), lower_better=lb) if b_ else
+                         '<span class="pill nu">first run</span>', lab))
+        sp = spark(r["series"], "rev", 200, 50) if len(r["series"]) >= 4 else ""
+        tr += ('<tr><td class=l><div class="ncell">'
+               '<span class="bar" style="background:%s"></span>'
+               '<span class="nm">%s</span>'
+               '<span class="sn one">%s &nbsp;·&nbsp; day %d &nbsp;·&nbsp; born %s</span>'
+               '<span class="sn one">%s</span></div></td>%s'
+               '<td style="width:240px">%s<span class="s">since launch</span></td></tr>'
+               '<tr><td colspan=11 class="why" style="border:0"><b>READ:</b> %s</td></tr>'
+               % (COL[r["state"]], esc(_clip(r["name"], 40)), status(r["state"]), r["age"],
+                  esc(r["born"]), esc(_clip(safe(k.get("adset") or ""), 44)), cells, sp,
+                  esc(r["why"])))
+    body += ('<div class="card">%s'
+             '<table><tr><th class=l>Ad · born in the last 3 days</th><th>Spend</th><th>Revenue</th>'
+             '<th>ROAS</th><th>CPP</th><th>AOV</th><th>CVR</th><th>ATC</th><th>CPMR</th><th>Freq</th>'
+             '<th>Since launch</th></tr>%s</table></div>'
+             % (head("target", "Follow up on every one",
+                     "every metric against the same ad's own previous period"), tr))
+    return page(A, win, "New launches — the last 3 days",
+                "Every ad born in the last 3 days, followed daily until it earns a verdict.",
+                body, 0)
+
+
 # ---------------------------------------------------------------- driver
 # TOP DOWN. Account, then campaigns, then ad sets, then ads, then what to do with the money,
 # then the creative, then the sentences. You cannot judge an ad before you know whether the
@@ -1245,6 +1350,18 @@ CARDS = (("1-account",     c_exec),
          ("9-fatigue",     c_fatigue),
          ("10-makemore",   c_makemore),
          ("11-observations", c_observations))
+
+
+def render_one(A, win, fn):
+    """One card, on demand. The launch feed is not part of the daily deck."""
+    try:
+        r = fn(A, win)
+        if not r: return None
+        return shoot(r[0], r[1])
+    except Exception:
+        import traceback
+        sys.stderr.write("[html] render_one failed:\n%s\n" % traceback.format_exc())
+        return None
 
 
 def available():

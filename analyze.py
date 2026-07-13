@@ -113,6 +113,12 @@ def brand_of(name):
     return "playmore" if "playmore" in n else ("ourkids" if "kids" in n else None)
 
 
+def channel_launches_for(name):
+    """The launch feed. One per brand."""
+    b = brand_of(name)
+    return CH.get("%s_launches" % b) if b else None
+
+
 def channel_window_for(name, win):
     """win = daily | 3day | 7day. Each brand has its own channel per read."""
     brand = brand_of(name)
@@ -418,6 +424,87 @@ def get_budgets(acct, max_pages=12):
         a["campaign"] = c.get("name") or ""
         a["camp_daily"] = c.get("daily") or 0.0
     return {"adsets": ads_, "campaigns": camps}
+
+
+def new_launches(A, days=3):
+    """EVERY AD BORN IN THE LAST 3 DAYS, AND HOW IT IS DOING SINCE.
+    A launch you do not follow is a launch you did not really make. This is the follow up: the
+    ad, when it was born, what it has spent, and whether it is beating the account yet."""
+    created = A.get("ad_created") or {}
+    b30 = A.get("b30") or {}
+    b7 = A.get("b7") or {}
+    daily = A.get("ad_daily") or {}
+    acc = A.get("b7_acc") or A["summary"]
+    a_roas = acc.get("roas") or 0
+    if not created: return None
+    cut = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+
+    out = []
+    for aid, meta in created.items():
+        born = meta.get("created") or ""
+        if not born or born < cut: continue
+        k = b7.get(aid) or b30.get(aid)
+        age = 0
+        try:
+            age = (datetime.date.today() - datetime.date.fromisoformat(born)).days
+        except Exception:
+            pass
+        sp = (k.get("spend") or 0) if k else 0
+        pur = (k.get("purch") or 0) if k else 0
+        roas = (k.get("roas") or 0) if k else 0
+        # THE HONEST VERDICT ON A BABY AD. Most of them have not earned one yet, and saying so
+        # is the whole point: killing an ad on day one is how you never find a winner.
+        if not k or sp < 300:
+            state, why = "TOO EARLY", "Under 300 EGP spent. Nothing here is a signal yet."
+        elif pur < EVIDENCE["purch"]:
+            state, why = "LEARNING", ("%d purchases so far. It needs %d before the ROAS means anything."
+                                      % (int(pur), EVIDENCE["purch"]))
+        elif roas >= a_roas:
+            state, why = "WINNING", ("%.2fx against the account's %.2fx on %d purchases."
+                                     % (r2(roas), r2(a_roas), int(pur)))
+        elif roas >= a_roas * 0.6:
+            state, why = "BEHIND", ("%.2fx against the account's %.2fx. Give it more data, not more budget."
+                                    % (r2(roas), r2(a_roas)))
+        else:
+            state, why = "FAILING", ("%.2fx against the account's %.2fx on %s spent. Switch it off."
+                                     % (r2(roas), r2(a_roas), _k(sp)))
+        out.append({"ad_id": aid, "name": safe(meta.get("name") or ""), "born": born, "age": age,
+                    "status": meta.get("status") or "", "k": k or {}, "state": state, "why": why,
+                    "spend": sp, "purch": pur, "roas": roas, "series": daily.get(str(aid)) or [],
+                    "acc_roas": a_roas})
+    ORD = {"WINNING": 0, "BEHIND": 1, "FAILING": 2, "LEARNING": 3, "TOO EARLY": 4}
+    out.sort(key=lambda r: (ORD[r["state"]], -r["spend"]))
+    return {"rows": out, "days": days, "acc_roas": a_roas,
+            "n": len(out), "win": sum(1 for r in out if r["state"] == "WINNING"),
+            "fail": sum(1 for r in out if r["state"] == "FAILING"),
+            "early": sum(1 for r in out if r["state"] in ("TOO EARLY", "LEARNING")),
+            "spend": sum(r["spend"] for r in out),
+            "min_pur": EVIDENCE["purch"]}
+
+
+def msg_new_launches(A, L):
+    """The launch channel message. Short, and every line is a named ad with its numbers."""
+    if not L or not L["rows"]:
+        return ("*%s — NEW LAUNCHES*\n\nNo new ads were created in the last %d days."
+                % (A["account"]["name"].upper(), L["days"] if L else 3))
+    out = ["*%s — NEW LAUNCHES*   ·   created in the last %d days" % (
+        A["account"]["name"].upper(), L["days"])]
+    out.append("*%d launched* · %d winning · %d failing · %d still learning · %s spent · account bar *%.2fx*"
+               % (L["n"], L["win"], L["fail"], L["early"], _k(L["spend"]), r2(L["acc_roas"])))
+    for r in L["rows"][:8]:
+        k = r["k"]; q = k.get("prev") or {}
+        out.append("\n• *%s* — _%s_ (day %d, born %s)" % (
+            _clip(r["name"], 40), r["state"], r["age"], r["born"]))
+        out.append("     spend *%s* · rev *%s* · ROAS *%.2fx* · CPP *%s* · AOV *%s* · CVR *%.2f%%* · "
+                   "ATC *%.1f%%* · CPMR *%s* · frq *%.2f*"
+                   % (_k(k.get("spend") or 0), _k(k.get("rev") or 0), r2(k.get("roas") or 0),
+                      _k(k.get("cpa") or 0), _k(k.get("aov") or 0), r2(k.get("cvr") or 0),
+                      (k.get("atc_rate") or 0), _k(k.get("cpmr") or 0), r2(k.get("freq") or 0)))
+        out.append("     _%s_" % r["why"])
+    out.append("\n_An ad is only judged once it clears %s spend and %d purchases. Before that, "
+               "TOO EARLY and LEARNING mean exactly what they say._"
+               % (_k(EVIDENCE["spend"]), L["min_pur"]))
+    return "\n".join(out)
 
 
 def adset_plan(A, win):
@@ -3561,13 +3648,16 @@ def msg_short(A, win):
                   {"spend": p.get("spend"), "rev": p.get("rev")})
 
     def mline(m, q):
-        """the five metrics, each with its own previous period, on one line"""
-        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · CPMR *%s* (%s)"
-                % (r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, (q or {}).get("roas") or 0)) or "n/a",
-                   _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, (q or {}).get("cpa") or 0)) or "n/a",
-                   _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, (q or {}).get("aov") or 0)) or "n/a",
-                   r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, (q or {}).get("cvr") or 0)) or "n/a",
-                   _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, (q or {}).get("cpmr") or 0)) or "n/a"))
+        """every metric that matters, each with its own previous period, on one line"""
+        q = q or {}
+        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
+                % (r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, q.get("roas") or 0)) or "n/a",
+                   _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, q.get("cpa") or 0)) or "n/a",
+                   _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, q.get("aov") or 0)) or "n/a",
+                   r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, q.get("cvr") or 0)) or "n/a",
+                   (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0)) or "n/a",
+                   _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, q.get("cpmr") or 0)) or "n/a"))
 
     L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
                                        _fmt_range(DATES.get("label")),
@@ -4360,13 +4450,21 @@ def img_url(fn):
     repo = os.environ.get("GITHUB_REPOSITORY", "bOBsNVAGINA123/ai-media-buyer")
     return "https://raw.githubusercontent.com/%s/main/docs/img/%s?v=%d" % (repo, fn, int(time.time()))
 
+PDF_DIR = os.path.join(DOCS, "pdf")
+
+
+def pdf_url(fn):
+    repo = os.environ.get("GITHUB_REPOSITORY", "bOBsNVAGINA123/ai-media-buyer")
+    return "https://raw.githubusercontent.com/%s/main/docs/pdf/%s?v=%d" % (repo, fn, int(time.time()))
+
+
 def push_images():
     """Commit the cards so Slack has a public URL to render."""
     import subprocess
     try:
         subprocess.run(["git", "config", "user.name", "ai-media-buyer"], check=False)
         subprocess.run(["git", "config", "user.email", "bot@users.noreply.github.com"], check=False)
-        subprocess.run(["git", "add", "docs/img", "docs/data.json"], check=False)
+        subprocess.run(["git", "add", "docs/img", "docs/pdf", "docs/data.json"], check=False)
         subprocess.run(["git", "commit", "-m", "auto: briefing cards"], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         r = subprocess.run(["git", "push"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -5336,6 +5434,8 @@ def main():
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
     CARDS = []
+    PDFS = []
+    LAUNCH = []
     QUIET = {}          # brand -> (account name, last date it spent). A silent channel is a bug.
     global SEGMAP, ADSEG
     SEGX = ",".join(["ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"])
@@ -5387,11 +5487,21 @@ def main():
         # made up number: you cannot divide winners by ads launched if you never counted the ads
         # you launched.
         d30 = {"since": str(y - datetime.timedelta(days=29)), "until": str(y)}
+        p30 = {"since": str(y - datetime.timedelta(days=59)),
+               "until": str(y - datetime.timedelta(days=30))}
         rows30 = get_insights(acct["id"], d30) or []
         B30 = {}
         for r in rows30:
             m = metric(r)
             if m["ad_id"]: B30[str(m["ad_id"])] = m
+        # AND THE 30 DAYS BEFORE THOSE 30. Without it every creative on the card printed "new"
+        # next to every metric, which is not a comparison, it is an admission that there is none.
+        P30 = {}
+        for r in (get_insights(acct["id"], p30) or []):
+            m = metric(r)
+            if m["ad_id"]: P30[str(m["ad_id"])] = m
+        for aid, m in B30.items():
+            m["prev"] = P30.get(aid)
         B30_ACC = agg(list(B30.values())) if B30 else None
         AD_CREATED = get_ad_created(acct["id"])
         BUDGETS = get_budgets(acct["id"])    # where the budget lever ACTUALLY is
@@ -5450,6 +5560,31 @@ def main():
                         "10-observations": "*10 · GENERAL OBSERVATIONS* — the account in plain sentences, money attached.",
                     }
                     cards = render_cards(AW, win)
+                    # THE WHOLE DECK AS ONE PDF. Free: Pillow stitches the PNGs, GitHub hosts it.
+                    try:
+                        import cards as _cd
+                        pdf = _cd.to_pdf([p for _, p in cards])
+                        if pdf:
+                            os.makedirs(PDF_DIR, exist_ok=True)
+                            PDF_FN = "%s-%s.pdf" % (slug(acct["name"]), win)
+                            with open(os.path.join(PDF_DIR, PDF_FN), "wb") as fh: fh.write(pdf)
+                            PDFS.append({"ch": wch, "fn": PDF_FN, "n": len(cards),
+                                         "name": acct["name"], "win": win})
+                    except Exception as e:
+                        sys.stderr.write("[pdf] %s\n" % e)
+                    # ---- NEW LAUNCHES. Its own channel, once a day, off the daily read. ----
+                    if win == "daily":
+                        lch2 = channel_launches_for(acct["name"])
+                        if lch2:
+                            try:
+                                import cards as _cd2
+                                lp = _cd2.render_one(AW, win, _cd2.c_launches)
+                                LAUNCH.append({"ch": lch2, "png": lp,
+                                               "fn": "%s-launches.png" % slug(acct["name"]),
+                                               "title": "%s-launches" % slug(acct["name"]),
+                                               "memo": msg_new_launches(AW, new_launches(AW, 3))})
+                            except Exception as e:
+                                sys.stderr.write("[launches] %s\n" % e)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
                         os.makedirs(IMG_DIR, exist_ok=True)
@@ -5519,7 +5654,34 @@ def main():
                 time.sleep(1)
             time.sleep(1)
 
-    sys.stderr.write("[done] %d accounts, %d cards\n" % (len(report["accounts"]), len(CARDS)))
+    # ---- the launch feed: its own channel, its own card, its own memo ----
+    for c in LAUNCH:
+        if c.get("png"):
+            os.makedirs(IMG_DIR, exist_ok=True)
+            with open(os.path.join(IMG_DIR, c["fn"]), "wb") as fh: fh.write(c["png"])
+    if LAUNCH and any(c.get("png") for c in LAUNCH):
+        push_images(); time.sleep(6)
+    for c in LAUNCH:
+        head_ = "%s  *NEW LAUNCHES* — every ad born in the last 3 days, followed daily." % MENTION
+        sent = False
+        if c.get("png"):
+            sent = slack_image(c["ch"], c["png"], c["title"], head_)
+            if not sent:
+                sent = slack_image_url(c["ch"], img_url(c["fn"]), head_)
+        if not sent:
+            slack(c["ch"], head_)
+        time.sleep(1)
+        if c.get("memo"):
+            slack(c["ch"], c["memo"]); time.sleep(1)
+
+    # ---- the deck, as one PDF, last thing in the channel ----
+    for p in PDFS:
+        slack(p["ch"], "*THE WHOLE DECK* — %s, %s, all %d cards in one PDF:\n%s"
+              % (p["name"].upper(), WIN_TITLE.get(p["win"], "MEMO"), p["n"], pdf_url(p["fn"])))
+        time.sleep(1)
+
+    sys.stderr.write("[done] %d accounts, %d cards, %d pdfs\n"
+                     % (len(report["accounts"]), len(CARDS), len(PDFS)))
 
 if __name__ == "__main__":
     main()
