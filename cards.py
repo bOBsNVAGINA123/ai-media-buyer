@@ -171,9 +171,8 @@ td .s{display:block;font-size:14px;font-weight:700;color:#94A3B8;margin-top:6px;
 td .sn{display:block;font-size:16px;font-weight:600;color:#475569;margin-top:7px;
        text-transform:none;letter-spacing:0}
 .nm{font-size:24px;font-weight:800;letter-spacing:-.3px;color:#0F172A;display:block;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%%}
-td .sn{white-space:nowrap}
-td.l{max-width:0}
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px}
+td .sn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px}
 .bar{width:6px;height:50px;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:14px}
 .g{color:#0F7A43}.r{color:#C0392B}.b{color:#1D4ED8}.a{color:#B45309}.m{color:#475569}
 .ft{display:flex;font-size:16px;color:#64748B;padding-top:10px;font-weight:600;gap:14px;
