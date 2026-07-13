@@ -8,12 +8,22 @@ HTML now, and Chrome takes the picture.
 If Chrome is not on the machine, analyze.py falls back to the old matplotlib cards, so this can
 never take the report down.
 """
-import os, re, shutil, subprocess, tempfile, html as _html
+import os, sys, shutil, subprocess, tempfile, html as _html
 
-import analyze as az
-from analyze import (_k, r2, pct, safe, _clip, pctile, decompose, attribution, proposals,
-                     fatigue_scan, winning_pattern, hit_rate, brief_lines, daywk, is_catalogue,
-                     CRIT, FATG, FATG_CRIT, SEGN, DATES, WIN_TITLE, WIN_FOOT, _fmt_range)
+# BIND TO THE RUNNING MODULE, NOT A SECOND COPY OF IT.
+# analyze.py executes as __main__. `import analyze` therefore imports a SECOND, separate module
+# object with its own globals, so DATES was empty and every date chip and previous-period number
+# came out blank. Reach for the module that is actually running.
+_m = sys.modules.get("__main__")
+az = _m if hasattr(_m, "DATES") and hasattr(_m, "decompose") else __import__("analyze")
+
+_k, r2, pct, safe = az._k, az.r2, az.pct, az.safe
+_clip, pctile, _fmt_range = az._clip, az.pctile, az._fmt_range
+decompose, attribution, proposals = az.decompose, az.attribution, az.proposals
+fatigue_scan, winning_pattern, hit_rate = az.fatigue_scan, az.winning_pattern, az.hit_rate
+brief_lines, daywk, is_catalogue = az.brief_lines, az.daywk, az.is_catalogue
+CRIT, FATG, FATG_CRIT = az.CRIT, az.FATG, az.FATG_CRIT
+SEGN, WIN_TITLE, WIN_FOOT = az.SEGN, az.WIN_TITLE, az.WIN_FOOT
 
 W = 1400                      # every card is this wide. Fixed canvas, no surprises.
 
@@ -136,7 +146,7 @@ def tile(label, value, was=None, p=None, lower_better=False, neutral=False):
 
 
 def page(A, win, title, sub, body, height):
-    cur, pre = DATES.get("label"), DATES.get("p_label")
+    cur, pre = az.DATES.get("label"), az.DATES.get("p_label")
     head = ('<div class="hd"><span>%s</span><span class="sep">|</span><span>%s</span>'
             '<div class="dates"><span class="chip">THIS <b>%s</b></span>'
             '<span class="chip">vs PREVIOUS <b>%s</b></span></div></div>'
@@ -176,7 +186,8 @@ def spark(series, key="rev", w=150, h=34, lo=None, hi=None):
 
 # ---------------------------------------------------------------- 1 · EXECUTIVE
 def c_exec(A, win):
-    s, p = A["summary"], A.get("prev_summary") or {}
+    s = A["summary"]
+    p = s.get("prev") or {}     # analyze() hangs the previous period here
     D = decompose({"spend": s.get("spend"), "rev": s.get("rev")},
                   {"spend": p.get("spend"), "rev": p.get("rev")})
     d_rev = pct(s.get("rev") or 0, p.get("rev") or 0)
