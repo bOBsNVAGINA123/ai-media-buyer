@@ -372,6 +372,113 @@ def launch_stats(A, days=30):
             "win_ids": winners}
 
 
+def get_budgets(acct, max_pages=12):
+    """THE BUDGET IS NOT ON THE AD. It is on the ad set, or on the campaign if that campaign is
+    CBO. Telling someone to 'raise this ad to 1,762 a day' is an instruction Meta will not let
+    them carry out. Pull the real budgets so the recommendation lands where the lever actually is."""
+    ads_, camps = {}, {}
+    after, pages = None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,daily_budget,lifetime_budget,bid_strategy,effective_status,campaign_id",
+             "limit": 300}
+        if after: p["after"] = after
+        d = api_get("%s/adsets" % acct, p)
+        if "error" in d: break
+        for a in d.get("data", []):
+            ads_[str(a["id"])] = {
+                "name": a.get("name") or "", "campaign_id": str(a.get("campaign_id") or ""),
+                "daily": f(a.get("daily_budget")) / 100.0 if a.get("daily_budget") else 0.0,
+                "lifetime": f(a.get("lifetime_budget")) / 100.0 if a.get("lifetime_budget") else 0.0,
+                "status": a.get("effective_status") or ""}
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    after, pages = None, 0
+    while pages < max_pages:
+        p = {"fields": "id,name,daily_budget,lifetime_budget,effective_status", "limit": 300}
+        if after: p["after"] = after
+        d = api_get("%s/campaigns" % acct, p)
+        if "error" in d: break
+        for c in d.get("data", []):
+            camps[str(c["id"])] = {
+                "name": c.get("name") or "",
+                "daily": f(c.get("daily_budget")) / 100.0 if c.get("daily_budget") else 0.0,
+                "lifetime": f(c.get("lifetime_budget")) / 100.0 if c.get("lifetime_budget") else 0.0,
+                "status": c.get("effective_status") or ""}
+        after = d.get("paging", {}).get("cursors", {}).get("after"); pages += 1
+        if not after: break
+    # a campaign carrying its own daily budget is CBO: the ad sets under it cannot be moved
+    # individually, and saying otherwise sends him hunting for a field that is not there.
+    for a in ads_.values():
+        c = camps.get(a["campaign_id"]) or {}
+        a["cbo"] = bool(c.get("daily") or c.get("lifetime"))
+        a["campaign"] = c.get("name") or ""
+        a["camp_daily"] = c.get("daily") or 0.0
+    return {"adsets": ads_, "campaigns": camps}
+
+
+def adset_plan(A, win):
+    """THE BUDGET DECISION, WHERE THE BUDGET ACTUALLY LIVES: the ad set.
+    Current daily budget straight from Meta, what it earned, and what to set it to."""
+    b7 = A.get("b7") or {}
+    acc = A.get("b7_acc") or A["summary"]
+    BU = (A.get("budgets") or {}).get("adsets") or {}
+    a_roas = acc.get("roas") or 0
+    if not b7: return None
+
+    roll = {}
+    for aid, k in b7.items():
+        sid = str(k.get("adset_id") or "")
+        if not sid: continue
+        g = roll.setdefault(sid, {"ads": [], "prev": []})
+        g["ads"].append(k)
+        if k.get("prev"): g["prev"].append(k["prev"])
+
+    out = []
+    for sid, g in roll.items():
+        m = agg(g["ads"])
+        q = agg(g["prev"]) if g["prev"] else None
+        b = BU.get(sid) or {}
+        sp_day = (m.get("spend") or 0) / 7.0
+        if sp_day < 30: continue
+        # Meta's own daily budget if we have it. If the ad set has none, the budget is on the
+        # campaign (CBO) and the number to change is up there, not here.
+        cur = b.get("daily") or 0.0
+        cbo = bool(b.get("cbo"))
+        roas = m.get("roas") or 0
+        freq = m.get("freq") or 0
+        pur = m.get("purch") or 0
+        d = {"octr": pct(m.get("octr") or 0, (q or {}).get("octr") or 0),
+             "cpm": pct(m.get("cpm") or 0, (q or {}).get("cpm") or 0),
+             "cpp": pct(m.get("cpa") or 0, (q or {}).get("cpa") or 0)} if q else {}
+        lab, tests = label_with_reasons(m, acc, d)
+        base = cur if cur else sp_day          # if no explicit budget, price off what it spends
+        if lab in ("SCALE", "HEADROOM"):
+            step = 0.20 if lab == "SCALE" else 0.15
+            new = base * (1 + step); delta = new - base
+            act, inc = "RAISE", delta * roas
+        elif lab in ("CUT", "SATURATED"):
+            step = 1.0 if lab == "CUT" else 0.30
+            new = base * (1 - step); delta = new - base
+            act, inc = ("TURN OFF" if lab == "CUT" else "REDUCE"), delta * roas
+        else:
+            new, delta, act, inc = base, 0.0, "HOLD", 0.0
+        out.append({"adset_id": sid, "name": safe(b.get("name") or (g["ads"][0].get("adset") or "(ad set)")),
+                    "campaign": safe(b.get("campaign") or (g["ads"][0].get("campaign") or "")),
+                    "campaign_id": b.get("campaign_id") or "",
+                    "cbo": cbo, "camp_daily": b.get("camp_daily") or 0.0,
+                    "has_budget": bool(cur), "cur": base, "new": new, "delta": delta,
+                    "act": act, "label": lab, "tests": tests, "inc": inc,
+                    "m": m, "prev": q, "sp_day": sp_day, "roas": roas, "freq": freq,
+                    "cpp": m.get("cpa") or 0, "purch": pur, "n_ads": len(g["ads"]),
+                    "vs_acct": delta * (roas - a_roas) if delta > 0 else 0.0})
+    up = sorted([r for r in out if r["act"] == "RAISE"], key=lambda r: -r["inc"])
+    dn = sorted([r for r in out if r["act"] in ("REDUCE", "TURN OFF")], key=lambda r: r["inc"])
+    hold = [r for r in out if r["act"] == "HOLD"]
+    return {"up": up, "down": dn, "hold": hold, "acc_roas": a_roas,
+            "add": sum(r["delta"] for r in up[:5]),
+            "free": sum(-r["delta"] for r in dn[:5])}
+
+
 # ---------- Meta's OWN audience segment breakdown. The ground truth. No inference. ----------
 # user_segment_key returns: prospecting | engaged | existing | unknown
 SEGKEY = {"prospecting": "NEW", "engaged": "ENGAGED", "existing": "EXISTING", "unknown": "UNKNOWN"}
@@ -3669,15 +3776,37 @@ def action_plan(A, win):
     scale = [e for e in V if e["verdict"] in ("SCALE", "SCALE CAREFULLY")][:2]
     iterate = [e for e in V if e["verdict"] == "ITERATE"][:1]
 
+    # THE BUDGET IS NOT ON THE AD. "raise this ad 20%" is an instruction Meta will not let him
+    # carry out. Ads get switched off or kept. Budgets move on the AD SET.
     if kills:
-        L.append("\n*CUT TODAY*")
-        for e in kills: L.append(line(e, "cut 30%"))
+        L.append("\n*SWITCH THESE ADS OFF*  (the ad set keeps its budget, the other ads in it get the share)")
+        for e in kills: L.append(line(e, "turn off"))
     if scale:
-        L.append("\n*FUND TODAY*")
-        for e in scale: L.append(line(e, "raise 15 to 20%"))
+        L.append("\n*KEEP THESE ADS RUNNING*  (to give them more money, raise the AD SET budget below)")
+        for e in scale: L.append(line(e, "keep running"))
     if iterate:
         L.append("\n*FIX*")
         for e in iterate: L.append(line(e, "iterate"))
+
+    # ---- WHERE THE BUDGET ACTUALLY MOVES ----
+    S = adset_plan(A, win)
+    if S and (S["up"] or S["down"]):
+        L.append("\n*THE BUDGET MOVES — ON THE AD SETS*")
+        for r in (S["up"][:3] + S["down"][:3]):
+            if r["cbo"]:
+                L.append("• *%s* — _%s_ · this ad set is under a CBO campaign, so change the budget on "
+                         "the campaign *%s* (currently %s/day), not on the ad set."
+                         % (_clip(r["name"], 38), r["act"], _clip(r["campaign"], 34),
+                            _k(r["camp_daily"]) if r["camp_daily"] else "not set"))
+            else:
+                L.append("• *%s* — *%s* from %s/day to *%s/day* (%s%s/day)"
+                         % (_clip(r["name"], 38), r["act"], _k(r["cur"]), _k(max(0, r["new"])),
+                            "+" if r["delta"] >= 0 else "-", _k(abs(r["delta"]))))
+            L.append("     ROAS %.2fx vs account %.2fx · CPP %s · frequency %.2f · %d purchases · %d ads"
+                     % (r2(r["roas"]), r2(S["acc_roas"]), _k(r["cpp"]), r2(r["freq"]),
+                        int(r["purch"]), r["n_ads"]))
+            L.append("     _expected %s%s revenue/day · campaign: %s_"
+                     % ("+" if r["inc"] >= 0 else "-", _k(abs(r["inc"])), _clip(r["campaign"], 34)))
 
     if B and B["rows"]:
         top = B["rows"][0]
@@ -5382,6 +5511,7 @@ def main():
             if m["ad_id"]: B30[str(m["ad_id"])] = m
         B30_ACC = agg(list(B30.values())) if B30 else None
         AD_CREATED = get_ad_created(acct["id"])
+        BUDGETS = get_budgets(acct["id"])    # where the budget lever ACTUALLY is
         A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
@@ -5423,6 +5553,7 @@ def main():
                     AW["b30"] = B30            # the last 30 days per ad
                     AW["b30_acc"] = B30_ACC
                     AW["ad_created"] = AD_CREATED   # when each ad was launched
+                    AW["budgets"] = BUDGETS         # real ad set / campaign daily budgets
                     CAP = {
                         "1-account": "*1 · THE ACCOUNT* — what happened, and whether the move was the budget or the account.",
                         "2-campaigns": "*2 · CAMPAIGNS* — which campaigns moved it, every metric against its own previous period.",
