@@ -36,8 +36,11 @@
       "playmore_3day": "C0BGQUQN8E6",
       "playmore_7day": "C0BGULETERJ",
       "ourkids_launches": "C0BH20Z8AL9",
-      "playmore_launches": "C0BGY3GKUPQ"
+      "playmore_launches": "C0BGY3GKUPQ",
+      "ourkids_30day": "C0BH5BNS9PE",
+      "playmore_30day": "C0BGVCM299R"
     },
-    "_launches": "ads created in the last 3 days, followed daily until each one earns a verdict. Posted once a day off the daily run."
+    "_launches": "ads created in the last 3 days, followed daily until each one earns a verdict. Posted once a day off the daily run.",
+    "_schedule": "daily + 3day every morning 09:17 Cairo. 7day every SATURDAY 02:17 Cairo. 30day on the FIRST of the month 02:17 Cairo. launches every morning."
   }
 }

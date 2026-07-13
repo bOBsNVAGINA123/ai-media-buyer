@@ -55,10 +55,12 @@ CAT_KW = ["catalog", "dpa"]
 # Names lie: "Existing Content" is a CREATIVE naming convention, not an existing-customer audience.
 SEGN = {"NEW": "New audience", "ENGAGED": "Engaged", "EXISTING": "Existing customers"}
 SEGMAP = {}   # adset_id -> "NEW"/"ENGAGED"/"EXISTING", rebuilt per account from targeting
-WIN_TITLE = {"daily": "DAILY MEMO", "3day": "3-DAY MEMO", "7day": "7-DAY MEMO"}
+WIN_TITLE = {"daily": "DAILY MEMO", "3day": "3-DAY MEMO", "7day": "7-DAY MEMO",
+             "30day": "30-DAY MEMO"}
 WIN_FOOT = {"daily": "Daily memo. Yesterday vs the day before. One day is noisy, treat it as a signal, not a verdict.",
             "3day": "3-day memo. Last 3 days vs the 3 before.",
-            "7day": "7-day memo. Last 7 days vs the 7 before."}
+            "7day": "7-day memo. Last 7 days vs the 7 before. Posted every Saturday.",
+            "30day": "30-day memo. Last 30 days vs the 30 before. Posted on the first of the month."}
 
 def ca_segment(name, subtype=""):
     """Classify one custom audience. A lookalike is prospecting (NEW), not the seed audience."""
@@ -5426,11 +5428,50 @@ def main():
     DATES["p3"] = (fmt_day(y - datetime.timedelta(days=5)), fmt_day(y - datetime.timedelta(days=3)))
     ACC = "spend,impressions,reach,frequency,cpm,ctr,actions,action_values"
     # the three reads the memo is written for, each to its own channel per brand
-    WINDOWS = [
-        ("daily", l1, prev1, (fmt_day(y), fmt_day(y)), (fmt_day(y - datetime.timedelta(days=1)),) * 2),
-        ("3day",  l3, prev3, DATES["l3"], DATES["p3"]),
-        ("7day",  last, prev, DATES["label"], DATES["p_label"]),
-    ]
+    l30 = {"since": str(y - datetime.timedelta(days=29)), "until": str(y)}
+    prev30 = {"since": str(y - datetime.timedelta(days=59)),
+              "until": str(y - datetime.timedelta(days=30))}
+    L30 = (fmt_day(y - datetime.timedelta(days=29)), fmt_day(y))
+    P30 = (fmt_day(y - datetime.timedelta(days=59)), fmt_day(y - datetime.timedelta(days=30)))
+
+    ALL_WINDOWS = {
+        "daily": ("daily", l1, prev1, (fmt_day(y), fmt_day(y)),
+                  (fmt_day(y - datetime.timedelta(days=1)),) * 2),
+        "3day":  ("3day",  l3, prev3, DATES["l3"], DATES["p3"]),
+        "7day":  ("7day",  last, prev, DATES["label"], DATES["p_label"]),
+        "30day": ("30day", l30, prev30, L30, P30),
+    }
+
+    # THE SCHEDULE, IN CAIRO TIME.
+    # A 7 day read posted every single morning is not a 7 day read, it is noise with a longer
+    # window. It goes out once a week, on Saturday, and the 30 day goes out once a month, on the
+    # first. The workflow fires twice a day and this decides what actually gets written.
+    #   09:17 Cairo -> daily + 3day + the launch feed
+    #   02:17 Cairo -> 7day  (Saturday only)  ·  30day  (1st of the month only)
+    # a hand-triggered run can force any read, so a Saturday-only card is still testable on a
+    # Tuesday without waiting five days to find out it is broken
+    force = [w.strip() for w in (os.environ.get("FORCE_WINDOWS") or "").split(",") if w.strip()]
+    night = now.hour < 5
+    if force:
+        wins = [w for w in force if w in ALL_WINDOWS]
+        DO_LAUNCHES = True
+        WINDOWS = [ALL_WINDOWS[w] for w in wins]
+        sys.stderr.write("[schedule] FORCED -> %s\n" % ", ".join(wins))
+    elif night:
+        wins = []
+        if now.weekday() == 5: wins.append("7day")     # Monday=0, so Saturday=5
+        if now.day == 1:       wins.append("30day")
+        if not wins:
+            sys.stderr.write("[skip] %s Cairo: nothing scheduled for this night run\n"
+                             % now.strftime("%a %d %b %H:%M"))
+            return
+    if not force:
+        if not night:
+            wins = ["daily", "3day"]
+        DO_LAUNCHES = not night
+        WINDOWS = [ALL_WINDOWS[w] for w in wins]
+        sys.stderr.write("[schedule] %s Cairo -> %s\n"
+                         % (now.strftime("%a %d %b %H:%M"), ", ".join(wins)))
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
     CARDS = []
@@ -5573,7 +5614,7 @@ def main():
                     except Exception as e:
                         sys.stderr.write("[pdf] %s\n" % e)
                     # ---- NEW LAUNCHES. Its own channel, once a day, off the daily read. ----
-                    if win == "daily":
+                    if win == "daily" and DO_LAUNCHES:
                         lch2 = channel_launches_for(acct["name"])
                         if lch2:
                             try:

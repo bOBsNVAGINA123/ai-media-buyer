@@ -365,7 +365,8 @@ def call(kind, text, icon=None):
         kind, IC[ic], text)
 
 
-WINN = {"daily": "yesterday", "3day": "last 3 days", "7day": "last 7 days"}
+WINN = {"daily": "yesterday", "3day": "last 3 days", "7day": "last 7 days",
+        "30day": "last 30 days"}
 
 
 def page(A, win, title, sub, body, height):
