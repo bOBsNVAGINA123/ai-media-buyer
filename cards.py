@@ -80,8 +80,8 @@ h1{font-size:46px;font-weight:800;letter-spacing:-1.2px;margin:0 0 8px;color:#0F
 
 /* ---------- section card ---------- */
 .card{background:#FFFFFF;border:1px solid #E9EDF2;border-radius:20px;
-      padding:26px 28px 28px;margin-bottom:22px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
-.ch{display:flex;align-items:center;gap:16px;margin-bottom:22px}
+      padding:20px 24px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.ch{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .ch .ic{width:46px;height:46px;border-radius:50%%;background:#1E293B;color:#fff;
         display:flex;align-items:center;justify-content:center;flex:0 0 46px}
 .ch .ic svg{width:22px;height:22px}
@@ -163,7 +163,7 @@ table{width:100%%;border-collapse:collapse}
 th{font-size:14px;font-weight:800;letter-spacing:.06em;color:#94A3B8;text-transform:uppercase;
    text-align:right;padding:0 10px 14px 10px}
 th.l{text-align:left}
-td{font-size:22px;font-weight:800;text-align:right;padding:22px 10px;border-top:1px solid #EEF1F5;
+td{font-size:20px;font-weight:800;text-align:right;padding:13px 10px;border-top:1px solid #EEF1F5;
    font-variant-numeric:tabular-nums;color:#0F172A}
 td.l{text-align:left;vertical-align:top}
 td .s{display:block;font-size:14px;font-weight:700;color:#94A3B8;margin-top:6px;
@@ -171,11 +171,11 @@ td .s{display:block;font-size:14px;font-weight:700;color:#94A3B8;margin-top:6px;
 td .sn{display:block;font-size:16px;font-weight:600;color:#475569;margin-top:7px;
        text-transform:none;letter-spacing:0}
 .ncell{width:430px;overflow:hidden}
-.nm{font-size:24px;font-weight:800;letter-spacing:-.3px;color:#0F172A;display:block;
+.nm{font-size:21px;font-weight:800;letter-spacing:-.3px;color:#0F172A;display:block;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%%}
-td .sn{overflow:hidden;text-overflow:ellipsis;max-width:100%%}
+td .sn{overflow:hidden;text-overflow:ellipsis;max-width:100%%;margin-top:4px;font-size:15px}
 td .sn.one{white-space:nowrap}
-.bar{width:6px;height:50px;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:14px}
+.bar{width:6px;height:44px;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:14px}
 .g{color:#0F7A43}.r{color:#C0392B}.b{color:#1D4ED8}.a{color:#B45309}.m{color:#475569}
 .ft{display:flex;font-size:16px;color:#64748B;padding-top:10px;font-weight:600;gap:14px;
     align-items:center}
@@ -185,7 +185,7 @@ td .sn.one{white-space:nowrap}
 .ft .fi svg{width:16px;height:16px}
 .tag{font-size:14px;font-weight:800;padding:4px 10px;border-radius:7px;letter-spacing:.03em}
 .spark{display:block}
-.why{font-size:17px;font-weight:600;color:#475569;padding:0 0 20px 20px;line-height:1.55}
+.why{font-size:15px;font-weight:600;color:#475569;padding:0 0 12px 20px;line-height:1.45}
 .why b{color:#0F172A;font-weight:800}
 """
 
@@ -663,142 +663,133 @@ def c_winners(A, win):
 
 
 # ---------------------------------------------------------------- 4 · MONEY
-def c_money(A, win):
-    """THE BUDGET LIVES ON THE AD SET. You cannot set a budget on an ad, so this card never asks
-    you to. Ad sets get budget instructions. Ads get keep / kill instructions."""
+def c_budget(A, win):
+    """BUDGETS MOVE ON AD SETS. You cannot set a budget on an ad, so this screen never asks."""
     S = az.adset_plan(A, win)
+    if not S or (not S["up"] and not S["down"]): return None
+    up, dn = S["up"][:4], S["down"][:3]
+
+    board = '<div class="grid g3">%s%s%s</div>' % (
+        kpi("Budget to add", "+%s / day" % _k(S["add"]), "up", "g",
+            prev="across %d ad sets" % len(up), big=True),
+        kpi("Budget to free", "-%s / day" % _k(S["free"]), "down", "b",
+            prev="across %d ad sets" % len(dn), big=True),
+        kpi("Account ROAS", "%.2fx" % r2(S["acc_roas"]), "trend", "p",
+            prev="the bar every ad set is judged against", big=True))
+    body = ('<div class="card">%s%s%s</div>'
+            % (head("coins", "The budget board, per day",
+                    "ad set level, because that is where the budget field is"), board,
+               call("c-a", "You cannot set a budget on an ad. Every number below is an <b>AD SET</b> "
+                           "daily budget, taken from Meta. Where the campaign is <b>CBO</b> the ad set "
+                           "has no budget field and the change is made on the campaign, named on the row.",
+                    icon="warn")))
+
+    def srow(r, is_up):
+        col = "#0F7A43" if is_up else "#C0392B"
+        m, q = r["m"], r["prev"] or {}
+        cells = ""
+        for lab, key, f, lb in (("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
+                                ("freq", "freq", "%.2f", True)):
+            a_, b_ = m.get(key) or 0, q.get(key) or 0
+            v = _k(a_) if f == "%s" else (f % r2(a_))
+            cells += ('<td>%s<div style="margin-top:5px">%s</div>'
+                      '<span class="s">%s · 7d</span></td>'
+                      % (v, pill(pct(a_, b_), lower_better=lb), lab))
+        why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
+        if r["cbo"]:
+            budget = ('<td colspan=3><span class="pill am">CBO — budget is on the campaign</span>'
+                      '<span class="sn">campaign budget %s / day. Change it on <b>%s</b>.</span></td>'
+                      % (_k(r["camp_daily"]) if r["camp_daily"] else "not set",
+                         esc(_clip(r["campaign"], 38))))
+        else:
+            budget = ('<td>%s<span class="s">budget now</span></td>'
+                      '<td class="%s">%s<span class="s">set it to</span></td>'
+                      '<td class="%s">%s%s<span class="s">%s</span></td>'
+                      % (_k(r["cur"]), "b" if is_up else "r", _k(max(0, r["new"])),
+                         "g" if is_up else "r",
+                         "+" if r["delta"] >= 0 else "-", _k(abs(r["delta"])),
+                         "extra spend" if is_up else "freed"))
+        return ('<tr><td class=l><div class="ncell">'
+                '<span class="bar" style="background:%s"></span>'
+                '<span class="nm">%s</span>'
+                '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; %d ads &nbsp;·&nbsp; %d purchases</span>'
+                '<span class="sn one">CAMPAIGN &nbsp;%s</span></div></td>%s%s'
+                '<td class="%s">%s%s<span class="s">revenue / day</span></td></tr>'
+                '<tr><td colspan=8 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
+                % (col, esc(_clip(r["name"], 40)), status(r["act"]), status(r["label"]),
+                   r["n_ads"], int(r["purch"]), esc(_clip(r["campaign"], 40)), budget, cells,
+                   "g" if r["inc"] >= 0 else "r",
+                   "+" if r["inc"] >= 0 else "-", _k(abs(r["inc"])), why))
+
+    TH = ('<tr><th class=l>Ad set</th><th>Now</th><th>Set to</th><th>Change</th>'
+          '<th>ROAS</th><th>CPP</th><th>Freq</th><th>Revenue</th></tr>')
+    if up:
+        body += ('<div class="card">%s<table>%s%s</table></div>'
+                 % (head("up", "Raise these ad set budgets", "this is the number to change"),
+                    TH, "".join(srow(r, True) for r in up)))
+    if dn:
+        body += ('<div class="card">%s<table>%s%s</table></div>'
+                 % (head("down", "Cut these ad set budgets",
+                         "what you give up, and what the freed money buys elsewhere"),
+                    TH, "".join(srow(r, False) for r in dn)))
+    h = 250 + 300 + (140 + 165 * len(up) if up else 0) + (140 + 165 * len(dn) if dn else 0) + 110
+    return page(A, win, "The budget — on the ad sets",
+                "Budgets move on ad sets, because that is the only place Meta lets you set one.",
+                body, h)
+
+
+def c_adverdict(A, win):
+    """ADS ARE NOT A BUDGET DECISION. They are a keep or a kill."""
     P = proposals(A, win)
-    if not S and not P: return None
+    if not P or (not P["scale"] and not P["cut"]): return None
+    good = [r for r in P["scale"] if not r["cat"]][:3]
+    bad = P["cut"][:3]
+    if not good and not bad: return None
 
+    def arow(r, ok):
+        col = "#0F7A43" if ok else "#C0392B"
+        k = r["k"]
+        act = ("KEEP RUNNING" if ok else
+               ("TURN THIS AD OFF" if r["label"] == "CUT" else "REFRESH THE CREATIVE"))
+        note = ("Beating the account. To give it more money, duplicate it into an ad set and raise "
+                "the budget THERE." if ok else
+                ("Switch it off inside its ad set. The budget stays with the ad set and goes to the "
+                 "other ads in it." if r["label"] == "CUT" else
+                 "The same people are seeing it too often. New creative, or a wider audience."))
+        why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
+        return ('<tr><td class=l><div class="ncell">'
+                '<span class="bar" style="background:%s"></span>'
+                '<span class="nm">%s</span>'
+                '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s</span>'
+                '<span class="sn one">AD SET &nbsp;%s</span></div></td>'
+                '<td>%s<span class="s">spend · 7d</span></td>'
+                '<td class="%s">%.2fx<span class="s">roas · acct %.2fx</span></td>'
+                '<td>%s<span class="s">cpp · 7d</span></td>'
+                '<td>%.2f<span class="s">freq · 7d</span></td>'
+                '<td>%d<span class="s">purchases</span></td>'
+                '<td style="width:380px"><span class="sn" style="margin:0">%s</span></td></tr>'
+                '<tr><td colspan=7 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
+                % (col, esc(_clip(r["name"], 40)), status(act), esc(r["kind"]), r["conf"],
+                   esc(_clip(safe(k.get("adset") or "(unknown ad set)"), 40)),
+                   _k(k.get("spend") or 0), "g" if ok else "r", r2(r["roas"]), r2(P["acc_roas"]),
+                   _k(r["cpp"]), r2(r["freq"]), int(k.get("purch") or 0), esc(note), why))
+
+    TH = ('<tr><th class=l>Ad</th><th>Spend</th><th>ROAS</th><th>CPP</th><th>Freq</th>'
+          '<th>Purchases</th><th class=l>What to do</th></tr>')
     body = ""
-    if S:
-        board = '<div class="grid g3">%s%s%s</div>' % (
-            kpi("Budget to add", "+%s / day" % _k(S["add"]), "up", "g",
-                prev="across %d ad sets" % len(S["up"][:5]), big=True),
-            kpi("Budget to free", "-%s / day" % _k(S["free"]), "down", "b",
-                prev="across %d ad sets" % len(S["down"][:5]), big=True),
-            kpi("Account ROAS", "%.2fx" % r2(S["acc_roas"]), "trend", "p",
-                prev="the bar every ad set is judged against", big=True))
-        body += ('<div class="card">%s%s%s</div>'
-                 % (head("coins", "The budget board, per day",
-                         "ad set level, because that is where the budget field is"), board,
-                    call("c-a", "You cannot set a budget on an ad. Every number below is an "
-                                "<b>AD SET</b> daily budget, taken from Meta. Where a campaign is "
-                                "<b>CBO</b> the ad set has no budget field of its own and the change "
-                                "must be made on the campaign, which is named on the row.",
-                         icon="warn")))
-
-        def srow(r, up):
-            col = "#0F7A43" if up else "#C0392B"
-            m, q = r["m"], r["prev"] or {}
-            cells = ""
-            for lab, key, f, lb in (("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
-                                    ("freq", "freq", "%.2f", True), ("cvr", "cvr", "%.2f%%", False)):
-                a_, b_ = m.get(key) or 0, q.get(key) or 0
-                v = _k(a_) if f == "%s" else (f % r2(a_))
-                w = _k(b_) if f == "%s" else (f % r2(b_))
-                cells += ('<td>%s<div style="margin-top:7px">%s</div>'
-                          '<span class="s">%s · 7d · was %s</span></td>'
-                          % (v, pill(pct(a_, b_), lower_better=lb), lab, w))
-            why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
-            if r["cbo"]:
-                budget = ('<td colspan=3><span class="pill am">CBO — budget is on the campaign</span>'
-                          '<span class="sn">campaign daily budget %s. Change it on '
-                          '<b>%s</b>, not on this ad set.</span></td>'
-                          % (_k(r["camp_daily"]) if r["camp_daily"] else "not set",
-                             esc(_clip(r["campaign"], 44))))
-            else:
-                budget = ('<td>%s<span class="s">%s / day</span></td>'
-                          '<td class="%s">%s<span class="s">set it to / day</span></td>'
-                          '<td class="%s">%s%s<span class="s">%s / day</span></td>'
-                          % (_k(r["cur"]),
-                             "budget now" if r["has_budget"] else "spending now (no budget set)",
-                             "b" if up else "r", _k(max(0, r["new"])),
-                             "g" if up else "r",
-                             "+" if r["delta"] >= 0 else "-", _k(abs(r["delta"])),
-                             "extra spend" if up else "spend freed"))
-            return ('<tr><td class=l><div class="ncell">'
-                    '<span class="bar" style="background:%s"></span>'
-                    '<span class="nm">%s</span>'
-                    '<span class="sn">CAMPAIGN &nbsp;%s</span>'
-                    '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; %d ads &nbsp;·&nbsp; %d purchases</span>'
-                    '</div></td>%s%s'
-                    '<td class="%s">%s%s<span class="s">expected revenue / day</span></td></tr>'
-                    '<tr><td colspan=9 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
-                    % (col, esc(_clip(r["name"], 44)), esc(_clip(r["campaign"], 44)),
-                       status(r["act"]), status(r["label"]), r["n_ads"], int(r["purch"]),
-                       budget, cells,
-                       "g" if r["inc"] >= 0 else "r",
-                       "+" if r["inc"] >= 0 else "-", _k(abs(r["inc"])), why))
-
-        TH = ('<tr><th class=l>Ad set</th><th>Now</th><th>Set to</th><th>Change</th>'
-              '<th>ROAS</th><th>CPP</th><th>Frequency</th><th>CVR</th><th>Revenue</th></tr>')
-        if S["up"]:
-            body += ('<div class="card">%s<table>%s%s</table></div>'
-                     % (head("up", "Raise these ad set budgets",
-                             "the budget field is on the ad set. this is the number to change"),
-                        TH, "".join(srow(r, True) for r in S["up"][:5])))
-        if S["down"]:
-            body += ('<div class="card">%s<table>%s%s</table></div>'
-                     % (head("down", "Cut these ad set budgets",
-                             "what you give up, and what the freed money buys elsewhere"),
-                        TH, "".join(srow(r, False) for r in S["down"][:5])))
-
-    # ---- ADS: not a budget decision. A KEEP or a KILL, with the reason.
-    if P:
-        def arow(r, good):
-            col = "#0F7A43" if good else "#C0392B"
-            k = r["k"]
-            act = ("KEEP RUNNING" if good else
-                   ("TURN THIS AD OFF" if r["label"] == "CUT" else "REFRESH THE CREATIVE"))
-            note = ("It is beating the account. Duplicate it into another ad set and raise the "
-                    "budget THERE." if good else
-                    ("Switch the ad off inside its ad set. The budget stays with the ad set and "
-                     "goes to the other ads in it." if r["label"] == "CUT" else
-                     "The same people are seeing it too often. New creative, or a wider audience."))
-            why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
-            return ('<tr><td class=l><div class="ncell">'
-                    '<span class="bar" style="background:%s"></span>'
-                    '<span class="nm">%s</span>'
-                    '<span class="sn">AD SET &nbsp;%s</span>'
-                    '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s</span></div></td>'
-                    '<td>%s<span class="s">spend · 7d</span></td>'
-                    '<td class="%s">%.2fx<span class="s">roas · 7d · acct %.2fx</span></td>'
-                    '<td>%s<span class="s">cpp · 7d</span></td>'
-                    '<td>%.2f<span class="s">freq · 7d</span></td>'
-                    '<td>%d<span class="s">purchases · 7d</span></td>'
-                    '<td style="width:420px"><span class="sn" style="margin:0">%s</span></td></tr>'
-                    '<tr><td colspan=7 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
-                    % (col, esc(_clip(r["name"], 44)),
-                       esc(_clip(safe(k.get("adset") or "(unknown ad set)"), 44)),
-                       status(act), esc(r["kind"]), r["conf"],
-                       _k(k.get("spend") or 0),
-                       "g" if good else "r", r2(r["roas"]), r2(P["acc_roas"]),
-                       _k(r["cpp"]), r2(r["freq"]), int(k.get("purch") or 0),
-                       esc(note), why))
-
-        TH2 = ('<tr><th class=l>Ad</th><th>Spend</th><th>ROAS</th><th>CPP</th><th>Frequency</th>'
-               '<th>Purchases</th><th class=l>What to do</th></tr>')
-        good = [r for r in P["scale"] if not r["cat"]][:4]
-        bad = P["cut"][:4]
-        if good:
-            body += ('<div class="card">%s<table>%s%s</table></div>'
-                     % (head("star", "The good ads — keep them running",
-                             "you cannot budget an ad. you can duplicate it into an ad set that has budget"),
-                        TH2, "".join(arow(r, True) for r in good)))
-        if bad:
-            body += ('<div class="card">%s<table>%s%s</table></div>'
-                     % (head("warn", "The bad ads — switch them off",
-                             "turning an ad off hands its share of the ad set budget to the ads that work"),
-                        TH2, "".join(arow(r, False) for r in bad)))
-
-    h = (250 + (330 + 170 + 240 * len(S["up"][:5]) + (170 if S["down"] else 0)
-                + 240 * len(S["down"][:5]) if S else 0)
-         + ((170 + 215 * len([r for r in P["scale"] if not r["cat"]][:4])) if P and P["scale"] else 0)
-         + ((170 + 215 * len(P["cut"][:4])) if P and P["cut"] else 0) + 120)
-    return page(A, win, "What to do with the money",
-                "Budgets move on ad sets, because that is the only place Meta lets you set one. "
-                "Ads get kept or killed.", body, h)
+    if good:
+        body += ('<div class="card">%s<table>%s%s</table></div>'
+                 % (head("star", "Good ads — keep them running",
+                         "you cannot budget an ad. duplicate it into an ad set that has budget"),
+                    TH, "".join(arow(r, True) for r in good)))
+    if bad:
+        body += ('<div class="card">%s<table>%s%s</table></div>'
+                 % (head("warn", "Bad ads — switch them off",
+                         "turning an ad off hands its share of the ad set budget to the ads that work"),
+                    TH, "".join(arow(r, False) for r in bad)))
+    h = 250 + (140 + 160 * len(good) if good else 0) + (140 + 160 * len(bad) if bad else 0) + 110
+    return page(A, win, "The ads — keep or kill",
+                "An ad has no budget field. It gets kept, refreshed, or switched off.", body, h)
 
 
 # ---------------------------------------------------------------- 5 · AUDIENCE
@@ -1173,11 +1164,12 @@ CARDS = (("1-account",     c_exec),
          ("3-adsets",      lambda A, w: c_cause(A, w, "adset")),
          ("4-ads",         lambda A, w: c_cause(A, w, "ad")),
          ("5-verdicts",    c_winners),
-         ("6-money",       c_money),
-         ("7-audience",    c_audience),
-         ("8-fatigue",     c_fatigue),
-         ("9-makemore",    c_makemore),
-         ("10-observations", c_observations))
+         ("6-budget",      c_budget),
+         ("7-adverdicts",  c_adverdict),
+         ("8-audience",    c_audience),
+         ("9-fatigue",     c_fatigue),
+         ("10-makemore",   c_makemore),
+         ("11-observations", c_observations))
 
 
 def available():

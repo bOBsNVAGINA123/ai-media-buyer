@@ -3550,189 +3550,51 @@ def card_bars(A, win, level):
 
 
 def msg_short(A, win):
-    """The cards carry the numbers. This is the call. Percent only, never absolutes,
-    never standard deviations."""
+    """SHORT. The images carry the detail; this is the headline you read on your phone.
+    Six lines, the biggest numbers, and nothing else."""
     s = A["summary"]; p = s.get("prev") or {}
-    H = A.get("hist") or []
-    nd = WIN_DAYS.get(win, 1)
-    W = waterfall(s, p); M = mix_split(A); S = plan(A); F = fatiguing(A["creatives"])
-    B = normal_band(H, "rev", (s["rev"] or 0) / nd)
-    segs = A.get("segs") or {}
-    # A WALKTHROUGH, IN ORDER. Not a pile of numbers.
-    #   1 did anything actually happen   2 which metric did it   3 which ad did it   4 what to do
-    L = ["*%s — %s*   ·   %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
-                                 _period_line().replace("THIS PERIOD  ", "").replace("      vs      PREVIOUS  ", " vs "))]
-
-    sp_now = s.get("spend") or 0; sp_pre = p.get("spend") or 0
-    DEC = decompose(s, p)
-    L.append("*1 · WHAT HAPPENED*")
-    L.append("Spend %s → %s   ·   Revenue %s → %s   ·   ROAS %.2fx → %.2fx" % (
-        _k(sp_pre), _k(sp_now), _k(p.get("rev") or 0), _k(s.get("rev") or 0),
-        r2((p.get("roas") or 0)), r2((s.get("roas") or 0))))
-    if DEC:
-        L.append("*%s*" % ("EFFICIENCY IMPROVED." if DEC["efficient"] else "EFFICIENCY GOT WORSE."))
-        L.append("Revenue moved *%s%s EGP*. Of that, *%s* is the budget you changed and *%s* is the account itself changing.\n%s" % (
-            "+" if DEC["d_rev"] >= 0 else "-", _k(abs(DEC["d_rev"])),
-            ("%s%s" % ("+" if DEC["spend_eff"] >= 0 else "-", _k(abs(DEC["spend_eff"])))),
-            ("%s%s" % ("+" if DEC["perf_eff"] >= 0 else "-", _k(abs(DEC["perf_eff"])))),
-            verdict_line(DEC)))
-    if B:
-        L.append("Against a typical day revenue is *%+.0f%%*, %s the normal swing of %+.0f%% to %+.0f%%." % (
-            B["vs"], "inside" if B["inside"] else "OUTSIDE", B["lo_p"], B["hi_p"]))
-
-    L.append("\n*2 · WHICH METRIC MOVED IT*")
-
-    if W:
-        # The lever that MOVED revenue must push the SAME WAY revenue went. A lever that
-        # pulled the other way is a drag, not the reason. Never call a drag the reason.
-        tot = sum(x["rev_pct"] for x in W["steps"])
-        up = tot >= 0
-        same = [x for x in W["steps"] if (x["rev_pct"] >= 0) == up]
-        opp = [x for x in W["steps"] if (x["rev_pct"] >= 0) != up]
-        t = max(same or W["steps"], key=lambda x: abs(x["rev_pct"]))
-
-        def _why(k, r):
-            return {"SPEND": "You bought %s media. The account did not get better or worse." % (
-                        "more" if r >= 0 else "less"),
-                    "CPC": "Clicks got %s. That is auction cost and click rate, so it is creative and audience." % (
-                        "cheaper" if r >= 0 else "dearer"),
-                    "CVR": "Conversion rate %s. That is offer, price or landing page, not the ad account." % (
-                        "rose" if r >= 0 else "fell"),
-                    "AOV": "Basket size %s. That is the mix of what is selling." % (
-                        "rose" if r >= 0 else "fell")}.get(k, "")
-
-        # TWO DIFFERENT BASELINES, SO NAME BOTH. The line above is versus a TYPICAL DAY of the
-        # last 30. The lever split below is versus the PERIOD IMMEDIATELY BEFORE. Never print
-        # one number against one baseline and the next against another without saying so.
-        pp = _safe_pct(s.get("rev") or 0, p.get("rev") or 0)
-        L.append("Against the *period immediately before* (a different baseline to the line above), revenue %s.\n*%s is the reason.* It is %d%% of that move and worth *%+.1f%%* of revenue on its own.\n%s" % (
-            ("moved *%+.0f%%*" % pp) if pp is not None else "moved",
-            t["k"], t["pct"], t["rev_pct"], _why(t["k"], t["rev_pct"])))
-
-        if opp:
-            d = max(opp, key=lambda x: abs(x["rev_pct"]))
-            if abs(d["rev_pct"]) >= 3:
-                # A lever pointing against a FALL is holding you up, so do not "fix" it.
-                # A lever pointing against a RISE is capping you, so that one you fix.
-                tail = ("*%s capped the gain*, worth *%+.1f%%* of revenue.\n%s\nFix that and the gain gets bigger." % (
-                            d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"]))
-                        if up else
-                        "*%s cushioned the fall*, worth *%+.1f%%* of revenue.\n%s\nWithout it the drop would be worse. Protect it." % (
-                            d["k"], d["rev_pct"], _why(d["k"], d["rev_pct"])))
-                L.append(tail)
-
-    if M:
-        dom = "mix" if abs(M["mix"]) >= abs(M["perf"]) else "performance"
-        if dom == "mix" and abs(M["mix"]) >= 3:
-            L.append("Blended ROAS moved *%+.0f%%*, but *%+.0f%%* of that is mix, not performance.\nYou shifted money between audiences. The account did not actually get better." % (
-                M["total"], M["mix"]))
-        else:
-            L.append("Blended ROAS moved *%+.0f%%*, and *%+.0f%%* of that is real performance, not mix." % (
-                M["total"], M["perf"]))
-
-    room = [k for k in ("NEW", "ENGAGED", "EXISTING")
-            if segs.get(k) and (segs[k].get("freq") or 9) < 3.0 and segs[k].get("share", 0) >= 5]
-    full = [k for k in ("NEW", "ENGAGED", "EXISTING")
-            if segs.get(k) and (segs[k].get("freq") or 0) >= 3.0 and segs[k].get("share", 0) >= 5]
-    if room or full:
-        bits = []
-        if room: bits.append("headroom in %s" % ", ".join(SEGN[k].lower() for k in room))
-        if full: bits.append("%s is saturated" % ", ".join(SEGN[k].lower() for k in full))
-        L.append("Budget: %s." % "; ".join(bits))
-
-    if F:
-        L.append("*Burning:* %s, %s. Outbound CTR %+.0f%% while frequency %+.0f%%." % (
-            _clip(F[0]["name"], 36), F[0]["verdict"].lower(),
-            F[0]["d"]["octr"] or 0, F[0]["d"]["freq"] or 0))
-
-    # 3 · WHICH ADS DID IT. Named, priced in EGP, spend then and now, the stage that broke,
-    # and a link that opens that exact ad. No hunting.
-    B = attribution(A, "ad", n=40)
-    if B and B["all"]:
-        acct_id = A["account"].get("id") or ""
-        live = [r for r in B["all"] if (r["now"] or {}).get("spend") or abs(r["d_rev"]) >= 1]
-        losers = sorted([r for r in live if r["d_rev"] < 0], key=lambda r: r["d_rev"])[:3]
-        gainers = sorted([r for r in live if r["d_rev"] > 0], key=lambda r: -r["d_rev"])[:3]
-
-        def _line(r):
-            m_ = r["now"] or {}; q_ = r["pre"] or {}; DD = r.get("dec")
-            cause = r["dx"][0] if r.get("dx") else ("new" if r["new"] else "")
-            out = ["• %s — *%s%s EGP* (%+.0f%% of all movement)  ·  *%s*" % (
-                ads_link(_clip(safe(r["name"]), 38), acct_id, r["ent_id"]),
-                "+" if r["d_rev"] >= 0 else "-", _k(abs(r["d_rev"])), r["share"], cause)]
-            out.append("     spend %s → %s  ·  rev %s → %s  ·  ROAS %.2fx  ·  CPMR %s  ·  CVR %s" % (
-                _k(q_.get("spend") or 0), _k(m_.get("spend") or 0),
-                _k(r["prev_rev"]), _k(r["rev"]), r2(r["roas"]), _k(m_.get("cpmr") or 0),
-                ("%.2f%%" % r2(m_.get("cvr") or 0)) if m_.get("cvr") else "n/a"))
-            if DD:
-                out.append("     _budget %s%s · performance %s%s — %s_" % (
-                    "+" if DD["spend_eff"] >= 0 else "-", _k(abs(DD["spend_eff"])),
-                    "+" if DD["perf_eff"] >= 0 else "-", _k(abs(DD["perf_eff"])),
-                    "mostly the budget you set" if DD["driver"] == "SPEND"
-                    else "a real performance change"))
-            return out
-
-        if losers:
-            L.append("\n*3 · WHAT PULLED IT DOWN*")
-            for r in losers: L.extend(_line(r))
-        # ALWAYS show what is fighting back. Cutting one of these by mistake makes the hole
-        # bigger, and the old memo never mentioned they existed.
-        if gainers:
-            L.append("\n*WHAT FOUGHT BACK*  (do not cut these by accident)")
-            for r in gainers: L.extend(_line(r))
-
-        if losers and losers[0].get("dx"):
-            top = losers[0]
-            L.append("\n*4 · WHAT TO DO ABOUT THE BIGGEST ONE*")
-            L.append("_%s_" % top["dx"][1])
-            L.append("*Go and do:* %s" % top["dx"][2])
-
-    if S:
-        L.append("\n*THE BUDGET MOVE:* cut %s (%.2fx, %.0f%% under the account) by 30%%, fund %s (%.2fx). Same budget, revenue *%+.1f%%*." % (
-            _clip(safe(S["cut"][0]["ad_name"]), 32), r2(S["cut"][0]["roas"]),
-            (1 - (S["cut"][0]["roas"] or 0) / (s["roas"] or 1)) * 100,
-            _clip(safe(S["fund"][0]["ad_name"]), 32), r2(S["fund"][0]["roas"]), S["gain_pct"]))
-
-    # ---- CREATIVE FATIGUE. Named ads, named tests, actual numbers. Never "some ads are tired".
     acct_id = A["account"].get("id") or ""
-    FS = fatigue_scan(A)
-    tired = [r for r in FS if r["state"] in ("FATIGUED", "FATIGUING")]
+    D = decompose({"spend": s.get("spend"), "rev": s.get("rev")},
+                  {"spend": p.get("spend"), "rev": p.get("rev")})
+    L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
+                                       _fmt_range(DATES.get("label")),
+                                       _fmt_range(DATES.get("p_label")))]
+    L.append("Revenue *%s* (%s)  ·  Spend *%s* (%s)  ·  ROAS *%.2fx* (%s)" % (
+        _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a",
+        _k(s.get("spend") or 0), _d(pct(s.get("spend") or 0, p.get("spend") or 0)) or "n/a",
+        r2(s.get("roas") or 0), _d(pct(s.get("roas") or 0, p.get("roas") or 0)) or "n/a"))
+    if D:
+        L.append("_%s: %s%s of the move was the budget, %s%s was the account._" % (
+            "BUDGET" if D["driver"] == "SPEND" else "PERFORMANCE",
+            "+" if D["spend_eff"] >= 0 else "-", _k(abs(D["spend_eff"])),
+            "+" if D["perf_eff"] >= 0 else "-", _k(abs(D["perf_eff"]))))
+
+    S = adset_plan(A, win)
+    if S and S["up"]:
+        r = S["up"][0]
+        L.append("*RAISE:* %s — %s → *%s/day* (%.2fx) → *+%s rev/day*" % (
+            _clip(r["name"], 30),
+            ("CBO, change the campaign" if r["cbo"] else "%s" % _k(r["cur"])),
+            ("campaign %s" % _clip(r["campaign"], 22)) if r["cbo"] else _k(r["new"]),
+            r2(r["roas"]), _k(r["inc"])))
+    if S and S["down"]:
+        r = S["down"][0]
+        L.append("*CUT:* %s — %s → *%s/day* (%.2fx, frq %.2f)" % (
+            _clip(r["name"], 30), _k(r["cur"]), _k(max(0, r["new"])), r2(r["roas"]), r2(r["freq"])))
+
+    F = fatigue_scan(A)
+    tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED")]
     if tired:
-        L.append("\n*5 · CREATIVE FATIGUE*  (5 tests: frequency over 3.0, outbound CTR down over 15%, "
-                 "CPM up over 15%, hook down over 15%, CPP up over 20%)")
-        for r in tired[:4]:
-            L.append("• %s — *%s*, %d of 5 tests fired  ·  spend %s  ·  ROAS %.2fx" % (
-                ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]), r["state"], r["hits"],
-                _k(r["spend"]), r2(r["roas"])))
-            fired = [t["t"] for t in r["tests"] if t["ok"]]
-            L.append("     frq *%.2f* · hook *%.1f%%* (%s) · CTR-O %s · CPM %s · CPP %s" % (
-                r["freq"], r["hook"], _d(r["d_hook"]) or "no prior",
-                _d(r["d_octr"]) or "no prior", _d(r["d_cpm"]) or "no prior",
-                _d(r["d_cpp"]) or "no prior"))
-            L.append("     _fired: %s_" % ("; ".join(fired) if fired else "none"))
-    elif FS:
-        L.append("\n*5 · CREATIVE FATIGUE*  none. No ad fires 2 or more of the five tests.")
+        L.append("*KILL:* %s — %.2fx, frequency *%.2f* (%s)" % (
+            _clip(tired[0]["name"], 30), r2(tired[0]["roas"]), tired[0]["freq"],
+            tired[0]["state"]))
 
-    # ---- MAKE MORE OF WHAT WORKED. The hit rate says how many, the winners say what.
-    P = winning_pattern(A)
-    if P:
-        HR = hit_rate(A)
-        L.append("\n*6 · MAKE MORE OF WHAT WORKED*")
-        if HR:
-            L.append("Hit rate *%.0f%%* (%d of %d proven ads won). Launch *%d* to get 1 more winner, *%d* for 3."
-                     % (HR["hr"], HR["winners"], HR["tested"], HR["need_1"], HR["need_3"]))
-        for k in P["top"][:2]:
-            pv = (A.get("previews") or {}).get(str(k.get("ad_id")))
-            nm = _clip(safe(k.get("ad_name") or ""), 34)
-            nm = ("<%s|%s>" % (pv, nm)) if pv else nm
-            L.append("• %s — ROAS *%.2fx* · hook *%.1f%%* · hold *%.0f%%* · rev %s" % (
-                nm, r2(k.get("roas") or 0), k.get("hook") or 0, k.get("hold") or 0,
-                _k(k.get("rev") or 0)))
-        for ln in brief_lines(P)[1:4]:
-            L.append("_%s_" % ln)
-
-    L.append("_Margin and LTV are unknown from ad data. Nothing above assumes them._")
-    return "\n".join(x for x in L if x)
+    LS = launch_stats(A, 30)
+    if LS:
+        L.append("*CREATIVE:* %d launched / 30d, %d won → *%.0f%% hit rate*, launch *%d* for the next winner."
+                 % (LS["launched"], LS["winners"], LS["hr"], LS["need_1"]))
+    L.append("_Full detail in the cards above._")
+    return "\n".join(L)
 
 
 def action_plan(A, win):
@@ -5584,7 +5446,9 @@ def main():
                                       "comment": head + CAP.get(suf, ""),
                                       # the memo, then the action plan, both AFTER every image
                                       "memo": msg_short(AW, win) if is_last else None,
-                                      "plan": action_plan(AW, win) if is_last else None})
+                                      # the action plan was a second wall of text saying what the
+                                      # cards already say. One short memo, then stop talking.
+                                      "plan": None})
             DATES["label"], DATES["p_label"] = save7
             DATES["win"] = "7day"
         # --weekly is retired: the 7day memo already ships every day to the 7day channel.
