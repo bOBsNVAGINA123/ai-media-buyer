@@ -353,6 +353,26 @@ def tile(label, value, was=None, p=None, lower_better=False, neutral=False,
                ("was %s" % esc(was)) if was is not None else "&nbsp;"))
 
 
+WSHORT = {"daily": "1d", "3day": "3d", "7day": "7d", "30day": "30d"}
+
+
+def cell(w, q, k7, lab, key, f, lower=False, win="daily"):
+    """THE WINDOW IS THE HEADLINE. The 7 day figure sits under it as the benchmark.
+    On a daily card a 'cut this today' decision must be labelled with TODAY's numbers. The week
+    is there to tell you whether today is normal, not to stand in for it."""
+    a_ = (w or {}).get(key) or 0
+    b_ = (q or {}).get(key) or 0
+    c7 = (k7 or {}).get(key) or 0
+    v = _k(a_) if f == "%s" else (f % r2(a_))
+    v7 = _k(c7) if f == "%s" else (f % r2(c7))
+    ws = WSHORT.get(win, "1d")
+    bench = ("<span class=\"s\">%s · %s &nbsp;·&nbsp; 7d %s</span>" % (lab, ws, v7)) if ws != "7d" \
+        else ("<span class=\"s\">%s · 7d</span>" % lab)
+    return ('<td>%s<div style="margin-top:5px">%s</div>%s</td>'
+            % (v, pill(pct(a_, b_), lower_better=lower) if b_ else
+               '<span class="pill nu">new</span>', bench))
+
+
 def head(icon, title, note=""):
     return ('<div class="ch"><span class="ic">%s</span><h2>%s</h2>%s</div>'
             % (IC.get(icon, IC["grid"]), esc(title),
@@ -675,28 +695,27 @@ def c_winners(A, win):
             tests = " &nbsp;·&nbsp; ".join(
                 "<b>%s</b> %s (%s)" % ("PASS" if t["ok"] else "FAIL", esc(t["t"]), esc(t["v"]))
                 for t in r["tests"][:4])
-            # EVERY METRIC AGAINST ITS OWN PREVIOUS PERIOD. A verdict with no baseline is a hunch.
-            q = k.get("prev") or {}
+            # THIS WINDOW is the headline; the 7 day is the benchmark beside it. The LABEL is
+            # still a 7 day label, because one day must never be allowed to kill an ad.
+            w = r.get("w") or k
+            q = (w or {}).get("prev") or {}
             cells = ""
             for lab_, key, f, lb in (("spend", "spend", "%s", False), ("roas", "roas", "%.2fx", False),
                                      ("cpp", "cpa", "%s", True), ("aov", "aov", "%s", False),
                                      ("cvr", "cvr", "%.2f%%", False), ("atc", "atc_rate", "%.1f%%", False),
                                      ("out ctr", "octr", "%.2f%%", False),
                                      ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
-                a_, b_ = k.get(key) or 0, q.get(key) or 0
-                v = _k(a_) if f == "%s" else (f % r2(a_))
-                cells += ('<td>%s<div style="margin-top:5px">%s</div>'
-                          '<span class="s">%s · 7d</span></td>'
-                          % (v, pill(pct(a_, b_), lower_better=lb) if b_ else
-                             '<span class="pill nu">new</span>', lab_))
+                cells += cell(w, q, k, lab_, key, f, lower=lb, win=win)
             tr += ('<tr><td class=l><div class="ncell"><span class="bar" style="background:%s"></span>'
                    '<span class="nm">%s</span>'
-                   '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s &nbsp;·&nbsp; %d purchases</span>'
-                   '<span class="sn one">account ROAS %.2fx</span></div></td>%s'
+                   '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s &nbsp;·&nbsp; %d purchases (7d)</span>'
+                   '<span class="sn one">account ROAS %.2fx &nbsp;·&nbsp; the label is a 7 DAY call, the '
+                   'numbers are %s</span></div></td>%s'
                    '<td style="width:260px">%s</td></tr>'
                    '<tr><td colspan=10 class="why" style="border:0">%s</td></tr>'
                    % (col, esc(_clip(r["name"], 42)), status(lab), esc(r["kind"]), r["conf"],
-                      int(k.get("purch") or 0), r2(acc.get("roas") or 0), cells, an, tests))
+                      int(k.get("purch") or 0), r2(acc.get("roas") or 0),
+                      esc(WINN.get(win, "this window")), cells, an, tests))
         return tr
 
     def blk(title, ic, note, rs):
@@ -753,16 +772,12 @@ def c_budget(A, win):
 
     def srow(r, is_up):
         col = "#0F7A43" if is_up else "#C0392B"
-        m, q = r["m"], r["prev"] or {}
+        m, q, m7 = r["m"], r["prev"] or {}, r.get("m7") or {}
         cells = ""
         for lab, key, f, lb in (("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
                                 ("cvr", "cvr", "%.2f%%", False), ("atc", "atc_rate", "%.1f%%", False),
                                 ("freq", "freq", "%.2f", True)):
-            a_, b_ = m.get(key) or 0, q.get(key) or 0
-            v = _k(a_) if f == "%s" else (f % r2(a_))
-            cells += ('<td>%s<div style="margin-top:5px">%s</div>'
-                      '<span class="s">%s · 7d</span></td>'
-                      % (v, pill(pct(a_, b_), lower_better=lb), lab))
+            cells += cell(m, q, m7, lab, key, f, lower=lb, win=win)
         why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
         if r["cbo"]:
             budget = ('<td colspan=3><span class="pill am">CBO — budget is on the campaign</span>'
@@ -780,8 +795,9 @@ def c_budget(A, win):
         return ('<tr><td class=l><div class="ncell">'
                 '<span class="bar" style="background:%s"></span>'
                 '<span class="nm">%s</span>'
-                '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; %d ads &nbsp;·&nbsp; %d purchases</span>'
-                '<span class="sn one">CAMPAIGN &nbsp;%s</span></div></td>%s%s'
+                '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; %d ads &nbsp;·&nbsp; %d purchases (7d)</span>'
+                '<span class="sn one">CAMPAIGN &nbsp;%s &nbsp;·&nbsp; budget maths off the steady 7 day rate</span>'
+                '</div></td>%s%s'
                 '<td class="%s">%s%s<span class="s">revenue / day</span></td></tr>'
                 '<tr><td colspan=8 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
                 % (col, esc(_clip(r["name"], 40)), status(r["act"]), status(r["label"]),
@@ -825,38 +841,38 @@ def c_adverdict(A, win):
                  "other ads in it." if r["label"] == "CUT" else
                  "The same people are seeing it too often. New creative, or a wider audience."))
         why = " &nbsp;·&nbsp; ".join(esc(t["t"]) for t in r["tests"] if t["ok"])
+        w = r.get("w") or k
+        q = (w or {}).get("prev") or {}
+        cells = ""
+        for lab_, key, f, lb in (("spend", "spend", "%s", False), ("roas", "roas", "%.2fx", False),
+                                 ("cpp", "cpa", "%s", True), ("cvr", "cvr", "%.2f%%", False),
+                                 ("atc", "atc_rate", "%.1f%%", False), ("freq", "freq", "%.2f", True)):
+            cells += cell(w, q, k, lab_, key, f, lower=lb, win=win)
         return ('<tr><td class=l><div class="ncell">'
                 '<span class="bar" style="background:%s"></span>'
                 '<span class="nm">%s</span>'
                 '<span class="sn one">%s &nbsp; %s &nbsp;·&nbsp; confidence %s</span>'
                 '<span class="sn one">AD SET &nbsp;%s</span></div></td>'
-                '<td>%s<span class="s">spend · 7d</span></td>'
-                '<td class="%s">%.2fx<span class="s">roas · acct %.2fx</span></td>'
-                '<td>%s<span class="s">cpp · 7d</span></td>'
-                '<td>%.2f%%<span class="s">cvr · 7d</span></td>'
-                '<td>%.1f%%<span class="s">atc · 7d</span></td>'
-                '<td>%.2f<span class="s">freq · 7d</span></td>'
-                '<td>%d<span class="s">purchases</span></td>'
+                '%s'
+                '<td>%d<span class="s">purchases · 7d</span></td>'
                 '<td style="width:340px"><span class="sn" style="margin:0">%s</span></td></tr>'
                 '<tr><td colspan=9 class="why" style="border:0"><b>WHY:</b> %s</td></tr>'
                 % (col, esc(_clip(r["name"], 40)), status(act), esc(r["kind"]), r["conf"],
                    esc(_clip(safe(k.get("adset") or "(unknown ad set)"), 40)),
-                   _k(k.get("spend") or 0), "g" if ok else "r", r2(r["roas"]), r2(P["acc_roas"]),
-                   _k(r["cpp"]), r2(k.get("cvr") or 0), (k.get("atc_rate") or 0),
-                   r2(r["freq"]), int(k.get("purch") or 0), esc(note), why))
+                   cells, int(k.get("purch") or 0), esc(note), why))
 
     TH = ('<tr><th class=l>Ad</th><th>Spend</th><th>ROAS</th><th>CPP</th><th>CVR</th><th>ATC</th>'
           '<th>Freq</th><th>Purchases</th><th class=l>What to do</th></tr>')
+    NOTE = ("the big number is %s. the small one under it is the 7 day benchmark. the VERDICT is "
+            "always a 7 day call — one day never kills an ad" % WINN.get(win, "this window"))
     body = ""
     if good:
         body += ('<div class="card">%s<table>%s%s</table></div>'
-                 % (head("star", "Good ads — keep them running",
-                         "you cannot budget an ad. duplicate it into an ad set that has budget"),
+                 % (head("star", "Good ads — keep them running", NOTE),
                     TH, "".join(arow(r, True) for r in good)))
     if bad:
         body += ('<div class="card">%s<table>%s%s</table></div>'
-                 % (head("warn", "Bad ads — switch them off",
-                         "turning an ad off hands its share of the ad set budget to the ads that work"),
+                 % (head("warn", "Bad ads — switch them off", NOTE),
                     TH, "".join(arow(r, False) for r in bad)))
     h = 250 + (140 + 160 * len(good) if good else 0) + (140 + 160 * len(bad) if bad else 0) + 110
     return page(A, win, "The ads — keep or kill",
@@ -1054,17 +1070,22 @@ def c_makemore(A, win):
                     kpi("Judged", "%d" % LS["judged"], "rules", "n",
                         prev="%d still gathering data" % LS["pending"], big=True),
                     kpi("Winners", "%d" % LS["winners"], "star", "g",
-                        prev="%d lost to the account" % LS["losers"], big=True),
+                        prev="%d cleared %.2fx  ·  %d only matched the account" % (
+                            LS["winners"], r2(LS["bar"]), LS["near"]), big=True),
                     kpi("Hit rate", "%.0f%%" % LS["hr"], "target", "p",
                         prev="launch %d to get 1  ·  %d to get 3" % (LS["need_1"], LS["need_3"]),
                         big=True),
                     call("c-b",
-                         "<b>THE CRITERIA.</b> An ad is <b>JUDGED</b> once it has spent at least "
-                         "<b>%s EGP</b> and taken at least <b>%d purchases</b> inside the 30 days. It is "
-                         "a <b>WINNER</b> if its ROAS beats the account's <b>%.2fx over those same 30 "
-                         "days</b>. Catalogue and DPA are excluded from both sides: a product feed is "
-                         "not a creative you shot."
-                         % (_k(LS["min_spend"]), LS["min_pur"], r2(LS["bar"])), icon="rules"),
+                         "<b>THE CRITERIA, IN FULL.</b> An ad is <b>JUDGED</b> once it has spent at least "
+                         "<b>%s EGP</b> and taken at least <b>%d purchases</b> inside the 30 days. "
+                         "It is a <b>WINNER</b> only if its ROAS is at least <b>%d%% above the account "
+                         "average</b> — the account ran <b>%.2fx</b> over those 30 days, so the winner "
+                         "bar is <b>%.2fx</b>. Beating the account by 1%% is not a winner, it is a "
+                         "rounding error, and <b>%d ad(s) landed in exactly that gap</b> this month. "
+                         "Catalogue and DPA are excluded from both sides: a product feed is not a "
+                         "creative you shot."
+                         % (_k(LS["min_spend"]), LS["min_pur"], LS["margin"],
+                            r2(LS["acc_roas"]), r2(LS["bar"]), LS["near"]), icon="rules"),
                     call("c-a",
                          "At a <b>%.0f%%</b> hit rate you must launch <b>%d</b> new creatives for the next "
                          "winner and <b>%d</b> for three. You launched <b>%d</b> in the last 30 days."
@@ -1102,12 +1123,14 @@ def c_makemore(A, win):
         if LS["best"]:
             body += ('<div class="card">%s<table>%s%s</table></div>'
                      % (head("target", "The winning creatives — last 30 days, by name",
-                             "every metric against the same ad's previous period"),
+                             "cleared %.2fx (%d%% above the account's %.2fx) on %s+ spend and %d+ purchases"
+                             % (r2(LS["bar"]), LS["margin"], r2(LS["acc_roas"]),
+                                _k(LS["min_spend"]), LS["min_pur"])),
                         TH, "".join(crow(k, True) for k in LS["best"])))
         if LS["worst"]:
             body += ('<div class="card">%s<table>%s%s</table></div>'
                      % (head("down", "The losing creatives — last 30 days",
-                             "shot creative that never cleared the account"),
+                             "judged, but never cleared the %.2fx winner bar" % r2(LS["bar"])),
                         TH, "".join(crow(k, False) for k in LS["worst"])))
 
     # ---- WHAT SEPARATES THEM

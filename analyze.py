@@ -360,7 +360,12 @@ def launch_stats(A, days=30):
     if not created or not m30: return None
     cut = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
 
-    launched, spent, winners, losers, pending = [], [], [], [], []
+    # THE WINNER BAR. An ad that beats the account by 1% is not a winner, it is a rounding error
+    # dressed as one, and counting it inflates the hit rate and tells you to shoot fewer videos
+    # than you actually need. A winner clears the account by a MARGIN.
+    bar = a_roas * WIN_MARGIN
+
+    launched, spent, winners, losers, near, pending = [], [], [], [], [], []
     for aid, meta in created.items():
         if not meta.get("created") or meta["created"] < cut: continue
         k = m30.get(aid)
@@ -370,16 +375,27 @@ def launch_stats(A, days=30):
             pending.append(aid)                    # launched, not yet judged
             continue
         spent.append(aid)
-        (winners if (k.get("roas") or 0) >= a_roas else losers).append(aid)
+        roas = k.get("roas") or 0
+        if roas >= bar:
+            winners.append(aid)
+        elif roas >= a_roas:
+            near.append(aid)                       # beat the account, but not by enough to count
+            losers.append(aid)
+        else:
+            losers.append(aid)
     if not spent: return None
     hr = max(0.02, min(0.9, len(winners) / len(spent)))
     # NAME THEM. "8 winners" is a number; "these are the eight, in order of revenue" is a brief.
     best = sorted((m30[i] for i in winners), key=lambda k: -(k.get("rev") or 0))
     worst = sorted((m30[i] for i in losers), key=lambda k: (k.get("roas") or 0))
+    for k in best: k["_bar"] = bar
+    for k in worst: k["_bar"] = bar
     return {"days": days, "launched": len(launched), "judged": len(spent),
             "winners": len(winners), "losers": len(losers), "pending": len(pending),
+            "near": len(near),
             "hr": hr * 100, "need_1": int(math.ceil(1 / hr)), "need_3": int(math.ceil(3 / hr)),
-            "bar": a_roas, "min_spend": EVIDENCE["spend"], "min_pur": EVIDENCE["purch"],
+            "acc_roas": a_roas, "bar": bar, "margin": int((WIN_MARGIN - 1) * 100),
+            "min_spend": EVIDENCE["spend"], "min_pur": EVIDENCE["purch"],
             "win_ids": winners, "best": best[:5], "worst": worst[:3],
             "created": created}
 
@@ -518,32 +534,42 @@ def adset_plan(A, win):
     a_roas = acc.get("roas") or 0
     if not b7: return None
 
+    bwin = A.get("bwin") or {}
     roll = {}
     for aid, k in b7.items():
         sid = str(k.get("adset_id") or "")
         if not sid: continue
-        g = roll.setdefault(sid, {"ads": [], "prev": []})
+        g = roll.setdefault(sid, {"ads": [], "prev": [], "win": [], "winprev": []})
         g["ads"].append(k)
         if k.get("prev"): g["prev"].append(k["prev"])
+    # the same ad sets, but measured over THIS window, so the daily card shows the day
+    for aid, c in bwin.items():
+        sid = str(c.get("adset_id") or "")
+        if sid not in roll: continue
+        roll[sid]["win"].append(c)
+        if c.get("prev"): roll[sid]["winprev"].append(c["prev"])
 
     out = []
     for sid, g in roll.items():
-        m = agg(g["ads"])
-        q = agg(g["prev"]) if g["prev"] else None
+        m7 = agg(g["ads"])                       # the 7 day benchmark
+        q7 = agg(g["prev"]) if g["prev"] else None
+        m = agg(g["win"]) if g["win"] else m7    # THIS window: the headline
+        q = agg(g["winprev"]) if g["winprev"] else None
         b = BU.get(sid) or {}
-        sp_day = (m.get("spend") or 0) / 7.0
+        sp_day = (m7.get("spend") or 0) / 7.0    # budget maths always off the steady 7 day rate
         if sp_day < 30: continue
         # Meta's own daily budget if we have it. If the ad set has none, the budget is on the
         # campaign (CBO) and the number to change is up there, not here.
         cur = b.get("daily") or 0.0
         cbo = bool(b.get("cbo"))
-        roas = m.get("roas") or 0
-        freq = m.get("freq") or 0
-        pur = m.get("purch") or 0
-        d = {"octr": pct(m.get("octr") or 0, (q or {}).get("octr") or 0),
-             "cpm": pct(m.get("cpm") or 0, (q or {}).get("cpm") or 0),
-             "cpp": pct(m.get("cpa") or 0, (q or {}).get("cpa") or 0)} if q else {}
-        lab, tests = label_with_reasons(m, acc, d)
+        roas = m7.get("roas") or 0
+        freq = m7.get("freq") or 0
+        pur = m7.get("purch") or 0
+        # the VERDICT is a 7 day verdict. A single day cannot move an ad set budget.
+        d = {"octr": pct(m7.get("octr") or 0, (q7 or {}).get("octr") or 0),
+             "cpm": pct(m7.get("cpm") or 0, (q7 or {}).get("cpm") or 0),
+             "cpp": pct(m7.get("cpa") or 0, (q7 or {}).get("cpa") or 0)} if q7 else {}
+        lab, tests = label_with_reasons(m7, acc, d)
         base = cur if cur else sp_day          # if no explicit budget, price off what it spends
         if lab in ("SCALE", "HEADROOM"):
             step = 0.20 if lab == "SCALE" else 0.15
@@ -561,8 +587,10 @@ def adset_plan(A, win):
                     "cbo": cbo, "camp_daily": b.get("camp_daily") or 0.0,
                     "has_budget": bool(cur), "cur": base, "new": new, "delta": delta,
                     "act": act, "label": lab, "tests": tests, "inc": inc,
-                    "m": m, "prev": q, "sp_day": sp_day, "roas": roas, "freq": freq,
-                    "cpp": m.get("cpa") or 0, "purch": pur, "n_ads": len(g["ads"]),
+                    "m": m, "prev": q,            # THIS window: what the card shows
+                    "m7": m7, "prev7": q7,        # the 7 day benchmark, beside it
+                    "sp_day": sp_day, "roas": roas, "freq": freq,
+                    "cpp": m7.get("cpa") or 0, "purch": pur, "n_ads": len(g["ads"]),
                     "vs_acct": delta * (roas - a_roas) if delta > 0 else 0.0})
     up = sorted([r for r in out if r["act"] == "RAISE"], key=lambda r: -r["inc"])
     dn = sorted([r for r in out if r["act"] in ("REDUCE", "TURN OFF")], key=lambda r: r["inc"])
@@ -1776,6 +1804,12 @@ def allocate(A):
 
 # ---------- what a winner actually is. Printed on the card, never assumed. ----------
 EVIDENCE = {"spend": 1500, "purch": 5, "lc": 60}     # over the last 7 days, not one day
+
+# A WINNER MUST BEAT THE ACCOUNT BY A MARGIN, NOT BY A ROUNDING ERROR.
+# 1.20 = its ROAS must be at least 20% above the account average. Beating the account by 1% and
+# calling it a winner flatters the hit rate, and a flattered hit rate tells you to shoot fewer
+# creatives than you actually need to find the next one.
+WIN_MARGIN = 1.20
 DEF_WINNER = ("WINNER = last 7 days: spend over %s, at least %d purchases, ROAS at or above the "
               "account, CPMR at or below the account, and frequency under %.1f. "
               "Top quartile of the account by a composite of ROAS, CPP, CPMR, CVR and outbound CTR."
@@ -2074,7 +2108,10 @@ def proposals(A, win):
         pur = k.get("purch") or 0; sp = k.get("spend") or 0
         conf = ("HIGH" if pur >= 20 and sp >= 5000 else
                 "MEDIUM" if pur >= 8 and sp >= 2000 else "LOW")
-        row = {"ad_id": aid, "name": safe(k.get("ad_name") or ""), "k": k, "label": lab,
+        # THE VERDICT IS STILL A 7 DAY VERDICT. One bad day must never kill an ad. But what the
+        # card SHOWS is this window's own numbers, with the 7 day beside it as the benchmark.
+        w = (A.get("bwin") or {}).get(str(aid)) or {}
+        row = {"ad_id": aid, "name": safe(k.get("ad_name") or ""), "k": k, "w": w, "label": lab,
                "tests": tests, "conf": conf, "roas": roas, "freq": k.get("freq") or 0,
                "cpp": k.get("cpa") or 0, "sp_day": sp_day, "cat": cat,
                "kind": "CATALOGUE" if cat else (k.get("type") or "IMAGE")}
@@ -3664,6 +3701,10 @@ def msg_short(A, win):
     L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
                                        _fmt_range(DATES.get("label")),
                                        _fmt_range(DATES.get("p_label")))]
+    L.append("_Every number below is %s, against the period immediately before it. "
+             "The 7 day figure is the benchmark, not the headline._"
+             % {"daily": "YESTERDAY", "3day": "the LAST 3 DAYS", "7day": "the LAST 7 DAYS",
+                "30day": "the LAST 30 DAYS"}.get(win, "this window"))
     L.append("Spend *%s* (%s) · Revenue *%s* (%s)" % (
         _k(s.get("spend") or 0), _d(pct(s.get("spend") or 0, p.get("spend") or 0)) or "n/a",
         _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a"))
@@ -3674,7 +3715,18 @@ def msg_short(A, win):
             "+" if D["spend_eff"] >= 0 else "-", _k(abs(D["spend_eff"])),
             "+" if D["perf_eff"] >= 0 else "-", _k(abs(D["perf_eff"]))))
 
+    WN = {"daily": "yesterday", "3day": "last 3 days", "7day": "last 7 days",
+          "30day": "last 30 days"}.get(win, "this window")
     S = adset_plan(A, win)
+
+    def two(r):
+        """THIS WINDOW on top, the 7 DAY underneath as the benchmark. A daily action labelled
+        with a week's numbers is a daily action nobody can check."""
+        out = ["     *%s:* %s" % (WN.upper(), mline(r["m"], r["prev"]))]
+        if win != "7day":
+            out.append("     _7-day benchmark: %s_" % mline(r.get("m7") or {}, r.get("prev7")))
+        return out
+
     if S and S["up"]:
         r = S["up"][0]
         L.append("\n*RAISE THE AD SET* — %s" % _clip(r["name"], 40))
@@ -3682,31 +3734,42 @@ def msg_short(A, win):
             ("CBO: change the campaign %s" % _clip(r["campaign"], 26)) if r["cbo"] else _k(r["cur"]),
             ("campaign" if r["cbo"] else _k(r["new"])),
             "+" if r["delta"] >= 0 else "-", _k(abs(r["delta"])), _k(r["inc"])))
-        L.append("     %s" % mline(r["m"], r["prev"]))
+        L.extend(two(r))
     if S and S["down"]:
         r = S["down"][0]
         L.append("\n*CUT THE AD SET* — %s" % _clip(r["name"], 40))
-        L.append("     %s → *%s/day* (frequency %.2f)" % (
+        L.append("     %s → *%s/day* (frequency %.2f over 7d)" % (
             _k(r["cur"]), _k(max(0, r["new"])), r2(r["freq"])))
-        L.append("     %s" % mline(r["m"], r["prev"]))
+        L.extend(two(r))
 
     F = fatigue_scan(A)
-    tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED")]
+    tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED", "FATIGUING")]
     if tired:
-        t = tired[0]
-        L.append("\n*BURNING OUT* — %s (%s, frequency *%.2f*)" % (
-            _clip(t["name"], 40), t["state"], t["freq"]))
-        L.append("     %s" % mline(t["k"], t["k"].get("prev")))
+        burn = sum(r["spend"] for r in tired) / 7.0
+        L.append("\n*BURNING OUT* — %d creative(s), carrying *%s EGP/day*" % (len(tired), _k(burn)))
+        for t in tired[:3]:
+            L.append("• *%s* — _%s_, %d of 5 tests fired, frequency *%.2f*" % (
+                _clip(t["name"], 36), t["state"], t["hits"], t["freq"]))
+            L.append("     %s" % mline(t["k"], t["k"].get("prev")))
+    elif F:
+        L.append("\n*BURNING OUT* — none. No creative fires 2 or more of the five fatigue tests.")
 
     LS = launch_stats(A, 30)
     if LS:
-        L.append("\n*CREATIVE* — %d launched / 30d, %d judged, %d won → *%.0f%% hit rate*. "
-                 "Launch *%d* for the next winner." % (
-                     LS["launched"], LS["judged"], LS["winners"], LS["hr"], LS["need_1"]))
-        if LS["best"]:
-            k = LS["best"][0]
-            L.append("     Best: *%s* — %s" % (_clip(safe(k.get("ad_name") or ""), 36),
-                                               mline(k, k.get("prev"))))
+        L.append("\n*CREATIVE — LAST 30 DAYS*")
+        L.append("*%d launched* · %d judged · *%d won* → *%.0f%% hit rate* → launch *%d* for the next winner."
+                 % (LS["launched"], LS["judged"], LS["winners"], LS["hr"], LS["need_1"]))
+        L.append("_Winner = ROAS at least *%d%% above the account* (%.2fx account → *%.2fx bar*), on "
+                 "*%s+ spend* and *%d+ purchases* inside the 30 days. Catalogue and DPA excluded. "
+                 "%d ad(s) beat the account but missed the bar._"
+                 % (LS["margin"], r2(LS["acc_roas"]), r2(LS["bar"]),
+                    _k(LS["min_spend"]), LS["min_pur"], LS["near"]))
+        for k in LS["best"][:2]:
+            L.append("• *WON:* %s — %s" % (_clip(safe(k.get("ad_name") or ""), 34),
+                                           mline(k, k.get("prev"))))
+        for k in LS["worst"][:2]:
+            L.append("• *LOST:* %s — %s" % (_clip(safe(k.get("ad_name") or ""), 34),
+                                            mline(k, k.get("prev"))))
     return "\n".join(L)
 
 
@@ -5580,6 +5643,16 @@ def main():
                 wch = channel_window_for(acct["name"], win)
                 if wch:
                     AW["hist"] = HIST
+                    # EVERY AD'S NUMBERS FOR *THIS* WINDOW. On the daily card the DAY is the
+                    # headline; the 7 day figure sits beside it as the benchmark. Labelling a
+                    # "cut this today" decision with a week's spend is how a one day dip gets
+                    # read as a week long collapse, and vice versa.
+                    BWIN = {}
+                    for c_ in AW["creatives"]:
+                        if c_.get("ad_id"): BWIN[str(c_["ad_id"])] = c_
+                    AW["bwin"] = BWIN
+                    AW["bwin_acc"] = AW["summary"]
+                    AW["win"] = win
                     AW["b7"] = B7            # each ad's own last 7 days
                     AW["b7_acc"] = B7_ACC    # the account's last 7 days
                     AW["ad_daily"] = AD_DAILY   # each ad's own daily series, for the weekly graph
