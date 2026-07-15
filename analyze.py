@@ -3899,46 +3899,118 @@ def msg_short(A, win):
             L.append("• *LOST:* %s — %s" % (_clip(safe(k.get("ad_name") or ""), 34),
                                             vline(k, acc30)))
 
-    # ---- RECOMMENDED ACTIONS NOW. The bottom line, every item a link, every item a reason. ----
+    # ---- RECOMMENDED ACTIONS NOW. Every item: the full metric picture vs the account (so you can
+    # SEE it is banging on all of them, or sucking on all of them), the daily AND weekly numbers,
+    # whether it is already in a scaling campaign, and the action. ----
     acct_id = A["account"].get("id") or ""
-    acts = []
+
+    def mvsacc(m):
+        """all six metrics vs the account average, + = better on every one."""
+        a = acc7
+        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
+                % (r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
+                   _k(m.get("cpa") or 0), gap(m.get("cpa"), a.get("cpa"), lower=True),
+                   _k(m.get("aov") or 0), gap(m.get("aov"), a.get("aov")),
+                   r2(m.get("cvr") or 0), gap(m.get("cvr"), a.get("cvr")),
+                   (m.get("atc_rate") or 0), gap(m.get("atc_rate"), a.get("atc_rate")),
+                   _k(m.get("cpmr") or 0), gap(m.get("cpmr"), a.get("cpmr"), lower=True)))
+
+    def wins_of(m):
+        """how many of the six it beats the account on — the 'banging on all metrics' proof."""
+        a = acc7
+        keys = [("roas", False), ("cpa", True), ("aov", False),
+                ("cvr", False), ("atc_rate", False), ("cpmr", True)]
+        good = tot = 0
+        for k, lower in keys:
+            if not a.get(k) or not m.get(k):
+                continue
+            d = pct(m.get(k) or 0, a.get(k) or 0)
+            if d is None:
+                continue
+            tot += 1
+            if ((d < 0) if lower else (d > 0)):
+                good += 1
+        return good, tot
+
+    def scaling_note(camp, cbo):
+        c = (camp or "").lower()
+        inside = any(w in c for w in ("scal", "scaling"))
+        if inside:
+            return "already inside the scaling campaign *%s*" % _clip(safe(camp), 26)
+        return "NOT in a scaling campaign yet — move a duplicate into your scaling campaign"
+
+    acts = []   # each: (icon, verb, link, metric_line, why)
     # ad-level: switch off / keep — from proposals()
     P = proposals(A, win)
     if P:
         for r in P["cut"][:3]:
+            m7 = r["k"]; g, t = wins_of(m7)
             acts.append(("🔴", "SWITCH OFF", ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]),
-                         "%.2fx vs the account %.2fx, CPP %s, frequency %.2f — off inside its ad set, "
-                         "the budget stays with the ad set." % (
-                             r2(r["roas"]), r2(P["acc_roas"]), _k(r["cpp"]), r2(r["freq"]))))
+                         mvsacc(m7),
+                         "beats the account on only *%d of %d* metrics — it is losing across the board. "
+                         "%s spend/day (*%s*/7d), frequency %.2f. Off inside its ad set; the budget stays "
+                         "with the ad set." % (g, t, _k(r["sp_day"]), _k(m7.get("spend") or 0), r2(r["freq"]))))
         for r in [x for x in P["scale"] if not x["cat"]][:2]:
+            m7 = r["k"]; g, t = wins_of(m7)
             acts.append(("🟢", "KEEP + DUPLICATE", ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]),
-                         "%.2fx vs the account %.2fx — beating it. Duplicate into an ad set with budget "
-                         "headroom." % (r2(r["roas"]), r2(P["acc_roas"]))))
+                         mvsacc(m7),
+                         "banging on *%d of %d* metrics vs the account. %s spend/day (*%s*/7d), "
+                         "frequency %.2f, %s. Duplicate a fresh copy into an ad set with budget headroom." % (
+                             g, t, _k(r["sp_day"]), _k(m7.get("spend") or 0), r2(r["freq"]),
+                             scaling_note(m7.get("campaign"), False))))
     # ad-set level budget moves
     if S:
         for r in S["up"][:2]:
-            tgt = ("the CBO campaign *%s*" % _clip(r["campaign"], 26)) if r["cbo"] else \
-                  ("*%s/day*" % _k(r["new"]))
+            m, m7 = r["m"], r.get("m7") or {}
+            g, t = wins_of(m7)
+            tgt = ("the CBO campaign *%s*" % _clip(r["campaign"], 26)) if r["cbo"] else ("*%s/day*" % _k(r["new"]))
             acts.append(("💰", "RAISE BUDGET", aset_link(_clip(r["name"], 34), r.get("adset_id")),
-                         "%.2fx vs the account %.2fx, frequency %.2f — take it to %s (+%s rev/day)." % (
-                             r2(r["roas"]), r2(S["acc_roas"]), r2(r["freq"]), tgt, _k(r["inc"]))))
+                         mvsacc(m7),
+                         "winning on *%d of %d* metrics. %s spend today (*%s*/7d), frequency %.2f, %s. "
+                         "Take it to %s (+%s rev/day)." % (
+                             g, t, _k(m.get("spend") or 0), _k(m7.get("spend") or 0), r2(r["freq"]),
+                             scaling_note(r["campaign"], r["cbo"]), tgt, _k(r["inc"]))))
         for r in (S.get("bad") or [])[:3]:
             if r["act"] in ("REDUCE", "TURN OFF"): continue        # already covered by CUT lists
+            m, m7 = r["m"], r.get("m7") or {}
+            g, t = wins_of(m7)
             acts.append(("🟠", "INVESTIGATE", aset_link(_clip(r["name"], 34), r.get("adset_id")),
-                         "%.2fx, %.0f%% below the account on %s spend — below the bar but not tripping "
-                         "the cut rule. Check the landing page and the offer before it bleeds more." % (
-                             r2(r["roas"]), abs(r["vs_acct_pct"]), _k((r["m"] or {}).get("spend") or 0))))
+                         mvsacc(m7),
+                         "beats the account on only *%d of %d* metrics, %.0f%% below on ROAS. %s spend "
+                         "today (*%s*/7d), frequency %.2f. Below the bar but not tripping the cut rule — "
+                         "check the landing page and the offer before it bleeds more." % (
+                             g, t, abs(r["vs_acct_pct"]), _k(m.get("spend") or 0),
+                             _k(m7.get("spend") or 0), r2(r["freq"]))))
+    # ad-set level: the CUT list, so a bleeding ad set gets a hard action, not just 'investigate'
+    if S and S.get("down"):
+        for r in S["down"][:2]:
+            m, m7 = r["m"], r.get("m7") or {}
+            g, t = wins_of(m7)
+            tgt = ("cut the CBO campaign *%s*" % _clip(r["campaign"], 26)) if r["cbo"] else ("*%s/day → 0*" % _k(r["cur"]))
+            acts.append(("⛔", "CUT THE AD SET", aset_link(_clip(r["name"], 34), r.get("adset_id")),
+                         mvsacc(m7),
+                         "sucks across the board — beats the account on only *%d of %d* metrics, %.0f%% "
+                         "below on ROAS. %s spend today (*%s*/7d), frequency %.2f. %s." % (
+                             g, t, abs(r["vs_acct_pct"]), _k(m.get("spend") or 0),
+                             _k(m7.get("spend") or 0), r2(r["freq"]), tgt)))
     # creative fatigue -> refresh
     F = fatigue_scan(A)
-    for t in [r for r in F if r["state"] in ("FATIGUED", "SATURATED")][:2]:
-        acts.append(("♻️", "REFRESH CREATIVE", ads_link(_clip(t["name"], 34), acct_id, t["ad_id"]),
+    for tt in [r for r in F if r["state"] in ("FATIGUED", "SATURATED")][:2]:
+        m7 = tt.get("k") or {}
+        acts.append(("♻️", "REFRESH CREATIVE", ads_link(_clip(tt["name"], 34), acct_id, tt["ad_id"]),
+                     mvsacc(m7) if m7 else "",
                      "%s at frequency %.2f — the same people are seeing it. New creative or a wider "
-                     "audience, not more budget." % (t["state"], t["freq"])))
+                     "audience, not more budget." % (tt["state"], tt["freq"])))
     if acts:
         L.append("\n━━━━━━━━━━━━━━━━━━━━")
         L.append("*✅ RECOMMENDED ACTIONS NOW*  (tap the name to open it in Ads Manager)")
-        for i, (ic, verb, link, why) in enumerate(acts[:10], 1):
+        L.append("_Each one shows every metric vs the account average — + is better. So you can see it is "
+                 "banging on all of them, or sucking on all of them, before you act._")
+        for i, (ic, verb, link, mline_, why) in enumerate(acts[:12], 1):
             L.append("%d. %s *%s* — %s" % (i, ic, verb, link))
+            if mline_:
+                L.append("     %s" % mline_)
             L.append("     _%s_" % why)
     return "\n".join(L)
 
