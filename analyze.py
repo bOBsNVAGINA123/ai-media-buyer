@@ -3695,16 +3695,18 @@ def card_bars(A, win, level):
 
 
 def stability(win_roas, roas_7d, win):
-    """Is this window normal for the ad set, or an anomaly? Compared against its own 7 day ROAS.
-    On the 7 day and 30 day cards the window IS the benchmark, so there is nothing to compare."""
+    """Is this window normal for the ad set, or an anomaly? ROAS of the window vs its OWN 7 day
+    average — never against a previous period, always against its own recent run. The number is
+    always shown, so 'stable' is a fact you can check, not a word you have to trust."""
     if win in ("7day", "30day") or not roas_7d:
         return ""
     d = (win_roas / roas_7d - 1) * 100.0
-    if abs(d) < 15:
-        return "STABLE — matches its 7 day"
-    if d >= 15:
-        return "TODAY *+%.0f%%* above its 7 day — a good spike, not the norm" % d
-    return "TODAY *%.0f%%* below its 7 day — a dip, not the whole story" % d
+    ws = {"daily": "today", "3day": "these 3 days"}.get(win, "this window")
+    if abs(d) < 12:
+        return "Steady: ROAS %s is *%+.0f%%* vs its own 7-day average — normal for it" % (ws, d)
+    if d >= 12:
+        return "ROAS %s is *%+.0f%%* ABOVE its own 7-day average — a good spike, not the norm" % (ws, d)
+    return "ROAS %s is *%+.0f%%* BELOW its own 7-day average — a dip, read the 7-day too" % (ws, d)
 
 
 def msg_short(A, win):
@@ -3725,6 +3727,28 @@ def msg_short(A, win):
                    r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, q.get("cvr") or 0)) or "n/a",
                    (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0)) or "n/a",
                    _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, q.get("cpmr") or 0)) or "n/a"))
+
+    def vline(m, acc):
+        """A launched creative has no 'previous period' — it was born inside this window. So it is
+        NOT judged against a prior it never had (that is where the 'n/a' came from). It is judged
+        against the ACCOUNT AVERAGE: every metric says how far above or below the account it sits.
+        Lower is better for CPP and CPMR, so cheaper-than-account reads as ABOVE (winning)."""
+        acc = acc or {}
+        def vs(mv, av, lower=False):
+            d = pct(mv or 0, av or 0)
+            if d is None or not av:
+                return "vs acct n/a"
+            good = (d < 0) if lower else (d > 0)
+            word = "above" if good else "below"
+            return "*%.0f%% %s acct*" % (abs(d), word)
+        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
+                % (r2(m.get("roas") or 0), vs(m.get("roas"), acc.get("roas")),
+                   _k(m.get("cpa") or 0), vs(m.get("cpa"), acc.get("cpa"), lower=True),
+                   _k(m.get("aov") or 0), vs(m.get("aov"), acc.get("aov")),
+                   r2(m.get("cvr") or 0), vs(m.get("cvr"), acc.get("cvr")),
+                   (m.get("atc_rate") or 0), vs(m.get("atc_rate"), acc.get("atc_rate")),
+                   _k(m.get("cpmr") or 0), vs(m.get("cpmr"), acc.get("cpmr"), lower=True)))
 
     L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
                                        _fmt_range(DATES.get("label")),
@@ -3773,28 +3797,38 @@ def msg_short(A, win):
     # EVERY AD SET RANKED AGAINST THE ACCOUNT, in a form you can actually read on a phone.
     # One ad set per block, a blank line between them, the metrics on two short lines, and a
     # plain-English verdict on whether the window is normal for it or an anomaly.
+    # WHAT EVERY % IS MEASURED AGAINST, said once, in plain words. The bracketed deltas on each
+    # metric are THIS window vs the SAME length of time immediately before it.
+    PRIOROF = {"daily": "the day before", "3day": "the 3 days before",
+               "7day": "the 7 days before", "30day": "the 30 days before"}
+    prior = PRIOROF.get(win, "the period before")
+
     def block(r, sign):
         m, m7 = r["m"], r.get("m7") or {}
+        q = r["prev"] or {}
         st = stability(r["roas"], (m7.get("roas") or 0), win)
         head_ = ("🔻" if sign == "bad" else "🟢")
-        rel = ("%.0f%% below" % abs(r["vs_acct_pct"])) if sign == "bad" \
-            else ("+%.0f%% above" % r["vs_acct_pct"])
-        out = ["", "%s *%s*" % (head_, _clip(r["name"], 40)),
-               "     *%.2fx*  ·  %s the account  ·  %d purchases (7d)" % (
-                   r2(r["roas"]), rel, int(r["purch"]))]
+        rel = ("%.0f%% below the account" % abs(r["vs_acct_pct"])) if sign == "bad" \
+            else ("+%.0f%% above the account" % r["vs_acct_pct"])
+        name = aset_link(_clip(r["name"], 40), r.get("adset_id"))     # EDITABLE LINK
+        d_sp = pct(m.get("spend") or 0, q.get("spend") or 0)
+        spdir = ("up %+.0f%%" % d_sp) if (q.get("spend") and d_sp is not None) else "no prior"
+        out = ["", "%s %s" % (head_, name),      # name is already a clickable Ads Manager link
+               "     *%.2fx*  ·  %s  ·  %d purchases (7d)" % (r2(r["roas"]), rel, int(r["purch"]))]
         if st:
             out.append("     %s" % st)
-        out.append("     spend *%s* %s  ·  frequency *%.2f* (7d)  ·  budget %s" % (
-            _k((m or {}).get("spend") or 0), WN, r2(r["freq"]),
+        out.append("     spend *%s* (%s, %s) · frequency *%.2f* (7d) · budget %s" % (
+            _k((m or {}).get("spend") or 0), WN, spdir, r2(r["freq"]),
             ("CBO campaign" if r["cbo"] else "%s/day" % _k(r["cur"]))))
+        out.append("     _all ▲▼ below are %s vs %s:_" % (WN, prior))
         out.append("     ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s)" % (
-            r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, (r["prev"] or {}).get("roas") or 0)) or "n/a",
-            _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, (r["prev"] or {}).get("cpa") or 0)) or "n/a",
-            _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, (r["prev"] or {}).get("aov") or 0)) or "n/a"))
+            r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, q.get("roas") or 0)) or "n/a",
+            _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, q.get("cpa") or 0)) or "n/a",
+            _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, q.get("aov") or 0)) or "n/a"))
         out.append("     CVR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)" % (
-            r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, (r["prev"] or {}).get("cvr") or 0)) or "n/a",
-            (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, (r["prev"] or {}).get("atc_rate") or 0)) or "n/a",
-            _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, (r["prev"] or {}).get("cpmr") or 0)) or "n/a"))
+            r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, q.get("cvr") or 0)) or "n/a",
+            (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0)) or "n/a",
+            _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, q.get("cpmr") or 0)) or "n/a"))
         return out
 
     if S and S.get("bad"):
@@ -3833,12 +3867,58 @@ def msg_short(A, win):
                  "%d ad(s) beat the account but missed the bar._"
                  % (LS["margin"], r2(LS["acc_roas"]), r2(LS["bar"]),
                     _k(LS["min_spend"]), LS["min_pur"], LS["near"]))
+        acc30 = A.get("b30_acc") or A.get("b7_acc") or A["summary"]
+        L.append("_Each metric below is vs the *account average* (%.2fx), not a prior period — "
+                 "these ads were launched inside the 30 days, so they have no 'before'._"
+                 % r2((acc30 or {}).get("roas") or LS["acc_roas"]))
         for k in LS["best"][:2]:
             L.append("• *WON:* %s — %s" % (_clip(safe(k.get("ad_name") or ""), 34),
-                                           mline(k, k.get("prev"))))
+                                           vline(k, acc30)))
         for k in LS["worst"][:2]:
             L.append("• *LOST:* %s — %s" % (_clip(safe(k.get("ad_name") or ""), 34),
-                                            mline(k, k.get("prev"))))
+                                            vline(k, acc30)))
+
+    # ---- RECOMMENDED ACTIONS NOW. The bottom line, every item a link, every item a reason. ----
+    acct_id = A["account"].get("id") or ""
+    acts = []
+    # ad-level: switch off / keep — from proposals()
+    P = proposals(A, win)
+    if P:
+        for r in P["cut"][:3]:
+            acts.append(("🔴", "SWITCH OFF", ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]),
+                         "%.2fx vs the account %.2fx, CPP %s, frequency %.2f — off inside its ad set, "
+                         "the budget stays with the ad set." % (
+                             r2(r["roas"]), r2(P["acc_roas"]), _k(r["cpp"]), r2(r["freq"]))))
+        for r in [x for x in P["scale"] if not x["cat"]][:2]:
+            acts.append(("🟢", "KEEP + DUPLICATE", ads_link(_clip(r["name"], 34), acct_id, r["ad_id"]),
+                         "%.2fx vs the account %.2fx — beating it. Duplicate into an ad set with budget "
+                         "headroom." % (r2(r["roas"]), r2(P["acc_roas"]))))
+    # ad-set level budget moves
+    if S:
+        for r in S["up"][:2]:
+            tgt = ("the CBO campaign *%s*" % _clip(r["campaign"], 26)) if r["cbo"] else \
+                  ("*%s/day*" % _k(r["new"]))
+            acts.append(("💰", "RAISE BUDGET", aset_link(_clip(r["name"], 34), r.get("adset_id")),
+                         "%.2fx vs the account %.2fx, frequency %.2f — take it to %s (+%s rev/day)." % (
+                             r2(r["roas"]), r2(S["acc_roas"]), r2(r["freq"]), tgt, _k(r["inc"]))))
+        for r in (S.get("bad") or [])[:3]:
+            if r["act"] in ("REDUCE", "TURN OFF"): continue        # already covered by CUT lists
+            acts.append(("🟠", "INVESTIGATE", aset_link(_clip(r["name"], 34), r.get("adset_id")),
+                         "%.2fx, %.0f%% below the account on %s spend — below the bar but not tripping "
+                         "the cut rule. Check the landing page and the offer before it bleeds more." % (
+                             r2(r["roas"]), abs(r["vs_acct_pct"]), _k((r["m"] or {}).get("spend") or 0))))
+    # creative fatigue -> refresh
+    F = fatigue_scan(A)
+    for t in [r for r in F if r["state"] in ("FATIGUED", "SATURATED")][:2]:
+        acts.append(("♻️", "REFRESH CREATIVE", ads_link(_clip(t["name"], 34), acct_id, t["ad_id"]),
+                     "%s at frequency %.2f — the same people are seeing it. New creative or a wider "
+                     "audience, not more budget." % (t["state"], t["freq"])))
+    if acts:
+        L.append("\n━━━━━━━━━━━━━━━━━━━━")
+        L.append("*✅ RECOMMENDED ACTIONS NOW*  (tap the name to open it in Ads Manager)")
+        for i, (ic, verb, link, why) in enumerate(acts[:10], 1):
+            L.append("%d. %s *%s* — %s" % (i, ic, verb, link))
+            L.append("     _%s_" % why)
     return "\n".join(L)
 
 
