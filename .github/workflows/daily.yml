@@ -5,12 +5,11 @@ name: AI Media Buyer
 on:
   schedule:
     # GitHub cron is UTC only. Egypt is UTC+3, so:
-    #   06:17 UTC = 09:17 Cairo  -> the daily + 3 day read, and the new-launch feed
-    #   23:17 UTC = 02:17 Cairo the NEXT day -> the 7 day (Saturdays) and the 30 day (1st of month)
-    # analyze.py reads the Cairo clock and decides which of those it is actually writing.
+    #   23:05 UTC = 02:05 Cairo the NEXT day -> the ONE daily run.
+    # Everything posts here: the daily memo, the 3-day, the launch feed, and the decisions feed.
+    # analyze.py adds the 7-day on Saturdays and the 30-day on the 1st, off the Cairo clock.
     # Off the :00 minute on purpose: GitHub throttles and often drops crons set to exactly :00.
-    - cron: "17 6 * * *"
-    - cron: "17 23 * * *"
+    - cron: "5 23 * * *"
   workflow_dispatch:      # trigger by hand from the Actions tab
     inputs:
       windows:
