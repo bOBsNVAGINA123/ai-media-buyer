@@ -816,9 +816,66 @@ def c_budget(A, win):
                  % (head("down", "Cut these ad set budgets",
                          "what you give up, and what the freed money buys elsewhere"),
                     TH, "".join(srow(r, False) for r in dn)))
-    h = 250 + 300 + (140 + 165 * len(up) if up else 0) + (140 + 165 * len(dn) if dn else 0) + 110
+    # ---- THE FULL SCORECARD. Every ad set, above or below the account, all metrics.
+    # The RAISE / CUT tables above only carry ad sets that trip the strict label. A quiet 2x
+    # ad set that is bleeding but not badly enough to trip CUT never appeared. Here it does.
+    def scard(rows, above):
+        col = "#0F7A43" if above else "#C0392B"
+        tr = ""
+        for r in rows[:8]:
+            m, q, m7 = r["m"], r["prev"] or {}, r.get("m7") or {}
+            cells = ""
+            for lab, key, f, lb in (("roas", "roas", "%.2fx", False), ("cpp", "cpa", "%s", True),
+                                    ("aov", "aov", "%s", False), ("cvr", "cvr", "%.2f%%", False),
+                                    ("atc", "atc_rate", "%.1f%%", False),
+                                    ("cpmr", "cpmr", "%s", True), ("freq", "freq", "%.2f", True)):
+                cells += cell(m, q, m7, lab, key, f, lower=lb, win=win)
+            vs = r["vs_acct_pct"]
+            gap = ('<td class="%s">%s%s<span class="s">%s / day vs the account</span></td>'
+                   % ("g" if r["gap_day"] >= 0 else "r",
+                      "+" if r["gap_day"] >= 0 else "-", _k(abs(r["gap_day"])),
+                      "earned" if r["gap_day"] >= 0 else "bled"))
+            act = ("RAISE" if r["act"] == "RAISE" else
+                   ("CUT" if r["act"] in ("REDUCE", "TURN OFF") else
+                    ("HOLD" if above else "WATCH — below the account")))
+            tr += ('<tr><td class=l><div class="ncell">'
+                   '<span class="bar" style="background:%s"></span>'
+                   '<span class="nm">%s</span>'
+                   '<span class="sn one">%s &nbsp; %s the account (%s%.0f%%) &nbsp;·&nbsp; %d ads &nbsp;·&nbsp; %d purchases 7d</span>'
+                   '<span class="sn one">CAMPAIGN &nbsp;%s &nbsp;·&nbsp; budget %s/day</span></div></td>'
+                   '%s<td>%s<span class="s">spend %s</span></td>%s</tr>'
+                   % (col, esc(_clip(r["name"], 40)), status(act),
+                      "beats" if above else "below", "+" if vs >= 0 else "", vs,
+                      r["n_ads"], int(r["purch"]), esc(_clip(r["campaign"], 40)),
+                      "CBO campaign" if r["cbo"] else _k(r["cur"]),
+                      cells, _k((m.get("spend") or 0)), esc(WINN.get(win, "")), gap))
+        return tr
+
+    if S.get("bad"):
+        body += ('<div class="card">%s<table><tr><th class=l>Ad set · below the account</th>'
+                 '<th>ROAS</th><th>CPP</th><th>AOV</th><th>CVR</th><th>ATC</th><th>CPMR</th><th>Freq</th>'
+                 '<th>Spend</th><th>vs account</th></tr>%s</table>%s</div>'
+                 % (head("down", "Every ad set BELOW the account — cut candidates",
+                         "sorted worst first. these are dragging the account down, in order"),
+                    scard(S["bad"], False),
+                    call("c-r", "These ad sets return under the account's <b>%.2fx</b>. Together they are "
+                                "bleeding about <b>%s EGP a day</b> against simply running that spend at "
+                                "the account rate. Cut the budget or turn off the worst ads inside them."
+                         % (r2(S["acc_roas"]), _k(S.get("bleed") or 0)), icon="warn")))
+    if S.get("good"):
+        body += ('<div class="card">%s<table><tr><th class=l>Ad set · above the account</th>'
+                 '<th>ROAS</th><th>CPP</th><th>AOV</th><th>CVR</th><th>ATC</th><th>CPMR</th><th>Freq</th>'
+                 '<th>Spend</th><th>vs account</th></tr>%s</table>%s</div>'
+                 % (head("up", "Every ad set ABOVE the account — scale candidates",
+                         "sorted best first. these are carrying the account, give them more room"),
+                    scard(S["good"], True),
+                    call("c-g", "These beat the account's <b>%.2fx</b>. Raise the budget on the ones with "
+                                "frequency headroom; the ones already fatiguing need fresh creative, not "
+                                "more money." % r2(S["acc_roas"]), icon="check")))
+
+    h = 250 + 300 + (140 + 165 * len(up) if up else 0) + (140 + 165 * len(dn) if dn else 0) + 700
     return page(A, win, "The budget — on the ad sets",
-                "Budgets move on ad sets, because that is the only place Meta lets you set one.",
+                "Budgets move on ad sets. Every ad set ranked against the account, above and below.",
                 body, h)
 
 

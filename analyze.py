@@ -595,9 +595,24 @@ def adset_plan(A, win):
     up = sorted([r for r in out if r["act"] == "RAISE"], key=lambda r: -r["inc"])
     dn = sorted([r for r in out if r["act"] in ("REDUCE", "TURN OFF")], key=lambda r: r["inc"])
     hold = [r for r in out if r["act"] == "HOLD"]
+
+    # EVERY AD SET, RANKED AGAINST THE ACCOUNT. The RAISE / CUT lists only carry ad sets that
+    # clear the strict label thresholds, so a quiet 2x ad set that is bleeding but not bleeding
+    # *badly enough* to trip CUT never showed up at all. That is exactly the one you want to see.
+    # This splits ALL of them, by whether their 7 day ROAS beats the account, and prices the gap.
+    for r in out:
+        rr = r["roas"] or 0
+        r["above"] = rr >= a_roas
+        r["vs_acct_pct"] = ((rr / a_roas - 1) * 100.0) if a_roas else 0.0
+        # what the day's spend on this ad set is worth vs simply running it at the account rate
+        r["gap_day"] = r["sp_day"] * (rr - a_roas)
+    good = sorted([r for r in out if r["above"]], key=lambda r: -(r["roas"] or 0))
+    bad = sorted([r for r in out if not r["above"]], key=lambda r: (r["roas"] or 0))
     return {"up": up, "down": dn, "hold": hold, "acc_roas": a_roas,
             "add": sum(r["delta"] for r in up[:5]),
-            "free": sum(-r["delta"] for r in dn[:5])}
+            "free": sum(-r["delta"] for r in dn[:5]),
+            "good": good, "bad": bad, "all": out,
+            "bleed": sum(-r["gap_day"] for r in bad)}
 
 
 # ---------- Meta's OWN audience segment breakdown. The ground truth. No inference. ----------
@@ -3741,6 +3756,24 @@ def msg_short(A, win):
         L.append("     %s → *%s/day* (frequency %.2f over 7d)" % (
             _k(r["cur"]), _k(max(0, r["new"])), r2(r["freq"])))
         L.extend(two(r))
+
+    # EVERY AD SET BELOW THE ACCOUNT. A 2x ad set that never trips the strict CUT label still
+    # drags the account down, and it belongs in your face, named, with its numbers.
+    if S and S.get("bad"):
+        L.append("\n*AD SETS BELOW THE ACCOUNT* (%.2fx) — bleeding *%s EGP/day*" % (
+            r2(S["acc_roas"]), _k(S.get("bleed") or 0)))
+        for r in S["bad"][:5]:
+            L.append("• *%s* — *%.2fx* (%.0f%% below), spend %s, frequency %.2f, %d purchases 7d" % (
+                _clip(r["name"], 34), r2(r["roas"]), abs(r["vs_acct_pct"]),
+                _k((r["m"] or {}).get("spend") or 0), r2(r["freq"]), int(r["purch"])))
+            L.append("     %s: %s" % (WN.upper(), mline(r["m"], r["prev"])))
+    if S and S.get("good"):
+        L.append("\n*AD SETS ABOVE THE ACCOUNT* — carrying it")
+        for r in S["good"][:5]:
+            L.append("• *%s* — *%.2fx* (+%.0f%% above), spend %s, frequency %.2f, %d purchases 7d" % (
+                _clip(r["name"], 34), r2(r["roas"]), r["vs_acct_pct"],
+                _k((r["m"] or {}).get("spend") or 0), r2(r["freq"]), int(r["purch"])))
+            L.append("     %s: %s" % (WN.upper(), mline(r["m"], r["prev"])))
 
     F = fatigue_scan(A)
     tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED", "FATIGUING")]
