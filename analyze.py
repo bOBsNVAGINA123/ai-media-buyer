@@ -3803,32 +3803,53 @@ def msg_short(A, win):
                "7day": "the 7 days before", "30day": "the 30 days before"}
     prior = PRIOROF.get(win, "the period before")
 
+    acc7 = A.get("b7_acc") or A["summary"]        # the account 7-day average — the thing to beat
+
+    def gap(mv, av, lower=False):
+        """How far this metric is from the ACCOUNT AVERAGE. + always means BETTER: for CPP and
+        CPMR (lower is better) the sign is flipped, so cheaper-than-account reads as +."""
+        d = pct(mv or 0, av or 0)
+        if d is None or not av:
+            return "n/a"
+        if lower:
+            d = -d
+        return "*%+.0f%%*" % d
+
     def block(r, sign):
         m, m7 = r["m"], r.get("m7") or {}
         q = r["prev"] or {}
-        st = stability(r["roas"], (m7.get("roas") or 0), win)
+        a = acc7
         head_ = ("🔻" if sign == "bad" else "🟢")
-        rel = ("%.0f%% below the account" % abs(r["vs_acct_pct"])) if sign == "bad" \
-            else ("+%.0f%% above the account" % r["vs_acct_pct"])
         name = aset_link(_clip(r["name"], 40), r.get("adset_id"))     # EDITABLE LINK
+        # THE 7-DAY VERDICT, said in plain words: is the whole ad set good or bad, and by how much.
+        verd = "*BAD across 7 days*" if sign == "bad" else "*GOOD across 7 days*"
+        rel = ("%.0f%% below the account" % abs(r["vs_acct_pct"])) if sign == "bad" \
+            else ("%.0f%% above the account" % r["vs_acct_pct"])
+        # IS TODAY AN ANOMALY? window ROAS vs its OWN 7-day average — the real comparison, not the
+        # 7-day against itself (that always read +0%).
+        dt = pct(m.get("roas") or 0, m7.get("roas") or 0)
         d_sp = pct(m.get("spend") or 0, q.get("spend") or 0)
-        spdir = ("up %+.0f%%" % d_sp) if (q.get("spend") and d_sp is not None) else "no prior"
-        out = ["", "%s %s" % (head_, name),      # name is already a clickable Ads Manager link
-               "     *%.2fx*  ·  %s  ·  %d purchases (7d)" % (r2(r["roas"]), rel, int(r["purch"]))]
-        if st:
-            out.append("     %s" % st)
-        out.append("     spend *%s* (%s, %s) · frequency *%.2f* (7d) · budget %s" % (
-            _k((m or {}).get("spend") or 0), WN, spdir, r2(r["freq"]),
+        spdir = ("*%+.0f%%* vs the day before" % d_sp) if (q.get("spend") and d_sp is not None) else "no prior day"
+        out = ["", "%s %s" % (head_, name),
+               "     %s · 7-day *%.2fx*, %s (*account %.2fx*) · %d purchases (7d)" % (
+                   verd, r2(r["roas"]), rel, r2(a.get("roas") or 0), int(r["purch"]))]
+        if win != "7day" and dt is not None:
+            mood = ("steady" if abs(dt) < 12 else ("a spike, not the norm" if dt > 0 else "a dip — watch it"))
+            out.append("     today *%.2fx* is *%+.0f%%* vs its own 7-day average — %s" % (
+                r2(m.get("roas") or 0), dt, mood))
+        out.append("     spend *%s* today (%s) · *%s*/7d · frequency *%.2f* · budget %s" % (
+            _k(m.get("spend") or 0), spdir, _k(m7.get("spend") or 0), r2(r["freq"]),
             ("CBO campaign" if r["cbo"] else "%s/day" % _k(r["cur"]))))
-        out.append("     _all ▲▼ below are %s vs %s:_" % (WN, prior))
+        out.append("     _7-day vs the account average — *+ is better* on every metric:_")
         out.append("     ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s)" % (
-            r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, q.get("roas") or 0)) or "n/a",
-            _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, q.get("cpa") or 0)) or "n/a",
-            _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, q.get("aov") or 0)) or "n/a"))
-        out.append("     CVR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)" % (
-            r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, q.get("cvr") or 0)) or "n/a",
-            (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0)) or "n/a",
-            _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, q.get("cpmr") or 0)) or "n/a"))
+            r2(m7.get("roas") or 0), gap(m7.get("roas"), a.get("roas")),
+            _k(m7.get("cpa") or 0), gap(m7.get("cpa"), a.get("cpa"), lower=True),
+            _k(m7.get("aov") or 0), gap(m7.get("aov"), a.get("aov"))))
+        out.append("     CVR *%.2f%%* (%s) · CTR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)" % (
+            r2(m7.get("cvr") or 0), gap(m7.get("cvr"), a.get("cvr")),
+            r2(m7.get("octr") or 0), gap(m7.get("octr"), a.get("octr")),
+            (m7.get("atc_rate") or 0), gap(m7.get("atc_rate"), a.get("atc_rate")),
+            _k(m7.get("cpmr") or 0), gap(m7.get("cpmr"), a.get("cpmr"), lower=True)))
         return out
 
     if S and S.get("bad"):
