@@ -606,8 +606,8 @@ def adset_plan(A, win):
         r["vs_acct_pct"] = ((rr / a_roas - 1) * 100.0) if a_roas else 0.0
         # what the day's spend on this ad set is worth vs simply running it at the account rate
         r["gap_day"] = r["sp_day"] * (rr - a_roas)
-    good = sorted([r for r in out if r["above"]], key=lambda r: -(r["roas"] or 0))
-    bad = sorted([r for r in out if not r["above"]], key=lambda r: (r["roas"] or 0))
+    good = sorted([r for r in out if r["above"]], key=lambda r: -r["gap_day"])
+    bad = sorted([r for r in out if not r["above"]], key=lambda r: r["gap_day"])
     return {"up": up, "down": dn, "hold": hold, "acc_roas": a_roas,
             "add": sum(r["delta"] for r in up[:5]),
             "free": sum(-r["delta"] for r in dn[:5]),
@@ -3694,6 +3694,19 @@ def card_bars(A, win, level):
     return _png(fig)
 
 
+def stability(win_roas, roas_7d, win):
+    """Is this window normal for the ad set, or an anomaly? Compared against its own 7 day ROAS.
+    On the 7 day and 30 day cards the window IS the benchmark, so there is nothing to compare."""
+    if win in ("7day", "30day") or not roas_7d:
+        return ""
+    d = (win_roas / roas_7d - 1) * 100.0
+    if abs(d) < 15:
+        return "STABLE — matches its 7 day"
+    if d >= 15:
+        return "TODAY *+%.0f%%* above its 7 day — a good spike, not the norm" % d
+    return "TODAY *%.0f%%* below its 7 day — a dip, not the whole story" % d
+
+
 def msg_short(A, win):
     """SHORT, BUT NEVER MISSING A METRIC. Every line carries ROAS, CPP, AOV, CVR and CPMR,
     because a ROAS with no CPP and no AOV underneath it is half a fact."""
@@ -3757,23 +3770,46 @@ def msg_short(A, win):
             _k(r["cur"]), _k(max(0, r["new"])), r2(r["freq"])))
         L.extend(two(r))
 
-    # EVERY AD SET BELOW THE ACCOUNT. A 2x ad set that never trips the strict CUT label still
-    # drags the account down, and it belongs in your face, named, with its numbers.
+    # EVERY AD SET RANKED AGAINST THE ACCOUNT, in a form you can actually read on a phone.
+    # One ad set per block, a blank line between them, the metrics on two short lines, and a
+    # plain-English verdict on whether the window is normal for it or an anomaly.
+    def block(r, sign):
+        m, m7 = r["m"], r.get("m7") or {}
+        st = stability(r["roas"], (m7.get("roas") or 0), win)
+        head_ = ("🔻" if sign == "bad" else "🟢")
+        rel = ("%.0f%% below" % abs(r["vs_acct_pct"])) if sign == "bad" \
+            else ("+%.0f%% above" % r["vs_acct_pct"])
+        out = ["", "%s *%s*" % (head_, _clip(r["name"], 40)),
+               "     *%.2fx*  ·  %s the account  ·  %d purchases (7d)" % (
+                   r2(r["roas"]), rel, int(r["purch"]))]
+        if st:
+            out.append("     %s" % st)
+        out.append("     spend *%s* %s  ·  frequency *%.2f* (7d)  ·  budget %s" % (
+            _k((m or {}).get("spend") or 0), WN, r2(r["freq"]),
+            ("CBO campaign" if r["cbo"] else "%s/day" % _k(r["cur"]))))
+        out.append("     ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s)" % (
+            r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, (r["prev"] or {}).get("roas") or 0)) or "n/a",
+            _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, (r["prev"] or {}).get("cpa") or 0)) or "n/a",
+            _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, (r["prev"] or {}).get("aov") or 0)) or "n/a"))
+        out.append("     CVR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)" % (
+            r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, (r["prev"] or {}).get("cvr") or 0)) or "n/a",
+            (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, (r["prev"] or {}).get("atc_rate") or 0)) or "n/a",
+            _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, (r["prev"] or {}).get("cpmr") or 0)) or "n/a"))
+        return out
+
     if S and S.get("bad"):
-        L.append("\n*AD SETS BELOW THE ACCOUNT* (%.2fx) — bleeding *%s EGP/day*" % (
-            r2(S["acc_roas"]), _k(S.get("bleed") or 0)))
+        L.append("\n━━━━━━━━━━━━━━━━━━━━")
+        L.append("*AD SETS BELOW THE ACCOUNT*  (account %.2fx)" % r2(S["acc_roas"]))
+        L.append("_Losing about *%s EGP/day* against running that spend at the account rate. "
+                 "Biggest loser first._" % _k(S.get("bleed") or 0))
         for r in S["bad"][:5]:
-            L.append("• *%s* — *%.2fx* (%.0f%% below), spend %s, frequency %.2f, %d purchases 7d" % (
-                _clip(r["name"], 34), r2(r["roas"]), abs(r["vs_acct_pct"]),
-                _k((r["m"] or {}).get("spend") or 0), r2(r["freq"]), int(r["purch"])))
-            L.append("     %s: %s" % (WN.upper(), mline(r["m"], r["prev"])))
+            L.extend(block(r, "bad"))
     if S and S.get("good"):
-        L.append("\n*AD SETS ABOVE THE ACCOUNT* — carrying it")
+        L.append("\n━━━━━━━━━━━━━━━━━━━━")
+        L.append("*AD SETS ABOVE THE ACCOUNT*  (carrying it)")
+        L.append("_Beating the account. Give the ones with frequency headroom more budget._")
         for r in S["good"][:5]:
-            L.append("• *%s* — *%.2fx* (+%.0f%% above), spend %s, frequency %.2f, %d purchases 7d" % (
-                _clip(r["name"], 34), r2(r["roas"]), r["vs_acct_pct"],
-                _k((r["m"] or {}).get("spend") or 0), r2(r["freq"]), int(r["purch"])))
-            L.append("     %s: %s" % (WN.upper(), mline(r["m"], r["prev"])))
+            L.extend(block(r, "good"))
 
     F = fatigue_scan(A)
     tired = [r for r in F if r["state"] in ("FATIGUED", "SATURATED", "FATIGUING")]

@@ -247,6 +247,11 @@ td .sn.one{white-space:nowrap}
 .ft .fi svg{width:16px;height:16px}
 .tag{font-size:14px;font-weight:800;padding:4px 10px;border-radius:7px;letter-spacing:.03em}
 .spark{display:block}
+.mc{vertical-align:top}
+.mc .mv{font-size:20px;font-weight:800;color:#0F172A;font-variant-numeric:tabular-nums;line-height:1.1}
+.mc .mp{margin:5px 0 6px}
+.mc .ml{display:block;font-size:12px;font-weight:800;letter-spacing:.05em;color:#94A3B8;text-transform:uppercase}
+.mc .mb{display:block;font-size:14px;font-weight:700;color:#475569;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .why{font-size:15px;font-weight:600;color:#475569;padding:0 0 12px 20px;line-height:1.45}
 .why b{color:#0F172A;font-weight:800}
 """
@@ -365,12 +370,18 @@ def cell(w, q, k7, lab, key, f, lower=False, win="daily"):
     c7 = (k7 or {}).get(key) or 0
     v = _k(a_) if f == "%s" else (f % r2(a_))
     v7 = _k(c7) if f == "%s" else (f % r2(c7))
-    ws = WSHORT.get(win, "1d")
-    bench = ("<span class=\"s\">%s · %s &nbsp;·&nbsp; 7d %s</span>" % (lab, ws, v7)) if ws != "7d" \
-        else ("<span class=\"s\">%s · 7d</span>" % lab)
-    return ('<td>%s<div style="margin-top:5px">%s</div>%s</td>'
-            % (v, pill(pct(a_, b_), lower_better=lower) if b_ else
-               '<span class="pill nu">new</span>', bench))
+    ws = WSHORT.get(win, "1d").upper()
+    pl = pill(pct(a_, b_), lower_better=lower) if b_ else '<span class="pill nu">new</span>'
+    # TWO CLEAN LINES, NOT ONE WRAPPING SPAN. The metric name and window tag on the first line,
+    # the 7 day benchmark on its own line with its own value. "ROAS · 3D · 7D 6.32x" jammed onto
+    # one line is exactly the mush he called out.
+    if ws == "7D":
+        sub = '<span class="ml">%s · 7D</span>' % lab
+    else:
+        sub = ('<span class="ml">%s · %s</span><span class="mb">7D&nbsp;&nbsp;%s</span>'
+               % (lab, ws, v7))
+    return ('<td class="mc"><div class="mv">%s</div><div class="mp">%s</div>%s</td>'
+            % (v, pl, sub))
 
 
 def head(icon, title, note=""):
