@@ -38,9 +38,12 @@
       "ourkids_launches": "C0BH20Z8AL9",
       "playmore_launches": "C0BGY3GKUPQ",
       "ourkids_30day": "C0BH5BNS9PE",
-      "playmore_30day": "C0BGVCM299R"
+      "playmore_30day": "C0BGVCM299R",
+      "ourkids_decisions": "C0BHJMWGWNA",
+      "playmore_decisions": "C0BHNK5JH8R"
     },
     "_launches": "ads created in the last 3 days, followed daily until each one earns a verdict. Posted once a day off the daily run.",
-    "_schedule": "daily + 3day every morning 09:17 Cairo. 7day every SATURDAY 02:17 Cairo. 30day on the FIRST of the month 02:17 Cairo. launches every morning."
+    "_decisions": "budget edits and status changes from Meta's activity log in the last 2 days, and what each did to ROAS/CPP/AOV/CVR/CTR/ATC/CPMR. Posted daily.",
+    "_schedule": "EVERYTHING posts once a day at ~02:00 Cairo (23:00 UTC). daily + 3day + launches + decisions every night. 7day added on SATURDAY. 30day added on the FIRST of the month."
   }
 }

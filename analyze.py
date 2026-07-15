@@ -121,6 +121,12 @@ def channel_launches_for(name):
     return CH.get("%s_launches" % b) if b else None
 
 
+def channel_decisions_for(name):
+    """The decisions feed: what budget/status edits happened and what they did. One per brand."""
+    b = brand_of(name)
+    return CH.get("%s_decisions" % b) if b else None
+
+
 def channel_window_for(name, win):
     """win = daily | 3day | 7day. Each brand has its own channel per read."""
     brand = brand_of(name)
@@ -442,6 +448,61 @@ def get_budgets(acct, max_pages=12):
         a["campaign"] = c.get("name") or ""
         a["camp_daily"] = c.get("daily") or 0.0
     return {"adsets": ads_, "campaigns": camps}
+
+
+def get_activities(acct, since, until, max_pages=8):
+    """META'S OWN CHANGE LOG. Every budget edit, every on/off, every bid change, with a timestamp
+    and who did it. This is the 'what did we actually DO' feed, so the decisions channel can tie a
+    real edit to what it did to the metrics — instead of guessing why a number moved."""
+    out, after, pages = [], None, 0
+    while pages < max_pages:
+        p = {"fields": ("event_type,translated_event_type,object_id,object_type,object_name,"
+                        "extra_data,actor_name,event_time"),
+             "since": since, "until": until, "limit": 200}
+        if after: p["after"] = after
+        d = api_get("%s/activities" % acct, p)
+        if "error" in d:
+            sys.stderr.write("[activities] %s: %s\n" % (acct, str(d)[:140])); break
+        out += d.get("data", [])
+        after = d.get("paging", {}).get("cursors", {}).get("after")
+        pages += 1
+        if not after: break
+    return out
+
+
+def _change_kind(ev):
+    """Only the edits that move money: budget, on/off status, bid. Everything else is noise."""
+    et = (ev.get("event_type") or "").lower()
+    if "budget" in et: return "BUDGET"
+    if "run_status" in et or "status" in et or "pause" in et or "resume" in et or "activate" in et:
+        return "STATUS"
+    if "bid" in et: return "BID"
+    return None
+
+
+def _change_oldnew(ev):
+    """Meta stashes the before/after in extra_data as a JSON blob. Pull old and new out of it."""
+    ex = ev.get("extra_data")
+    if not ex: return (None, None)
+    try:
+        d = json.loads(ex) if isinstance(ex, str) else ex
+    except Exception:
+        return (None, None)
+    if not isinstance(d, dict): return (None, None)
+    old = d.get("old_value", d.get("old", d.get("oldValue")))
+    new = d.get("new_value", d.get("new", d.get("newValue")))
+    return (old, new)
+
+
+def _fmt_budget_val(v):
+    """Budget values in the log are in minor units (piastres). Show them as EGP/day."""
+    try:
+        n = float(v)
+        if n >= 1000:                       # almost certainly minor units
+            return _k(n / 100.0)
+        return _k(n)
+    except (TypeError, ValueError):
+        return str(v) if v not in (None, "") else "?"
 
 
 def new_launches(A, days=3):
@@ -4015,6 +4076,114 @@ def msg_short(A, win):
     return "\n".join(L)
 
 
+def msg_decisions(A):
+    """THE DECISIONS CHANNEL. What did we CHANGE — budget edits, on/off, bid — in the last 2 days,
+    and what did each change DO to the metrics. Every changed ad set is shown TODAY (since the edit)
+    against its OWN 7-day baseline AND against the account, on all seven metrics, with a plain
+    verdict: did the edit help or hurt. So a budget move is judged by its effect, not by vibes."""
+    acct_id = A["account"].get("id") or ""
+    acc7 = A.get("b7_acc") or A["summary"]
+    acts = A.get("activities") or []
+    S = adset_plan(A, "daily")
+    smap = {}
+    if S:
+        for r in S.get("all", []):
+            smap[str(r.get("adset_id"))] = r
+    b7 = A.get("b7") or {}
+
+    def gap(mv, av, lower=False):
+        d = pct(mv or 0, av or 0)
+        if d is None or not av: return "n/a"
+        if lower: d = -d
+        return "*%+.0f%%*" % d
+
+    def metric_line(m):
+        a = acc7
+        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
+                % (r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
+                   _k(m.get("cpa") or 0), gap(m.get("cpa"), a.get("cpa"), True),
+                   _k(m.get("aov") or 0), gap(m.get("aov"), a.get("aov")),
+                   r2(m.get("cvr") or 0), gap(m.get("cvr"), a.get("cvr")),
+                   (m.get("atc_rate") or 0), gap(m.get("atc_rate"), a.get("atc_rate")),
+                   _k(m.get("cpmr") or 0), gap(m.get("cpmr"), a.get("cpmr"), True)))
+
+    L = ["%s  *%s — DECISIONS & THEIR EFFECT*" % (MENTION, A["account"]["name"].upper())]
+    L.append("_Every budget edit and on/off from Meta's change log in the last 2 days, and what it did "
+             "to the metrics. Each one is judged TODAY, since the edit, against its own 7-day and the "
+             "account average. + is better on every metric._")
+
+    # collapse duplicate events on the same object+kind, keep the latest
+    seen = {}
+    for ev in acts:
+        kind = _change_kind(ev)
+        if not kind: continue
+        key = (str(ev.get("object_id") or ""), kind)
+        t = ev.get("event_time") or ""
+        if key not in seen or t > (seen[key].get("event_time") or ""):
+            seen[key] = ev
+
+    changes = list(seen.values())
+    if not changes:
+        L.append("\n_No budget edits or status changes in the log for the last 2 days. The moment you "
+                 "raise a budget, cut one, or turn something on or off, it lands here the next run with "
+                 "its effect on every metric._")
+        return "\n".join(L)
+
+    ICON = {"BUDGET": "💰", "STATUS": "🔀", "BID": "🎯"}
+    shown = 0
+    for ev in sorted(changes, key=lambda e: e.get("event_time") or "", reverse=True):
+        kind = _change_kind(ev)
+        otype = (ev.get("object_type") or "").upper()
+        oid = str(ev.get("object_id") or "")
+        oname = safe(ev.get("object_name") or "(unnamed)")
+        old, new = _change_oldnew(ev)
+        when = (ev.get("event_time") or "")[:10]
+        who = safe(ev.get("actor_name") or "")
+        # what changed, in words
+        if kind == "BUDGET":
+            what = "budget *%s → %s/day*" % (_fmt_budget_val(old), _fmt_budget_val(new))
+        elif kind == "STATUS":
+            what = "status *%s → %s*" % (str(old or "?"), str(new or "?"))
+        else:
+            what = "bid *%s → %s*" % (str(old or "?"), str(new or "?"))
+        # link + metrics: ad sets and campaigns deep-link to the ad set view
+        row = smap.get(oid)
+        if otype == "ADSET" and row:
+            link = aset_link(_clip(oname, 40), oid)
+        elif otype == "AD" and oid in b7:
+            link = ads_link(_clip(oname, 40), acct_id, oid)
+        else:
+            link = "*%s*" % _clip(oname, 40)
+        L.append("")
+        L.append("%s %s — %s   ·   _%s%s_" % (ICON.get(kind, "•"), link, what, when,
+                                              (" by %s" % who) if who else ""))
+        # the effect
+        if otype == "ADSET" and row:
+            m, m7 = row["m"], row.get("m7") or {}
+            dt = pct(m.get("roas") or 0, m7.get("roas") or 0)
+            if dt is None:
+                verdict = "no separate day yet — too early to read the effect"
+            elif dt >= 8:
+                verdict = "*HELPED* — ROAS since the edit is *%+.0f%%* vs its own 7-day" % dt
+            elif dt <= -8:
+                verdict = "*HURT* — ROAS since the edit is *%+.0f%%* vs its own 7-day" % dt
+            else:
+                verdict = "flat — ROAS since the edit is *%+.0f%%* vs its own 7-day" % dt
+            L.append("     since the edit: %s" % verdict)
+            L.append("     today, vs the account: %s" % metric_line(m))
+            L.append("     _its 7-day: %s_" % metric_line(m7))
+        elif otype == "AD" and oid in b7:
+            m = b7[oid]
+            L.append("     the ad, last 7 days vs the account: %s" % metric_line(m))
+        else:
+            L.append("     _%s-level change. Watch the campaign's ad sets above for the effect._"
+                     % otype.title())
+        shown += 1
+        if shown >= 12: break
+    return "\n".join(L)
+
+
 def action_plan(A, win):
     """The last thing in the channel: short, mentions him, and every line is an action with the
     reason, the money, a preview of the creative and a link that opens it for editing."""
@@ -5748,40 +5917,29 @@ def main():
     }
 
     # THE SCHEDULE, IN CAIRO TIME.
-    # A 7 day read posted every single morning is not a 7 day read, it is noise with a longer
-    # window. It goes out once a week, on Saturday, and the 30 day goes out once a month, on the
-    # first. The workflow fires twice a day and this decides what actually gets written.
-    #   09:17 Cairo -> daily + 3day + the launch feed
-    #   02:17 Cairo -> 7day  (Saturday only)  ·  30day  (1st of the month only)
-    # a hand-triggered run can force any read, so a Saturday-only card is still testable on a
-    # Tuesday without waiting five days to find out it is broken
+    # ONE run a day, at ~02:00 Cairo (the workflow fires at 23:00 UTC). Everything the account
+    # needs every morning goes out then: the daily memo, the 3-day, the launch feed, and the
+    # decisions feed. The 7-day is added on Saturday and the 30-day on the 1st — those are the only
+    # things that are not daily, so they are gated by the date, not by a second cron.
+    # A hand-triggered run can still FORCE any read, so a Saturday-only card is testable on a Tuesday.
     force = [w.strip() for w in (os.environ.get("FORCE_WINDOWS") or "").split(",") if w.strip()]
-    night = now.hour < 5
     if force:
         wins = [w for w in force if w in ALL_WINDOWS]
-        DO_LAUNCHES = True
-        WINDOWS = [ALL_WINDOWS[w] for w in wins]
         sys.stderr.write("[schedule] FORCED -> %s\n" % ", ".join(wins))
-    elif night:
-        wins = []
+    else:
+        wins = ["daily", "3day"]
         if now.weekday() == 5: wins.append("7day")     # Monday=0, so Saturday=5
         if now.day == 1:       wins.append("30day")
-        if not wins:
-            sys.stderr.write("[skip] %s Cairo: nothing scheduled for this night run\n"
-                             % now.strftime("%a %d %b %H:%M"))
-            return
-    if not force:
-        if not night:
-            wins = ["daily", "3day"]
-        DO_LAUNCHES = not night
-        WINDOWS = [ALL_WINDOWS[w] for w in wins]
         sys.stderr.write("[schedule] %s Cairo -> %s\n"
                          % (now.strftime("%a %d %b %H:%M"), ", ".join(wins)))
+    DO_LAUNCHES = True
+    WINDOWS = [ALL_WINDOWS[w] for w in wins]
 
     report = {"generated_at": now.isoformat(), "timezone": TZ, "sample": False, "accounts": []}
     CARDS = []
     PDFS = []
     LAUNCH = []
+    DECIS = []          # brand decisions feed: budget edits + status changes and their effect
     QUIET = {}          # brand -> (account name, last date it spent). A silent channel is a bug.
     global SEGMAP, ADSEG
     SEGX = ",".join(["ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"])
@@ -5851,6 +6009,11 @@ def main():
         B30_ACC = agg(list(B30.values())) if B30 else None
         AD_CREATED = get_ad_created(acct["id"])
         BUDGETS = get_budgets(acct["id"])    # where the budget lever ACTUALLY is
+        # META'S CHANGE LOG for the last 2 days: what we actually edited, for the decisions feed
+        try:
+            ACTS = get_activities(acct["id"], str(y - datetime.timedelta(days=1)), str(now.date()))
+        except Exception as e:
+            ACTS = []; sys.stderr.write("[activities] %s\n" % e)
         A = analyze(acct, cur_rows, prev_rows, STATUS)
         if A["summary"]["spend"] <= 0: continue
         report["accounts"].append(A)
@@ -5941,6 +6104,15 @@ def main():
                                                "memo": msg_new_launches(AW, new_launches(AW, 3))})
                             except Exception as e:
                                 sys.stderr.write("[launches] %s\n" % e)
+                        # ---- THE DECISIONS FEED. Budget edits + on/off in the last 2 days, and what
+                        # each did to the metrics. Its own channel, once a day, off the daily read. ----
+                        dch = channel_decisions_for(acct["name"])
+                        if dch:
+                            AW["activities"] = ACTS
+                            try:
+                                DECIS.append({"ch": dch, "memo": msg_decisions(AW)})
+                            except Exception as e:
+                                sys.stderr.write("[decisions] %s\n" % e)
                     for i, (suf, png) in enumerate(cards):
                         fn = "%s-%s-%s.png" % (slug(acct["name"]), win, suf)
                         os.makedirs(IMG_DIR, exist_ok=True)
@@ -6027,6 +6199,11 @@ def main():
         if not sent:
             slack(c["ch"], head_)
         time.sleep(1)
+        if c.get("memo"):
+            slack(c["ch"], c["memo"]); time.sleep(1)
+
+    # ---- the decisions feed: what we changed, and what it did ----
+    for c in DECIS:
         if c.get("memo"):
             slack(c["ch"], c["memo"]); time.sleep(1)
 
