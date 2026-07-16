@@ -588,27 +588,46 @@ def msg_new_launches(A, L):
     if not L or not L["rows"]:
         return ("*%s — NEW LAUNCHES*\n\nNo new ads were created in the last %d days."
                 % (A["account"]["name"].upper(), L["days"] if L else 3))
+    acct_id = A["account"].get("id") or ""
+    acc = A.get("b7_acc") or A["summary"]
+    def gp(mv, av, lower=False):
+        d = pct(mv or 0, av or 0)
+        if d is None or not av: return "n/a"
+        if lower: d = -d
+        return "*%+.0f%%*" % d
     ICON = {"WINNER": "🏆", "PROMISING": "🟢", "WATCH": "⚪", "BAD SIGNAL": "🟠", "DEAD": "🔴"}
-    out = ["*%s — NEW LAUNCHES*   ·   created in the last %d days" % (
-        A["account"]["name"].upper(), L["days"])]
-    out.append("*%d launched* · 🏆 *%d WINNER* · 🟢 *%d PROMISING* · 🟠 *%d BAD/DEAD* · ⚪ *%d WATCH* · "
+    STAT = {"ACTIVE": "🟢 live", "PAUSED": "⏸️ paused", "ADSET_PAUSED": "⏸️ ad set paused",
+            "CAMPAIGN_PAUSED": "⏸️ campaign paused", "IN_PROCESS": "⏳ processing",
+            "PENDING_REVIEW": "⏳ in review", "PENDING_BILLING_INFO": "⏳ billing",
+            "WITH_ISSUES": "⚠️ issues", "DISAPPROVED": "⛔ rejected", "PREAPPROVED": "⏳ preapproved",
+            "ARCHIVED": "🗄️ archived", "DELETED": "🗑️ deleted"}
+    out = ["*%s — NEW LAUNCHES*   ·   created in the last %d days" % (A["account"]["name"].upper(), L["days"])]
+    out.append("_Tap a name to open and edit it in Ads Manager. Every ▲▼ is vs the account average "
+               "*%.2fx* — *+ is better*._" % r2(acc.get("roas") or 0))
+    out.append("🏆 *%d WINNER* · 🟢 *%d PROMISING* · 🟠 *%d BAD/DEAD* · ⚪ *%d WATCH*   ·   %d launched · "
                "%s spent · winner bar *%.2fx*"
-               % (L["n"], L["winner"], L["promising"], L["bad"], L["watch"],
+               % (L["winner"], L["promising"], L["bad"], L["watch"], L["n"],
                   _k(L["spend"]), r2(L["acc_roas"] * WIN_MARGIN)))
     for r in L["rows"][:8]:
-        k = r["k"]; q = k.get("prev") or {}
-        out.append("\n• %s *%s* — *%s*  (day %d, born %s)" % (
-            ICON.get(r["state"], "•"), _clip(r["name"], 38), r["state"], r["age"], r["born"]))
-        out.append("     spend *%s* · rev *%s* · ROAS *%.2fx* · CPP *%s* · AOV *%s* · CVR *%.2f%%* · "
-                   "ATC *%.1f%%* · CPMR *%s* · frq *%.2f*"
-                   % (_k(k.get("spend") or 0), _k(k.get("rev") or 0), r2(k.get("roas") or 0),
-                      _k(k.get("cpa") or 0), _k(k.get("aov") or 0), r2(k.get("cvr") or 0),
-                      (k.get("atc_rate") or 0), _k(k.get("cpmr") or 0), r2(k.get("freq") or 0)))
+        k = r["k"]
+        name = ads_link(_clip(r["name"], 36), acct_id, r["ad_id"])
+        st = STAT.get((r.get("status") or "").upper(), (r.get("status") or "").lower() or "status n/a")
+        out.append("\n%s %s   ·   *%s* · %s · day %d"
+                   % (ICON.get(r["state"], "•"), name, r["state"], st, r["age"]))
+        out.append("     ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s)" % (
+            r2(k.get("roas") or 0), gp(k.get("roas"), acc.get("roas")),
+            _k(k.get("cpa") or 0), gp(k.get("cpa"), acc.get("cpa"), lower=True),
+            _k(k.get("aov") or 0), gp(k.get("aov"), acc.get("aov"))))
+        out.append("     CVR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)   ·   spend *%s* · frq *%.2f*" % (
+            r2(k.get("cvr") or 0), gp(k.get("cvr"), acc.get("cvr")),
+            (k.get("atc_rate") or 0), gp(k.get("atc_rate"), acc.get("atc_rate")),
+            _k(k.get("cpmr") or 0), gp(k.get("cpmr"), acc.get("cpmr"), lower=True),
+            _k(k.get("spend") or 0), r2(k.get("freq") or 0)))
         out.append("     _%s_" % r["why"])
     out.append("\n_Labels: 🏆 *WINNER* clears the winner bar (account ROAS +%d%%) on *%s* spend and *%d* "
                "purchases. 🟢 *PROMISING* beats the account but not the bar, or is early and above it. "
                "⚪ *WATCH* has too little data to judge. 🟠 *BAD SIGNAL* is below the account. 🔴 *DEAD* "
-               "spent the evidence and lost — switch it off._"
+               "spent the evidence and lost, switch it off._"
                % (int((WIN_MARGIN - 1) * 100), _k(EVIDENCE["spend"]), L["min_pur"]))
     return "\n".join(out)
 

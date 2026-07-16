@@ -1396,6 +1396,14 @@ def c_launches(A, win):
 
     COL = {"WINNER": "#0F7A43", "PROMISING": "#16A34A", "WATCH": "#94A3B8",
            "BAD SIGNAL": "#B45309", "DEAD": "#C0392B"}
+    TINTL = {"WINNER": "#F3FBF6", "PROMISING": "#F3FBF6", "WATCH": "#FFFFFF",
+             "BAD SIGNAL": "#FFFBF2", "DEAD": "#FDF3F2"}
+    STATL = {"ACTIVE": ("LIVE", "#0F7A43"), "PAUSED": ("PAUSED", "#B45309"),
+             "ADSET_PAUSED": ("AD SET PAUSED", "#B45309"), "CAMPAIGN_PAUSED": ("CAMPAIGN PAUSED", "#B45309"),
+             "PENDING_REVIEW": ("IN REVIEW", "#475569"), "IN_PROCESS": ("PROCESSING", "#475569"),
+             "WITH_ISSUES": ("ISSUES", "#B45309"), "DISAPPROVED": ("REJECTED", "#C0392B"),
+             "ARCHIVED": ("ARCHIVED", "#475569"), "DELETED": ("DELETED", "#C0392B")}
+    acc = A.get("b7_acc") or A["summary"]; a_roas = acc.get("roas") or 0
     tr = ""
     for r in L["rows"][:10]:
         k = r["k"]; q = k.get("prev") or {}
@@ -1411,16 +1419,25 @@ def c_launches(A, win):
                       % (v, pill(pct(a_, b_), lower_better=lb) if b_ else
                          '<span class="pill nu">first run</span>', lab))
         sp = spark(r["series"], "rev", 200, 50) if len(r["series"]) >= 4 else ""
-        tr += ('<tr><td class=l><div class="ncell">'
-               '<span class="bar" style="background:%s"></span>'
+        tint = TINTL.get(r["state"], "#FFFFFF")
+        sl, sc = STATL.get((r.get("status") or "").upper(),
+                           ((str(r.get("status") or "").upper()[:12]) or "STATUS N/A", "#475569"))
+        statchip = ('<span class="tag" style="background:%s;color:#fff;margin-left:10px">%s</span>' % (sc, sl))
+        vsa = ('<span class="pill %s" style="margin-left:10px">ROAS %s%.0f%% vs acct</span>'
+               % ("up" if (k.get("roas") or 0) >= a_roas else "dn",
+                  "+" if (k.get("roas") or 0) >= a_roas else "",
+                  (pct(k.get("roas") or 0, a_roas) or 0))) if a_roas and k.get("roas") else ""
+        tr += ('<tr><td class=l style="background:%s"><div class="ncell">'
+               '<span class="bar" style="background:%s;height:56px"></span>'
                '<span class="nm">%s</span>'
-               '<span class="sn one">%s &nbsp;·&nbsp; day %d &nbsp;·&nbsp; born %s</span>'
-               '<span class="sn one">%s</span></div></td>%s'
-               '<td style="width:240px">%s<span class="s">since launch</span></td></tr>'
-               '<tr><td colspan=11 class="why" style="border:0"><b>READ:</b> %s</td></tr>'
-               % (COL[r["state"]], esc(_clip(r["name"], 40)), status(r["state"]), r["age"],
-                  esc(r["born"]), esc(_clip(safe(k.get("adset") or ""), 44)), cells, sp,
-                  esc(r["why"])))
+               '<span class="sn one" style="margin-top:7px">%s%s%s</span>'
+               '<span class="sn one">day %d &nbsp;·&nbsp; born %s &nbsp;·&nbsp; %s</span></div></td>%s'
+               '<td style="width:240px;background:%s">%s<span class="s">since launch</span></td></tr>'
+               '<tr><td colspan=11 class="why" style="border:0;background:%s"><b>READ:</b> %s</td></tr>'
+               % (tint, COL[r["state"]], esc(_clip(r["name"], 40)),
+                  status(r["state"]), statchip, vsa,
+                  r["age"], esc(r["born"]), esc(_clip(safe(k.get("adset") or ""), 40)),
+                  cells, tint, sp, tint, esc(r["why"])))
     body += ('<div class="card">%s'
              '<table><tr><th class=l>Ad · born in the last 3 days</th><th>Spend</th><th>Revenue</th>'
              '<th>ROAS</th><th>CPP</th><th>AOV</th><th>CVR</th><th>ATC</th><th>CPMR</th><th>Freq</th>'
