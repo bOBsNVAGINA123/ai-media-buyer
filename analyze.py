@@ -3901,16 +3901,17 @@ def msg_short(A, win):
         out.append("     spend *%s* today (%s) · *%s*/7d · frequency *%.2f* · budget %s" % (
             _k(m.get("spend") or 0), spdir, _k(m7.get("spend") or 0), r2(r["freq"]),
             ("CBO campaign" if r["cbo"] else "%s/day" % _k(r["cur"]))))
-        out.append("     _7-day vs the account average — *+ is better* on every metric:_")
-        out.append("     ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s)" % (
-            r2(m7.get("roas") or 0), gap(m7.get("roas"), a.get("roas")),
-            _k(m7.get("cpa") or 0), gap(m7.get("cpa"), a.get("cpa"), lower=True),
-            _k(m7.get("aov") or 0), gap(m7.get("aov"), a.get("aov"))))
-        out.append("     CVR *%.2f%%* (%s) · CTR *%.2f%%* (%s) · ATC *%.1f%%* (%s) · CPMR *%s* (%s)" % (
-            r2(m7.get("cvr") or 0), gap(m7.get("cvr"), a.get("cvr")),
-            r2(m7.get("octr") or 0), gap(m7.get("octr"), a.get("octr")),
-            (m7.get("atc_rate") or 0), gap(m7.get("atc_rate"), a.get("atc_rate")),
-            _k(m7.get("cpmr") or 0), gap(m7.get("cpmr"), a.get("cpmr"), lower=True)))
+        out.append("     _7-day — this ad set / the account average / the gap (*+ better, − worse*):_")
+        out.append("     ROAS *%.2fx* / *%.2fx* (%s) · CPP *%s* / *%s* (%s) · AOV *%s* / *%s* (%s)" % (
+            r2(m7.get("roas") or 0), r2(a.get("roas") or 0), gap(m7.get("roas"), a.get("roas")),
+            _k(m7.get("cpa") or 0), _k(a.get("cpa") or 0), gap(m7.get("cpa"), a.get("cpa"), lower=True),
+            _k(m7.get("aov") or 0), _k(a.get("aov") or 0), gap(m7.get("aov"), a.get("aov"))))
+        out.append("     CVR *%.2f%%* / *%.2f%%* (%s) · CTR *%.2f%%* / *%.2f%%* (%s) · "
+                   "ATC *%.1f%%* / *%.1f%%* (%s) · CPMR *%s* / *%s* (%s)" % (
+            r2(m7.get("cvr") or 0), r2(a.get("cvr") or 0), gap(m7.get("cvr"), a.get("cvr")),
+            r2(m7.get("octr") or 0), r2(a.get("octr") or 0), gap(m7.get("octr"), a.get("octr")),
+            (m7.get("atc_rate") or 0), (a.get("atc_rate") or 0), gap(m7.get("atc_rate"), a.get("atc_rate")),
+            _k(m7.get("cpmr") or 0), _k(a.get("cpmr") or 0), gap(m7.get("cpmr"), a.get("cpmr"), lower=True)))
         return out
 
     if S and S.get("bad"):
@@ -4066,8 +4067,9 @@ def msg_short(A, win):
     if acts:
         L.append("\n━━━━━━━━━━━━━━━━━━━━")
         L.append("*✅ RECOMMENDED ACTIONS NOW*  (tap the name to open it in Ads Manager)")
-        L.append("_Each one shows every metric vs the account average — + is better. So you can see it is "
-                 "banging on all of them, or sucking on all of them, before you act._")
+        L.append("_Each one shows every metric vs the account average — *+ means better than the account, "
+                 "− means worse*. So you can see it is banging on all of them, or sucking on all of them, "
+                 "before you act._")
         for i, (ic, verb, link, mline_, why) in enumerate(acts[:12], 1):
             L.append("%d. %s *%s* — %s" % (i, ic, verb, link))
             if mline_:
@@ -4111,7 +4113,7 @@ def msg_decisions(A):
     L = ["%s  *%s — DECISIONS & THEIR EFFECT*" % (MENTION, A["account"]["name"].upper())]
     L.append("_Every budget edit and on/off from Meta's change log in the last 2 days, and what it did "
              "to the metrics. Each one is judged TODAY, since the edit, against its own 7-day and the "
-             "account average. + is better on every metric._")
+             "account average. *+ means better than the account, − means worse._")
 
     # collapse duplicate events on the same object+kind, keep the latest
     seen = {}
