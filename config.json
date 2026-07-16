@@ -40,8 +40,10 @@
       "ourkids_30day": "C0BH5BNS9PE",
       "playmore_30day": "C0BGVCM299R",
       "ourkids_decisions": "C0BHJMWGWNA",
-      "playmore_decisions": "C0BHNK5JH8R"
+      "playmore_decisions": "C0BHNK5JH8R",
+      "ourkids_store": "C0BHRP8NK6Z"
     },
+    "_store": "the whole Shopify store, daily: sessions/ATC%/CVR/AOV funnel, vendors up/down, best sellers, product movers, 80/20, patterns. Needs SHOPIFY_STORE + SHOPIFY_TOKEN secrets.",
     "_launches": "ads created in the last 3 days, followed daily until each one earns a verdict. Posted once a day off the daily run.",
     "_decisions": "budget edits and status changes from Meta's activity log in the last 2 days, and what each did to ROAS/CPP/AOV/CVR/CTR/ATC/CPMR. Posted daily.",
     "_schedule": "EVERYTHING posts once a day at ~02:00 Cairo (23:00 UTC). daily + 3day + launches + decisions every night. 7day added on SATURDAY. 30day added on the FIRST of the month."

@@ -5877,6 +5877,270 @@ def strat_payload(A):
 
 
 # ----------------------- main -----------------------
+# ================= SHOPIFY: the STORE side, fully self-hosted. Orders via Admin GraphQL, the
+# sessions funnel via ShopifyQL. Needs two GitHub secrets: SHOPIFY_STORE and SHOPIFY_TOKEN. If they
+# are not set, none of this runs and the Meta reports are untouched. =================
+SHOP_STORE = os.environ.get("SHOPIFY_STORE", "").strip()
+SHOP_TOKEN = os.environ.get("SHOPIFY_TOKEN", "").strip()
+SHOP_API = os.environ.get("SHOPIFY_API_VERSION", "2025-01").strip()
+
+def _shop_host():
+    s = SHOP_STORE
+    if not s: return ""
+    return s if ".myshopify.com" in s else ("%s.myshopify.com" % s)
+
+def shopify_gql(query, variables=None, tries=4):
+    """One Admin GraphQL call, with a retry on Shopify's cost-based THROTTLED error."""
+    host = _shop_host()
+    if not host or not SHOP_TOKEN: return {}
+    url = "https://%s/admin/api/%s/graphql.json" % (host, SHOP_API)
+    body = json.dumps({"query": query, "variables": variables or {}}).encode()
+    for i in range(tries):
+        req = urllib.request.Request(url, data=body, headers={
+            "Content-Type": "application/json", "X-Shopify-Access-Token": SHOP_TOKEN})
+        try:
+            r = urllib.request.urlopen(req, timeout=60); d = json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            try: d = json.loads(e.read().decode())
+            except Exception: d = {"errors": str(e)}
+        except Exception as e:
+            d = {"errors": str(e)}
+        if d.get("errors") and "THROTTLED" in json.dumps(d.get("errors")).upper():
+            time.sleep(2 + i * 2); continue
+        return d
+    return {}
+
+def shopify_orders(since_date, until_date, max_pages=60):
+    """Every order line in the window: vendor, title, quantity, post-discount amount, order id, day.
+    That is everything the store report needs — revenue, orders, and how they split."""
+    host = _shop_host()
+    if not host or not SHOP_TOKEN: return None
+    q = ('query($q:String!,$after:String){ orders(first:100, query:$q, after:$after, sortKey:CREATED_AT){'
+         ' edges{ node{ id createdAt lineItems(first:100){ edges{ node{ quantity vendor title'
+         ' discountedTotalSet{ shopMoney{ amount } } } } } } } pageInfo{ hasNextPage endCursor } } }')
+    qstr = "created_at:>=%s created_at:<=%s" % (since_date, until_date)
+    lines, after, pages = [], None, 0
+    while pages < max_pages:
+        d = shopify_gql(q, {"q": qstr, "after": after})
+        data = (((d or {}).get("data") or {}).get("orders") or {})
+        if not data:
+            sys.stderr.write("[shopify] orders returned nothing: %s\n" % str(d)[:180]); break
+        for e in data.get("edges", []):
+            n = e["node"]; oid = n["id"]; created = (n.get("createdAt") or "")[:10]
+            for le in ((n.get("lineItems") or {}).get("edges") or []):
+                ln = le["node"]
+                try:
+                    amt = float((((ln.get("discountedTotalSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
+                except Exception:
+                    amt = 0.0
+                v = (ln.get("vendor") or "").strip() or "(no vendor)"
+                lines.append({"order": oid, "date": created, "vendor": v,
+                              "title": ln.get("title") or "(untitled)",
+                              "qty": int(ln.get("quantity") or 0), "amt": amt})
+        pi = data.get("pageInfo") or {}
+        after = pi.get("endCursor"); pages += 1
+        if not pi.get("hasNextPage"): break
+    return lines
+
+def shop_agg(lines, d0, d1):
+    """Aggregate the lines with d0 <= date <= d1: net, units, distinct orders, per vendor, per product."""
+    sel = [l for l in lines if d0 <= l["date"] <= d1]
+    net = sum(l["amt"] for l in sel); units = sum(l["qty"] for l in sel)
+    orders = set(l["order"] for l in sel)
+    ven, prod, vo, po = {}, {}, {}, {}
+    for l in sel:
+        ven[l["vendor"]] = ven.get(l["vendor"], 0.0) + l["amt"]
+        prod[l["title"]] = prod.get(l["title"], 0.0) + l["amt"]
+        vo.setdefault(l["vendor"], set()).add(l["order"])
+        po.setdefault(l["title"], set()).add(l["order"])
+    return {"net": net, "units": units, "orders": len(orders),
+            "aov": (net / len(orders)) if orders else 0, "ven": ven, "prod": prod,
+            "ven_orders": {k: len(v) for k, v in vo.items()},
+            "prod_orders": {k: len(v) for k, v in po.items()}}
+
+def shopify_funnel(days=9):
+    """Sessions / ATC / checkout / CVR per day via ShopifyQL. Needs analytics scope on the token.
+    If the token cannot read analytics, return None and the report simply ships without the funnel."""
+    host = _shop_host()
+    if not host or not SHOP_TOKEN: return None
+    ql = ("FROM sessions SHOW sessions, sessions_with_cart_additions, "
+          "sessions_that_reached_checkout, sessions_that_completed_checkout "
+          "TIMESERIES day SINCE -%dd UNTIL today" % days)
+    q = ('query($ql:String!){ shopifyqlQuery(query:$ql){ __typename ... on TableResponse{'
+         ' tableData{ rowData columns{ name } } } } }')
+    d = shopify_gql(q, {"ql": ql})
+    td = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {}).get("tableData")
+    if not td:
+        sys.stderr.write("[shopify] funnel unavailable (needs analytics scope): %s\n" % str(d)[:160])
+        return None
+    out = {}
+    for row in td.get("rowData", []):
+        try:
+            day = str(row[0])[:10]; s = float(row[1] or 0); atc = float(row[2] or 0)
+            chk = float(row[3] or 0); comp = float(row[4] or 0)
+        except Exception:
+            continue
+        out[day] = {"sessions": s, "atc": atc, "checkout": chk, "completed": comp,
+                    "atc_rate": (atc / s * 100) if s else 0, "cvr": (comp / s * 100) if s else 0}
+    return out or None
+
+
+SWIM_KW = ("swim", "robe", "beach", "pool")
+def _is_swim(t):
+    tl = (t or "").lower(); return any(k in tl for k in SWIM_KW)
+
+def shopify_memo():
+    """THE WHOLE STORE REPORT, one Slack message, no dependency on anything but the two Shopify
+    secrets. Pulls 14 days of orders once, slices them into yesterday / day-before / 3-day, adds the
+    sessions funnel, and writes: the funnel top line, what DROVE the revenue move, vendors up and
+    down, best sellers, product movers, the 80/20, and the patterns. Returns None if not configured."""
+    if not _shop_host() or not SHOP_TOKEN: return None
+    try:
+        from zoneinfo import ZoneInfo; z = ZoneInfo(TZ)
+    except Exception:
+        z = datetime.timezone.utc
+    now = datetime.datetime.now(z)
+    y = (now - datetime.timedelta(days=1)).date()
+    yb = y - datetime.timedelta(days=1)
+    lines = shopify_orders(str(y - datetime.timedelta(days=14)), str(now.date()))
+    if lines is None:
+        return ("%s  *OURKIDS STORE — DAILY*\n\n*Shopify read failed* — the token or store is not "
+                "reachable. This is a broken read, not a quiet store. Check the SHOPIFY_TOKEN secret "
+                "and that the custom app has read_orders." % MENTION)
+    Ay  = shop_agg(lines, str(y), str(y))
+    Ayb = shop_agg(lines, str(yb), str(yb))
+    A3  = shop_agg(lines, str(y - datetime.timedelta(days=2)), str(y))
+    Ap3 = shop_agg(lines, str(y - datetime.timedelta(days=5)), str(y - datetime.timedelta(days=3)))
+    F = shopify_funnel() or {}
+    fy, fyb = F.get(str(y)), F.get(str(yb))
+
+    def mv(new, old, lower=False):
+        d = pct(new or 0, old or 0)
+        if d is None: return "n/a"
+        return "*%+.0f%%*" % (-d if lower else d)
+
+    L = ["%s  *OURKIDS STORE — DAILY MEMO*   ·   %s vs %s" % (MENTION, y.isoformat(), yb.isoformat())]
+    L.append("_Yesterday, the full day, against the day before. The number to beat is the store, not "
+             "one vendor._")
+
+    # ---- 1) THE FUNNEL TOP LINE: sessions, ATC%, CVR, AOV ----
+    L.append("\n*THE FUNNEL*")
+    if fy:
+        L.append("Sessions *%s* (%s) · ATC *%.2f%%* (%s) · reached checkout *%d* · CVR *%.2f%%* (%s)" % (
+            _k(fy["sessions"]), mv(fy["sessions"], (fyb or {}).get("sessions")),
+            fy["atc_rate"], mv(fy["atc_rate"], (fyb or {}).get("atc_rate")),
+            int(fy["completed"]),
+            fy["cvr"], mv(fy["cvr"], (fyb or {}).get("cvr"))))
+    else:
+        L.append("_Sessions / ATC% / CVR need Shopify Analytics access on the token — not returned. "
+                 "Everything below is from orders and is exact._")
+    L.append("Net sales *%s* (%s) · Orders *%d* (%s) · AOV *%s* (%s) · Units *%d*" % (
+        _k(Ay["net"]), mv(Ay["net"], Ayb["net"]),
+        Ay["orders"], mv(Ay["orders"], Ayb["orders"]),
+        _k(Ay["aov"]), mv(Ay["aov"], Ayb["aov"]), Ay["units"]))
+
+    # ---- 2) WHAT DROVE THE MOVE: orders vs basket (AOV) ----
+    net_chg = Ay["net"] - Ayb["net"]
+    ord_eff = (Ay["orders"] - Ayb["orders"]) * (Ayb["aov"] or 0)
+    aov_eff = Ay["orders"] * ((Ay["aov"] or 0) - (Ayb["aov"] or 0))
+    driver = "MORE ORDERS" if abs(ord_eff) >= abs(aov_eff) else "BIGGER BASKET (AOV)"
+    L.append("_Net sales moved *%s%s*. %s: orders %s%s, basket %s%s._" % (
+        "+" if net_chg >= 0 else "-", _k(abs(net_chg)), driver,
+        "+" if ord_eff >= 0 else "-", _k(abs(ord_eff)),
+        "+" if aov_eff >= 0 else "-", _k(abs(aov_eff))))
+
+    # ---- 3) VENDORS: yesterday vs the day before ----
+    vk = set(Ay["ven"]) | set(Ayb["ven"])
+    vrows = []
+    for v in vk:
+        n0, n1 = Ay["ven"].get(v, 0.0), Ayb["ven"].get(v, 0.0)
+        vrows.append({"v": v, "now": n0, "prev": n1, "d": n0 - n1,
+                      "ord": Ay["ven_orders"].get(v, 0)})
+    gain = sorted([r for r in vrows if r["d"] > 0], key=lambda r: -r["d"])[:6]
+    lose = sorted([r for r in vrows if r["d"] < 0], key=lambda r: r["d"])[:6]
+    # 80/20
+    tot = Ay["net"] or 1
+    cum, n8 = 0.0, 0
+    for v, nv in sorted(Ay["ven"].items(), key=lambda kv: -kv[1]):
+        cum += nv; n8 += 1
+        if cum >= 0.8 * tot: break
+    topv, topn = (sorted(Ay["ven"].items(), key=lambda kv: -kv[1])[:1] or [("", 0)])[0]
+    L.append("\n*VENDORS — yesterday vs the day before*")
+    L.append("_*%d of %d vendors* made 80%% of yesterday's revenue. Top vendor *%s* = *%.0f%%* of the day._"
+             % (n8, len(Ay["ven"]), _clip(topv, 22), (topn / tot * 100)))
+    L.append("  ▲ *GAINING:*")
+    for r in gain:
+        tag = " · *new*" if r["prev"] <= 0 else ""
+        L.append("     *%s* — *%s* (%s), %d orders%s" % (
+            _clip(r["v"], 24), _k(r["now"]), mv(r["now"], r["prev"]), r["ord"], tag))
+    L.append("  ▼ *FADING:*")
+    for r in lose:
+        tag = " · *dropped to 0*" if r["now"] <= 0 else ""
+        L.append("     *%s* — *%s* (%s)%s" % (
+            _clip(r["v"], 24), _k(r["now"]), mv(r["now"], r["prev"]), tag))
+
+    # ---- 4) BEST SELLERS + 5) PRODUCT MOVERS ----
+    pk = set(Ay["prod"]) | set(Ayb["prod"])
+    prows = []
+    for p in pk:
+        n0, n1 = Ay["prod"].get(p, 0.0), Ayb["prod"].get(p, 0.0)
+        prows.append({"p": p, "now": n0, "prev": n1, "d": n0 - n1,
+                      "ord": Ay["prod_orders"].get(p, 0)})
+    best = sorted([r for r in prows if r["now"] > 0], key=lambda r: -r["now"])[:6]
+    pgain = sorted([r for r in prows if r["d"] > 0], key=lambda r: -r["d"])[:4]
+    pfade = sorted([r for r in prows if r["now"] <= 0 and r["prev"] > 0], key=lambda r: r["prev"])[:4]
+    L.append("\n*BEST SELLERS — yesterday*")
+    for r in best:
+        L.append("     *%s* — *%s*, %d orders" % (_clip(r["p"], 44), _k(r["now"]), r["ord"]))
+    L.append("*GAINING PRODUCTS* (vs the day before)")
+    for r in pgain:
+        base = "*new*" if r["prev"] <= 0 else mv(r["now"], r["prev"])
+        L.append("     *%s* — *%s* (%s)" % (_clip(r["p"], 44), _k(r["now"]), base))
+    if pfade:
+        L.append("*FADED OUT* (sold the day before, nothing yesterday)")
+        for r in pfade:
+            L.append("     *%s* — was *%s*" % (_clip(r["p"], 44), _k(r["prev"])))
+
+    # ---- 6) PATTERNS ----
+    pats = []
+    if fy and fyb:
+        ds = pct(fy["sessions"], fyb["sessions"]) or 0
+        if abs(ds) < 6 and net_chg > 0:
+            pats.append("Traffic was flat (*%+.0f%%* sessions) but revenue rose — the money came from a "
+                        "*bigger basket and better checkout*, not more visitors." % ds)
+        elif ds >= 6 and net_chg > 0:
+            pats.append("Revenue rose *with* traffic (*%+.0f%%* sessions) — top-of-funnel is doing the work." % ds)
+        if (fy["atc_rate"] < (fyb["atc_rate"] or 0)) and (fy["cvr"] > (fyb["cvr"] or 0)):
+            pats.append("Fewer carts but *more of them checked out* (CVR up, ATC% down) — the buyers who "
+                        "added were higher intent.")
+    if topn / tot >= 0.30:
+        pats.append("*Concentration risk:* one vendor (*%s*) is *%.0f%%* of the day. A slow day for it is a "
+                    "slow day for the store." % (_clip(topv, 22), topn / tot * 100))
+    bigt = [r for r in best if r["ord"] <= 1 and r["now"] >= 4000]
+    if bigt:
+        pats.append("*Big-ticket single orders swung the day:* %s. One order each, thousands in revenue — "
+                    "watch these, they inflate a good day and their absence tanks a bad one." %
+                    ", ".join("%s (%s)" % (_clip(r["p"], 28), _k(r["now"])) for r in bigt[:3]))
+    hifreq = sorted([r for r in prows if r["ord"] >= 6 and (r["now"] / max(r["ord"], 1)) < 400],
+                    key=lambda r: -r["ord"])[:2]
+    if hifreq:
+        pats.append("*High-frequency, low-value:* %s — lots of orders, small tickets. Impulse/attach items; "
+                    "good gift-with-order or free-gift-threshold bait." %
+                    ", ".join("%s (%d orders)" % (_clip(r["p"], 26), r["ord"]) for r in hifreq))
+    if [r for r in best if _is_swim(r["p"])]:
+        n_sw = len([r for r in best if _is_swim(r["p"])])
+        pats.append("*Summer swimwear is carrying the top of the list* (%d of the top sellers are swim robes). "
+                    "Stock depth and a swim-robe bundle are the obvious levers." % n_sw)
+    if pats:
+        L.append("\n*PATTERNS*")
+        for p in pats:
+            L.append("• %s" % p)
+
+    L.append("\n_Store: %s · currency EGP. This is the whole store; the Meta channels are the ads on top of it._"
+             % _shop_host())
+    return "\n".join(L)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--daily", action="store_true")
@@ -6208,6 +6472,19 @@ def main():
     for c in DECIS:
         if c.get("memo"):
             slack(c["ch"], c["memo"]); time.sleep(1)
+
+    # ---- THE STORE. One Shopify memo a day, its own channel. Only if Shopify is configured, and it
+    # never touches the Meta side: no token, no store memo, everything else runs exactly as before. ----
+    if (a.daily or a.dry_run) and SHOP_TOKEN and _shop_host():
+        sch = CH.get("ourkids_store")
+        if sch:
+            try:
+                memo = shopify_memo()
+                if memo:
+                    slack(sch, memo); time.sleep(1)
+                    sys.stderr.write("[shopify] store memo posted\n")
+            except Exception as e:
+                sys.stderr.write("[shopify] %s\n" % e)
 
     # ---- the deck, as one PDF, last thing in the channel ----
     for p in PDFS:
