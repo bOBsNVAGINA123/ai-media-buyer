@@ -505,6 +505,39 @@ def _fmt_budget_val(v):
         return str(v) if v not in (None, "") else "?"
 
 
+LAUNCH_STATES = ("WINNER", "PROMISING", "WATCH", "BAD SIGNAL", "DEAD")
+def launch_verdict(sp, pur, roas, a_roas):
+    """THE HONEST LABEL ON A BABY AD, with the criteria baked in. A launch is only truly JUDGED once
+    it clears the evidence bar (spend + purchases). Before that it can still lean promising or bad,
+    but it is never DEAD on day one. That is how you avoid killing a winner before it warms up."""
+    bar = a_roas * WIN_MARGIN
+    ev_sp, ev_pu = EVIDENCE["spend"], EVIDENCE["purch"]
+    if sp < 300:
+        return "WATCH", "Under 300 EGP spent. No signal yet, leave it alone."
+    judged = sp >= ev_sp and pur >= ev_pu
+    if judged:
+        if roas >= bar:
+            return "WINNER", ("%.2fx, clears the winner bar *%.2fx* (account %.2fx +%d%%) on %d purchases. "
+                              "Duplicate it." % (r2(roas), r2(bar), r2(a_roas), int((WIN_MARGIN-1)*100), int(pur)))
+        if roas >= a_roas:
+            return "PROMISING", ("%.2fx, above the account %.2fx but under the %.2fx winner bar. Keep it, "
+                                 "give it room." % (r2(roas), r2(a_roas), r2(bar)))
+        if roas >= a_roas * 0.6:
+            return "BAD SIGNAL", ("%.2fx vs the account %.2fx on %s spent and %d purchases. Below the bar, "
+                                  "trending wrong." % (r2(roas), r2(a_roas), _k(sp), int(pur)))
+        return "DEAD", ("%.2fx vs the account %.2fx on %s spent and %d purchases. It had its shot. Switch "
+                        "it off." % (r2(roas), r2(a_roas), _k(sp), int(pur)))
+    # early: real spend but not yet at the evidence bar
+    if pur >= 1 and roas >= a_roas:
+        return "PROMISING", ("%.2fx above the account %.2fx early on %s spent. Give it data, not budget, "
+                             "until it clears %s and %d purchases." % (r2(roas), r2(a_roas), _k(sp), _k(ev_sp), ev_pu))
+    if sp >= 600 and roas < a_roas * 0.6:
+        return "BAD SIGNAL", ("%.2fx vs the account %.2fx on %s spent, still under the evidence bar. "
+                              "Leaning wrong." % (r2(roas), r2(a_roas), _k(sp)))
+    return "WATCH", ("%s spent, %d purchases. Needs %s and %d purchases before the ROAS means anything."
+                     % (_k(sp), int(pur), _k(ev_sp), ev_pu))
+
+
 def new_launches(A, days=3):
     """EVERY AD BORN IN THE LAST 3 DAYS, AND HOW IT IS DOING SINCE.
     A launch you do not follow is a launch you did not really make. This is the follow up: the
@@ -531,34 +564,23 @@ def new_launches(A, days=3):
         sp = (k.get("spend") or 0) if k else 0
         pur = (k.get("purch") or 0) if k else 0
         roas = (k.get("roas") or 0) if k else 0
-        # THE HONEST VERDICT ON A BABY AD. Most of them have not earned one yet, and saying so
-        # is the whole point: killing an ad on day one is how you never find a winner.
-        if not k or sp < 300:
-            state, why = "TOO EARLY", "Under 300 EGP spent. Nothing here is a signal yet."
-        elif pur < EVIDENCE["purch"]:
-            state, why = "LEARNING", ("%d purchases so far. It needs %d before the ROAS means anything."
-                                      % (int(pur), EVIDENCE["purch"]))
-        elif roas >= a_roas:
-            state, why = "WINNING", ("%.2fx against the account's %.2fx on %d purchases."
-                                     % (r2(roas), r2(a_roas), int(pur)))
-        elif roas >= a_roas * 0.6:
-            state, why = "BEHIND", ("%.2fx against the account's %.2fx. Give it more data, not more budget."
-                                    % (r2(roas), r2(a_roas)))
-        else:
-            state, why = "FAILING", ("%.2fx against the account's %.2fx on %s spent. Switch it off."
-                                     % (r2(roas), r2(a_roas), _k(sp)))
+        state, why = launch_verdict(sp, pur, roas, a_roas)
         out.append({"ad_id": aid, "name": safe(meta.get("name") or ""), "born": born, "age": age,
                     "status": meta.get("status") or "", "k": k or {}, "state": state, "why": why,
                     "spend": sp, "purch": pur, "roas": roas, "series": daily.get(str(aid)) or [],
                     "acc_roas": a_roas})
-    ORD = {"WINNING": 0, "BEHIND": 1, "FAILING": 2, "LEARNING": 3, "TOO EARLY": 4}
-    out.sort(key=lambda r: (ORD[r["state"]], -r["spend"]))
-    return {"rows": out, "days": days, "acc_roas": a_roas,
-            "n": len(out), "win": sum(1 for r in out if r["state"] == "WINNING"),
-            "fail": sum(1 for r in out if r["state"] == "FAILING"),
-            "early": sum(1 for r in out if r["state"] in ("TOO EARLY", "LEARNING")),
-            "spend": sum(r["spend"] for r in out),
-            "min_pur": EVIDENCE["purch"]}
+    ORD = {"WINNER": 0, "PROMISING": 1, "BAD SIGNAL": 2, "DEAD": 3, "WATCH": 4}
+    out.sort(key=lambda r: (ORD.get(r["state"], 5), -r["spend"]))
+    return {"rows": out, "days": days, "acc_roas": a_roas, "n": len(out),
+            "winner": sum(1 for r in out if r["state"] == "WINNER"),
+            "promising": sum(1 for r in out if r["state"] == "PROMISING"),
+            "bad": sum(1 for r in out if r["state"] in ("BAD SIGNAL", "DEAD")),
+            "watch": sum(1 for r in out if r["state"] == "WATCH"),
+            # kept for the card's existing 4-KPI board: good = winner+promising, fail = bad+dead
+            "win": sum(1 for r in out if r["state"] in ("WINNER", "PROMISING")),
+            "fail": sum(1 for r in out if r["state"] in ("BAD SIGNAL", "DEAD")),
+            "early": sum(1 for r in out if r["state"] == "WATCH"),
+            "spend": sum(r["spend"] for r in out), "min_pur": EVIDENCE["purch"]}
 
 
 def msg_new_launches(A, L):
@@ -566,23 +588,28 @@ def msg_new_launches(A, L):
     if not L or not L["rows"]:
         return ("*%s — NEW LAUNCHES*\n\nNo new ads were created in the last %d days."
                 % (A["account"]["name"].upper(), L["days"] if L else 3))
+    ICON = {"WINNER": "🏆", "PROMISING": "🟢", "WATCH": "⚪", "BAD SIGNAL": "🟠", "DEAD": "🔴"}
     out = ["*%s — NEW LAUNCHES*   ·   created in the last %d days" % (
         A["account"]["name"].upper(), L["days"])]
-    out.append("*%d launched* · %d winning · %d failing · %d still learning · %s spent · account bar *%.2fx*"
-               % (L["n"], L["win"], L["fail"], L["early"], _k(L["spend"]), r2(L["acc_roas"])))
+    out.append("*%d launched* · 🏆 *%d WINNER* · 🟢 *%d PROMISING* · 🟠 *%d BAD/DEAD* · ⚪ *%d WATCH* · "
+               "%s spent · winner bar *%.2fx*"
+               % (L["n"], L["winner"], L["promising"], L["bad"], L["watch"],
+                  _k(L["spend"]), r2(L["acc_roas"] * WIN_MARGIN)))
     for r in L["rows"][:8]:
         k = r["k"]; q = k.get("prev") or {}
-        out.append("\n• *%s* — _%s_ (day %d, born %s)" % (
-            _clip(r["name"], 40), r["state"], r["age"], r["born"]))
+        out.append("\n• %s *%s* — *%s*  (day %d, born %s)" % (
+            ICON.get(r["state"], "•"), _clip(r["name"], 38), r["state"], r["age"], r["born"]))
         out.append("     spend *%s* · rev *%s* · ROAS *%.2fx* · CPP *%s* · AOV *%s* · CVR *%.2f%%* · "
                    "ATC *%.1f%%* · CPMR *%s* · frq *%.2f*"
                    % (_k(k.get("spend") or 0), _k(k.get("rev") or 0), r2(k.get("roas") or 0),
                       _k(k.get("cpa") or 0), _k(k.get("aov") or 0), r2(k.get("cvr") or 0),
                       (k.get("atc_rate") or 0), _k(k.get("cpmr") or 0), r2(k.get("freq") or 0)))
         out.append("     _%s_" % r["why"])
-    out.append("\n_An ad is only judged once it clears %s spend and %d purchases. Before that, "
-               "TOO EARLY and LEARNING mean exactly what they say._"
-               % (_k(EVIDENCE["spend"]), L["min_pur"]))
+    out.append("\n_Labels: 🏆 *WINNER* clears the winner bar (account ROAS +%d%%) on *%s* spend and *%d* "
+               "purchases. 🟢 *PROMISING* beats the account but not the bar, or is early and above it. "
+               "⚪ *WATCH* has too little data to judge. 🟠 *BAD SIGNAL* is below the account. 🔴 *DEAD* "
+               "spent the evidence and lost — switch it off._"
+               % (int((WIN_MARGIN - 1) * 100), _k(EVIDENCE["spend"]), L["min_pur"]))
     return "\n".join(out)
 
 
@@ -5943,20 +5970,60 @@ def shopify_orders(since_date, until_date, max_pages=60):
     return lines
 
 def shop_agg(lines, d0, d1):
-    """Aggregate the lines with d0 <= date <= d1: net, units, distinct orders, per vendor, per product."""
+    """Aggregate the lines with d0 <= date <= d1: net, units, distinct orders, per vendor, per product,
+    plus units per vendor and per product so ASP (net/units) exists at every level, per house rule."""
     sel = [l for l in lines if d0 <= l["date"] <= d1]
     net = sum(l["amt"] for l in sel); units = sum(l["qty"] for l in sel)
     orders = set(l["order"] for l in sel)
-    ven, prod, vo, po = {}, {}, {}, {}
+    ven, prod, vo, po, vu, pu = {}, {}, {}, {}, {}, {}
     for l in sel:
         ven[l["vendor"]] = ven.get(l["vendor"], 0.0) + l["amt"]
         prod[l["title"]] = prod.get(l["title"], 0.0) + l["amt"]
+        vu[l["vendor"]] = vu.get(l["vendor"], 0) + l["qty"]
+        pu[l["title"]] = pu.get(l["title"], 0) + l["qty"]
         vo.setdefault(l["vendor"], set()).add(l["order"])
         po.setdefault(l["title"], set()).add(l["order"])
     return {"net": net, "units": units, "orders": len(orders),
-            "aov": (net / len(orders)) if orders else 0, "ven": ven, "prod": prod,
+            "aov": (net / len(orders)) if orders else 0,
+            "asp": (net / units) if units else 0,
+            "ven": ven, "prod": prod, "ven_units": vu, "prod_units": pu,
             "ven_orders": {k: len(v) for k, v in vo.items()},
             "prod_orders": {k: len(v) for k, v in po.items()}}
+
+
+def shopifyql_rows(ql):
+    """Run any ShopifyQL query via the Admin API and return rowData (list of rows), or None if the
+    token cannot read analytics. One helper so funnel and inventory share the same call."""
+    if not _shop_host() or not SHOP_TOKEN: return None
+    q = ('query($ql:String!){ shopifyqlQuery(query:$ql){ __typename ... on TableResponse{'
+         ' tableData{ rowData columns{ name } } } } }')
+    d = shopify_gql(q, {"ql": ql})
+    td = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {}).get("tableData")
+    if not td:
+        sys.stderr.write("[shopify] ql failed (%s): %s\n" % (ql[:50], str(d)[:120]))
+        return None
+    return td.get("rowData") or []
+
+
+def shopify_inventory(days=7):
+    """THE INVENTORY BRAIN. Per product: on-hand units, units sold in the window, sell-through, the
+    velocity per day, and DAYS OF COVER (on-hand / velocity). This is what turns 'we sold 31 robes'
+    into 'reorder now, it stocks out in 10 days'. Reorder-before-spend is step zero."""
+    rows = shopifyql_rows("FROM inventory SHOW ending_inventory_units, inventory_units_sold, "
+                          "sell_through_rate GROUP BY product_title ORDER BY inventory_units_sold DESC "
+                          "LIMIT 250 SINCE -%dd UNTIL today" % days)
+    if rows is None: return None
+    out = {}
+    for r in rows:
+        try:
+            name = str(r[0]); onhand = float(r[1] or 0); sold = float(r[2] or 0); strr = float(r[3] or 0)
+        except Exception:
+            continue
+        vel = sold / days if days else 0
+        cover = (onhand / vel) if vel > 0 else (9e9 if onhand > 0 else 0)
+        out[name] = {"onhand": onhand, "sold": sold, "str": strr * 100.0,
+                     "vel": vel, "cover": cover, "days": days}
+    return out
 
 def shopify_funnel(days=9):
     """Sessions / ATC / checkout / CVR per day via ShopifyQL. Needs analytics scope on the token.
@@ -5989,156 +6056,299 @@ SWIM_KW = ("swim", "robe", "beach", "pool")
 def _is_swim(t):
     tl = (t or "").lower(); return any(k in tl for k in SWIM_KW)
 
-def shopify_memo():
-    """THE WHOLE STORE REPORT, one Slack message, no dependency on anything but the two Shopify
-    secrets. Pulls 14 days of orders once, slices them into yesterday / day-before / 3-day, adds the
-    sessions funnel, and writes: the funnel top line, what DROVE the revenue move, vendors up and
-    down, best sellers, product movers, the 80/20, and the patterns. Returns None if not configured."""
+# how many days of stock is "reorder now", and what a healthy target looks like
+COVER_URGENT = 14        # <= this many days of cover on a real seller = reorder now
+COVER_TARGET = 30        # reorder up to this many days of cover
+DEAD_COVER   = 120       # >= this many days of cover = dead / overstock cash
+DEAD_MINUNITS = 20       # and this much on hand, so a 3-unit slow mover is not "dead cash"
+REAL_SELLER  = 5         # a product needs at least this many units sold in 7d to count as demand
+
+def _funnel_win(F, d0, d1):
+    days = [v for k, v in (F or {}).items() if d0 <= k <= d1]
+    if not days: return None
+    s = sum(x["sessions"] for x in days); atc = sum(x["atc"] for x in days)
+    chk = sum(x["checkout"] for x in days); comp = sum(x["completed"] for x in days)
+    return {"sessions": s, "atc": atc, "checkout": chk, "completed": comp,
+            "atc_rate": (atc / s * 100) if s else 0, "cvr": (comp / s * 100) if s else 0}
+
+def _win_ranges(win, y):
+    yb = y - datetime.timedelta(days=1)
+    if win == "3day":
+        return (y - datetime.timedelta(days=2), y, y - datetime.timedelta(days=5),
+                y - datetime.timedelta(days=3), "3-DAY", "the prior 3 days")
+    if win == "7day":
+        return (y - datetime.timedelta(days=6), y, y - datetime.timedelta(days=13),
+                y - datetime.timedelta(days=7), "7-DAY", "the prior 7 days")
+    return (y, y, yb, yb, "DAILY", "the day before")
+
+def shopify_build(win):
+    """THE STORE, TURNED INTO A DECISION. Pulls orders + the sessions funnel + live inventory, then
+    computes for one window: the funnel, revenue decomposed into UNITS x PRICE (ASP), vendors with
+    ABC grade and 80/20, best sellers and movers, and the inventory brain: what to reorder before it
+    stocks out, and what is dead cash to liquidate. Returns a dict both the memo and the cards read."""
     if not _shop_host() or not SHOP_TOKEN: return None
     try:
         from zoneinfo import ZoneInfo; z = ZoneInfo(TZ)
     except Exception:
         z = datetime.timezone.utc
-    now = datetime.datetime.now(z)
-    y = (now - datetime.timedelta(days=1)).date()
-    yb = y - datetime.timedelta(days=1)
+    now = datetime.datetime.now(z); y = (now - datetime.timedelta(days=1)).date()
+    c0, c1, p0, p1, wname, vs = _win_ranges(win, y)
     lines = shopify_orders(str(y - datetime.timedelta(days=14)), str(now.date()))
     if lines is None:
-        return ("%s  *OURKIDS STORE — DAILY*\n\n*Shopify read failed* — the token or store is not "
-                "reachable. This is a broken read, not a quiet store. Check the SHOPIFY_TOKEN secret "
-                "and that the custom app has read_orders." % MENTION)
-    Ay  = shop_agg(lines, str(y), str(y))
-    Ayb = shop_agg(lines, str(yb), str(yb))
-    A3  = shop_agg(lines, str(y - datetime.timedelta(days=2)), str(y))
-    Ap3 = shop_agg(lines, str(y - datetime.timedelta(days=5)), str(y - datetime.timedelta(days=3)))
+        return {"win": win, "wname": wname, "error": True}
+    Ac = shop_agg(lines, str(c0), str(c1))
+    Ap = shop_agg(lines, str(p0), str(p1))
+    A7 = shop_agg(lines, str(y - datetime.timedelta(days=6)), str(y))     # for product ASP
+    asp_map = {}
+    for t, u in A7["prod_units"].items():
+        if u: asp_map[t] = A7["prod"].get(t, 0.0) / u
     F = shopify_funnel() or {}
-    fy, fyb = F.get(str(y)), F.get(str(yb))
+    fc = _funnel_win(F, str(c0), str(c1)); fp = _funnel_win(F, str(p0), str(p1))
+    INV = shopify_inventory(7)
 
-    def mv(new, old, lower=False):
-        d = pct(new or 0, old or 0)
-        if d is None: return "n/a"
-        return "*%+.0f%%*" % (-d if lower else d)
+    # revenue decomposed into UNITS x PRICE (house rule), plus orders x basket for the funnel read
+    net_chg = Ac["net"] - Ap["net"]
+    units_eff = (Ac["units"] - Ap["units"]) * (Ap["asp"] or 0)
+    price_eff = Ac["units"] * ((Ac["asp"] or 0) - (Ap["asp"] or 0))
+    ord_eff = (Ac["orders"] - Ap["orders"]) * (Ap["aov"] or 0)
+    aov_eff = Ac["orders"] * ((Ac["aov"] or 0) - (Ap["aov"] or 0))
+    driver = "MORE UNITS" if abs(units_eff) >= abs(price_eff) else "HIGHER PRICE (ASP)"
 
-    L = ["%s  *OURKIDS STORE — DAILY MEMO*   ·   %s vs %s" % (MENTION, y.isoformat(), yb.isoformat())]
-    L.append("_Yesterday, the full day, against the day before. The number to beat is the store, not "
-             "one vendor._")
-
-    # ---- 1) THE FUNNEL TOP LINE: sessions, ATC%, CVR, AOV ----
-    L.append("\n*THE FUNNEL*")
-    if fy:
-        L.append("Sessions *%s* (%s) · ATC *%.2f%%* (%s) · reached checkout *%d* · CVR *%.2f%%* (%s)" % (
-            _k(fy["sessions"]), mv(fy["sessions"], (fyb or {}).get("sessions")),
-            fy["atc_rate"], mv(fy["atc_rate"], (fyb or {}).get("atc_rate")),
-            int(fy["completed"]),
-            fy["cvr"], mv(fy["cvr"], (fyb or {}).get("cvr"))))
-    else:
-        L.append("_Sessions / ATC% / CVR need Shopify Analytics access on the token — not returned. "
-                 "Everything below is from orders and is exact._")
-    L.append("Net sales *%s* (%s) · Orders *%d* (%s) · AOV *%s* (%s) · Units *%d*" % (
-        _k(Ay["net"]), mv(Ay["net"], Ayb["net"]),
-        Ay["orders"], mv(Ay["orders"], Ayb["orders"]),
-        _k(Ay["aov"]), mv(Ay["aov"], Ayb["aov"]), Ay["units"]))
-
-    # ---- 2) WHAT DROVE THE MOVE: orders vs basket (AOV) ----
-    net_chg = Ay["net"] - Ayb["net"]
-    ord_eff = (Ay["orders"] - Ayb["orders"]) * (Ayb["aov"] or 0)
-    aov_eff = Ay["orders"] * ((Ay["aov"] or 0) - (Ayb["aov"] or 0))
-    driver = "MORE ORDERS" if abs(ord_eff) >= abs(aov_eff) else "BIGGER BASKET (AOV)"
-    L.append("_Net sales moved *%s%s*. %s: orders %s%s, basket %s%s._" % (
-        "+" if net_chg >= 0 else "-", _k(abs(net_chg)), driver,
-        "+" if ord_eff >= 0 else "-", _k(abs(ord_eff)),
-        "+" if aov_eff >= 0 else "-", _k(abs(aov_eff))))
-
-    # ---- 3) VENDORS: yesterday vs the day before ----
-    vk = set(Ay["ven"]) | set(Ayb["ven"])
+    # vendors: movement, ASP, ABC grade, 80/20
+    tot = Ac["net"] or 1
+    vsorted = sorted(Ac["ven"].items(), key=lambda kv: -kv[1])
+    cum, abc = 0.0, {}
+    for v, nv in vsorted:
+        cum += nv; share = cum / tot
+        abc[v] = "A" if share <= 0.80 else ("B" if share <= 0.95 else "C")
+    cum, n80 = 0.0, 0
+    for v, nv in vsorted:
+        cum += nv; n80 += 1
+        if cum >= 0.80 * tot: break
+    topv, topn = (vsorted[:1] or [("", 0)])[0]
+    vk = set(Ac["ven"]) | set(Ap["ven"])
     vrows = []
     for v in vk:
-        n0, n1 = Ay["ven"].get(v, 0.0), Ayb["ven"].get(v, 0.0)
-        vrows.append({"v": v, "now": n0, "prev": n1, "d": n0 - n1,
-                      "ord": Ay["ven_orders"].get(v, 0)})
-    gain = sorted([r for r in vrows if r["d"] > 0], key=lambda r: -r["d"])[:6]
-    lose = sorted([r for r in vrows if r["d"] < 0], key=lambda r: r["d"])[:6]
-    # 80/20
-    tot = Ay["net"] or 1
-    cum, n8 = 0.0, 0
-    for v, nv in sorted(Ay["ven"].items(), key=lambda kv: -kv[1]):
-        cum += nv; n8 += 1
-        if cum >= 0.8 * tot: break
-    topv, topn = (sorted(Ay["ven"].items(), key=lambda kv: -kv[1])[:1] or [("", 0)])[0]
-    L.append("\n*VENDORS — yesterday vs the day before*")
-    L.append("_*%d of %d vendors* made 80%% of yesterday's revenue. Top vendor *%s* = *%.0f%%* of the day._"
-             % (n8, len(Ay["ven"]), _clip(topv, 22), (topn / tot * 100)))
-    L.append("  ▲ *GAINING:*")
-    for r in gain:
-        tag = " · *new*" if r["prev"] <= 0 else ""
-        L.append("     *%s* — *%s* (%s), %d orders%s" % (
-            _clip(r["v"], 24), _k(r["now"]), mv(r["now"], r["prev"]), r["ord"], tag))
-    L.append("  ▼ *FADING:*")
-    for r in lose:
-        tag = " · *dropped to 0*" if r["now"] <= 0 else ""
-        L.append("     *%s* — *%s* (%s)%s" % (
-            _clip(r["v"], 24), _k(r["now"]), mv(r["now"], r["prev"]), tag))
+        n0, n1 = Ac["ven"].get(v, 0.0), Ap["ven"].get(v, 0.0)
+        u0 = Ac["ven_units"].get(v, 0)
+        vrows.append({"v": v, "now": n0, "prev": n1, "d": n0 - n1, "units": u0,
+                      "asp": (n0 / u0) if u0 else 0, "ord": Ac["ven_orders"].get(v, 0),
+                      "grade": abc.get(v, "C")})
+    vgain = sorted([r for r in vrows if r["d"] > 0], key=lambda r: -r["d"])[:6]
+    vfade = sorted([r for r in vrows if r["d"] < 0], key=lambda r: r["d"])[:6]
 
-    # ---- 4) BEST SELLERS + 5) PRODUCT MOVERS ----
-    pk = set(Ay["prod"]) | set(Ayb["prod"])
+    # products: best sellers, movers
+    pk = set(Ac["prod"]) | set(Ap["prod"])
     prows = []
     for p in pk:
-        n0, n1 = Ay["prod"].get(p, 0.0), Ayb["prod"].get(p, 0.0)
-        prows.append({"p": p, "now": n0, "prev": n1, "d": n0 - n1,
-                      "ord": Ay["prod_orders"].get(p, 0)})
-    best = sorted([r for r in prows if r["now"] > 0], key=lambda r: -r["now"])[:6]
-    pgain = sorted([r for r in prows if r["d"] > 0], key=lambda r: -r["d"])[:4]
-    pfade = sorted([r for r in prows if r["now"] <= 0 and r["prev"] > 0], key=lambda r: r["prev"])[:4]
-    L.append("\n*BEST SELLERS — yesterday*")
-    for r in best:
-        L.append("     *%s* — *%s*, %d orders" % (_clip(r["p"], 44), _k(r["now"]), r["ord"]))
-    L.append("*GAINING PRODUCTS* (vs the day before)")
-    for r in pgain:
-        base = "*new*" if r["prev"] <= 0 else mv(r["now"], r["prev"])
-        L.append("     *%s* — *%s* (%s)" % (_clip(r["p"], 44), _k(r["now"]), base))
-    if pfade:
-        L.append("*FADED OUT* (sold the day before, nothing yesterday)")
-        for r in pfade:
-            L.append("     *%s* — was *%s*" % (_clip(r["p"], 44), _k(r["prev"])))
+        n0, n1 = Ac["prod"].get(p, 0.0), Ap["prod"].get(p, 0.0)
+        u0 = Ac["prod_units"].get(p, 0)
+        prows.append({"p": p, "now": n0, "prev": n1, "d": n0 - n1, "units": u0,
+                      "asp": (n0 / u0) if u0 else 0, "ord": Ac["prod_orders"].get(p, 0)})
+    best = sorted([r for r in prows if r["now"] > 0], key=lambda r: -r["now"])[:8]
+    pgain = sorted([r for r in prows if r["d"] > 0], key=lambda r: -r["d"])[:5]
+    pfade = sorted([r for r in prows if r["now"] <= 0 and r["prev"] > 0], key=lambda r: r["prev"])[:5]
 
-    # ---- 6) PATTERNS ----
-    pats = []
-    if fy and fyb:
-        ds = pct(fy["sessions"], fyb["sessions"]) or 0
-        if abs(ds) < 6 and net_chg > 0:
-            pats.append("Traffic was flat (*%+.0f%%* sessions) but revenue rose — the money came from a "
-                        "*bigger basket and better checkout*, not more visitors." % ds)
-        elif ds >= 6 and net_chg > 0:
-            pats.append("Revenue rose *with* traffic (*%+.0f%%* sessions) — top-of-funnel is doing the work." % ds)
-        if (fy["atc_rate"] < (fyb["atc_rate"] or 0)) and (fy["cvr"] > (fyb["cvr"] or 0)):
-            pats.append("Fewer carts but *more of them checked out* (CVR up, ATC% down) — the buyers who "
-                        "added were higher intent.")
-    if topn / tot >= 0.30:
-        pats.append("*Concentration risk:* one vendor (*%s*) is *%.0f%%* of the day. A slow day for it is a "
-                    "slow day for the store." % (_clip(topv, 22), topn / tot * 100))
-    bigt = [r for r in best if r["ord"] <= 1 and r["now"] >= 4000]
-    if bigt:
-        pats.append("*Big-ticket single orders swung the day:* %s. One order each, thousands in revenue — "
-                    "watch these, they inflate a good day and their absence tanks a bad one." %
-                    ", ".join("%s (%s)" % (_clip(r["p"], 28), _k(r["now"])) for r in bigt[:3]))
-    hifreq = sorted([r for r in prows if r["ord"] >= 6 and (r["now"] / max(r["ord"], 1)) < 400],
-                    key=lambda r: -r["ord"])[:2]
-    if hifreq:
-        pats.append("*High-frequency, low-value:* %s — lots of orders, small tickets. Impulse/attach items; "
-                    "good gift-with-order or free-gift-threshold bait." %
-                    ", ".join("%s (%d orders)" % (_clip(r["p"], 26), r["ord"]) for r in hifreq))
-    if [r for r in best if _is_swim(r["p"])]:
-        n_sw = len([r for r in best if _is_swim(r["p"])])
-        pats.append("*Summer swimwear is carrying the top of the list* (%d of the top sellers are swim robes). "
-                    "Stock depth and a swim-robe bundle are the obvious levers." % n_sw)
+    # THE INVENTORY BRAIN: reorder-now, dead stock, out-of-stock-with-demand
+    reorder, dead, oos = [], [], []
+    if INV:
+        for name, iv in INV.items():
+            asp = asp_map.get(name, 0.0)
+            if iv["onhand"] <= 0 and iv["sold"] >= REAL_SELLER:
+                oos.append({"p": name, "sold7": iv["sold"], "vel": iv["vel"],
+                            "lost_day": iv["vel"] * asp, "asp": asp})
+            elif iv["onhand"] > 0 and iv["sold"] >= REAL_SELLER and iv["cover"] <= COVER_URGENT:
+                need = max(0, iv["vel"] * COVER_TARGET - iv["onhand"])
+                reorder.append({"p": name, "onhand": iv["onhand"], "cover": iv["cover"],
+                                "vel": iv["vel"], "str": iv["str"], "sold7": iv["sold"],
+                                "reorder": need, "lost_day": iv["vel"] * asp, "asp": asp})
+            elif iv["onhand"] >= DEAD_MINUNITS and iv["cover"] >= DEAD_COVER:
+                dead.append({"p": name, "onhand": iv["onhand"], "cover": iv["cover"],
+                             "vel": iv["vel"], "str": iv["str"], "sold7": iv["sold"], "asp": asp})
+        reorder.sort(key=lambda r: r["cover"])
+        oos.sort(key=lambda r: -r["lost_day"])
+        dead.sort(key=lambda r: -r["onhand"])
+
+    return {"win": win, "wname": wname, "vs": vs, "error": False,
+            "clabel": (c0.isoformat() if c0 == c1 else "%s to %s" % (c0.isoformat(), c1.isoformat())),
+            "plabel": (p0.isoformat() if p0 == p1 else "%s to %s" % (p0.isoformat(), p1.isoformat())),
+            "sales": Ac, "prev": Ap, "funnel": fc, "funnel_prev": fp,
+            "net_chg": net_chg, "units_eff": units_eff, "price_eff": price_eff,
+            "ord_eff": ord_eff, "aov_eff": aov_eff, "driver": driver,
+            "vgain": vgain, "vfade": vfade, "n80": n80, "n_vendors": len(Ac["ven"]),
+            "topv": topv, "topshare": (topn / tot * 100), "abc_a": [v for v, g in abc.items() if g == "A"],
+            "best": best, "pgain": pgain, "pfade": pfade,
+            "reorder": reorder, "dead": dead, "oos": oos, "has_inv": INV is not None,
+            "host": _shop_host()}
+
+
+def _mvp(new, old, lower=False):
+    d = pct(new or 0, old or 0)
+    if d is None: return "n/a"
+    return "*%+.0f%%*" % (-d if lower else d)
+
+def msg_shopify(rep):
+    """The store sales memo: funnel, what drove it (units x price), vendors with ABC + 80/20, best
+    sellers and movers, patterns. The inventory brain gets its own message and channel."""
+    if not rep: return None
+    if rep.get("error"):
+        return ("%s  *OURKIDS STORE — %s*\n\n*Shopify read failed.* The token or store is not reachable. "
+                "This is a broken read, not a quiet store. Check the SHOPIFY_TOKEN secret and that the "
+                "app has read_orders and read_reports." % (MENTION, rep["wname"]))
+    s, p = rep["sales"], rep["prev"]; fc, fp = rep["funnel"], rep["funnel_prev"]
+    L = ["%s  *OURKIDS STORE — %s MEMO*   ·   %s vs %s" % (MENTION, rep["wname"], rep["clabel"], rep["plabel"])]
+    L.append("_This window against %s. ASP is the average selling price per unit. The number to beat is "
+             "the store, not one vendor._" % rep["vs"])
+    L.append("\n*THE FUNNEL*")
+    if fc:
+        L.append("Sessions *%s* (%s) · ATC *%.2f%%* (%s) · reached checkout *%d* · completed *%d* · CVR *%.2f%%* (%s)"
+                 % (_k(fc["sessions"]), _mvp(fc["sessions"], (fp or {}).get("sessions")),
+                    fc["atc_rate"], _mvp(fc["atc_rate"], (fp or {}).get("atc_rate")),
+                    int(fc["checkout"]), int(fc["completed"]),
+                    fc["cvr"], _mvp(fc["cvr"], (fp or {}).get("cvr"))))
+    else:
+        L.append("_Sessions / ATC% / CVR need the read_reports (Analytics) scope on the token. "
+                 "Everything below is from orders and is exact._")
+    L.append("Net sales *%s* (%s) · Orders *%d* (%s) · Units *%d* (%s) · AOV *%s* (%s) · ASP *%s* (%s)" % (
+        _k(s["net"]), _mvp(s["net"], p["net"]), s["orders"], _mvp(s["orders"], p["orders"]),
+        s["units"], _mvp(s["units"], p["units"]), _k(s["aov"]), _mvp(s["aov"], p["aov"]),
+        _k(s["asp"]), _mvp(s["asp"], p["asp"])))
+    L.append("_Net sales moved *%s%s*. %s: units %s%s, price %s%s._" % (
+        "+" if rep["net_chg"] >= 0 else "-", _k(abs(rep["net_chg"])), rep["driver"],
+        "+" if rep["units_eff"] >= 0 else "-", _k(abs(rep["units_eff"])),
+        "+" if rep["price_eff"] >= 0 else "-", _k(abs(rep["price_eff"]))))
+
+    L.append("\n*VENDORS*   (grade A = top 80% of revenue, B = next 15%, C = tail)")
+    L.append("_*%d of %d vendors* make 80%% of the revenue. Top vendor *%s* = *%.0f%%*._"
+             % (rep["n80"], rep["n_vendors"], _clip(rep["topv"], 22), rep["topshare"]))
+    L.append("  ▲ *GAINING:*")
+    for r in rep["vgain"]:
+        tag = " · *new*" if r["prev"] <= 0 else ""
+        L.append("     [%s] *%s* — *%s* (%s) · %d units · ASP *%s*%s" % (
+            r["grade"], _clip(r["v"], 22), _k(r["now"]), _mvp(r["now"], r["prev"]),
+            int(r["units"]), _k(r["asp"]), tag))
+    L.append("  ▼ *FADING:*")
+    for r in rep["vfade"]:
+        tag = " · *dropped to 0*" if r["now"] <= 0 else ""
+        L.append("     [%s] *%s* — *%s* (%s)%s" % (
+            r["grade"], _clip(r["v"], 22), _k(r["now"]), _mvp(r["now"], r["prev"]), tag))
+
+    L.append("\n*BEST SELLERS*")
+    for r in rep["best"]:
+        L.append("     *%s* — *%s* · %d units · ASP *%s*" % (
+            _clip(r["p"], 42), _k(r["now"]), int(r["units"]), _k(r["asp"])))
+    if rep["pgain"]:
+        L.append("*GAINING* (vs %s)" % rep["vs"])
+        for r in rep["pgain"]:
+            base = "*new*" if r["prev"] <= 0 else _mvp(r["now"], r["prev"])
+            L.append("     *%s* — *%s* (%s)" % (_clip(r["p"], 42), _k(r["now"]), base))
+    if rep["pfade"]:
+        L.append("*FADED* (sold %s, nothing this window)" % rep["vs"])
+        for r in rep["pfade"]:
+            L.append("     *%s* — was *%s*" % (_clip(r["p"], 42), _k(r["prev"])))
+
+    # a one-line inventory pointer so the sales channel still flags the urgent stuff
+    if rep.get("reorder"):
+        top = rep["reorder"][0]
+        L.append("\n⚠️ *STOCK:* *%d* products need a reorder now. Most urgent: *%s* has *%.0f days* of cover "
+                 "left. Full list in the inventory channel." % (
+                     len(rep["reorder"]), _clip(top["p"], 34), top["cover"]))
+
+    pats = _shop_patterns(rep)
     if pats:
         L.append("\n*PATTERNS*")
-        for p in pats:
-            L.append("• %s" % p)
-
-    L.append("\n_Store: %s · currency EGP. This is the whole store; the Meta channels are the ads on top of it._"
-             % _shop_host())
+        for pp in pats: L.append("• %s" % pp)
+    L.append("\n_Store: %s · EGP. This is the whole store; the Meta channels are the ads on top of it._"
+             % rep["host"])
     return "\n".join(L)
+
+
+def msg_inventory(rep):
+    """THE INVENTORY CHANNEL. Reorder-before-spend is step zero. What is about to stock out, what is
+    already out with demand still coming, and what is dead cash to liquidate. Numbers, not vibes."""
+    if not rep or rep.get("error"): return None
+    if not rep.get("has_inv"):
+        return ("%s  *OURKIDS — INVENTORY*\n\n_Inventory needs the read_reports (Analytics) scope on the "
+                "Shopify token. Add it and this channel fills with reorder and dead-stock signals._" % MENTION)
+    L = ["%s  *OURKIDS — INVENTORY & REORDER*   ·   live stock vs 7-day velocity" % MENTION]
+    L.append("_Days of cover = on-hand units / units sold per day. Reorder-before-spend is step zero: no "
+             "point driving traffic to a product that stocks out in a week._")
+
+    L.append("\n🔴 *REORDER NOW*   (real sellers with %d days of cover or less)" % COVER_URGENT)
+    if rep["reorder"]:
+        for r in rep["reorder"][:12]:
+            L.append("• *%s*" % _clip(r["p"], 46))
+            L.append("     *%.0f days* of cover · *%.0f/day* · %d on hand · %d sold 7d · sell-through *%.0f%%*"
+                     % (r["cover"], r["vel"], int(r["onhand"]), int(r["sold7"]), r["str"]))
+            L.append("     _reorder ~*%d units* to hit %d days · if it stocks out you lose ~*%s/day*_"
+                     % (int(round(r["reorder"])), COVER_TARGET, _k(r["lost_day"])))
+    else:
+        L.append("_Nothing under %d days of cover among real sellers. Stock is healthy on the movers._" % COVER_URGENT)
+
+    if rep["oos"]:
+        L.append("\n⛔ *OUT OF STOCK, STILL IN DEMAND*   (sold in the last 7 days, now zero on hand)")
+        for r in rep["oos"][:8]:
+            L.append("• *%s* — %d sold 7d, now *0 on hand* · losing ~*%s/day* until restocked"
+                     % (_clip(r["p"], 44), int(r["sold7"]), _k(r["lost_day"])))
+
+    L.append("\n🟡 *DEAD / OVERSTOCK*   (%d+ days of cover, cash sitting still)" % DEAD_COVER)
+    if rep["dead"]:
+        for r in rep["dead"][:10]:
+            cov = "999+" if r["cover"] >= 9e8 else "%.0f" % r["cover"]
+            L.append("• *%s* — *%d on hand* · %s days of cover · %d sold 7d · sell-through *%.0f%%*"
+                     % (_clip(r["p"], 44), int(r["onhand"]), cov, int(r["sold7"]), r["str"]))
+        L.append("_These are candidates for a discount, a bundle, or a gift-with-order. The units are cash "
+                 "you already spent, sitting on a shelf._")
+    else:
+        L.append("_No obvious dead stock over %d days of cover with real quantity on hand._" % DEAD_COVER)
+    return "\n".join(L)
+
+
+def _shop_patterns(rep):
+    """The narrative, from the numbers. Traffic vs basket, concentration, big-ticket swings, inventory."""
+    pats = []; s = rep["sales"]; fc, fp = rep["funnel"], rep["funnel_prev"]
+    if fc and fp:
+        ds = pct(fc["sessions"], fp["sessions"]) or 0
+        if abs(ds) < 6 and rep["net_chg"] > 0:
+            pats.append("Traffic was flat (*%+.0f%%* sessions) but revenue rose. The money came from a bigger "
+                        "basket and better checkout, not more visitors." % ds)
+        elif ds >= 6 and rep["net_chg"] > 0:
+            pats.append("Revenue rose with traffic (*%+.0f%%* sessions). Top of funnel is doing the work." % ds)
+        if fc["atc_rate"] < (fp["atc_rate"] or 0) and fc["cvr"] > (fp["cvr"] or 0):
+            pats.append("Fewer carts but more of them checked out (CVR up, ATC%% down). The buyers who added "
+                        "were higher intent." if False else
+                        "Fewer carts but more of them checked out. CVR up while ATC rate fell, so the buyers "
+                        "who added were higher intent.")
+    if rep["topshare"] >= 30:
+        pats.append("Concentration risk: *%s* is *%.0f%%* of revenue. A slow day for it is a slow day for the "
+                    "whole store." % (_clip(rep["topv"], 22), rep["topshare"]))
+    bigt = [r for r in rep["best"] if r["ord"] <= 1 and r["now"] >= 4000]
+    if bigt:
+        pats.append("Big-ticket single orders swung the window: %s. One order each, thousands in revenue, so "
+                    "they inflate a good day and their absence tanks a bad one." %
+                    ", ".join("%s (%s)" % (_clip(r["p"], 26), _k(r["now"])) for r in bigt[:3]))
+    if rep.get("reorder"):
+        r = rep["reorder"][0]
+        pats.append("Your fastest sellers are your thinnest stock: *%s* has only *%.0f days* of cover. Reorder "
+                    "before you spend another pound driving traffic to it." % (_clip(r["p"], 30), r["cover"]))
+    if rep.get("dead"):
+        units = sum(int(d["onhand"]) for d in rep["dead"])
+        pats.append("*%d units* across %d products are dead cash (over %d days of cover). Bundle or discount "
+                    "them to free the money." % (units, len(rep["dead"]), DEAD_COVER))
+    if [r for r in rep["best"] if _is_swim(r["p"])]:
+        pats.append("Summer swimwear owns the top of the best-seller list. Stock depth and a swim-robe bundle "
+                    "are the obvious levers while the season is hot.")
+    return pats
+
+
+STORE_CAP = {
+    "1-pulse":       "*1 · STORE PULSE* — sessions, cart, checkout, and the money. Revenue split into units x price.",
+    "2-vendors":     "*2 · VENDORS* — who is carrying the store, who is fading, the ABC grade and the 80/20.",
+    "3-bestsellers": "*3 · BEST SELLERS* — top products, what is climbing, what fell off.",
+    "4-reorder":     "*4 · REORDER NOW* — real sellers about to stock out. Reorder-before-spend is step zero.",
+    "5-deadstock":   "*5 · DEAD STOCK* — cash tied up in stock that is not moving. Liquidation candidates.",
+    "6-patterns":    "*6 · PATTERNS* — what the numbers are telling you, in plain sentences.",
+}
 
 
 def main():
@@ -6473,18 +6683,66 @@ def main():
         if c.get("memo"):
             slack(c["ch"], c["memo"]); time.sleep(1)
 
-    # ---- THE STORE. One Shopify memo a day, its own channel. Only if Shopify is configured, and it
-    # never touches the Meta side: no token, no store memo, everything else runs exactly as before. ----
+    # ---- THE STORE. Visual cards + a PDF per window (daily/3day/7day), same as the Meta reports,
+    # plus a dedicated inventory channel for reorder + dead stock. Only runs if Shopify is configured;
+    # no token means none of this fires and the Meta side is untouched. ----
     if (a.daily or a.dry_run) and SHOP_TOKEN and _shop_host():
-        sch = CH.get("ourkids_store")
-        if sch:
+        store_wins = [w for w in wins if w in ("daily", "3day", "7day")] or ["daily"]
+        STORE, SPDF, inv_ch, inv_msg = [], [], None, None
+        for sw in store_wins:
             try:
-                memo = shopify_memo()
-                if memo:
-                    slack(sch, memo); time.sleep(1)
-                    sys.stderr.write("[shopify] store memo posted\n")
+                rep = shopify_build(sw)
             except Exception as e:
-                sys.stderr.write("[shopify] %s\n" % e)
+                sys.stderr.write("[shopify] build %s: %s\n" % (sw, e)); continue
+            if not rep: continue
+            wch = CH.get("ourkids_store_%s" % sw); memo = msg_shopify(rep)
+            scards = []
+            try:
+                import cards as _sc
+                scards = _sc.render_store_cards(rep)
+            except Exception as e:
+                sys.stderr.write("[shopify cards] %s\n" % e)
+            if wch and scards:
+                for i, (suf, png) in enumerate(scards):
+                    fn = "store-%s-%s.png" % (sw, suf)
+                    os.makedirs(IMG_DIR, exist_ok=True)
+                    with open(os.path.join(IMG_DIR, fn), "wb") as fh: fh.write(png)
+                    head_ = ("%s  *OURKIDS STORE — %s*\n" % (MENTION, rep["wname"])) if i == 0 else ""
+                    STORE.append({"ch": wch, "png": png, "fn": fn, "title": "store-%s-%s" % (sw, suf),
+                                  "comment": head_ + STORE_CAP.get(suf, ""),
+                                  "memo": memo if suf == scards[-1][0] else None})
+                try:
+                    import cards as _cd
+                    pdf = _cd.to_pdf([p for _, p in scards])
+                    if pdf:
+                        os.makedirs(PDF_DIR, exist_ok=True); pfn = "store-%s.pdf" % sw
+                        with open(os.path.join(PDF_DIR, pfn), "wb") as fh: fh.write(pdf)
+                        SPDF.append({"ch": wch, "fn": pfn, "n": len(scards), "win": sw})
+                except Exception as e:
+                    sys.stderr.write("[shopify pdf] %s\n" % e)
+            elif wch:
+                STORE.append({"ch": wch, "png": None, "fn": None, "title": None, "comment": None, "memo": memo})
+            if sw == "daily":
+                inv_ch = CH.get("ourkids_inventory"); inv_msg = msg_inventory(rep)
+        # post the store cards (native upload, else push + link), each window's memo after its deck
+        if STORE:
+            if any(c["png"] for c in STORE):
+                push_images(); time.sleep(6)
+            for c in STORE:
+                if c["png"]:
+                    sent = slack_image(c["ch"], c["png"], c["title"], c["comment"])
+                    if not sent: sent = slack_image_url(c["ch"], img_url(c["fn"]), c["comment"])
+                    if not sent: slack(c["ch"], c["comment"])
+                elif c.get("comment") is not None:
+                    slack(c["ch"], c["comment"])
+                time.sleep(1)
+                if c.get("memo"):
+                    slack(c["ch"], c["memo"]); time.sleep(1)
+        for p in SPDF:
+            slack(p["ch"], "*THE WHOLE STORE DECK* — %s, all %d cards in one PDF:\n%s"
+                  % (p["win"].upper(), p["n"], pdf_url(p["fn"]))); time.sleep(1)
+        if inv_ch and inv_msg:
+            slack(inv_ch, inv_msg); time.sleep(1); sys.stderr.write("[shopify] inventory memo posted\n")
 
     # ---- the deck, as one PDF, last thing in the channel ----
     for p in PDFS:

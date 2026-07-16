@@ -193,6 +193,11 @@ h1{font-size:46px;font-weight:800;letter-spacing:-1.2px;margin:0 0 8px;color:#0F
 .st-cut,.st-fatigued{background:#C0392B;color:#fff}
 .st-saturated,.st-fatiguing{background:#B45309;color:#fff}
 .st-monitor,.st-no-prior{background:#475569;color:#fff}
+.st-winner{background:#0F7A43;color:#fff}
+.st-promising{background:#16A34A;color:#fff}
+.st-watch{background:#475569;color:#fff}
+.st-bad-signal{background:#B45309;color:#fff}
+.st-dead{background:#C0392B;color:#fff}
 
 /* ---------- callouts ---------- */
 .callout{display:flex;gap:14px;align-items:center;border-radius:14px;padding:18px 20px;
@@ -1375,11 +1380,11 @@ def c_launches(A, win):
     board = '<div class="grid g4">%s%s%s%s</div>' % (
         kpi("Launched · 3d", "%d" % L["n"], "pencil", "b",
             prev="new ads created in the last 3 days", big=True),
-        kpi("Winning", "%d" % L["win"], "star", "g",
-            prev="already beating the account's %.2fx" % r2(L["acc_roas"]), big=True),
-        kpi("Failing", "%d" % L["fail"], "warn", "r",
-            prev="under 60%% of the account", big=True),
-        kpi("Still learning", "%d" % L["early"], "clock", "n",
+        kpi("Winner + promising", "%d" % L["win"], "star", "g",
+            prev="at or above the account's %.2fx" % r2(L["acc_roas"]), big=True),
+        kpi("Bad + dead", "%d" % L["fail"], "warn", "r",
+            prev="below the account, or spent the evidence and lost", big=True),
+        kpi("Watch", "%d" % L["early"], "clock", "n",
             prev="not enough data to judge yet", big=True))
     body = ('<div class="card">%s%s%s</div>'
             % (head("pencil", "New launches", "ads created in the last 3 days, followed daily"),
@@ -1389,8 +1394,8 @@ def c_launches(A, win):
                            "a hedge — killing an ad on day one is how you never find a winner."
                     % (_k(az.EVIDENCE["spend"]), L["min_pur"]), icon="rules")))
 
-    COL = {"WINNING": "#0F7A43", "BEHIND": "#B45309", "FAILING": "#C0392B",
-           "LEARNING": "#475569", "TOO EARLY": "#94A3B8"}
+    COL = {"WINNER": "#0F7A43", "PROMISING": "#16A34A", "WATCH": "#94A3B8",
+           "BAD SIGNAL": "#B45309", "DEAD": "#C0392B"}
     tr = ""
     for r in L["rows"][:10]:
         k = r["k"]; q = k.get("prev") or {}
@@ -1425,6 +1430,180 @@ def c_launches(A, win):
     return page(A, win, "New launches — the last 3 days",
                 "Every ad born in the last 3 days, followed daily until it earns a verdict.",
                 body, 0)
+
+
+# ================= STORE CARDS (Shopify). Same design system, retail-intelligence content. =================
+import re as _re
+def _md(s):
+    return _re.sub(r"\*([^*]+)\*", r"<b>\1</b>", esc(s))
+
+def _spage(rep, title, sub, body):
+    hd = ('<div class="hd"><span>OURKIDS STORE</span><span class="sep">|</span><span>%s</span>'
+          '<div class="dates"><span>%s</span><span class="vs">vs</span><span>%s</span></div></div>'
+          % (esc(rep["wname"]), esc(rep["clabel"]), esc(rep["plabel"])))
+    ft = ('<div class="ft"><span class="fi">%s</span><div>Shopify store, EGP. ASP = average selling '
+          'price per unit. Days of cover = on-hand units / units sold per day.</div></div>' % IC["cal"])
+    return ("<!doctype html><meta charset=utf-8><style>%s</style><body><div class=pg>%s<h1>%s</h1>"
+            "<div class=sub>%s</div>%s%s</div></body>" % (CSS % W, hd, esc(title), esc(sub), body, ft))
+
+def _dp(now, prev, lower=False):
+    return pill(pct(now or 0, prev or 0), lower_better=lower) if prev else '<span class="pill nu">new</span>'
+
+def _tbl(headers, rows_html):
+    ths = "".join('<th%s>%s</th>' % ((' class="l"' if i == 0 else ""), esc(h)) for i, h in enumerate(headers))
+    return '<table><tr>%s</tr>%s</table>' % (ths, rows_html)
+
+def sc_pulse(rep):
+    s, p = rep["sales"], rep["prev"]; fc, fp = rep["funnel"], rep["funnel_prev"] or {}
+    if fc:
+        funnel = ('<div class="grid g4">%s%s%s%s</div>' % (
+            kpi("Sessions", _k(fc["sessions"]), "people", "b", prev=(_k(fp.get("sessions")) if fp else None),
+                p=(pct(fc["sessions"], fp.get("sessions")) if fp else None), big=True),
+            kpi("ATC rate", "%.2f%%" % fc["atc_rate"], "bag", "b", prev=(("%.2f%%" % fp["atc_rate"]) if fp else None),
+                p=(pct(fc["atc_rate"], fp.get("atc_rate")) if fp else None), big=True),
+            kpi("Checkouts", _k(fc["completed"]), "check", "g", big=True),
+            kpi("CVR", "%.2f%%" % fc["cvr"], "target", "g", prev=(("%.2f%%" % fp["cvr"]) if fp else None),
+                p=(pct(fc["cvr"], fp.get("cvr")) if fp else None), big=True)))
+    else:
+        funnel = call("c-a", "Sessions / ATC / CVR need the read_reports scope on the Shopify token. "
+                             "The sales numbers below are exact from orders.")
+    sales = ('<div class="grid g4" style="margin-top:16px">%s%s%s%s</div>' % (
+        kpi("Net sales", _k(s["net"]), "coins", "g", prev=_k(p["net"]), p=pct(s["net"], p["net"]), big=True),
+        kpi("Orders", str(s["orders"]), "bag", "b", prev=str(p["orders"]), p=pct(s["orders"], p["orders"]), big=True),
+        kpi("Units", str(s["units"]), "grid", "b", prev=str(p["units"]), p=pct(s["units"], p["units"]), big=True),
+        kpi("ASP", _k(s["asp"]), "tag", "p", prev=_k(p["asp"]), p=pct(s["asp"], p["asp"]), big=True)))
+    drove = call("c-b", _md("*Net sales moved %s%s.* %s: units %s%s, price %s%s." % (
+        "+" if rep["net_chg"] >= 0 else "-", _k(abs(rep["net_chg"])), rep["driver"],
+        "+" if rep["units_eff"] >= 0 else "-", _k(abs(rep["units_eff"])),
+        "+" if rep["price_eff"] >= 0 else "-", _k(abs(rep["price_eff"])))), icon="trend")
+    body = ('<div class="card">%s%s%s</div><div class="card">%s%s</div>'
+            % (head("trend", "The funnel"), funnel, sales, head("swap", "What drove it"), drove))
+    return _spage(rep, "Store pulse", "Sessions, cart, checkout and the money, this window vs %s." % rep["vs"], body)
+
+def sc_vendors(rep):
+    def vr(r):
+        return ('<tr><td class="l ncell"><span class="nm">[%s]&nbsp; %s</span></td>'
+                '<td>%s %s</td><td>%d</td><td>%s</td></tr>'
+                % (r["grade"], esc(_clip(r["v"], 28)), _k(r["now"]), _dp(r["now"], r["prev"]),
+                   int(r["units"]), _k(r["asp"])))
+    def vrl(r):
+        tag = ' · <span class="tag" style="background:#FDECEC;color:#C0392B">dropped</span>' if r["now"] <= 0 else ""
+        return ('<tr><td class="l ncell"><span class="nm">[%s]&nbsp; %s</span></td>'
+                '<td>%s %s</td><td colspan=2 class="l" style="color:#94A3B8;font-size:15px">%s</td></tr>'
+                % (r["grade"], esc(_clip(r["v"], 28)), _k(r["now"]), _dp(r["now"], r["prev"]), tag or "&nbsp;"))
+    g = _tbl(["Vendor (grade)", "Net sales", "Units", "ASP"], "".join(vr(r) for r in rep["vgain"]))
+    l = _tbl(["Vendor (grade)", "Net sales", "", ""], "".join(vrl(r) for r in rep["vfade"]))
+    conc = call("c-a" if rep["topshare"] >= 30 else "c-b",
+                _md("*%d of %d vendors* make 80%% of revenue. Top vendor *%s* = *%.0f%%* of the store. "
+                    "Grade A = top 80%%, B = next 15%%, C = the tail." % (
+                        rep["n80"], rep["n_vendors"], _clip(rep["topv"], 24), rep["topshare"])), icon="pie")
+    body = ('<div class="card">%s%s</div><div class="card">%s<div class="ch"><span class="ic">%s</span>'
+            '<h2>Gaining</h2></div>%s<div class="ch" style="margin-top:18px"><span class="ic">%s</span>'
+            '<h2>Fading</h2></div>%s</div>'
+            % (head("pie", "Vendor concentration"), conc, "", IC["up"], g, IC["down"], l))
+    return _spage(rep, "Vendors", "Who is carrying the store, who is fading, and the 80/20.", body)
+
+def sc_best(rep):
+    def br(r):
+        return ('<tr><td class="l ncell"><span class="nm">%s</span></td><td>%s</td>'
+                '<td>%d<span class="s">units</span></td><td>%s<span class="s">ASP</span></td></tr>'
+                % (esc(_clip(r["p"], 46)), _k(r["now"]), int(r["units"]), _k(r["asp"])))
+    def gr(r):
+        base = "new" if r["prev"] <= 0 else ""
+        return ('<tr><td class="l ncell"><span class="nm">%s</span></td><td>%s %s</td></tr>'
+                % (esc(_clip(r["p"], 52)), _k(r["now"]), _dp(r["now"], r["prev"]) if not base else '<span class="pill up">new</span>'))
+    best = _tbl(["Product", "Net sales", "Units", "ASP"], "".join(br(r) for r in rep["best"]))
+    gain = _tbl(["Gaining product", "Net sales"], "".join(gr(r) for r in rep["pgain"]))
+    faded = ""
+    if rep["pfade"]:
+        faded = ('<div class="ch" style="margin-top:18px"><span class="ic">%s</span><h2>Faded out</h2></div>%s'
+                 % (IC["down"], _tbl(["Sold %s, nothing now" % rep["vs"], "Was"],
+                    "".join('<tr><td class="l ncell"><span class="nm">%s</span></td><td>%s</td></tr>'
+                            % (esc(_clip(r["p"], 52)), _k(r["prev"])) for r in rep["pfade"]))))
+    body = ('<div class="card">%s%s</div><div class="card">%s%s%s</div>'
+            % (head("star", "Best sellers"), best, head("up", "Gaining"), gain, faded))
+    return _spage(rep, "Best sellers & movers", "Top products, what is climbing, what fell off.", body)
+
+def sc_reorder(rep):
+    if not rep.get("has_inv"):
+        body = '<div class="card">%s%s</div>' % (head("bag", "Reorder"),
+               call("c-a", "Inventory needs the read_reports (Analytics) scope on the Shopify token."))
+        return _spage(rep, "Reorder now", "Stock intelligence.", body)
+    def rr(r):
+        return ('<tr><td class="l ncell"><span class="nm">%s</span></td>'
+                '<td>%s<span class="s">days cover</span></td><td>%.0f<span class="s">/day</span></td>'
+                '<td>%d<span class="s">on hand</span></td><td>%.0f%%<span class="s">sell-thru</span></td>'
+                '<td>%s<span class="s">reorder</span></td><td>%s<span class="s">lost/day if OOS</span></td></tr>'
+                % (esc(_clip(r["p"], 40)),
+                   ('<span style="color:#C0392B">%.0f</span>' % r["cover"]),
+                   r["vel"], int(r["onhand"]), r["str"], int(round(r["reorder"])), _k(r["lost_day"])))
+    if rep["reorder"]:
+        tbl = _tbl(["Product", "Cover", "Velocity", "Stock", "Sell-thru", "Reorder", "Risk"],
+                   "".join(rr(r) for r in rep["reorder"][:14]))
+        note = call("c-r", _md("*%d products* are real sellers with %d days of cover or less. Reorder "
+                    "before you spend another pound driving traffic to them." % (len(rep["reorder"]),
+                    az.COVER_URGENT)), icon="warn")
+    else:
+        tbl = ""; note = call("c-g", "No real seller is under %d days of cover. Stock is healthy on the "
+                              "movers." % az.COVER_URGENT)
+    oos = ""
+    if rep["oos"]:
+        oos = ('<div class="ch" style="margin-top:18px"><span class="ic">%s</span><h2>Out of stock, still '
+               'in demand</h2></div>%s' % (IC["warn"], _tbl(["Product", "Sold 7d", "Losing / day"],
+               "".join('<tr><td class="l ncell"><span class="nm">%s</span></td><td>%d</td>'
+                       '<td style="color:#C0392B">%s</td></tr>'
+                       % (esc(_clip(r["p"], 44)), int(r["sold7"]), _k(r["lost_day"])) for r in rep["oos"][:8]))))
+    body = '<div class="card">%s%s%s%s</div>' % (head("bag", "Reorder now"), note, tbl, oos)
+    return _spage(rep, "Reorder now", "Reorder-before-spend is step zero. What stocks out next.", body)
+
+def sc_dead(rep):
+    if not rep.get("has_inv"):
+        body = '<div class="card">%s%s</div>' % (head("coins", "Dead stock"),
+               call("c-a", "Inventory needs the read_reports scope on the token."))
+        return _spage(rep, "Dead stock", "Overstock and tied-up cash.", body)
+    def dr(r):
+        cov = "999+" if r["cover"] >= 9e8 else ("%.0f" % r["cover"])
+        return ('<tr><td class="l ncell"><span class="nm">%s</span></td>'
+                '<td>%d<span class="s">on hand</span></td><td>%s<span class="s">days cover</span></td>'
+                '<td>%d<span class="s">sold 7d</span></td><td>%.0f%%<span class="s">sell-thru</span></td></tr>'
+                % (esc(_clip(r["p"], 46)), int(r["onhand"]), cov, int(r["sold7"]), r["str"]))
+    if rep["dead"]:
+        tbl = _tbl(["Product", "Stock", "Cover", "Sold 7d", "Sell-thru"],
+                   "".join(dr(r) for r in rep["dead"][:12]))
+        units = sum(int(d["onhand"]) for d in rep["dead"])
+        note = call("c-a", _md("*%d units* across %d products are sitting on over %d days of cover. That is "
+                    "cash you already spent, on a shelf. Bundle, discount, or gift-with-order to free it."
+                    % (units, len(rep["dead"]), az.DEAD_COVER)), icon="warn")
+    else:
+        tbl = ""; note = call("c-g", "No obvious dead stock over %d days of cover with real quantity."
+                              % az.DEAD_COVER)
+    body = '<div class="card">%s%s%s</div>' % (head("coins", "Dead / overstock"), note, tbl)
+    return _spage(rep, "Dead stock & liquidation", "Cash tied up in stock that is not moving.", body)
+
+def sc_patterns(rep):
+    pats = az._shop_patterns(rep)
+    items = "".join('<div class="callout c-b" style="margin-top:12px"><span class="ci">%s</span>'
+                    '<div>%s</div></div>' % (IC["info"], _md(p)) for p in pats) \
+            or '<div class="sub">No standout patterns this window.</div>'
+    body = '<div class="card">%s%s</div>' % (head("search", "Patterns"), items)
+    return _spage(rep, "Patterns", "What the numbers are telling you, in plain sentences.", body)
+
+STORE_CARDS = (("1-pulse", sc_pulse), ("2-vendors", sc_vendors), ("3-bestsellers", sc_best),
+               ("4-reorder", sc_reorder), ("5-deadstock", sc_dead), ("6-patterns", sc_patterns))
+
+def render_store_cards(rep):
+    """Every store card as (suffix, png). Chrome shoots each; analyze stitches them to one PDF."""
+    if not rep or rep.get("error"): return []
+    out = []
+    for suf, fn in STORE_CARDS:
+        try:
+            html = fn(rep)
+            png = shoot(html)
+            if png: out.append((suf, png))
+        except Exception:
+            import traceback
+            sys.stderr.write("[store card %s] %s\n" % (suf, traceback.format_exc()))
+    return out
 
 
 # ---------------------------------------------------------------- driver
