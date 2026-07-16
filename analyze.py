@@ -6044,6 +6044,49 @@ def shopify_inventory(days=7):
                      "vel": vel, "cover": cover, "days": days}
     return out
 
+
+def shopify_products_onhand(max_pages=60):
+    """ON-HAND STOCK, THE NATIVE WAY. product.totalInventory is the sum of tracked variant stock, and
+    it needs only read_products — no analytics scope, no ShopifyQL. We pair this with velocity from
+    the orders we already pull, so the whole inventory brain works on a plain read_orders/read_products
+    token. Returns {product_title: on_hand_units} or None."""
+    host = _shop_host()
+    if not host or not SHOP_TOKEN: return None
+    q = ('query($after:String){ products(first:200, after:$after){ edges{ node{ title totalInventory } }'
+         ' pageInfo{ hasNextPage endCursor } } }')
+    out, after, pages = {}, None, 0
+    while pages < max_pages:
+        d = shopify_gql(q, {"after": after})
+        data = (((d or {}).get("data") or {}).get("products") or {})
+        if not data:
+            sys.stderr.write("[shopify] products on-hand returned nothing: %s\n" % str(d)[:160]); break
+        for e in data.get("edges", []):
+            n = e["node"]; t = n.get("title") or "(untitled)"
+            try:
+                out[t] = float(n.get("totalInventory") or 0)
+            except Exception:
+                out[t] = 0.0
+        pi = data.get("pageInfo") or {}; after = pi.get("endCursor"); pages += 1
+        if not pi.get("hasNextPage"): break
+    return out
+
+
+def inventory_from_orders(onhand, units7):
+    """The inventory brain, built from native on-hand stock + velocity from orders. days of cover =
+    on-hand / (units sold per day). No analytics scope required."""
+    if onhand is None: return None
+    out = {}
+    keys = set(onhand) | set(units7)
+    for name in keys:
+        onh = float(onhand.get(name, 0) or 0)
+        sold = float(units7.get(name, 0) or 0)
+        vel = sold / 7.0
+        cover = (onh / vel) if vel > 0 else (9e9 if onh > 0 else 0)
+        strr = (sold / (onh + sold) * 100.0) if (onh + sold) > 0 else 0.0
+        out[name] = {"onhand": onh, "sold": sold, "str": strr, "vel": vel, "cover": cover, "days": 7}
+    return out
+
+
 def shopify_funnel(days=9):
     """Sessions / ATC / checkout / CVR per day via ShopifyQL. Needs analytics scope on the token.
     If the token cannot read analytics, return None and the report simply ships without the funnel."""
@@ -6123,7 +6166,9 @@ def shopify_build(win):
         if u: asp_map[t] = A7["prod"].get(t, 0.0) / u
     F = shopify_funnel() or {}
     fc = _funnel_win(F, str(c0), str(c1)); fp = _funnel_win(F, str(p0), str(p1))
-    INV = shopify_inventory(7)
+    # inventory: on-hand from the Products API (native, read_products only), velocity from orders.
+    # No analytics scope needed, so the reorder brain works on the same token as everything else.
+    INV = inventory_from_orders(shopify_products_onhand(), A7["prod_units"])
 
     # revenue decomposed into UNITS x PRICE (house rule), plus orders x basket for the funnel read
     net_chg = Ac["net"] - Ap["net"]
