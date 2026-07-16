@@ -42,6 +42,10 @@ jobs:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           FORCE_WINDOWS: ${{ github.event.inputs.windows }}
+          # Optional: set these two to turn on the Shopify store memo. If they are empty, the store
+          # report simply does not run and the Meta reports are untouched.
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
         run: python analyze.py --daily
 
       - name: Commit dashboard data + alert state
