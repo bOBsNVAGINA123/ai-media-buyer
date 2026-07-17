@@ -6150,41 +6150,46 @@ def clarity_pull(days=1):
         except Exception as e:
             sys.stderr.write("[clarity] %s\n" % str(e)[:160]); return None
 
+    # ONE call only. Clarity caps the Data Export API at 10 requests per project per DAY, so we do not
+    # burn quota on extra dimension calls.
     data = call("%s?numOfDays=%d" % (base, d))
-    if data is None: return out
-    # first runs: log the shape so the parser can be tightened to the real payload
-    sys.stderr.write("[clarity] shape: %s\n" % json.dumps(data)[:700])
+    if data is None:
+        sys.stderr.write("[clarity] no data (throttled or empty). Cap is 10 calls/day.\n"); return out
+    sys.stderr.write("[clarity] shape: %s\n" % json.dumps(data)[:900])   # logged so the parser can be tuned
     rows = data if isinstance(data, list) else (data.get("metrics") if isinstance(data, dict) else []) or []
+
+    def as_pct(v):
+        """Clarity returns strings, and percentages sometimes as a fraction (0.41) and sometimes as a
+        number (41). Normalise to a 0-100 percent."""
+        n = _cl_num(v)
+        if n is None: return None
+        return n * 100.0 if 0 < n <= 1 else n
+
     for m in rows:
         if not isinstance(m, dict): continue
-        name = str(m.get("metricName") or m.get("name") or "").lower()
+        name = str(m.get("metricName") or m.get("name") or "").lower().replace(" ", "")
         info = m.get("information") or m.get("info") or []
         first = info[0] if isinstance(info, list) and info else (info if isinstance(info, dict) else {})
-        pct = _cl_num(first.get("sessionsWithMetricPercentage")) if isinstance(first, dict) else None
-        if "traffic" in name or (isinstance(first, dict) and "totalsessioncount" in [k.lower() for k in first]):
+        if not isinstance(first, dict): continue
+        # the percentage field goes by a few names across metrics
+        pct = None
+        for key in ("sessionsWithMetricPercentage", "sessionswithmetricpercentage", "percentage",
+                    "metricPercentage", "value"):
+            if key in first:
+                pct = as_pct(first.get(key)); break
+        if "traffic" in name or "totalSessionCount" in first:
             out["sessions"] = _cl_num(first.get("totalSessionCount") or first.get("sessionsCount"))
             out["bots"] = _cl_num(first.get("totalBotSessionCount"))
-        elif "script" in name or "javascript" in name or ("error" in name and "js" not in name):
+        elif "scripterror" in name or "javascript" in name or "jserror" in name:
             out["js_err"] = pct
-        elif "rage" in name:
+        elif "rageclick" in name or "rage" in name:
             out["rage"] = pct
-        elif "dead" in name:
+        elif "deadclick" in name or "dead" in name:
             out["dead"] = pct
-        elif "quickback" in name or "quick back" in name:
+        elif "quickback" in name:
             out["quickback"] = pct
-        elif "scroll" in name and "excess" in name:
+        elif "excessivescroll" in name or ("scroll" in name and "excess" in name):
             out["scroll"] = pct
-    # worst pages for JS errors, so an action can name the page to fix
-    pages = call("%s?numOfDays=%d&dimension1=URL" % (base, d))
-    if isinstance(pages, list):
-        for m in pages:
-            if not isinstance(m, dict): continue
-            if "script" in str(m.get("metricName") or "").lower() or "error" in str(m.get("metricName") or "").lower():
-                for row in (m.get("information") or [])[:5]:
-                    if isinstance(row, dict):
-                        out["pages"].append({"url": row.get("URL") or row.get("url") or "?",
-                                             "pct": _cl_num(row.get("sessionsWithMetricPercentage")),
-                                             "sessions": _cl_num(row.get("sessionsCount"))})
     return out
 
 def clarity_alerts(cl):
@@ -6340,9 +6345,57 @@ def _mvp(new, old, lower=False):
     if d is None: return "n/a"
     return "*%+.0f%%*" % (-d if lower else d)
 
+def _shop_why(rep):
+    """THE CHAIN. One connected story that pinpoints WHY revenue moved: the lever (orders vs basket),
+    then the exact vendors that net to the move, then the exact products inside them, then the root
+    cause. Not disconnected panels, a flow you can act on."""
+    s, p = rep["sales"], rep["prev"]; chg = rep["net_chg"]; up = chg >= 0
+    L = ["*🎯 WHY REVENUE IS %s — the chain*" % ("UP" if up else "DOWN")]
+    L.append("Net sales *%s%s* (*%+.0f%%*).  Orders *%+.0f%%* (%s%s) · basket/AOV *%+.0f%%* (%s%s).  "
+             "Bigger lever: *%s*." % (
+                 "+" if up else "-", _k(abs(chg)), pct(s["net"], p["net"]) or 0,
+                 pct(s["orders"], p["orders"]) or 0,
+                 "+" if rep["ord_eff"] >= 0 else "-", _k(abs(rep["ord_eff"])),
+                 pct(s["aov"], p["aov"]) or 0,
+                 "+" if rep["aov_eff"] >= 0 else "-", _k(abs(rep["aov_eff"])), rep["driver"]))
+    g, d = rep["vgain"][:2], rep["vfade"][:2]
+    gtxt = ", ".join("*%s* %s%s" % (_clip(r["v"], 16), "+" if r["d"] >= 0 else "-", _k(abs(r["d"]))) for r in g)
+    dtxt = ", ".join("*%s* %s%s" % (_clip(r["v"], 16), "+" if r["d"] >= 0 else "-", _k(abs(r["d"]))) for r in d)
+    L.append("→ Vendors: pulled up by %s; dragged down by %s." % (gtxt or "—", dtxt or "—"))
+    prod_bits = []
+    if rep["pgain"]:
+        r = rep["pgain"][0]
+        prod_bits.append("*%s* %s *%s*" % (_clip(r["p"], 28), ("is NEW at" if r["prev"] <= 0 else "jumped to"), _k(r["now"])))
+    cooled = None
+    for r in rep["best"]:
+        if r["prev"] and r["now"] < r["prev"] * 0.6 and (r["prev"] - r["now"]) >= 3000:
+            cooled = {"p": r["p"], "prev": r["prev"], "now": r["now"]}; break
+    if not cooled and rep["pfade"]:
+        cooled = {"p": rep["pfade"][0]["p"], "prev": rep["pfade"][0]["prev"], "now": 0}
+    if cooled:
+        prod_bits.append("*%s* cooled *%s→%s*" % (_clip(cooled["p"], 28), _k(cooled["prev"]), _k(cooled["now"])))
+    if prod_bits:
+        L.append("→ Products: " + "; ".join(prod_bits) + ".")
+    causes = []
+    bigt = [r for r in rep["best"] if r["ord"] <= 1 and r["now"] >= 4000]
+    if bigt:
+        causes.append("*anomaly* — %d big single order(s) (%s) swung it" % (
+            len(bigt), ", ".join(_clip(r["p"], 18) for r in bigt[:2])))
+    if rep["pgain"] and rep["pgain"][0]["prev"] <= 0:
+        causes.append("*a new product* took off (%s)" % _clip(rep["pgain"][0]["p"], 22))
+    if abs(rep["aov_eff"]) > abs(rep["ord_eff"]):
+        causes.append("*basket/mix* moved more than order volume")
+    cl = rep.get("clarity")
+    if cl and cl.get("js_err") and cl["js_err"] >= 10 and not up:
+        causes.append("*conversion* — Clarity shows JS errors on %.0f%% of sessions" % cl["js_err"])
+    if causes:
+        L.append("→ Root cause: " + "; ".join(causes) + ".")
+    return L
+
+
 def msg_shopify(rep):
-    """The store sales memo: funnel, what drove it (units x price), vendors with ABC + 80/20, best
-    sellers and movers, patterns. The inventory brain gets its own message and channel."""
+    """The store sales memo: the WHY chain first, then funnel, vendors with ABC + 80/20, best sellers
+    and movers, Clarity behaviour, alerts, patterns. The inventory brain gets its own channel."""
     if not rep: return None
     if rep.get("error"):
         return ("%s  *OURKIDS STORE — %s*\n\n*Shopify read failed.* The token or store is not reachable. "
@@ -6352,6 +6405,8 @@ def msg_shopify(rep):
     L = ["%s  *OURKIDS STORE — %s MEMO*   ·   %s vs %s" % (MENTION, rep["wname"], rep["clabel"], rep["plabel"])]
     L.append("_This window against %s. ASP is the average selling price per unit. The number to beat is "
              "the store, not one vendor._" % rep["vs"])
+    L.append("")
+    for _w in _shop_why(rep): L.append(_w)
     L.append("\n*THE FUNNEL*")
     if fc:
         L.append("Sessions *%s* (%s) · ATC *%.2f%%* (%s) · reached checkout *%d* · completed *%d* · CVR *%.2f%%* (%s)"
