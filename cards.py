@@ -1600,6 +1600,48 @@ def sc_dead(rep):
     body = '<div class="card">%s%s%s</div>' % (head("coins", "Dead / overstock"), note, tbl)
     return _spage(rep, "Dead stock & liquidation", "Cash tied up in stock that is not moving.", body)
 
+def sc_traffic(rep):
+    T = rep.get("traffic")
+    if not T or not T.get("rows"):
+        body = '<div class="card">%s%s</div>' % (head("target", "Traffic 80/20"),
+               call("c-a", "Traffic by source needs the analytics scope on the Shopify token."))
+        return _spage(rep, "Traffic 80/20", "Where the sessions come from and which convert.", body)
+    avg = sum(r["completed"] for r in T["rows"]) / (T["total"] or 1) * 100
+    def tr(r):
+        flag = ""
+        if r["share"] >= 20 and r["cvr"] < avg * 0.7:
+            flag = '<span class="pill" style="background:#FDECEC;color:#C0392B">fix</span>'
+        elif r["cvr"] > avg * 1.3 and r["sessions"] >= 500:
+            flag = '<span class="pill up">grow</span>'
+        return ('<tr><td class="l ncell"><span class="nm">%s</span></td>'
+                '<td>%.0f%%<span class="s">of traffic</span></td><td>%s<span class="s">sessions</span></td>'
+                '<td>%.2f%%<span class="s">CVR</span></td><td>%s</td></tr>'
+                % (esc(r["src"]), r["share"], _k(r["sessions"]), r["cvr"], flag or "&nbsp;"))
+    tbl = _tbl(["Source", "Share", "Sessions", "CVR", ""], "".join(tr(r) for r in T["rows"][:6]))
+    note = call("c-b", _md("*%d source(s)* make 80%% of the traffic. Store average CVR *%.2f%%*. Grow the "
+                "high-CVR sources, fix or exclude the high-volume ones that convert below average."
+                % (T["n80"], avg)), icon="target")
+    body = '<div class="card">%s%s%s</div>' % (head("target", "Traffic 80/20 by source"), note, tbl)
+    return _spage(rep, "Traffic 80/20", "Which channels bring the sessions, and which actually convert.", body)
+
+def sc_findings(rep):
+    anoms = az._shop_anomalies(rep)
+    fixes, ftot = az._shop_fixes(rep)
+    fitems = "".join('<div class="callout c-b" style="margin-top:10px"><span class="ci">%s</span>'
+                     '<div>%s</div></div>' % (IC["info"], _md(t)) for _s, _e, t in anoms[:12]) \
+             or '<div class="sub">Nothing notable moved this window.</div>'
+    fixrows = "".join('<tr><td class="l ncell"><span class="nm">%s</span></td>'
+                      '<td>~%s<span class="s">/day</span></td></tr>' % (_md(t), _k(e)) for e, t in fixes) \
+              or '<tr><td class="l">No fixes surfaced this window.</td><td>&nbsp;</td></tr>'
+    fixtbl = _tbl(["Fix this first", "Recoverable"], fixrows)
+    body = ('<div class="card">%s%s</div>'
+            '<div class="card">%s%s%s</div>'
+            % (head("search", "Findings — everything that moved"), fitems,
+               head("target", "The 80/20 — fix these first"),
+               call("c-r", _md("These few fixes are ~80%% of the recoverable EGP per day. Do them before "
+                    "anything else; the rest is the long tail."), icon="target"), fixtbl))
+    return _spage(rep, "Findings & the 80/20", "Every anomaly this window, and the few fixes that win most of the money back.", body)
+
 def sc_patterns(rep):
     pats = az._shop_patterns(rep)
     items = "".join('<div class="callout c-b" style="margin-top:12px"><span class="ci">%s</span>'
@@ -1608,8 +1650,9 @@ def sc_patterns(rep):
     body = '<div class="card">%s%s</div>' % (head("search", "Patterns"), items)
     return _spage(rep, "Patterns", "What the numbers are telling you, in plain sentences.", body)
 
-STORE_CARDS = (("1-pulse", sc_pulse), ("2-vendors", sc_vendors), ("3-bestsellers", sc_best),
-               ("4-reorder", sc_reorder), ("5-deadstock", sc_dead), ("6-patterns", sc_patterns))
+STORE_CARDS = (("1-pulse", sc_pulse), ("2-traffic", sc_traffic), ("3-vendors", sc_vendors),
+               ("4-bestsellers", sc_best), ("5-reorder", sc_reorder), ("6-deadstock", sc_dead),
+               ("7-findings", sc_findings), ("8-patterns", sc_patterns))
 
 def render_store_cards(rep):
     """Every store card as (suffix, png). Chrome shoots each; analyze stitches them to one PDF."""

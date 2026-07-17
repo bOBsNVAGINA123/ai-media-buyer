@@ -6143,6 +6143,39 @@ def shopify_funnel(days=9):
     return out or None
 
 
+def shopify_traffic(d0, d1):
+    """TRAFFIC 80/20 BY SOURCE. Sessions and completed checkouts per referrer source, so the report
+    can say which channels make 80% of the traffic AND which convert. Needs the analytics scope on
+    the token; returns None without it (the report then ships without the traffic split)."""
+    host = _shop_host()
+    if not host or not SHOP_TOKEN: return None
+    ql = ("FROM sessions SHOW sessions, sessions_that_completed_checkout "
+          "GROUP BY referrer_source ORDER BY sessions DESC SINCE %s UNTIL %s" % (d0, d1))
+    q = ('query($ql:String!){ shopifyqlQuery(query:$ql){ __typename ... on TableResponse{'
+         ' tableData{ rowData columns{ name } } } } }')
+    d = shopify_gql(q, {"ql": ql})
+    td = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {}).get("tableData")
+    if not td:
+        sys.stderr.write("[shopify] traffic unavailable (needs analytics scope): %s\n" % str(d)[:160])
+        return None
+    rows = []
+    for r in td.get("rowData", []):
+        try:
+            src = str(r[0] or "unknown"); sess = float(r[1] or 0); comp = float(r[2] or 0)
+        except Exception:
+            continue
+        rows.append({"src": src, "sessions": sess, "completed": comp,
+                     "cvr": (comp / sess * 100.0) if sess else 0.0})
+    rows.sort(key=lambda x: -x["sessions"])
+    tot = sum(r["sessions"] for r in rows) or 1
+    cum, n80 = 0.0, 0
+    for r in rows:
+        r["share"] = r["sessions"] / tot * 100.0
+        cum += r["sessions"];
+        if n80 == 0 and cum >= 0.80 * tot: n80 = rows.index(r) + 1
+    return {"rows": rows, "total": tot, "n80": n80 or len(rows)}
+
+
 SWIM_KW = ("swim", "robe", "beach", "pool")
 def _is_swim(t):
     tl = (t or "").lower(); return any(k in tl for k in SWIM_KW)
@@ -6188,11 +6221,12 @@ def clarity_pull(days=1):
     rows = data if isinstance(data, list) else (data.get("metrics") if isinstance(data, dict) else []) or []
 
     def as_pct(v):
-        """Clarity returns strings, and percentages sometimes as a fraction (0.41) and sometimes as a
-        number (41). Normalise to a 0-100 percent."""
+        """Clarity's live-insights API returns percentages ALREADY as plain numbers: 40.82 for 41%,
+        16.79 for 17%, 2.8 for 2.8%, 0.06 for 0.06%. Verified against the Clarity dashboard. So we do
+        NOT rescale — the old 'multiply anything <= 1 by 100' heuristic wrongly turned a real 0.06%
+        rage rate into 6%. Return the number as the API gives it."""
         n = _cl_num(v)
-        if n is None: return None
-        return n * 100.0 if 0 < n <= 1 else n
+        return None if n is None else n
 
     for m in rows:
         if not isinstance(m, dict): continue
@@ -6290,6 +6324,7 @@ def shopify_build(win):
         if u: asp_map[t] = A7["prod"].get(t, 0.0) / u
     F = shopify_funnel() or {}
     fc = _funnel_win(F, str(c0), str(c1)); fp = _funnel_win(F, str(p0), str(p1))
+    TRAF = shopify_traffic(str(c0), str(c1))     # 80/20 of traffic by source (needs analytics scope)
     # inventory: on-hand from the Products API (native, read_products only), velocity from orders.
     # No analytics scope needed, so the reorder brain works on the same token as everything else.
     INV = inventory_from_orders(shopify_products_onhand(), A7["prod_units"])
@@ -6378,7 +6413,7 @@ def shopify_build(win):
             "topv": topv, "topshare": (topn / tot * 100), "abc_a": [v for v, g in abc.items() if g == "A"],
             "best": best, "pgain": pgain, "pfade": pfade,
             "reorder": reorder, "dead": dead, "oos": oos, "has_inv": INV is not None,
-            "inv_map": INV or {}, "clarity": CL, "host": _shop_host()}
+            "inv_map": INV or {}, "clarity": CL, "traffic": TRAF, "host": _shop_host()}
 
 
 def _shop_scale_ads(rep):
@@ -6404,6 +6439,116 @@ def _shop_scale_ads(rep):
     scale.sort(key=lambda x: (-x["rev"], -x["sold7"]))
     reorder_first.sort(key=lambda x: x["cover"])
     return scale[:6], reorder_first[:5]
+
+
+def _fmtd(a, b):
+    d = pct(a or 0, b or 0)
+    return "n/a" if d is None else ("%+.0f%%" % d)
+
+
+def _shop_anomalies(rep):
+    """EVERY notable move this window vs the day before — named, quantified, today vs yesterday.
+    Not a curated few: the full findings list, each with the EGP it moved so it can be ranked."""
+    A = []; s, p = rep["sales"], rep["prev"]; vs = rep["vs"]
+    # VENDORS — spikes, collapses, brand-new, dropped-to-zero, all with names + the EGP delta
+    for r in rep.get("vgain", []):
+        if r["prev"] <= 0 and r["now"] >= 2000:
+            A.append(("SPIKE", r["now"], "🆕 *%s* is a NEW vendor at *%s* (0 → %s). If it repeats, feed it ads." % (
+                _clip(r["v"], 22), _k(r["now"]), _k(r["now"]))))
+        elif r["d"] >= 4000:
+            A.append(("SPIKE", r["d"], "▲ *%s* jumped *%s → %s* (*+%s*, %s). Rising — check stock and push it." % (
+                _clip(r["v"], 22), _k(r["prev"]), _k(r["now"]), _k(r["d"]), _fmtd(r["now"], r["prev"]))))
+    for r in rep.get("vfade", []):
+        if r["now"] <= 0 and r["prev"] >= 2000:
+            A.append(("DROP", r["prev"], "⛔ *%s* did *%s* %s and *0* this window (-100%%). Check its stock and that its ads are live." % (
+                _clip(r["v"], 22), _k(r["prev"]), vs)))
+        elif r["d"] <= -4000:
+            A.append(("DROP", -r["d"], "▼ *%s* fell *%s → %s* (*%s*, %s). Cooling — diagnose before it drops out." % (
+                _clip(r["v"], 22), _k(r["prev"]), _k(r["now"]), _k(r["d"]), _fmtd(r["now"], r["prev"]))))
+    # PRODUCTS — new top sellers, cooled drivers
+    for r in rep.get("pgain", []):
+        if r["prev"] <= 0 and r["now"] >= 3000:
+            A.append(("SPIKE", r["now"], "🆕 *%s* is a NEW top seller at *%s*. Build a campaign if it holds tomorrow." % (
+                _clip(r["p"], 28), _k(r["now"]))))
+    for r in rep.get("best", []):
+        if r["prev"] and r["now"] < r["prev"] * 0.6 and (r["prev"] - r["now"]) >= 3000:
+            A.append(("DROP", r["prev"] - r["now"], "▼ *%s* cooled *%s → %s* (%s). Was a driver, now fading." % (
+                _clip(r["p"], 28), _k(r["prev"]), _k(r["now"]), _fmtd(r["now"], r["prev"]))))
+    bigt = [r for r in rep["best"] if r["ord"] <= 1 and r["now"] >= 4000]
+    if bigt:
+        tot = sum(r["now"] for r in bigt)
+        A.append(("NOISE", tot, "⚠️ %d single big order(s) worth *%s* (%s) inflated the window. Strip them to read the real day." % (
+            len(bigt), _k(tot), ", ".join("%s %s" % (_clip(r["p"], 16), _k(r["now"])) for r in bigt[:2]))))
+    # FUNNEL — native only (Clarity funnel has no clean prior day)
+    fc, fp = rep["funnel"], rep["funnel_prev"]
+    if fc and fp and fc.get("src") != "clarity":
+        dc = pct(fc["cvr"], fp["cvr"])
+        if dc is not None and dc <= -10:
+            A.append(("DROP", abs(rep["net_chg"]) or 5000, "▼ CVR fell *%.2f%% → %.2f%%* (%+.0f%%). A conversion problem, not a traffic one." % (fp["cvr"], fc["cvr"], dc)))
+        da = pct(fc.get("atc_rate"), fp.get("atc_rate")) if fc.get("atc_rate") is not None else None
+        if da is not None and da <= -10:
+            A.append(("DROP", 3000, "▼ ATC rate fell *%.2f%% → %.2f%%* (%+.0f%%). Product page or price is losing the add-to-cart." % (fp["atc_rate"], fc["atc_rate"], da)))
+        ds = pct(fc["sessions"], fp["sessions"])
+        if ds is not None and ds <= -12:
+            A.append(("DROP", 4000, "▼ Sessions fell *%s → %s* (%+.0f%%). Traffic dropped — check ad delivery and spend." % (_k(fp["sessions"]), _k(fc["sessions"]), ds)))
+    # TRAFFIC — a big source converting far below the store
+    T = rep.get("traffic")
+    if T and T.get("rows"):
+        tot_s = sum(r["sessions"] for r in T["rows"]) or 1
+        avg = sum(r["completed"] for r in T["rows"]) / tot_s * 100
+        for r in T["rows"][:4]:
+            if r["share"] >= 25 and r["cvr"] < avg * 0.6 and r["sessions"] >= 1000:
+                A.append(("FIX", r["sessions"] * (avg - r["cvr"]) / 100 * (s["aov"] or 0) * 0.3,
+                          "▼ *%s* is *%.0f%%* of traffic but converts *%.2f%%* vs *%.2f%%* store avg. Bots or a bad match — fix or exclude." % (
+                              r["src"], r["share"], r["cvr"], avg)))
+    # INVENTORY
+    for r in (rep.get("oos") or [])[:3]:
+        A.append(("STOCK", r["lost_day"] * 7, "⛔ *%s* is OUT — %d sold %s, 0 on hand. Losing ~*%s/day*." % (
+            _clip(r["p"], 26), int(r["sold7"]), vs, _k(r["lost_day"]))))
+    for r in (rep.get("reorder") or [])[:3]:
+        A.append(("STOCK", r["lost_day"] * 7, "🔴 *%s* stocks out in *%.0f days* at %.1f/day. Reorder or lose ~*%s/day*." % (
+            _clip(r["p"], 26), r["cover"], r["vel"], _k(r["lost_day"]))))
+    # CLARITY
+    cl = rep.get("clarity") or {}
+    if cl.get("js_err") and cl["js_err"] >= 10:
+        A.append(("FIX", (s["net"] or 0) * 0.15, "🔴 JS errors on *%.0f%%* of sessions — a broken script suppresses checkout. Fix it first." % cl["js_err"]))
+    if cl.get("quickback") and cl["quickback"] >= 15:
+        A.append(("FIX", (s["net"] or 0) * 0.05, "🟠 Quick-backs on *%.0f%%* of sessions — ad-to-page mismatch or slow load." % cl["quickback"]))
+    A.sort(key=lambda x: -x[1])
+    return A
+
+
+def _shop_fixes(rep):
+    """THE 80/20 OF FIXES. Every lever you can pull, with an estimated recoverable EGP/day, ranked.
+    The few at the top are ~80% of the recoverable money — do those first, ignore the rest for now."""
+    s = rep["sales"]; net = s["net"] or 0; aov = s["aov"] or 0
+    cl = rep.get("clarity") or {}; fixes = []
+    if cl.get("js_err") and cl["js_err"] >= 10:
+        rec = net * min(0.25, cl["js_err"] / 100.0 * 0.4)
+        fixes.append((rec, "Fix the JavaScript error on *%.0f%%* of sessions — it caps checkout and CVR" % cl["js_err"]))
+    for r in (rep.get("oos") or [])[:3]:
+        fixes.append((r["lost_day"], "Restock *%s* — out of stock but still selling %d/7d" % (_clip(r["p"], 26), int(r["sold7"]))))
+    for r in (rep.get("reorder") or [])[:3]:
+        fixes.append((r["lost_day"], "Reorder *%s* before it stocks out (*%.0f days* cover)" % (_clip(r["p"], 26), r["cover"])))
+    T = rep.get("traffic")
+    if T and T.get("rows"):
+        tot_s = sum(x["sessions"] for x in T["rows"]) or 1
+        avg = sum(x["completed"] for x in T["rows"]) / tot_s * 100
+        for r in T["rows"][:4]:
+            if r["share"] >= 20 and r["cvr"] < avg * 0.7 and r["sessions"] >= 1000:
+                lift = r["sessions"] * (avg - r["cvr"]) / 100 * aov * 0.3   # realistic capture, not the full gap
+                fixes.append((min(lift, net * 0.5), "Lift *%s* conversion — *%.0f%%* of traffic at *%.2f%%* vs *%.2f%%* store avg" % (
+                    r["src"], r["share"], r["cvr"], avg)))
+    if cl.get("quickback") and cl["quickback"] >= 15:
+        fixes.append((net * 0.05, "Cut quick-backs (*%.0f%%* of sessions) — tighten ad-to-page match and page speed" % cl["quickback"]))
+    fixes = [f for f in fixes if f[0] > 0]
+    fixes.sort(key=lambda x: -x[0])
+    tot = sum(f[0] for f in fixes) or 1
+    picked, cum = [], 0.0
+    for f in fixes:
+        picked.append(f); cum += f[0]
+        if cum >= 0.80 * tot: break
+    return picked, tot
 
 
 def _mvp(new, old, lower=False):
@@ -6496,6 +6641,20 @@ def msg_shopify(rep):
         "+" if rep["units_eff"] >= 0 else "-", _k(abs(rep["units_eff"])),
         "+" if rep["price_eff"] >= 0 else "-", _k(abs(rep["price_eff"]))))
 
+    # ---- TRAFFIC 80/20: which sources make the traffic, and which actually convert ----
+    T = rep.get("traffic")
+    if T and T.get("rows"):
+        L.append("\n*🌐 TRAFFIC 80/20*  (source · share of sessions · CVR)")
+        L.append("_*%d source(s)* make 80%% of the traffic. Grow the ones that convert, fix the volume that does not._" % T["n80"])
+        avg = sum(r["completed"] for r in T["rows"]) / (T["total"] or 1) * 100
+        for r in T["rows"][:5]:
+            flag = ""
+            if r["share"] >= 20 and r["cvr"] < avg * 0.7: flag = "  ⚠️ converts below store avg — fix or exclude"
+            elif r["cvr"] > avg * 1.3 and r["sessions"] >= 500: flag = "  ✅ best converter — send it more traffic"
+            L.append("     *%s* — *%.0f%%* (%s sessions) · CVR *%.2f%%*%s" % (
+                r["src"], r["share"], _k(r["sessions"]), r["cvr"], flag))
+        L.append("     _store average CVR *%.2f%%*_" % avg)
+
     L.append("\n*VENDORS*   (grade A = top 80% of revenue, B = next 15%, C = tail)")
     L.append("_*%d of %d vendors* make 80%% of the revenue. Top vendor *%s* = *%.0f%%*._"
              % (rep["n80"], rep["n_vendors"], _clip(rep["topv"], 22), rep["topshare"]))
@@ -6582,6 +6741,21 @@ def msg_shopify(rep):
         L.append("\n*🚨 ALERTS*")
         for lvl, txt in alerts[:6]:
             L.append("%s *%s* — %s" % (ICO.get(lvl, "•"), lvl, txt))
+
+    # ---- FINDINGS: every anomaly this window, ranked by the money it moved ----
+    anoms = _shop_anomalies(rep)
+    if anoms:
+        L.append("\n*🔎 FINDINGS — everything that moved (vs %s)*" % rep["vs"])
+        for _sev, _egp, txt in anoms[:12]:
+            L.append("• %s" % txt)
+
+    # ---- THE 80/20: the few fixes that make ~80% of the recoverable money ----
+    fixes, ftot = _shop_fixes(rep)
+    if fixes:
+        L.append("\n*🎯 80/20 — FIX THESE FIRST*  (≈80%% of the recoverable EGP/day)")
+        for egp, txt in fixes:
+            L.append("• %s  →  ~*%s/day*" % (txt, _k(egp)))
+        L.append("_Ranked by estimated recoverable revenue per day. Everything else is the long tail — ignore it until these are done._")
 
     pats = _shop_patterns(rep)
     if pats:
@@ -6710,12 +6884,14 @@ def _shop_patterns(rep):
 
 
 STORE_CAP = {
-    "1-pulse":       "*1 · STORE PULSE* — sessions, cart, checkout, and the money. Revenue split into units x price.",
-    "2-vendors":     "*2 · VENDORS* — who is carrying the store, who is fading, the ABC grade and the 80/20.",
-    "3-bestsellers": "*3 · BEST SELLERS* — top products, what is climbing, what fell off.",
-    "4-reorder":     "*4 · REORDER NOW* — real sellers about to stock out. Reorder-before-spend is step zero.",
-    "5-deadstock":   "*5 · DEAD STOCK* — cash tied up in stock that is not moving. Liquidation candidates.",
-    "6-patterns":    "*6 · PATTERNS* — what the numbers are telling you, in plain sentences.",
+    "1-pulse":       "*1 · STORE PULSE* — sessions, ATC%, checkout, CVR, and the money. Revenue split into units x price.",
+    "2-traffic":     "*2 · TRAFFIC 80/20* — which sources make the sessions, and which actually convert.",
+    "3-vendors":     "*3 · VENDORS* — who is carrying the store, who is fading, the ABC grade and the 80/20.",
+    "4-bestsellers": "*4 · BEST SELLERS* — top products, what is climbing, what fell off.",
+    "5-reorder":     "*5 · REORDER NOW* — real sellers about to stock out. Reorder-before-spend is step zero.",
+    "6-deadstock":   "*6 · DEAD STOCK* — cash tied up in stock that is not moving. Liquidation candidates.",
+    "7-findings":    "*7 · FINDINGS & THE 80/20* — every anomaly this window, and the few fixes that win most of the money back.",
+    "8-patterns":    "*8 · PATTERNS* — what the numbers are telling you, in plain sentences.",
 }
 
 
