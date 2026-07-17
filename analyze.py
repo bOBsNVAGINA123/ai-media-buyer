@@ -6388,22 +6388,20 @@ def _shop_scale_ads(rep):
       • real demand but thin cover -> REORDER FIRST: do not spend into a stockout.
     Returns (scale, reorder_first), both name+revenue+stock so the memo can name products and show math."""
     inv = rep.get("inv_map") or {}
-    seen, scale, reorder_first = set(), [], []
-    for r in list(rep.get("best") or []) + list(rep.get("pgain") or []):
-        name = r["p"]
-        if name in seen:
+    prodrev = (rep.get("sales") or {}).get("prod") or {}     # window revenue per product title
+    scale, reorder_first = [], []
+    # Iterate the inventory brain directly. Only rows where a product has BOTH real 7-day demand AND
+    # on-hand stock are meaningful here — that is exactly a proven seller you can put money behind.
+    for name, iv in inv.items():
+        if iv["sold"] < REAL_SELLER or iv["onhand"] <= 0:
             continue
-        seen.add(name)
-        iv = inv.get(name)
-        if not iv or iv["sold"] < REAL_SELLER or iv["onhand"] <= 0:
-            continue   # no stock read, not a repeat seller, or already out of stock (OOS handles it)
-        row = {"p": name, "rev": r["now"], "asp": r.get("asp") or 0, "onhand": iv["onhand"],
+        row = {"p": name, "rev": prodrev.get(name, 0.0), "onhand": iv["onhand"],
                "cover": iv["cover"], "vel": iv["vel"], "sold7": iv["sold"]}
         if iv["cover"] <= COVER_URGENT:
-            reorder_first.append(row)
+            reorder_first.append(row)          # selling fast, too thin to scale — reorder first
         elif iv["cover"] >= SCALE_COVER and iv["onhand"] >= SCALE_MINSTOCK:
-            scale.append(row)
-    scale.sort(key=lambda x: -x["rev"])
+            scale.append(row)                  # proven demand + stock depth — safe to scale ads
+    scale.sort(key=lambda x: (-x["rev"], -x["sold7"]))
     reorder_first.sort(key=lambda x: x["cover"])
     return scale[:6], reorder_first[:5]
 
@@ -6533,8 +6531,9 @@ def msg_shopify(rep):
         L.append("\n*🚀 SCALE ADS ON THESE*  (proven sellers with the stock to back the spend)")
         if scale:
             for r in scale:
-                L.append("     *%s* — *%s* this window · %d on hand · *%.0f days* cover · %.1f/day · ASP *%s*  →  push spend, stock holds"
-                         % (_clip(r["p"], 40), _k(r["rev"]), int(r["onhand"]), r["cover"], r["vel"], _k(r["asp"])))
+                rev = ("*%s* this window · " % _k(r["rev"])) if r["rev"] else ""
+                L.append("     *%s* — %s%d sold 7d · %d on hand · *%.0f days* cover · %.1f/day  →  push spend, stock holds"
+                         % (_clip(r["p"], 40), rev, int(r["sold7"]), int(r["onhand"]), r["cover"], r["vel"]))
         else:
             L.append("     _No proven seller has both momentum and deep stock this window — reorder the fast movers first._")
         if rfirst:
