@@ -46,6 +46,10 @@ jobs:
           # report simply does not run and the Meta reports are untouched.
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
           SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          # Optional: Microsoft Clarity Data Export token. Set it and the store report pulls behaviour
+          # (JS errors, rage/dead clicks, quick-backs) itself and turns it into alerts. No token, no
+          # behaviour section, everything else runs the same.
+          CLARITY_TOKEN: ${{ secrets.CLARITY_TOKEN }}
         run: python analyze.py --daily
 
       - name: Commit dashboard data + alert state
