@@ -3966,9 +3966,10 @@ def msg_short(A, win):
             r2(m7.get("roas") or 0), r2(a.get("roas") or 0), gap(m7.get("roas"), a.get("roas")),
             _k(m7.get("cpa") or 0), _k(a.get("cpa") or 0), gap(m7.get("cpa"), a.get("cpa"), lower=True),
             _k(m7.get("aov") or 0), _k(a.get("aov") or 0), gap(m7.get("aov"), a.get("aov"))))
-        out.append("     CVR *%.2f%%* / *%.2f%%* (%s) · CTR *%.2f%%* / *%.2f%%* (%s) · "
-                   "ATC *%.1f%%* / *%.1f%%* (%s) · CPMR *%s* / *%s* (%s)" % (
+        out.append("     CVR *%.2f%%* / *%.2f%%* (%s) · CTR all *%.2f%%* / *%.2f%%* (%s) · "
+                   "Out CTR *%.2f%%* / *%.2f%%* (%s) · ATC *%.1f%%* / *%.1f%%* (%s) · CPMR *%s* / *%s* (%s)" % (
             r2(m7.get("cvr") or 0), r2(a.get("cvr") or 0), gap(m7.get("cvr"), a.get("cvr")),
+            r2(m7.get("ctr") or 0), r2(a.get("ctr") or 0), gap(m7.get("ctr"), a.get("ctr")),
             r2(m7.get("octr") or 0), r2(a.get("octr") or 0), gap(m7.get("octr"), a.get("octr")),
             (m7.get("atc_rate") or 0), (a.get("atc_rate") or 0), gap(m7.get("atc_rate"), a.get("atc_rate")),
             _k(m7.get("cpmr") or 0), _k(a.get("cpmr") or 0), gap(m7.get("cpmr"), a.get("cpmr"), lower=True)))
@@ -4027,15 +4028,20 @@ def msg_short(A, win):
     acct_id = A["account"].get("id") or ""
 
     def mvsacc(m):
-        """all six metrics vs the account average, + = better on every one."""
+        """every metric vs the account average, + = better on every one. SPEND LEADS (shown as its
+        own value — the /day and /7d comparison lives in the reasoning line below), then CTR all and
+        Outbound CTR ride alongside ROAS/CPP/AOV/CVR/ATC/CPMR."""
         a = acc7
-        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
-                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
-                % (r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
+        return ("Spend *%s* · ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CTR all *%.2f%%* (%s) · Out CTR *%.2f%%* (%s) · CPMR *%s* (%s)"
+                % (_k(m.get("spend") or 0),
+                   r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
                    _k(m.get("cpa") or 0), gap(m.get("cpa"), a.get("cpa"), lower=True),
                    _k(m.get("aov") or 0), gap(m.get("aov"), a.get("aov")),
                    r2(m.get("cvr") or 0), gap(m.get("cvr"), a.get("cvr")),
                    (m.get("atc_rate") or 0), gap(m.get("atc_rate"), a.get("atc_rate")),
+                   (m.get("ctr") or 0), gap(m.get("ctr"), a.get("ctr")),
+                   (m.get("octr") or 0), gap(m.get("octr"), a.get("octr")),
                    _k(m.get("cpmr") or 0), gap(m.get("cpmr"), a.get("cpmr"), lower=True)))
 
     def wins_of(m):
