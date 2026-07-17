@@ -3824,15 +3824,20 @@ def msg_short(A, win):
                   {"spend": p.get("spend"), "rev": p.get("rev")})
 
     def mline(m, q):
-        """every metric that matters, each with its own previous period, on one line"""
+        """every metric that matters, each with its own previous period, on one line.
+        SPEND LEADS — it is the first thing on every line, because every other metric is
+        a consequence of what was spent. CTR (all) and Outbound CTR both ride here too."""
         q = q or {}
-        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
-                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
-                % (r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, q.get("roas") or 0)) or "n/a",
+        return ("Spend *%s* (%s) · ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CTR all *%.2f%%* (%s) · Out CTR *%.2f%%* (%s) · CPMR *%s* (%s)"
+                % (_k(m.get("spend") or 0), _d(pct(m.get("spend") or 0, q.get("spend") or 0)) or "n/a",
+                   r2(m.get("roas") or 0), _d(pct(m.get("roas") or 0, q.get("roas") or 0)) or "n/a",
                    _k(m.get("cpa") or 0), _d(pct(m.get("cpa") or 0, q.get("cpa") or 0)) or "n/a",
                    _k(m.get("aov") or 0), _d(pct(m.get("aov") or 0, q.get("aov") or 0)) or "n/a",
                    r2(m.get("cvr") or 0), _d(pct(m.get("cvr") or 0, q.get("cvr") or 0)) or "n/a",
                    (m.get("atc_rate") or 0), _d(pct(m.get("atc_rate") or 0, q.get("atc_rate") or 0)) or "n/a",
+                   (m.get("ctr") or 0), _d(pct(m.get("ctr") or 0, q.get("ctr") or 0)) or "n/a",
+                   (m.get("octr") or 0), _d(pct(m.get("octr") or 0, q.get("octr") or 0)) or "n/a",
                    _k(m.get("cpmr") or 0), _d(pct(m.get("cpmr") or 0, q.get("cpmr") or 0)) or "n/a"))
 
     def vline(m, acc):
@@ -3848,13 +3853,22 @@ def msg_short(A, win):
             good = (d < 0) if lower else (d > 0)
             word = "above" if good else "below"
             return "*%.0f%% %s acct*" % (abs(d), word)
-        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
-                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
-                % (r2(m.get("roas") or 0), vs(m.get("roas"), acc.get("roas")),
+        def vsraw(mv, av):
+            # SPEND is not better/worse, so show it neutrally: how big vs the average ad.
+            d = pct(mv or 0, av or 0)
+            if d is None or not av:
+                return "vs acct n/a"
+            return "*%+.0f%% vs acct*" % d
+        return ("Spend *%s* (%s) · ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CTR all *%.2f%%* (%s) · Out CTR *%.2f%%* (%s) · CPMR *%s* (%s)"
+                % (_k(m.get("spend") or 0), vsraw(m.get("spend"), acc.get("spend")),
+                   r2(m.get("roas") or 0), vs(m.get("roas"), acc.get("roas")),
                    _k(m.get("cpa") or 0), vs(m.get("cpa"), acc.get("cpa"), lower=True),
                    _k(m.get("aov") or 0), vs(m.get("aov"), acc.get("aov")),
                    r2(m.get("cvr") or 0), vs(m.get("cvr"), acc.get("cvr")),
                    (m.get("atc_rate") or 0), vs(m.get("atc_rate"), acc.get("atc_rate")),
+                   (m.get("ctr") or 0), vs(m.get("ctr"), acc.get("ctr")),
+                   (m.get("octr") or 0), vs(m.get("octr"), acc.get("octr")),
                    _k(m.get("cpmr") or 0), vs(m.get("cpmr"), acc.get("cpmr"), lower=True)))
 
     L = ["*%s — %s*   ·   %s vs %s" % (A["account"]["name"].upper(), WIN_TITLE.get(win, "MEMO"),
@@ -3864,10 +3878,10 @@ def msg_short(A, win):
              "The 7 day figure is the benchmark, not the headline._"
              % {"daily": "YESTERDAY", "3day": "the LAST 3 DAYS", "7day": "the LAST 7 DAYS",
                 "30day": "the LAST 30 DAYS"}.get(win, "this window"))
-    L.append("Spend *%s* (%s) · Revenue *%s* (%s)" % (
-        _k(s.get("spend") or 0), _d(pct(s.get("spend") or 0, p.get("spend") or 0)) or "n/a",
-        _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a"))
-    L.append(mline(s, p))
+    L.append("Revenue *%s* (%s)   ·   %d purchases (%s)" % (
+        _k(s.get("rev") or 0), _d(pct(s.get("rev") or 0, p.get("rev") or 0)) or "n/a",
+        int(s.get("purch") or 0), _d(pct(s.get("purch") or 0, p.get("purch") or 0)) or "n/a"))
+    L.append(mline(s, p))   # Spend leads this line
     if D:
         L.append("_%s: %s%s of the move was the budget, %s%s was the account._" % (
             "BUDGET" if D["driver"] == "SPEND" else "PERFORMANCE",
@@ -4145,15 +4159,24 @@ def msg_decisions(A):
         if lower: d = -d
         return "*%+.0f%%*" % d
 
+    def graw(mv, av):
+        # SPEND neutral vs account (bigger isn't better), plain signed %.
+        d = pct(mv or 0, av or 0)
+        if d is None or not av: return "n/a"
+        return "*%+.0f%%*" % d
+
     def metric_line(m):
         a = acc7
-        return ("ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
-                "ATC *%.1f%%* (%s) · CPMR *%s* (%s)"
-                % (r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
+        return ("Spend *%s* (%s) · ROAS *%.2fx* (%s) · CPP *%s* (%s) · AOV *%s* (%s) · CVR *%.2f%%* (%s) · "
+                "ATC *%.1f%%* (%s) · CTR all *%.2f%%* (%s) · Out CTR *%.2f%%* (%s) · CPMR *%s* (%s)"
+                % (_k(m.get("spend") or 0), graw(m.get("spend"), a.get("spend")),
+                   r2(m.get("roas") or 0), gap(m.get("roas"), a.get("roas")),
                    _k(m.get("cpa") or 0), gap(m.get("cpa"), a.get("cpa"), True),
                    _k(m.get("aov") or 0), gap(m.get("aov"), a.get("aov")),
                    r2(m.get("cvr") or 0), gap(m.get("cvr"), a.get("cvr")),
                    (m.get("atc_rate") or 0), gap(m.get("atc_rate"), a.get("atc_rate")),
+                   (m.get("ctr") or 0), gap(m.get("ctr"), a.get("ctr")),
+                   (m.get("octr") or 0), gap(m.get("octr"), a.get("octr")),
                    _k(m.get("cpmr") or 0), gap(m.get("cpmr"), a.get("cpmr"), True)))
 
     L = ["%s  *%s — DECISIONS & THEIR EFFECT*" % (MENTION, A["account"]["name"].upper())]
