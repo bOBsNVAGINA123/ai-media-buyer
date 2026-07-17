@@ -6118,6 +6118,94 @@ SWIM_KW = ("swim", "robe", "beach", "pool")
 def _is_swim(t):
     tl = (t or "").lower(); return any(k in tl for k in SWIM_KW)
 
+
+# ================= MICROSOFT CLARITY. Behavioural truth, so the report VALIDATES a conversion drop
+# instead of guessing. One secret: CLARITY_TOKEN (Clarity > Settings > Data export > generate token).
+# Runs entirely inside the GitHub engine, no assistant, no MCP. =================
+CLARITY_TOKEN = os.environ.get("CLARITY_TOKEN", "").strip()
+
+def _cl_num(v):
+    try: return float(v)
+    except Exception: return None
+
+def clarity_pull(days=1):
+    """Clarity's frustration signals (rage/dead clicks, quick-backs, excessive scroll, JS errors),
+    traffic, and the worst pages. Returns a dict, or None if CLARITY_TOKEN is not set. This is what
+    lets the report say 'CVR fell AND 41% of sessions hit a JS error' with evidence, not a hunch."""
+    if not CLARITY_TOKEN: return None
+    base = "https://www.clarity.ms/export-data/api/v1/project-live-insights"
+    d = max(1, min(3, int(days)))
+    out = {"sessions": None, "bots": None, "js_err": None, "rage": None, "dead": None,
+           "quickback": None, "scroll": None, "pages": []}
+
+    def call(url):
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer %s" % CLARITY_TOKEN})
+        try:
+            r = urllib.request.urlopen(req, timeout=45); return json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            body = ""
+            try: body = e.read().decode()[:160]
+            except Exception: pass
+            sys.stderr.write("[clarity] HTTP %s %s\n" % (getattr(e, "code", "?"), body)); return None
+        except Exception as e:
+            sys.stderr.write("[clarity] %s\n" % str(e)[:160]); return None
+
+    data = call("%s?numOfDays=%d" % (base, d))
+    if data is None: return out
+    # first runs: log the shape so the parser can be tightened to the real payload
+    sys.stderr.write("[clarity] shape: %s\n" % json.dumps(data)[:700])
+    rows = data if isinstance(data, list) else (data.get("metrics") if isinstance(data, dict) else []) or []
+    for m in rows:
+        if not isinstance(m, dict): continue
+        name = str(m.get("metricName") or m.get("name") or "").lower()
+        info = m.get("information") or m.get("info") or []
+        first = info[0] if isinstance(info, list) and info else (info if isinstance(info, dict) else {})
+        pct = _cl_num(first.get("sessionsWithMetricPercentage")) if isinstance(first, dict) else None
+        if "traffic" in name or (isinstance(first, dict) and "totalsessioncount" in [k.lower() for k in first]):
+            out["sessions"] = _cl_num(first.get("totalSessionCount") or first.get("sessionsCount"))
+            out["bots"] = _cl_num(first.get("totalBotSessionCount"))
+        elif "script" in name or "javascript" in name or ("error" in name and "js" not in name):
+            out["js_err"] = pct
+        elif "rage" in name:
+            out["rage"] = pct
+        elif "dead" in name:
+            out["dead"] = pct
+        elif "quickback" in name or "quick back" in name:
+            out["quickback"] = pct
+        elif "scroll" in name and "excess" in name:
+            out["scroll"] = pct
+    # worst pages for JS errors, so an action can name the page to fix
+    pages = call("%s?numOfDays=%d&dimension1=URL" % (base, d))
+    if isinstance(pages, list):
+        for m in pages:
+            if not isinstance(m, dict): continue
+            if "script" in str(m.get("metricName") or "").lower() or "error" in str(m.get("metricName") or "").lower():
+                for row in (m.get("information") or [])[:5]:
+                    if isinstance(row, dict):
+                        out["pages"].append({"url": row.get("URL") or row.get("url") or "?",
+                                             "pct": _cl_num(row.get("sessionsWithMetricPercentage")),
+                                             "sessions": _cl_num(row.get("sessionsCount"))})
+    return out
+
+def clarity_alerts(cl):
+    """Turn Clarity signals into ranked alerts. Only fire when a threshold is crossed, so it stays
+    signal, not noise."""
+    if not cl: return []
+    out = []
+    if cl.get("js_err") is not None and cl["js_err"] >= 10:
+        out.append(("CRITICAL" if cl["js_err"] >= 25 else "WARNING",
+                    "JavaScript errors on *%.0f%%* of sessions. A broken script suppresses checkout, "
+                    "this is the first thing to fix on any CVR drop." % cl["js_err"]))
+    if cl.get("quickback") is not None and cl["quickback"] >= 12:
+        out.append(("WARNING", "Quick-backs on *%.0f%%* of sessions. People land, hit back fast: wrong "
+                    "traffic, slow pages, or a mismatch between ad and landing page." % cl["quickback"]))
+    if cl.get("dead") is not None and cl["dead"] >= 5:
+        out.append(("WARNING", "Dead clicks on *%.0f%%* of sessions. People click things that do nothing, "
+                    "a broken button or a non-link that looks clickable." % cl["dead"]))
+    if cl.get("rage") is not None and cl["rage"] >= 2:
+        out.append(("WARNING", "Rage clicks on *%.1f%%* of sessions, a clear friction point." % cl["rage"]))
+    return out
+
 # how many days of stock is "reorder now", and what a healthy target looks like
 COVER_URGENT = 14        # <= this many days of cover on a real seller = reorder now
 COVER_TARGET = 30        # reorder up to this many days of cover
@@ -6169,6 +6257,7 @@ def shopify_build(win):
     # inventory: on-hand from the Products API (native, read_products only), velocity from orders.
     # No analytics scope needed, so the reorder brain works on the same token as everything else.
     INV = inventory_from_orders(shopify_products_onhand(), A7["prod_units"])
+    CL = clarity_pull(1) if win == "daily" else None   # behaviour, straight from Clarity's own API
 
     # revenue decomposed into UNITS x PRICE (house rule), plus orders x basket for the funnel read
     net_chg = Ac["net"] - Ap["net"]
@@ -6243,7 +6332,7 @@ def shopify_build(win):
             "topv": topv, "topshare": (topn / tot * 100), "abc_a": [v for v, g in abc.items() if g == "A"],
             "best": best, "pgain": pgain, "pfade": pfade,
             "reorder": reorder, "dead": dead, "oos": oos, "has_inv": INV is not None,
-            "host": _shop_host()}
+            "clarity": CL, "host": _shop_host()}
 
 
 def _mvp(new, old, lower=False):
@@ -6318,12 +6407,46 @@ def msg_shopify(rep):
                  "left. Full list in the inventory channel." % (
                      len(rep["reorder"]), _clip(top["p"], 34), top["cover"]))
 
+    # ---- CLARITY: behaviour that validates a conversion problem, straight from Clarity's API ----
+    cl = rep.get("clarity")
+    if cl and any(cl.get(k) is not None for k in ("js_err", "quickback", "dead", "rage")):
+        L.append("\n*🔬 CLARITY — user behaviour (last 24h)*")
+        bits = []
+        if cl.get("js_err") is not None: bits.append("JS errors *%.0f%%*" % cl["js_err"])
+        if cl.get("quickback") is not None: bits.append("quick-backs *%.0f%%*" % cl["quickback"])
+        if cl.get("dead") is not None: bits.append("dead clicks *%.1f%%*" % cl["dead"])
+        if cl.get("rage") is not None: bits.append("rage clicks *%.1f%%*" % cl["rage"])
+        L.append("     " + " · ".join(bits) + "  _(% of sessions)_")
+        if cl.get("pages"):
+            worst = cl["pages"][0]
+            L.append("     Worst page for errors: *%s* (%.0f%% of its sessions)"
+                     % (_clip(str(worst.get("url")), 46), worst.get("pct") or 0))
+
+    # ---- ALERTS: ranked by impact, so the team acts on the biggest thing first ----
+    alerts = clarity_alerts(cl)
+    if rep.get("reorder"):
+        alerts.append(("CRITICAL", "*%d* products need a reorder now, most urgent *%s* at *%.0f days* of "
+                       "cover." % (len(rep["reorder"]), _clip(rep["reorder"][0]["p"], 30), rep["reorder"][0]["cover"])))
+    if rep["net_chg"] < 0:
+        alerts.append(("WARNING", "Net sales down *%s* vs %s. Driver: %s." % (
+            _k(abs(rep["net_chg"])), rep["vs"], rep["driver"].lower())))
+    if rep.get("dead"):
+        u = sum(int(d["onhand"]) for d in rep["dead"])
+        alerts.append(("OPPORTUNITY", "*%d units* of dead stock to liquidate for cash." % u))
+    if alerts:
+        RANK = {"CRITICAL": 0, "WARNING": 1, "OPPORTUNITY": 2, "INFO": 3}
+        ICO = {"CRITICAL": "🔴", "WARNING": "🟠", "OPPORTUNITY": "🟢", "INFO": "🔵"}
+        alerts.sort(key=lambda a: RANK.get(a[0], 9))
+        L.append("\n*🚨 ALERTS*")
+        for lvl, txt in alerts[:6]:
+            L.append("%s *%s* — %s" % (ICO.get(lvl, "•"), lvl, txt))
+
     pats = _shop_patterns(rep)
     if pats:
         L.append("\n*PATTERNS*")
         for pp in pats: L.append("• %s" % pp)
-    L.append("\n_Store: %s · EGP. This is the whole store; the Meta channels are the ads on top of it._"
-             % rep["host"])
+    L.append("\n_Store: %s · EGP. Behaviour from Microsoft Clarity, sales from orders. This is the whole "
+             "store; the Meta channels are the ads on top of it._" % rep["host"])
     return "\n".join(L)
 
 
