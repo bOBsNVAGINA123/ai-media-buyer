@@ -6246,6 +6246,8 @@ COVER_TARGET = 30        # reorder up to this many days of cover
 DEAD_COVER   = 120       # >= this many days of cover = dead / overstock cash
 DEAD_MINUNITS = 20       # and this much on hand, so a 3-unit slow mover is not "dead cash"
 REAL_SELLER  = 5         # a product needs at least this many units sold in 7d to count as demand
+SCALE_COVER  = 21        # a proven seller needs at least 3 weeks of cover before we pour ad spend behind it
+SCALE_MINSTOCK = 15      # and this much on hand, so a thin fast-mover is "reorder first", not "scale"
 
 def _funnel_win(F, d0, d1):
     days = [v for k, v in (F or {}).items() if d0 <= k <= d1]
@@ -6292,6 +6294,16 @@ def shopify_build(win):
     # No analytics scope needed, so the reorder brain works on the same token as everything else.
     INV = inventory_from_orders(shopify_products_onhand(), A7["prod_units"])
     CL = clarity_pull(1) if win == "daily" else None   # behaviour, straight from Clarity's own API
+
+    # SESSIONS + CVR WITHOUT THE ANALYTICS SCOPE. Shopify's own funnel needs read_reports, which this
+    # token does not have. Clarity's Data Export DOES give the live session count, so we compute the
+    # real funnel from it: CVR = completed orders / sessions. That is the honest conversion rate, from
+    # two sources the token can actually reach.
+    if not fc and CL and CL.get("sessions"):
+        sess = CL.get("sessions") or 0
+        fc = {"sessions": sess, "atc": 0, "checkout": 0, "completed": Ac["orders"], "atc_rate": None,
+              "cvr": (Ac["orders"] / sess * 100.0) if sess else 0.0, "src": "clarity"}
+        fp = None   # a single Clarity call has no clean prior-day split, so no session delta yet
 
     # revenue decomposed into UNITS x PRICE (house rule), plus orders x basket for the funnel read
     net_chg = Ac["net"] - Ap["net"]
@@ -6366,7 +6378,34 @@ def shopify_build(win):
             "topv": topv, "topshare": (topn / tot * 100), "abc_a": [v for v, g in abc.items() if g == "A"],
             "best": best, "pgain": pgain, "pfade": pfade,
             "reorder": reorder, "dead": dead, "oos": oos, "has_inv": INV is not None,
-            "clarity": CL, "host": _shop_host()}
+            "inv_map": INV or {}, "clarity": CL, "host": _shop_host()}
+
+
+def _shop_scale_ads(rep):
+    """MEDIA x INVENTORY — the call the old report was missing. Cross the products that are SELLING
+    (best sellers + gainers) with the stock behind them:
+      • deep cover + real demand  -> SCALE ADS: proven seller you can safely pour spend behind.
+      • real demand but thin cover -> REORDER FIRST: do not spend into a stockout.
+    Returns (scale, reorder_first), both name+revenue+stock so the memo can name products and show math."""
+    inv = rep.get("inv_map") or {}
+    seen, scale, reorder_first = set(), [], []
+    for r in list(rep.get("best") or []) + list(rep.get("pgain") or []):
+        name = r["p"]
+        if name in seen:
+            continue
+        seen.add(name)
+        iv = inv.get(name)
+        if not iv or iv["sold"] < REAL_SELLER or iv["onhand"] <= 0:
+            continue   # no stock read, not a repeat seller, or already out of stock (OOS handles it)
+        row = {"p": name, "rev": r["now"], "asp": r.get("asp") or 0, "onhand": iv["onhand"],
+               "cover": iv["cover"], "vel": iv["vel"], "sold7": iv["sold"]}
+        if iv["cover"] <= COVER_URGENT:
+            reorder_first.append(row)
+        elif iv["cover"] >= SCALE_COVER and iv["onhand"] >= SCALE_MINSTOCK:
+            scale.append(row)
+    scale.sort(key=lambda x: -x["rev"])
+    reorder_first.sort(key=lambda x: x["cover"])
+    return scale[:6], reorder_first[:5]
 
 
 def _mvp(new, old, lower=False):
@@ -6437,15 +6476,19 @@ def msg_shopify(rep):
     L.append("")
     for _w in _shop_why(rep): L.append(_w)
     L.append("\n*THE FUNNEL*")
-    if fc:
+    if fc and fc.get("src") == "clarity":
+        L.append("Sessions *%s* _(Clarity)_ · CVR *%.2f%%* _(orders ÷ sessions)_ · completed *%d*  ·  "
+                 "_ATC%% needs the analytics scope on the token_"
+                 % (_k(fc["sessions"]), fc["cvr"], int(fc["completed"])))
+    elif fc:
         L.append("Sessions *%s* (%s) · ATC *%.2f%%* (%s) · reached checkout *%d* · completed *%d* · CVR *%.2f%%* (%s)"
                  % (_k(fc["sessions"]), _mvp(fc["sessions"], (fp or {}).get("sessions")),
                     fc["atc_rate"], _mvp(fc["atc_rate"], (fp or {}).get("atc_rate")),
                     int(fc["checkout"]), int(fc["completed"]),
                     fc["cvr"], _mvp(fc["cvr"], (fp or {}).get("cvr"))))
     else:
-        L.append("_Sessions / ATC% / CVR need the read_reports (Analytics) scope on the token. "
-                 "Everything below is from orders and is exact._")
+        L.append("_Sessions from Clarity, CVR from orders÷sessions — appears on the daily run. "
+                 "ATC%% needs the read_reports scope. Everything below is from orders and is exact._")
     L.append("Net sales *%s* (%s) · Orders *%d* (%s) · Units *%d* (%s) · AOV *%s* (%s) · ASP *%s* (%s)" % (
         _k(s["net"]), _mvp(s["net"], p["net"]), s["orders"], _mvp(s["orders"], p["orders"]),
         s["units"], _mvp(s["units"], p["units"]), _k(s["aov"]), _mvp(s["aov"], p["aov"]),
@@ -6483,6 +6526,22 @@ def msg_shopify(rep):
         L.append("*FADED* (sold %s, nothing this window)" % rep["vs"])
         for r in rep["pfade"]:
             L.append("     *%s* — was *%s*" % (_clip(r["p"], 42), _k(r["prev"])))
+
+    # ---- MEDIA x INVENTORY: push ad spend behind the proven sellers that have the stock to take it ----
+    scale, rfirst = _shop_scale_ads(rep)
+    if scale or rfirst:
+        L.append("\n*🚀 SCALE ADS ON THESE*  (proven sellers with the stock to back the spend)")
+        if scale:
+            for r in scale:
+                L.append("     *%s* — *%s* this window · %d on hand · *%.0f days* cover · %.1f/day · ASP *%s*  →  push spend, stock holds"
+                         % (_clip(r["p"], 40), _k(r["rev"]), int(r["onhand"]), r["cover"], r["vel"], _k(r["asp"])))
+        else:
+            L.append("     _No proven seller has both momentum and deep stock this window — reorder the fast movers first._")
+        if rfirst:
+            L.append("  ⚠️ *REORDER BEFORE YOU SCALE*  (selling fast, stock too thin to add spend):")
+            for r in rfirst:
+                L.append("     *%s* — *%s* · only *%.0f days* cover at %.1f/day. Reorder, then scale."
+                         % (_clip(r["p"], 40), _k(r["rev"]), r["cover"], r["vel"]))
 
     # a one-line inventory pointer so the sales channel still flags the urgent stuff
     if rep.get("reorder"):
@@ -6576,39 +6635,78 @@ def msg_inventory(rep):
 
 
 def _shop_patterns(rep):
-    """The narrative, from the numbers. Traffic vs basket, concentration, big-ticket swings, inventory."""
-    pats = []; s = rep["sales"]; fc, fp = rep["funnel"], rep["funnel_prev"]
-    if fc and fp:
-        ds = pct(fc["sessions"], fp["sessions"]) or 0
-        if abs(ds) < 6 and rep["net_chg"] > 0:
-            pats.append("Traffic was flat (*%+.0f%%* sessions) but revenue rose. The money came from a bigger "
-                        "basket and better checkout, not more visitors." % ds)
-        elif ds >= 6 and rep["net_chg"] > 0:
-            pats.append("Revenue rose with traffic (*%+.0f%%* sessions). Top of funnel is doing the work." % ds)
-        if fc["atc_rate"] < (fp["atc_rate"] or 0) and fc["cvr"] > (fp["cvr"] or 0):
-            pats.append("Fewer carts but more of them checked out (CVR up, ATC%% down). The buyers who added "
-                        "were higher intent." if False else
-                        "Fewer carts but more of them checked out. CVR up while ATC rate fell, so the buyers "
-                        "who added were higher intent.")
-    if rep["topshare"] >= 30:
-        pats.append("Concentration risk: *%s* is *%.0f%%* of revenue. A slow day for it is a slow day for the "
-                    "whole store." % (_clip(rep["topv"], 22), rep["topshare"]))
+    """STRATEGY, NOT TRIVIA. Every line adds up to the move, names the anomaly, and ends in a
+    directive. Order: reconcile the money, name the lever, the 80/20, the anomalies, then what to do
+    with ads / stock / cash / behaviour. This is the advisor read, not a list of observations."""
+    pats = []; s, p = rep["sales"], rep["prev"]; chg = rep["net_chg"]; vs = rep["vs"]
+
+    # 1) RECONCILE THE MONEY — so the numbers actually add up to the move.
+    up = sum(r["d"] for r in rep["vgain"]); down = sum(r["d"] for r in rep["vfade"])
+    topg = rep["vgain"][0] if rep["vgain"] else None
+    topf = rep["vfade"][0] if rep["vfade"] else None
+    recon = "Net sales *%s%s* vs %s (from *%s* to *%s*)." % (
+        "+" if chg >= 0 else "-", _k(abs(chg)), vs, _k(p["net"]), _k(s["net"]))
+    if topg and topf:
+        recon += (" Top gainers net *+%s* (led by *%s* +%s), top faders net *%s* (led by *%s* %s) — "
+                  "the gap is the rest of the tail." % (
+                      _k(up), _clip(topg["v"], 16), _k(topg["d"]),
+                      _k(down), _clip(topf["v"], 16), _k(topf["d"])))
+    pats.append(recon)
+
+    # 2) THE LEVER, with a directive.
+    pats.append("Lever: *%s* — orders %s%s, basket/ASP %s%s. %s." % (
+        rep["driver"].lower(),
+        "+" if rep["ord_eff"] >= 0 else "-", _k(abs(rep["ord_eff"])),
+        "+" if rep["aov_eff"] >= 0 else "-", _k(abs(rep["aov_eff"])),
+        "Push order volume — traffic and offers" if rep["driver"] == "MORE UNITS"
+        else "Protect ASP and mix, do not discount into it"))
+
+    # 3) CONCENTRATION / 80-20.
+    pats.append("*%d of %d vendors* make 80%% of revenue; *%s* alone is *%.0f%%*. One slow day for it is a "
+                "slow day for the whole store — widen the winner list." % (
+                    rep["n80"], rep["n_vendors"], _clip(rep["topv"], 20), rep["topshare"]))
+
+    # 4) ANOMALIES — called out, not buried.
     bigt = [r for r in rep["best"] if r["ord"] <= 1 and r["now"] >= 4000]
     if bigt:
-        pats.append("Big-ticket single orders swung the window: %s. One order each, thousands in revenue, so "
-                    "they inflate a good day and their absence tanks a bad one." %
-                    ", ".join("%s (%s)" % (_clip(r["p"], 26), _k(r["now"])) for r in bigt[:3]))
-    if rep.get("reorder"):
-        r = rep["reorder"][0]
-        pats.append("Your fastest sellers are your thinnest stock: *%s* has only *%.0f days* of cover. Reorder "
-                    "before you spend another pound driving traffic to it." % (_clip(r["p"], 30), r["cover"]))
+        pats.append("⚠️ Anomaly: %d big single order(s) — %s — moved the window on their own. Strip them and "
+                    "the underlying day is flatter; do not read them as a trend." % (
+                        len(bigt), ", ".join("%s (%s)" % (_clip(r["p"], 22), _k(r["now"])) for r in bigt[:2])))
+    newp = [r for r in rep["pgain"] if r["prev"] <= 0 and r["now"] >= 3000]
+    if newp:
+        pats.append("⚠️ New product spiked: *%s* went 0→*%s*. If it holds tomorrow, build a campaign around it; "
+                    "if it was a one-off, do not restock deep." % (_clip(newp[0]["p"], 26), _k(newp[0]["now"])))
+    dropped = [r for r in rep["vfade"] if r["now"] <= 0 and r["prev"] >= 3000]
+    if dropped:
+        pats.append("⚠️ Vendor to zero: *%s* did *%s* %s and *nothing* this window. Check its stock and that its "
+                    "ads are still live before it becomes a trend." % (
+                        _clip(dropped[0]["v"], 20), _k(dropped[0]["prev"]), vs))
+
+    # 5) DIRECTION — the media x inventory call the report used to miss.
+    scale, rfirst = _shop_scale_ads(rep)
+    if scale:
+        r = scale[0]
+        pats.append("Push ads: *%s* did *%s* on *%.0f days* of cover — proven demand with stock to back it. "
+                    "Scale spend here." % (_clip(r["p"], 26), _k(r["rev"]), r["cover"]))
+    if rfirst:
+        r = rfirst[0]
+        pats.append("Hold ads: *%s* is selling on only *%.0f days* of cover — reorder before you pour spend into "
+                    "a stockout." % (_clip(r["p"], 26), r["cover"]))
+
+    # 6) BEHAVIOUR — Clarity, tied to the conversion consequence.
+    cl = rep.get("clarity")
+    if cl and cl.get("js_err") is not None and cl["js_err"] >= 10:
+        pats.append("Fix first: Clarity shows JS errors on *%.0f%%* of sessions — a broken script suppresses "
+                    "checkout and caps CVR no matter how much traffic you buy." % cl["js_err"])
+    elif cl and cl.get("quickback") is not None and cl["quickback"] >= 15:
+        pats.append("Traffic quality: *%.0f%%* of sessions quick-back — ad-to-page mismatch or slow load. "
+                    "Tighten the landing page before you scale spend." % cl["quickback"])
+
+    # 7) CASH — dead stock as working capital.
     if rep.get("dead"):
-        units = sum(int(d["onhand"]) for d in rep["dead"])
-        pats.append("*%d units* across %d products are dead cash (over %d days of cover). Bundle or discount "
-                    "them to free the money." % (units, len(rep["dead"]), DEAD_COVER))
-    if [r for r in rep["best"] if _is_swim(r["p"])]:
-        pats.append("Summer swimwear owns the top of the best-seller list. Stock depth and a swim-robe bundle "
-                    "are the obvious levers while the season is hot.")
+        u = sum(int(d["onhand"]) for d in rep["dead"])
+        pats.append("Free cash: *%d units* across %d products sit on %d+ days of cover. Bundle or gift-with-order "
+                    "to turn dead stock into working capital." % (u, len(rep["dead"]), DEAD_COVER))
     return pats
 
 

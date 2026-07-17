@@ -1473,12 +1473,15 @@ def _tbl(headers, rows_html):
 def sc_pulse(rep):
     s, p = rep["sales"], rep["prev"]; fc, fp = rep["funnel"], rep["funnel_prev"] or {}
     if fc:
+        _atc_val = ("%.2f%%" % fc["atc_rate"]) if fc.get("atc_rate") is not None else "—"
+        _atc_sub = "Clarity" if fc.get("src") == "clarity" else "bag"
         funnel = ('<div class="grid g4">%s%s%s%s</div>' % (
             kpi("Sessions", _k(fc["sessions"]), "people", "b", prev=(_k(fp.get("sessions")) if fp else None),
                 p=(pct(fc["sessions"], fp.get("sessions")) if fp else None), big=True),
-            kpi("ATC rate", "%.2f%%" % fc["atc_rate"], "bag", "b", prev=(("%.2f%%" % fp["atc_rate"]) if fp else None),
-                p=(pct(fc["atc_rate"], fp.get("atc_rate")) if fp else None), big=True),
-            kpi("Checkouts", _k(fc["completed"]), "check", "g", big=True),
+            kpi("ATC rate", _atc_val, "bag", "b",
+                prev=(("%.2f%%" % fp["atc_rate"]) if (fp and fp.get("atc_rate") is not None) else None),
+                p=(pct(fc["atc_rate"], fp.get("atc_rate")) if (fp and fc.get("atc_rate") is not None) else None), big=True),
+            kpi("Orders", _k(fc["completed"]), "check", "g", big=True),
             kpi("CVR", "%.2f%%" % fc["cvr"], "target", "g", prev=(("%.2f%%" % fp["cvr"]) if fp else None),
                 p=(pct(fc["cvr"], fp.get("cvr")) if fp else None), big=True)))
     else:
