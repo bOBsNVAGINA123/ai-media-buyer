@@ -6116,26 +6116,47 @@ def inventory_from_orders(onhand, units7):
     return out
 
 
+def _shopifyql(ql):
+    """Run a ShopifyQL query on the Admin GraphQL API and return the rows as a list of dicts keyed by
+    column name, or None if it fails. Uses the CURRENT (2025-01) response shape: shopifyqlQuery returns
+    a ShopifyqlQueryResponse whose tableData has {columns{name}, rows(JSON)}. The OLD engine asked for
+    'TableResponse{ rowData }', a type Shopify removed — which is why the funnel silently returned None
+    even though the token had read_reports. This is the fix."""
+    if not _shop_host() or not SHOP_TOKEN: return None
+    q = 'query($ql:String!){ shopifyqlQuery(query:$ql){ parseErrors tableData{ columns{ name } rows } } }'
+    d = shopify_gql(q, {"ql": ql})
+    sq = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {})
+    perr = sq.get("parseErrors")
+    if perr:
+        sys.stderr.write("[shopify] ql parseErrors (%s): %s\n" % (ql[:40], str(perr)[:160]))
+    td = sq.get("tableData")
+    if not td:
+        sys.stderr.write("[shopify] ql failed (%s): %s\n" % (ql[:40], str(d)[:180]))
+        return None
+    cols = [c.get("name") for c in (td.get("columns") or [])]
+    out = []
+    for r in (td.get("rows") or []):
+        if isinstance(r, dict):
+            out.append(r)
+        elif isinstance(r, (list, tuple)):
+            out.append({cols[i]: r[i] for i in range(min(len(cols), len(r)))})
+    return out
+
+
 def shopify_funnel(days=9):
     """Sessions / ATC / checkout / CVR per day via ShopifyQL. Needs analytics scope on the token.
     If the token cannot read analytics, return None and the report simply ships without the funnel."""
-    host = _shop_host()
-    if not host or not SHOP_TOKEN: return None
-    ql = ("FROM sessions SHOW sessions, sessions_with_cart_additions, "
-          "sessions_that_reached_checkout, sessions_that_completed_checkout "
-          "TIMESERIES day SINCE -%dd UNTIL today" % days)
-    q = ('query($ql:String!){ shopifyqlQuery(query:$ql){ __typename ... on TableResponse{'
-         ' tableData{ rowData columns{ name } } } } }')
-    d = shopify_gql(q, {"ql": ql})
-    td = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {}).get("tableData")
-    if not td:
-        sys.stderr.write("[shopify] funnel unavailable (needs analytics scope): %s\n" % str(d)[:160])
-        return None
+    rows = _shopifyql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
+                      "sessions_that_reached_checkout, sessions_that_completed_checkout "
+                      "TIMESERIES day SINCE -%dd UNTIL today" % days)
+    if rows is None: return None
     out = {}
-    for row in td.get("rowData", []):
+    for r in rows:
         try:
-            day = str(row[0])[:10]; s = float(row[1] or 0); atc = float(row[2] or 0)
-            chk = float(row[3] or 0); comp = float(row[4] or 0)
+            day = str(r.get("day"))[:10]
+            s = float(r.get("sessions") or 0); atc = float(r.get("sessions_with_cart_additions") or 0)
+            chk = float(r.get("sessions_that_reached_checkout") or 0)
+            comp = float(r.get("sessions_that_completed_checkout") or 0)
         except Exception:
             continue
         out[day] = {"sessions": s, "atc": atc, "checkout": chk, "completed": comp,
@@ -6147,21 +6168,14 @@ def shopify_traffic(d0, d1):
     """TRAFFIC 80/20 BY SOURCE. Sessions and completed checkouts per referrer source, so the report
     can say which channels make 80% of the traffic AND which convert. Needs the analytics scope on
     the token; returns None without it (the report then ships without the traffic split)."""
-    host = _shop_host()
-    if not host or not SHOP_TOKEN: return None
-    ql = ("FROM sessions SHOW sessions, sessions_that_completed_checkout "
-          "GROUP BY referrer_source ORDER BY sessions DESC SINCE %s UNTIL %s" % (d0, d1))
-    q = ('query($ql:String!){ shopifyqlQuery(query:$ql){ __typename ... on TableResponse{'
-         ' tableData{ rowData columns{ name } } } } }')
-    d = shopify_gql(q, {"ql": ql})
-    td = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {}).get("tableData")
-    if not td:
-        sys.stderr.write("[shopify] traffic unavailable (needs analytics scope): %s\n" % str(d)[:160])
-        return None
+    raw = _shopifyql("FROM sessions SHOW sessions, sessions_that_completed_checkout "
+                     "GROUP BY referrer_source ORDER BY sessions DESC SINCE %s UNTIL %s" % (d0, d1))
+    if raw is None: return None
     rows = []
-    for r in td.get("rowData", []):
+    for r in raw:
         try:
-            src = str(r[0] or "unknown"); sess = float(r[1] or 0); comp = float(r[2] or 0)
+            src = str(r.get("referrer_source") or "unknown")
+            sess = float(r.get("sessions") or 0); comp = float(r.get("sessions_that_completed_checkout") or 0)
         except Exception:
             continue
         rows.append({"src": src, "sessions": sess, "completed": comp,
