@@ -95,8 +95,10 @@ function bD(i){const d=new Date(O.bl.start+'T00:00:00Z');d.setUTCDate(d.getUTCDa
 function bSum(name,r){if(!r)return 0;const a=O.bl.b[name]||[];let t=0;for(let i=r[0];i<=r[1];i++)t+=a[i]||0;return t;}
 function dec(L,d,max){max=max||120;const n=L.length;if(n<=max)return{L:L.slice(),d:d.slice(),ix:L.map((_,i)=>i)};const out={L:[],d:[],ix:[]},st=n/max;for(let b=0;b<max;b++){const s=Math.floor(b*st),e=Math.min(n,Math.floor((b+1)*st));let sm=0,c=0;for(let i=s;i<e;i++){sm+=d[i];c++;}out.L.push(L[s]);out.d.push(sm/(c||1));out.ix.push(e-1);}return out;}
 
-function boot(){O=window.O;FF=window.F;isoDates();
- const nx=(function(){try{const t=Date.parse((O.lastSync||'').replace(' UTC','Z').replace(' ','T'));return new Date(t+3*3600*1000).toISOString().slice(11,16)+' UTC';}catch(e){return '—';}})();document.getElementById('sync').innerHTML='↻ Synced <b>'+(O.lastSync||'—')+'</b> · next ~<b>'+nx+'</b>';
+function cairo(u){try{const t=Date.parse(String(u).replace(' UTC','Z').replace(' ','T'));const d=new Date(t+3*3600*1000);let h=d.getUTCHours(),mi=('0'+d.getUTCMinutes()).slice(-2);const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+mi+' '+ap;}catch(e){return String(u);}}
+let LSC='—',NXC='—';
+function boot(){O=window.O;FF=window.F;isoDates();LSC=cairo(O.lastSync);try{NXC=cairo(new Date(Date.parse(String(O.lastSync).replace(' UTC','Z').replace(' ','T'))+3*3600*1000).toISOString().replace('T',' ').slice(0,16)+' UTC');}catch(e){}
+ document.getElementById('sync').innerHTML='↻ Synced <b>'+LSC+'</b> Cairo · next ~<b>'+NXC+'</b>';
  ST.e=O.aw[1];ST.s=addD(ST.e,-29);
  const d0=document.getElementById('d0'),d1=document.getElementById('d1');
  d0.value=ST.s;d1.value=ST.e;d0.min=O.fin.start;d1.max=ST.e;
@@ -109,12 +111,13 @@ function boot(){O=window.O;FF=window.F;isoDates();
  document.getElementById('c0').onchange=rOn;document.getElementById('c1').onchange=rOn;
  ['gp','rf','tgt'].forEach(id=>document.getElementById(id).oninput=rOff);document.getElementById('oh').onchange=rOff;
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. · <b>v4.8</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. · <b>v4.9</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;document.getElementById('d0').value=ST.s;document.getElementById('d1').value=ST.e;rOn();}
 function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t5','me']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else rMedia();}
 
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));rOn();}
 function cmpW(){const ln=span(ST.s,ST.e);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}return ST.cmp==='yoy'?[addD(ST.s,-365),addD(ST.e,-365)]:[addD(ST.s,-ln),addD(ST.s,-1)];}
+function shS(k,s2,e2){if(!O.shop||!O.shop[k])return 0;const r=rng(s2,e2);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[k][i]||0;return t;}
 function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
  const o={cs,ce};const G=(k,a,b)=>fSum(k,a,b);
  o.gross=[G('rev',s,e),G('rev',cs,ce)];o.ref=[G('refund',s,e),G('refund',cs,ce)];o.net=[o.gross[0]-o.ref[0],o.gross[1]-o.ref[1]];
@@ -137,14 +140,19 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   o.sess=[S('sessions'),P('sessions')];o.nc=[S('newcust'),P('newcust')];o.rcn=[S('retcust'),P('retcust')];
   o.cac=[o.nc[0]?sp/o.nc[0]:0,rc&&o.nc[1]?spc/o.nc[1]:null];
   const nf0=o.gross[0]?1-o.ref[0]/o.gross[0]:1,nf1=o.gross[1]?1-o.ref[1]/o.gross[1]:1;
-  const shp=fShop(s,e),shpP=fShop(cs,ce);o.merStore=[sp?shp*nf0/sp:0,spc?shpP*nf1/spc:null];
+  const shNet=(O.shop?(shS('rev',s,e)-shS('ref',s,e))*1000:fShop(s,e)*nf0),shNetP=(O.shop?(shS('rev',cs,ce)-shS('ref',cs,ce))*1000:fShop(cs,ce)*nf1);
+  o.merStore=[sp?shNet/sp:0,spc?shNetP/spc:null];
+  const so0=shS('ord',s,e),so1=shS('ord',cs,ce);
+  o.saov=[so0?shS('rev',s,e)*1000/so0:null,so1?shS('rev',cs,ce)*1000/so1:null];o.sord=[so0,so1];
   o.mer=[sp?o.net[0]/sp:0,spc?o.net[1]/spc:null];
   o.gpcac=[o.cac[0]?o.gpp[0]/o.cac[0]:0,o.cac[1]?o.gpp[1]/o.cac[1]:null];
   o.mpur=[S('mpur'),P('mpur')];o.gconv=[S('gconv'),P('gconv')];
   o.gcpp=[o.gconv[0]?o.gsp[0]/o.gconv[0]:0,rc&&o.gconv[1]?o.gsp[1]/o.gconv[1]:null];
   o.cpp=[o.mpur[0]?o.msp[0]/o.mpur[0]:0,rc&&o.mpur[1]?o.msp[1]/o.mpur[1]:null];
-  o.tcpp=[null,null];const bp0=o.mpur[0]+o.gconv[0],bp1=rc?(o.mpur[1]||0)+(o.gconv[1]||0):0;
-  o.bcpp=[bp0?(o.msp[0]+o.gsp[0])/bp0:0,bp1?(o.msp[1]+o.gsp[1])/bp1:null];
+  const tp0=aSum('tpur',ra),tp1=rc?aSum('tpur',rc):0;
+  o.tcpp=[tp0?o.tsp[0]/tp0:null,tp1?o.tsp[1]/tp1:null];
+  const bp0=o.mpur[0]+o.gconv[0]+tp0,bp1=rc?(o.mpur[1]||0)+(o.gconv[1]||0)+tp1:0;
+  o.bcpp=[bp0?(o.msp[0]+o.gsp[0]+o.tsp[0])/bp0:0,bp1?(o.msp[1]+o.gsp[1]+o.tsp[1])/bp1:null];
   o.ncrev=[S('ncrev'),P('ncrev')];o.rcrev=[S('rcrev'),P('rcrev')];
   o.amer=[sp?o.ncrev[0]*nf0/sp:0,spc&&o.ncrev[1]?o.ncrev[1]*nf1/spc:null];
   o.ncaov=[o.nc[0]?o.ncrev[0]/o.nc[0]:0,rc&&o.nc[1]?o.ncrev[1]/o.nc[1]:null];
@@ -160,7 +168,15 @@ function aSeriesR(k,m,s,e){if(!O.ad[k])return null;const r=aRange(s,e);if(!r)ret
 function gcN(N){const e2=O.aw[1],s2=addD(e2,-(N-1));const gp2=fSum('gp',s2,e2),or2=fSum('orders',s2,e2);const r2=aRange(s2,e2);if(!r2||!or2)return null;let sp2=0,nc2=0;for(let i=r2[0];i<=r2[1];i++){sp2+=O.ad.spend[i]||0;nc2+=O.ad.newcust[i]||0;}const cac2=nc2?sp2/nc2:0;return cac2?(gp2/or2)/cac2:null;}
 function origIdxFin(decIdx,ixArr){const r=rng(ST.s,ST.e);return r?r[0]+ixArr[Math.min(decIdx,ixArr.length-1)]:0;}
 
-const COHORTS=[['Dec-2023',847,7933,6710,14643,17.29,4.59,4.68],['Jan-2024',567,6420,5983,12403,21.87,5.05,5.08],['Feb-2024',685,8965,10008,18973,27.70,3.21,3.33],['Mar-2024',757,9516,9461,18977,25.07,4.42,4.48],['Apr-2024',555,10117,9534,19650,35.41,3.31,3.46],['May-2024',603,10172,14657,24829,41.18,2.98,3.06],['Jun-2024',1269,20865,32184,53048,41.80,3.09,3.18],['Jul-2024',688,9726,18022,27748,40.33,3.10,3.26],['Aug-2024',971,12256,26703,38959,40.12,3.67,3.86],['Sep-2024',992,17299,32233,49532,49.93,2.91,2.98],['Oct-2024',1199,24516,46891,71407,59.56,2.96,3.07],['Nov-2024',1708,52615,50289,102904,60.25,3.07,3.17],['Dec-2024',1549,46566,38578,85144,54.97,2.87,2.95],['Jan-2025',894,19830,26941,46771,52.32,2.97,3.12],['Feb-2025',687,14814,23416,38230,55.65,3.41,3.49],['Mar-2025',1282,25550,36547,62097,48.44,3.65,3.89],['Apr-2025',1311,20948,43853,64801,49.43,3.19,3.30],['May-2025',2009,24893,43477,68370,34.03,4.68,4.74],['Jun-2025',1971,40976,54634,95610,48.51,3.69,3.81],['Jul-2025',2536,29801,51522,81324,32.07,5.46,5.65],['Aug-2025',2602,16699,56517,73216,28.14,5.82,6.45],['Sep-2025',3341,46680,62221,108901,32.60,4.95,5.32],['Oct-2025',1977,36414,45091,81505,41.23,4.78,5.14],['Nov-2025',3041,56661,87331,143992,47.35,4.20,4.35],['Dec-2025',2889,57082,60254,117337,40.61,4.35,4.46],['Jan-2026',2392,46125,72109,118234,49.43,4.28,4.43],['Feb-2026',2695,48289,75831,124120,46.06,4.35,4.35]];
+function adMonthly(){const M2={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(M2[m]=M2[m]||{ms:0,gs:0,ts:0,s:0});a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.s+=(O.ad.spend||[])[i]||0;}return M2;}
+function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const last=O.aw[1];
+ return O.coh.map(c=>{const a=AM[c.m];const full=a&&c.m>'2025-07';const ncac=full&&c.size?a.s/c.size:null;
+  const eom=new Date(Date.parse(c.m+'-01T00:00:00Z'));eom.setUTCMonth(eom.getUTCMonth()+1);eom.setUTCDate(0);
+  const age=Math.round((Date.parse(last)-eom.getTime())/864e5);
+  const r=w=>{const g=c['g'+w];if(age< w-30&&w>30)return null;if(w===30&&age<0)return null;return c.size&&ncac?(g/c.size)/ncac:null;};
+  const gp30=c.size?c.g30/c.size:null;
+  return {m:c.m,size:c.size,ms:a?a.ms:null,gs:a?a.gs:null,ts:a?a.ts:null,s:a?a.s:null,ncac,gp30,l30:r(30),l90:r(90),l180:r(180),l365:r(365),age};});}
+
 let CARDS=[];
 function cards(){CARDS=[
  {id:'ins',full:1,a:'ins',t:'Insights — auto-read from the data',src:'ins',cs:'Computed live from Odoo sales, refunds, margin, channels and the ads feed for this range.',k:o=>[],ins:1},
@@ -170,24 +186,25 @@ function cards(){CARDS=[
  {id:'gp',a:'odoo',t:'Gross Profit & Margin',src:'gp',cs:'Odoo margin (revenue − cost).',k:o=>[['Gross profit',o.gp[0],o.gp[1],'cur',1],['GP %',o.gpct[0],o.gpct[1],'pct',1]],c:o=>({fin:[{l:'GP',k:'gp',c:C.grn,f:1}],tip:'cur'})},
  {id:'gpp',a:'odoo',t:'Gross Profit per Order',src:'gpp',cs:'Odoo margin ÷ orders.',k:o=>[['GP / order',o.gpp[0],o.gpp[1],'cur',1],['Orders',o.ord[0],o.ord[1],'n',1]],c:o=>({fin:[{l:'GP',k:'gp',c:C.teal,f:1}],tip:'cur'})},
  {id:'ch',a:'odoo',t:'Online Revenue by Channel',src:'channels',cs:'Odoo daily revenue by crm.team. Sums exactly to gross.',chan:1,k:o=>[['Total',o.gross[0],o.gross[1],'cur',1]]},
- {id:'ord',a:'odoo',t:'Orders & AOV',src:'orders',cs:'Odoo orders; AOV = rev ÷ orders.',k:o=>[['Orders',o.ord[0],o.ord[1],'n',1],['AOV',o.aov[0],o.aov[1],'cur',1]],c:o=>({fin:[{l:'Orders',k:'orders',c:C.blue,f:1}],tip:'n'})},
+ {id:'ord',a:'odoo',t:'Orders & AOV',src:'orders',cs:'AOV (Shopify) = real website AOV. Blended AOV is inflated by marketplace bulk orders (a Noon \'order\' in Odoo is a batch — e.g. 51 orders averaging E£11.8k in June).',k:o=>[['Orders',o.ord[0],o.ord[1],'n',1],['AOV (Shopify)',o.saov[0],o.saov[1],'cur',1],['AOV (blended)',o.aov[0],o.aov[1],'cur',1]],c:o=>({fin:[{l:'Orders',k:'orders',c:C.blue,f:1}],tip:'n'})},
  {id:'sp',full:1,t:'Ad Spend',src:'spend',cs:'Meta + Google + TikTok, platform-reported.',ad:1,k:o=>[['Total',o.sp[0],o.sp[1],'cur',0],['Meta',o.msp[0],o.msp[1],'cur',0],['Google',o.gsp[0],o.gsp[1],'cur',0],['TikTok',o.tsp[0],o.tsp[1],'cur',0]],
   c:o=>({ad:[{l:'Meta',k:'mspend',c:C.blue,f:1},{l:'Google',k:'gspend',c:C.indigo,f:1},{l:'TikTok',k:'tspend',c:C.pink,f:1}],tip:'cur'})},
  {id:'broas',full:1,a:'blend',t:'Website / Online ROAS',src:'broas',cs:'(Google + Meta pixel + TikTok value) ÷ spend. Scales with attribution.',ad:1,k:o=>[['Blended',o.broas[0],o.broas[1],'x',1],['Google',o.groas[0],o.groas[1],'x',1],['Meta',o.mroas[0],o.mroas[1],'x',1],['TikTok',o.troas[0],o.troas[1],'x',1]],
   c:o=>({ad:[{l:'Meta value',k:'mecomrev',c:C.blue,m:af('meta'),f:1},{l:'Google value',k:'gecomrev',c:C.indigo,m:af('google'),f:1},{l:'TikTok value',k:'ttValue',c:C.pink,m:af('tt'),f:1}],tip:'cur'})},
  {id:'sr',full:1,a:'blend',t:'Spend vs Revenue — per platform',src:'broas',cs:'Revenue on the left axis, spend on the right (dashed) — so the two curves sit on top of each other and correlation is readable. Click legend items to isolate.',ad:1,k:o=>[['Meta ROAS',o.mroas[0],o.mroas[1],'x',1],['Google ROAS',o.groas[0],o.groas[1],'x',1],['TikTok ROAS',o.troas[0],o.troas[1],'x',1],['Total spend',o.sp[0],o.sp[1],'cur',0]],c:o=>({ad:[{l:'Meta revenue',k:'mecomrev',c:C.blue,m:af('meta')},{l:'Meta spend',k:'mspend',c:'#8fc3ff',y2:1},{l:'Google revenue',k:'gecomrev',c:C.indigo,m:af('google')},{l:'Google spend',k:'gspend',c:'#b3b4f7',y2:1},{l:'TikTok revenue',k:'ttValue',c:C.pink,m:af('tt')},{l:'TikTok spend',k:'tspend',c:'#ffc2dd',y2:1}],tip:'cur'})},
- {id:'tr',a:'blend',t:'Total ROAS — incl. Offline',src:'broas',cs:'(Online value + Meta omni offline) ÷ spend.',ad:1,k:o=>[['Total incl. offline',o.totroas[0],o.totroas[1],'x',1],['Website only',o.broas[0],o.broas[1],'x',1]]},
- {id:'mer',a:'odoo',t:'MER & aMER — net of returns',src:'mer',cs:'MER = Shopify-channel revenue NET of returns (blended Odoo refund rate for the range) ÷ spend. Noon/Amazon excluded, cancelled orders never counted. aMER = new-customer revenue net of returns ÷ spend.',ad:1,k:o=>[['MER (Shopify, net)',o.merStore[0],o.merStore[1],'x',1],['aMER (net)',o.amer[0],o.amer[1],'x',1],['All-channel net ÷ spend',o.mer[0],o.mer[1],'x',1]],c:o=>({ad:[{l:'Spend',k:'spend',c:C.orange,f:1}],tip:'cur'})},
+ {id:'tr',a:'blend',t:'Total ROAS — incl. Offline',src:'broas',cs:'(Online value + Meta omni offline) ÷ spend. Omni value daily vs spend (dashed, right axis).',ad:1,k:o=>[['Total incl. offline',o.totroas[0],o.totroas[1],'x',1],['Website only',o.broas[0],o.broas[1],'x',1],['Meta omni value',aSum('metaOmniValue',o.ra)*af('meta'),o.rc?aSum('metaOmniValue',o.rc)*af('meta'):null,'cur',1],['In-store value',o.instore[0],o.instore[1],'cur',1]],c:o=>({ad:[{l:'Meta omni value',k:'metaOmniValue',m:af('meta'),c:C.teal,f:1},{l:'Total spend',k:'spend',c:C.orange,y2:1}],tip:'cur'})},
+ {id:'mer',a:'odoo',t:'MER & aMER — net of returns',src:'mer',cs:'MER = Shopify-channel revenue minus ACTUAL Shopify credit notes (team-tagged in Odoo) ÷ spend. Noon/Amazon excluded, cancelled orders never counted. aMER = new-customer revenue net of returns ÷ spend.',ad:1,k:o=>[['MER (Shopify, net)',o.merStore[0],o.merStore[1],'x',1],['aMER (net)',o.amer[0],o.amer[1],'x',1],['All-channel net ÷ spend',o.mer[0],o.mer[1],'x',1]],c:o=>({ad:[{l:'Spend',k:'spend',c:C.orange,f:1}],tip:'cur'})},
  {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
- {id:'ltg',t:'LTGP : nCAC — cohorts',src:'cacgp',cs:'From your cohort sheet: cumulative gross profit per acquired customer vs acquisition CAC. It IMPROVES as cohorts age — full table in the Media tab.',k:o=>{const L=COHORTS[COHORTS.length-1],l3=COHORTS.slice(-3);return[['Latest cohort 30d',L[6],null,'x',1],['Latest cohort 90d',L[7],null,'x',1],['L3M avg 30d',l3.reduce((a,c)=>a+c[6],0)/3,null,'x',1],['L3M avg 90d',l3.reduce((a,c)=>a+c[7],0)/3,null,'x',1]];}},
- {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: platform spend ÷ platform-reported purchases, scaled by that platform\'s attribution. TikTok does not expose purchase counts in the feed yet — shows — until the TikTok token lands.',ad:1,k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',null,null,'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
+ {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
+
+ {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: platform spend ÷ platform-reported purchases. TikTok purchases now live from the TikTok API (complete payments).',ad:1,k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',o.tcpp[0],o.tcpp[1],'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
  {id:'nvr',full:1,a:'shop',t:'New vs Returning — Revenue, Orders & AOV',src:'orders',cs:'First-time vs returning: revenue, order counts and AOV each, with % vs previous period.',ad:1,k:o=>[['NC revenue',o.ncrev[0],o.ncrev[1],'cur',1],['RC revenue',o.rcrev[0],o.rcrev[1],'cur',1],['NC AOV',o.ncaov[0],o.ncaov[1],'cur',1],['RC AOV',o.rcaov[0],o.rcaov[1],'cur',1],['New',o.nc[0],o.nc[1],'n',1],['Returning',o.rcn[0],o.rcn[1],'n',1]],c:o=>({ad:[{l:'NC revenue',k:'ncrev',c:C.blue,f:1},{l:'RC revenue',k:'rcrev',c:C.indigo,f:1}],tip:'cur'})},
  {id:'fn',a:'shop',t:'Funnel — ATC / Checkout / CVR',src:'cvr',cs:'Shopify cart-adds, checkout, completed ÷ sessions.',ad:1,k:o=>[['ATC %',o.atc[0],o.atc[1],'pct',1],['Checkout %',o.cko[0],o.cko[1],'pct',1],['CVR %',o.cvr[0],o.cvr[1],'pct',1]],c:o=>({ad:[{l:'ATC',k:'atcRatio',c:C.orange},{l:'Checkout',k:'checkoutRatio',c:C.violet},{l:'CVR',k:'cvr',c:C.pink}],tip:'pct'})},
  {id:'ss',a:'shop',t:'Sessions',src:'sessions',cs:'Shopify online store sessions.',ad:1,k:o=>[['Sessions',o.sess[0],o.sess[1],'n',1]],c:o=>({ad:[{l:'Sessions',k:'sessions',c:C.blue,f:1}],tip:'n'})},
  {id:'np',a:'odoo',t:'Online Net Contribution (est)',src:'gp',cs:'Odoo GP net of returns − ad spend − e-com payroll (E£ 372,076/mo prorated). Before HQ overhead.',ad:1,k:o=>[['Net contribution',o.onp[0],o.onp[1],'cur',1],['GP',o.gp[0],o.gp[1],'cur',1],['Ad spend',o.sp[0],o.sp[1],'cur',0]]},
  {id:'is',a:'meta',t:'In-store Revenue from Meta',src:'instoreMeta',cs:'Meta omni − pixel = offline/in-store attributed.',ad:1,k:o=>[['Meta offline value',o.instore[0],o.instore[1],'cur',1]],c:o=>({ad:[{l:'Meta offline',k:'instoreMeta',c:C.orange,m:af('meta'),f:1}],tip:'cur'})}
 ];ST.ord=CARDS.map(c=>c.id);}
-function kH(l){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">(${f(k[2])})</span>`:''}</div></div>`;}).join('');}
+function kH(l){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">prev ${f(k[2])}</span>`:''}</div></div>`;}).join('');}
 
 function draw(cv,cfg,big){
  let sets=[],L=[],ixMap=null;
@@ -320,7 +337,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
  g.querySelectorAll('input[data-k]').forEach(i=>{i.oninput=()=>{const v=+i.value;if(isFinite(v))offI()[i.dataset.k]=v;clearTimeout(window._t);window._t=setTimeout(rOff,500);};});}
 function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3');g.innerHTML='';
  const sv={s:ST.s,e:ST.e};ST.s=addD(O.aw[1],-29);ST.e=O.aw[1];const o=calc();
- document.getElementById('bn3').innerHTML='↻ Synced <b>'+(O.lastSync||'')+'</b>. Commercial-director read: last 30 days vs the 30 before. Every driver is quantified as a % of the total move, with an expected outcome if corrected.';
+ document.getElementById('bn3').innerHTML='↻ Synced <b>'+LSC+' Cairo</b>. Commercial-director read: last 30 days vs the 30 before. Every driver is quantified as a % of the total move, with an expected outcome if corrected.';
  const S=[];const add=(t,rows)=>S.push({t,rows:rows.filter(r=>r&&r[1])});
  const money=v=>'E£ '+Math.round(Math.abs(v)).toLocaleString();
  const nm=x=>x.replace(/^\[[^\]]*\]\s*/,'');
@@ -362,32 +379,33 @@ function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3'
  ST.s=sv.s;ST.e=sv.e;}
 function shade(v,mn,mx,good){if(v==null||!isFinite(v)||mx===mn)return'';const t=(v-mn)/(mx-mn);const q=good>=0?t:1-t;const a=Math.abs(q-.5)*2*.30;return q>=.5?' style="background:rgba(18,160,110,'+a.toFixed(2)+')"':' style="background:rgba(226,58,99,'+(a*.85).toFixed(2)+')"';}
 function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5');g.innerHTML='';
- document.getElementById('bn5').innerHTML='&#8635; Synced <b>'+(O.lastSync||'')+'</b>. Cohort economics from your LTGP:nCAC cohort sheet (units as in the sheet). This is the number that should drive scaling decisions &mdash; it improves as cohorts age because GP accumulates while CAC is paid once. Live auto-computed cohorts land with the customer-level crawl.';
- const money=v=>Math.round(v).toLocaleString();
- const sh2=(v,mn,mx,good)=>shade(v,mn,mx,good);
- const cols=[['Cohort',c=>c[0],0,0],['Cohort size',c=>c[1],v=>money(v),1],['Meta spend',c=>c[2],v=>'$'+money(v),0],['Google spend',c=>c[3],v=>'$'+money(v),0],['Total spend',c=>c[4],v=>'$'+money(v),0],['nCAC',c=>c[5],v=>'$'+v.toFixed(2),-1],['30-day LTGP:nCAC',c=>c[6],v=>v.toFixed(2)+'x',1],['90-day LTGP:nCAC',c=>c[7],v=>v.toFixed(2)+'x',1]];
- let h='<div style="overflow-x:auto"><table class="bt" style="min-width:860px"><tr>'+cols.map(c=>'<th'+(c===cols[0]?' style="text-align:left"':'')+'>'+c[0]+'</th>').join('')+'</tr>';
- const stats={};cols.forEach((c,ci)=>{if(ci===0)return;const vs=COHORTS.map(c2=>c[1](c2));stats[ci]=[Math.min(...vs),Math.max(...vs)];});
- COHORTS.forEach(c2=>{h+='<tr>'+cols.map((c,ci)=>{if(ci===0)return '<td style="text-align:left;font-weight:700">'+c[1](c2)+'</td>';const v=c[1](c2);return '<td'+(c[3]?sh2(v,stats[ci][0],stats[ci][1],c[3]):'')+'>'+c[2](v)+'</td>';}).join('')+'</tr>';});
+ document.getElementById('bn5').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. REAL OurKids cohorts from the Odoo customer crawl (Shopify channel, 64k+ customers): every customer\'s first order defines the cohort; LTGP accumulates their gross profit over 30/90/180/365 days; nCAC = that month\'s total ad spend &divide; new customers. All figures EGP.';
+ const R=cohRows();const money=v=>Math.round(v).toLocaleString();
+ if(!R.length){pnlCard(g,'blend','Media Efficiency','Cohort feed missing — run one sync.','');return;}
+ const cols=[['Cohort',r=>r.m,0,0],['New customers',r=>r.size,v=>money(v),1],['Meta spend',r=>r.ms,v=>money(v),0],['Google spend',r=>r.gs,v=>money(v),0],['TikTok spend',r=>r.ts,v=>money(v),0],['Total spend',r=>r.s,v=>money(v),0],['nCAC',r=>r.ncac,v=>'E&pound; '+v.toFixed(0),-1],['LTGP:nCAC 30d',r=>r.l30,v=>v.toFixed(2)+'x',1],['90d',r=>r.l90,v=>v.toFixed(2)+'x',1],['180d',r=>r.l180,v=>v.toFixed(2)+'x',1],['365d',r=>r.l365,v=>v.toFixed(2)+'x',1]];
+ let h='<div style="overflow-x:auto"><table class="bt" style="min-width:1000px"><tr>'+cols.map((c,i)=>'<th'+(i===0?' style="text-align:left"':'')+'>'+c[0]+'</th>').join('')+'</tr>';
+ const st2={};cols.forEach((c,ci)=>{if(!ci)return;const vs=R.map(r=>c[1](r)).filter(v=>v!=null&&isFinite(v));st2[ci]=vs.length?[Math.min(...vs),Math.max(...vs)]:[0,0];});
+ R.forEach(r=>{h+='<tr>'+cols.map((c,ci)=>{if(!ci)return '<td style="text-align:left;font-weight:700">'+r.m+'</td>';const v=c[1](r);if(v==null||!isFinite(v))return '<td>&mdash;</td>';return '<td'+(c[3]?shade(v,st2[ci][0],st2[ci][1],c[3]):'')+'>'+c[2](v)+'</td>';}).join('')+'</tr>';});
  h+='</table></div>';
- const l6=COHORTS.slice(-6),f6=COHORTS.slice(0,6);
- const a30=l6.reduce((a,c)=>a+c[6],0)/6,b30=f6.reduce((a,c)=>a+c[6],0)/6;
- const bc=COHORTS.reduce((a,c)=>c[6]>a[6]?c:a),wc=COHORTS.reduce((a,c)=>c[6]<a[6]?c:a);
- const cacL3=COHORTS.slice(-3).reduce((a,c)=>a+c[5],0)/3,cac24=COHORTS.slice(6,18).reduce((a,c)=>a+c[5],0)/12;
- h+='<div class="ins" style="margin-top:8px">'
- +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Every cohort pays back inside 30 days (payback column = month 0 across the sheet) &mdash; CAC is front-loaded, GP compounds after. That is why scaling new-customer spend at current nCAC is rational.</span></div>'
- +'<div class="row"><span class="dot" style="background:'+(a30>=b30?C.grn:C.red)+'"></span><span>Last 6 cohorts average <b>'+a30.toFixed(2)+'x</b> 30-day LTGP:nCAC vs '+b30.toFixed(2)+'x for the first 6 cohorts &mdash; unit economics '+(a30>=b30?'improved':'deteriorated')+' as spend scaled.</span></div>'
- +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc[0]+' ('+bc[6].toFixed(2)+'x at 30d, nCAC $'+bc[5].toFixed(2)+'). Weakest: '+wc[0]+' ('+wc[6].toFixed(2)+'x, nCAC $'+wc[5].toFixed(2)+'). Study what acquisition mix ran in '+bc[0]+'.</span></div>'
- +'<div class="row"><span class="dot" style="background:'+(cacL3<=cac24?C.grn:C.orange)+'"></span><span>nCAC last 3 cohorts averages $'+cacL3.toFixed(2)+' vs $'+cac24.toFixed(2)+' through 2024 &mdash; '+(cacL3<=cac24?'holding':'creeping up')+' while cohort sizes roughly tripled.</span></div></div>';
- pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC','Cohort size, spend split, nCAC and cumulative LTGP:nCAC at 30/90 days. Colour: green = strongest, red = weakest per column.',h);}
+ const M2=R.filter(r=>r.l30!=null);
+ if(M2.length){const l3=M2.slice(-3),f3=M2.slice(0,3);
+  const a30=l3.reduce((a,r)=>a+r.l30,0)/l3.length,b30=f3.reduce((a,r)=>a+r.l30,0)/f3.length;
+  const grow=M2.filter(r=>r.l90!=null).map(r=>r.l90/r.l30-1);const gavg=grow.length?grow.reduce((a,b)=>a+b,0)/grow.length*100:0;
+  const bc=M2.reduce((a,r)=>r.l30>a.l30?r:a),wc=M2.reduce((a,r)=>r.l30<a.l30?r:a);
+  h+='<div class="ins" style="margin-top:8px">'
+  +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>LTGP:nCAC GROWS with cohort age &mdash; on average +'+gavg.toFixed(0)+'% from 30d to 90d, because GP keeps accumulating while CAC was paid once. Dashes mean the cohort is too young for that window.</span></div>'
+  +'<div class="row"><span class="dot" style="background:'+(a30>=b30?C.grn:C.red)+'"></span><span>Last 3 cohorts average <b>'+a30.toFixed(2)+'x</b> at 30 days vs '+b30.toFixed(2)+'x for the earliest measurable cohorts.</span></div>'
+  +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc.m+' ('+bc.l30.toFixed(2)+'x, nCAC E&pound; '+bc.ncac.toFixed(0)+'). Weakest: '+wc.m+' ('+wc.l30.toFixed(2)+'x, nCAC E&pound; '+wc.ncac.toFixed(0)+'). Pull the media mix that ran in '+bc.m+'.</span></div></div>';}
+ pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);}
 function pnlCtl(k,v){ST[k]=v;rPnl();}
 function pnlCard(g,a,t,cs2,body){const el=document.createElement('div');el.className='card full';el.dataset.a=a;
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+t+'</div><div class="cs">'+cs2+'</div></div></div>'+body;g.appendChild(el);}
 function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
- const EP=372076,HQW=1256706,RM=0.219,CO=(FF.company||{});
+ const EP=372076,RM=0.219,CO=(FF.company||{});
  const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=O.fin.refund[i]*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
- const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,gs:0,ts:0,nc:0,rc:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.nc+=(O.ad.ncrev||[])[i]||0;a.rc+=(O.ad.rcrev||[])[i]||0;}
+ const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=(O.shop.ref[i]||0)*1000;SH[m].gp+=(O.shop.gp[i]||0)*1000;SH[m].o+=O.shop.ord[i]||0;}
+ const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,gs:0,ts:0,nc:0,rc:0,io:0,ov:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.nc+=(O.ad.ncrev||[])[i]||0;a.rc+=(O.ad.rcrev||[])[i]||0;a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;}
  const BM={},BD={},names=(O.bl&&O.bl.b)?Object.keys(O.bl.b):[];
  if(O.bl)for(let i=0;i<O.bl.n;i++){const m=bD(i).slice(0,7);BD[m]=(BD[m]||0)+1;BM[m]=BM[m]||{};names.forEach(n=>{BM[m][n]=(BM[m][n]||0)+(O.bl.b[n][i]||0);});}
  const allM=Object.keys(M).sort();
@@ -395,78 +413,57 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
  if(ST.pm0>ST.pm1){const t0=ST.pm0;ST.pm0=ST.pm1;ST.pm1=t0;}
  const mons=allM.filter(m=>m>=ST.pm0&&m<=ST.pm1);
- document.getElementById('bn4').innerHTML='&#8635; Synced <b>'+(O.lastSync||'')+'</b>. Colour scale per row: green = best month, red = worst. Ads cover '+O.aw[0]+' &rarr; '+O.aw[1]+(O.bl&&O.bl.n?'; retail POS accounting covers '+bD(0)+' &rarr; '+bD(O.bl.n-1):'')+'. Months outside a feed show &mdash;.';
+ document.getElementById('bn4').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Colour: green = best month, red = worst, per row. All refunds, COGS, payroll, rent and OpEx below are ACTUAL accounting figures from Odoo (team-tagged credit notes + the 31.* expense tree). Ads cover 2025-07-25 onward.';
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
  ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><label>Customer type</label><select onchange="pnlCtl(&quot;pcust&quot;,this.value)"><option value="nc"'+(ST.pcust==='nc'?' selected':'')+'>First-time</option><option value="rc"'+(ST.pcust==='rc'?' selected':'')+'>Returning</option></select><div class="sp"></div><span class="cs">Filter applies to every table on this tab.</span></div>';
  g.appendChild(ctl);
- const nf=x=>x.g?1-x.r/x.g:1;
  const T=(lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+'</th>').join('')+'</tr>';
   lines.forEach(L=>{if(L===null){h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:2px;border:0"></td></tr>';return;}
    const vals=cols.map(L.f);const nums=vals.filter(v=>v!=null&&isFinite(v));const mn=nums.length?Math.min(...nums):0,mx=nums.length?Math.max(...nums):0;
    h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left">'+L.n+'</td>'+vals.map(v=>'<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+(v==null||!isFinite(v)?'&mdash;':L.fmt(v))+'</td>').join('')+'</tr>';});
   return h+'</table></div>';};
  const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
- const OL=[
-  {n:'Gross sales',f:m=>M[m].g,fmt:POS,sh:1,tt:'Odoo confirmed sale.order'},
-  {n:'Less: refunds',f:m=>-M[m].r,fmt:NEG,sh:1,tt:'Posted credit notes'},
-  {n:'Net revenue',f:m=>M[m].g-M[m].r,fmt:POS,sh:1,b:1},
-  {n:'COGS',f:m=>-(M[m].g-M[m].gp),fmt:NEG,sh:0,tt:'Gross &minus; Odoo margin'},
-  {n:'Gross profit',f:m=>M[m].gp,fmt:POS,sh:1,b:1},
-  {n:'Direct advertising &mdash; Meta',f:m=>A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0},
-  {n:'Direct advertising &mdash; Google',f:m=>A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
-  {n:'Direct advertising &mdash; TikTok',f:m=>A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'Fallback feed only covers the last ~60 days until TIKTOK_TOKEN is added to the repo secrets'},
-  {n:'Direct advertising &mdash; total',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Platform-reported spend, months the ads feed covers'},
-  {n:'Profit contribution',f:m=>A[m]&&A[m].s?M[m].gp*nf(M[m])-A[m].s:null,fmt:POS,sh:1,b:1,tt:'GP net of returns &minus; ads'},
-  {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team &mdash; Excel payroll Jun-2026'},
-  {n:'EBITDA est (online)',f:m=>A[m]&&A[m].s?M[m].gp*nf(M[m])-A[m].s-EP:null,fmt:POS,sh:1,b:1},
-  null,
-  {n:'Orders',f:m=>M[m].o,fmt:v=>Math.round(v).toLocaleString(),sh:1},
-  {n:'AOV',f:m=>M[m].o?M[m].g/M[m].o:null,fmt:POS,sh:1},
-  {n:'Refunds, %',f:m=>M[m].g?M[m].r/M[m].g*100:null,fmt:PCT,sh:1,gd:-1},
-  {n:'COGS, %',f:m=>M[m].g?(M[m].g-M[m].gp)/M[m].g*100:null,fmt:PCT,sh:1,gd:-1},
-  {n:'Gross profit margin, %',f:m=>M[m].g?M[m].gp/M[m].g*100:null,fmt:PCT,sh:1},
-  {n:'Contribution margin, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?(M[m].gp*nf(M[m])-A[m].s)/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1},
-  {n:'MER, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?A[m].s/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1,gd:-1,tt:'Ads &divide; net revenue'},
-  {n:'MER, x',f:m=>A[m]&&A[m].s?(M[m].g-M[m].r)/A[m].s:null,fmt:X,sh:1},
-  {n:'EBITDA, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?(M[m].gp*nf(M[m])-A[m].s-EP)/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1}];
- let h1=T(OL,mons);
- const nr=mons.map(m=>M[m].g-M[m].r);const bi=nr.indexOf(Math.max(...nr)),wi=nr.indexOf(Math.min(...nr));
- const rr=mons.map(m=>M[m].g?M[m].r/M[m].g*100:0);const wri=rr.indexOf(Math.max(...rr));
- h1+='<div class="ins" style="margin-top:8px">'
- +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Best month: '+mons[bi]+' &mdash; E&pound; '+money(nr[bi])+' net.</span></div>'
- +'<div class="row"><span class="dot" style="background:'+C.red+'"></span><span>Worst month: '+mons[wi]+' &mdash; E&pound; '+money(nr[wi])+' net.</span></div>'
- +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>Highest refund pressure: '+mons[wri]+' at '+rr[wri].toFixed(1)+'% of gross.</span></div></div>';
- pnlCard(g,'odoo','All Online Channels &mdash; Monthly P&L (Shopify + Noon + Amazon + Homzmart)','Odoo daily, rolled up per month. Sales &rarr; refunds &rarr; net &rarr; COGS &rarr; GP &rarr; ads (per platform) &rarr; contribution &rarr; OpEx &rarr; EBITDA, then the % block. Hover a line for its definition.',h1);
- const shKey=Object.keys(O.fin.chD||{}).find(k=>/shopify/i.test(k));
- if(shKey){const SM={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);SM[m]=(SM[m]||0)+(O.fin.chD[shKey][i]||0)*1000;}
-  const rrM=m=>M[m]&&M[m].g?M[m].r/M[m].g:0,gpM=m=>M[m]&&M[m].g?M[m].gp/M[m].g:0;
-  const sNet=m=>(SM[m]||0)*(1-rrM(m)),sGp=m=>sNet(m)*gpM(m);
+ // ---- 1 · SHOPIFY P&L — ACTUALS ----
+ if(O.shop){
   const SL2=[
-   {n:'Gross sales (Shopify channel)',f:m=>SM[m]||null,fmt:POS,sh:1,tt:'Odoo revenue on the Shopify sales team. Cancelled orders are never counted (state must be sale/done).'},
-   {n:'Less: refunds est',f:m=>SM[m]?-(SM[m]*rrM(m)):null,fmt:NEG,sh:1,tt:'Blended Odoo refund rate for that month applied to the channel &mdash; per-channel credit notes are not split in the ERP'},
-   {n:'Net revenue est',f:m=>SM[m]?sNet(m):null,fmt:POS,sh:1,b:1},
-   {n:'COGS est',f:m=>SM[m]?-(sNet(m)*(1-gpM(m))):null,fmt:NEG,sh:0,tt:'That month&rsquo;s blended Odoo GP% applied'},
-   {n:'Gross profit est',f:m=>SM[m]?sGp(m):null,fmt:POS,sh:1,b:1},
-   {n:'Direct advertising &mdash; total',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'All ad spend charged to Shopify &mdash; ads drive this channel'},
-   {n:'Profit contribution',f:m=>SM[m]&&A[m]&&A[m].s?sGp(m)-A[m].s:null,fmt:POS,sh:1,b:1},
-   {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0},
-   {n:'EBITDA est (Shopify)',f:m=>SM[m]&&A[m]&&A[m].s?sGp(m)-A[m].s-EP:null,fmt:POS,sh:1,b:1},
+   {n:'Gross sales',f:m=>SH[m]&&SH[m].g?SH[m].g:null,fmt:POS,sh:1,tt:'Odoo Shopify sales team, confirmed orders only &mdash; cancelled never counted'},
+   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,tt:'Posted credit notes tagged to the Shopify team'},
+   {n:'Net revenue',f:m=>SH[m]&&SH[m].g?SH[m].g-SH[m].r:null,fmt:POS,sh:1,b:1},
+   {n:'COGS (actual)',f:m=>SH[m]&&SH[m].g?-(SH[m].g-SH[m].gp):null,fmt:NEG,sh:0,tt:'Gross &minus; Odoo margin, Shopify channel only'},
+   {n:'Gross profit',f:m=>SH[m]&&SH[m].g?SH[m].gp:null,fmt:POS,sh:1,b:1},
+   {n:'Ads &mdash; Meta',f:m=>A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0},
+   {n:'Ads &mdash; Google',f:m=>A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
+   {n:'Ads &mdash; TikTok',f:m=>A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'TikTok API history baked in for the full year'},
+   {n:'Ads &mdash; total',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0},
+   {n:'Profit contribution',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?SH[m].gp-SH[m].r*(SH[m].gp/SH[m].g)-A[m].s:null,fmt:POS,sh:1,b:1,tt:'GP net of refunded margin &minus; all ads'},
+   {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026'},
+   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?SH[m].gp-SH[m].r*(SH[m].gp/SH[m].g)-A[m].s-EP:null,fmt:POS,sh:1,b:1},
    null,
-   {n:'MER, x (net &divide; ads)',f:m=>SM[m]&&A[m]&&A[m].s?sNet(m)/A[m].s:null,fmt:X,sh:1},
-   {n:'MER, %',f:m=>SM[m]&&A[m]&&A[m].s&&sNet(m)?A[m].s/sNet(m)*100:null,fmt:PCT,sh:1,gd:-1},
-   {n:'EBITDA, %',f:m=>SM[m]&&A[m]&&A[m].s&&sNet(m)?(sGp(m)-A[m].s-EP)/sNet(m)*100:null,fmt:PCT,sh:1}];
-  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (the channel ads actually drive)','Shopify-channel sales only &mdash; Noon/Amazon/Homzmart excluded. Refunds and COGS use that month&rsquo;s blended Odoo rates (the ERP does not split credit notes by channel).',T(SL2,mons));}
+   {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1},
+   {n:'AOV (real)',f:m=>SH[m]&&SH[m].o?SH[m].g/SH[m].o:null,fmt:POS,sh:1},
+   {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1},
+   {n:'GP margin, %',f:m=>SH[m]&&SH[m].g?SH[m].gp/SH[m].g*100:null,fmt:PCT,sh:1},
+   {n:'MER, x (net &divide; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?(SH[m].g-SH[m].r)/A[m].s:null,fmt:X,sh:1}];
+  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','The channel ads drive. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons));}
+ // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
+ if(O.exp&&Object.keys(O.exp).length){
+  const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Maintenance','Comms & internet','Other OpEx'];
+  const EL=GRP.map(gr=>({n:gr,f:m=>O.exp[m]&&O.exp[m][gr]?-O.exp[m][gr]:null,fmt:NEG,sh:1,gd:-1,tt:gr==='Offline advertising & gifts'?'ADV accounts incl. web/social &mdash; can overlap platform-reported ad spend where agencies invoice through bills':(gr==='Packing & bags'?'Wrapping and plastic bags account &mdash; the packing cost you asked for':'')}))
+   .concat([{n:'Total OpEx (accounting)',f:m=>O.exp[m]?-Object.values(O.exp[m]).reduce((a,b)=>a+b,0):null,fmt:NEG,sh:1,gd:-1,b:1}]);
+  pnlCard(g,'odoo','OpEx &mdash; ACTUAL Monthly Expenses (Odoo 31.* accounts)','Straight from the posted expense ledger: salaries, real branch rent, utilities, packing, payment-collection fees &mdash; everything readable, by month.',T(EL,mons.filter(m=>O.exp[m])));}
+ // ---- 3 · CUSTOMER-TYPE P&L ----
  const ck=ST.pcust;const cmons=mons.filter(m=>A[m]&&(A[m].nc>0||A[m].rc>0));
  if(cmons.length){const gpP=CO.gpPct||0.266;const CV=m=>ck==='nc'?A[m].nc:A[m].rc;
   const CL=[
    {n:'Gross revenue',f:m=>CV(m)||null,fmt:POS,sh:1,tt:'Shopify revenue by customer type'},
-   {n:'COGS est ('+((1-gpP)*100).toFixed(1)+'%)',f:m=>CV(m)?-CV(m)*(1-gpP):null,fmt:NEG,sh:0,tt:'Blended Odoo GP% applied &mdash; per-type COGS needs the customer crawl'},
+   {n:'COGS est ('+((1-gpP)*100).toFixed(1)+'%)',f:m=>CV(m)?-CV(m)*(1-gpP):null,fmt:NEG,sh:0},
    {n:'Gross profit est',f:m=>CV(m)?CV(m)*gpP:null,fmt:POS,sh:1,b:1},
-   {n:'Direct advertising & marketing',f:m=>ck==='nc'&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:ck==='nc'?'Full ad spend charged to first-time (acquisition view)':'Ads are charged to first-time &mdash; returning carries none'},
+   {n:'Ads (acquisition view)',f:m=>ck==='nc'&&A[m].s?-A[m].s:null,fmt:NEG,sh:0},
    {n:'Profit contribution',f:m=>CV(m)?(ck==='nc'?CV(m)*gpP-(A[m].s||0):CV(m)*gpP):null,fmt:POS,sh:1,b:1},
    {n:ck==='nc'?'aMER, x (new-customer revenue &divide; ad spend)':'Share of online gross, %',f:m=>ck==='nc'?(A[m].s?A[m].nc/A[m].s:null):(M[m]&&M[m].g?A[m].rc/M[m].g*100:null),fmt:ck==='nc'?X:PCT,sh:1}];
-  pnlCard(g,'shop',(ck==='nc'?'First-time':'Returning')+' Customers &mdash; Monthly P&L','Switch First-time / Returning in the filter bar above. Months without Shopify customer-type coverage are hidden.',T(CL,cmons));}
+  pnlCard(g,'shop',(ck==='nc'?'First-time':'Returning')+' Customers &mdash; Monthly P&L','Switch First-time / Returning in the filter bar above.',T(CL,cmons));}
+ // ---- 4 · RETAIL ----
  if(O.bl&&O.bl.n&&names.length){
   const bm=Object.keys(BM).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
   if(bm.length){
@@ -474,44 +471,51 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
   const cov=m=>Math.min(1,(BD[m]||0)/dim(m));
   const h2=T(names.map(n=>({n:n,f:m=>BM[m][n]||0,fmt:POS,sh:1}))
     .concat([{n:'Network',f:m=>names.reduce((a2,n)=>a2+(BM[m][n]||0),0),fmt:POS,sh:1,b:1}]),bm);
-  pnlCard(g,'odoo','Retail &mdash; Monthly Revenue by Branch (live POS accounting)','Colour graded per branch across months. Fixed costs in the P&L blocks below are pro-rated for partial months.',h2);
+  pnlCard(g,'odoo','Retail &mdash; Monthly Revenue by Branch (live POS accounting)','Colour graded per branch across months.',h2);
+  const RB=O.rentB||{};const rAvg={};Object.keys(RB).forEach(n=>{const vs=Object.values(RB[n]);rAvg[n]=vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:0;});
   const FXB={};FF.branches.forEach(b=>FXB[b.name]=b);
-  const bmF=bm.filter(m=>cov(m)>=0.5);let h3='';
+  const bmF=bm.filter(m=>cov(m)>=0.5);
+  const netRev=m=>names.reduce((a2,n)=>a2+(BM[m][n]||0),0);
+  let h3='';
   names.slice().sort((a,b)=>bm.reduce((s2,m)=>s2+(BM[m][b]||0),0)-bm.reduce((s2,m)=>s2+(BM[m][a]||0),0)).forEach(n=>{
-   const B=FXB[n]||{payroll:0,rentEst:0,opexEst:0};
+   const B=FXB[n]||{payroll:0};
+   const rent=m=>{const v=(RB[n]||{})[m];return v!=null&&v>0?v:rAvg[n]||null;};
+   const share=m=>netRev(m)?(BM[m][n]||0)/netRev(m):0;
+   const util=m=>{const e=O.exp&&O.exp[m];if(!e)return null;return ((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*share(m);};
+   const mkt=m=>{const a=A[m];if(!a||!a.s)return null;return a.ms*(a.ov?a.io/a.ov:0)*share(m);};
+   const contrib=m=>(BM[m][n]||0)*RM-B.payroll*cov(m)-(rent(m)||0)*cov(m)-(util(m)||0)-(mkt(m)||0);
    const BL=[
-    {n:'Revenue',f:m=>BM[m][n]||0,fmt:POS,sh:1},
-    {n:'Est. GP net of returns (21.9%)',f:m=>(BM[m][n]||0)*RM,fmt:POS,sh:1,tt:'Odoo GP 26.6% &times; (1 &minus; refund rate 17.5%)'},
-    {n:'Payroll',f:m=>-B.payroll*cov(m),fmt:NEG,sh:0,tt:'Excel payroll Jun-2026 &mdash; pro-rated for partial months'},
-    {n:'Rent est',f:m=>-B.rentEst*cov(m),fmt:NEG,sh:0,tt:'Editable estimate (8% of revenue benchmark)'},
-    {n:'OpEx est',f:m=>-B.opexEst*cov(m),fmt:NEG,sh:0,tt:'Editable estimate (5% of revenue benchmark)'},
-    {n:'Contribution',f:m=>(BM[m][n]||0)*RM-(B.payroll+B.rentEst+B.opexEst)*cov(m),fmt:POS,sh:1,b:1},
-    {n:'Contribution margin, %',f:m=>(BM[m][n]||0)?((BM[m][n]||0)*RM-(B.payroll+B.rentEst+B.opexEst)*cov(m))/(BM[m][n]||1)*100:null,fmt:PCT,sh:1}];
+    {n:'Revenue (POS accounting)',f:m=>BM[m][n]||0,fmt:POS,sh:1},
+    {n:'Est. GP net of returns (21.9%)',f:m=>(BM[m][n]||0)*RM,fmt:POS,sh:1,tt:'Odoo GP 26.6% &times; (1 &minus; refund rate 17.5%) &mdash; POS margin not itemised in accounting'},
+    {n:'Payroll (Excel, exact)',f:m=>-B.payroll*cov(m),fmt:NEG,sh:0},
+    {n:'Rent (ACTUAL accounting)',f:m=>rent(m)!=null?-rent(m)*cov(m):null,fmt:NEG,sh:0,tt:'RENT Branches ledger lines matched to this branch by lease description; months without a posted line use the branch 12-month average. Dokki/Nasr rent partly sits in unlabelled lines.'},
+    {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:0,tt:'Actual electricity/water/gas + maintenance from accounting, allocated by revenue share'},
+    {n:'Alloc. Meta in-store spend',f:m=>mkt(m)!=null?-mkt(m):null,fmt:NEG,sh:0,tt:'Meta spend &times; in-store share of omni value &times; branch revenue share &mdash; the marketing cost behind the Meta-attributed walk-ins'},
+    {n:'Contribution',f:m=>contrib(m),fmt:POS,sh:1,b:1},
+    {n:'Contribution margin, %',f:m=>(BM[m][n]||0)?contrib(m)/(BM[m][n]||1)*100:null,fmt:PCT,sh:1}];
    h3+='<div style="font-weight:800;font-size:13.5px;margin:14px 0 2px">'+n+'</div>'+T(BL,bmF.length?bmF:bm);});
-  pnlCard(g,'odoo','Retail &mdash; P&L per Branch','Each branch separately: revenue &rarr; est. GP &rarr; payroll &rarr; rent &rarr; opex &rarr; contribution. Partial edge months are dropped so fixed costs are never charged against a few days of sales. Payroll exact; rent/opex are the editable estimates from the Offline tab.',h3);
-  const cmb=mons.filter(m=>A[m]&&A[m].s&&BM[m]);
+  pnlCard(g,'odoo','Retail &mdash; P&L per Branch (actual rent + allocated marketing)','Revenue &rarr; est. GP &rarr; exact payroll &rarr; ACTUAL rent &rarr; allocated utilities/maintenance &rarr; allocated Meta in-store spend &rarr; contribution. Partial edge months dropped.',h3);
+  // ---- 5 · COMPANY P&L — ACTUAL OPEX ----
+  const cmb=mons.filter(m=>BM[m]&&O.exp&&O.exp[m]);
   if(cmb.length){
    const retRev=m=>names.reduce((a2,n)=>a2+(BM[m][n]||0),0);
-   const brFix=m=>names.reduce((a2,n)=>{const B=FXB[n]||{payroll:0,rentEst:0,opexEst:0};return a2+(B.payroll+B.rentEst+B.opexEst)*cov(m);},0);
-   const onNet=m=>M[m].g-M[m].r,onGpN=m=>M[m].gp*nf(M[m]);
+   const onNet=m=>M[m].g-M[m].r,onGpN=m=>M[m].gp*(M[m].g?1-M[m].r/M[m].g:1);
+   const opx=m=>Object.values(O.exp[m]).reduce((a,b)=>a+b,0);
+   const eb=m=>onGpN(m)+retRev(m)*RM-(A[m]&&A[m].s?A[m].s:0)-opx(m);
    const CM=[
-    {n:'Online net revenue',f:m=>onNet(m),fmt:POS,sh:1},
+    {n:'Online net revenue (all channels)',f:m=>onNet(m),fmt:POS,sh:1},
     {n:'Retail revenue',f:m=>retRev(m),fmt:POS,sh:1},
     {n:'Total revenue',f:m=>onNet(m)+retRev(m),fmt:POS,sh:1,b:1},
-    {n:'Gross profit (online net + retail est)',f:m=>onGpN(m)+retRev(m)*RM,fmt:POS,sh:1,b:1},
-    {n:'Direct advertising & marketing',f:m=>-A[m].s,fmt:NEG,sh:0},
-    {n:'Profit contribution',f:m=>onGpN(m)+retRev(m)*RM-A[m].s,fmt:POS,sh:1,b:1},
-    {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0},
-    {n:'OpEx: branch payroll + rent + opex',f:m=>-brFix(m),fmt:NEG,sh:0,tt:'All 7 branches, pro-rated for partial months'},
-    {n:'OpEx: HQ + warehouses + envelope',f:m=>-HQW,fmt:NEG,sh:0,tt:'HQ 783,651 + warehouses 420,305 + envelope 52,750 &mdash; payroll only; HQ rent/utilities/finance not readable'},
-    {n:'Company EBITDA est',f:m=>onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW,fmt:POS,sh:1,b:1},
-    {n:'EBITDA, %',f:m=>{const tr2=onNet(m)+retRev(m);return tr2?(onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW)/tr2*100:null;},fmt:PCT,sh:1},
-    {n:'MER, x (total rev &divide; ads)',f:m=>(onNet(m)+retRev(m))/A[m].s,fmt:X,sh:1}];
+    {n:'Gross profit (online actual + retail est)',f:m=>onGpN(m)+retRev(m)*RM,fmt:POS,sh:1,b:1},
+    {n:'Platform ads (Meta+Google+TikTok)',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Platform-reported. Note: parts may ALSO appear in the accounting ADV accounts below &mdash; where agencies invoice through bills the two overlap'},
+    {n:'Total OpEx (accounting, all 31.* accounts)',f:m=>-opx(m),fmt:NEG,sh:0,tt:'Salaries, all rent, utilities, packing, collection fees, offline adv, maintenance, comms, vehicles, other &mdash; the real posted expenses'},
+    {n:'Company EBITDA est',f:m=>eb(m),fmt:POS,sh:1,b:1,tt:'GP &minus; platform ads &minus; accounting OpEx. Conservative: if agency-billed ad spend is inside the ADV accounts it is counted twice here'},
+    {n:'EBITDA, %',f:m=>{const tr2=onNet(m)+retRev(m);return tr2?eb(m)/tr2*100:null;},fmt:PCT,sh:1},
+    {n:'MER, x (total rev &divide; platform ads)',f:m=>A[m]&&A[m].s?(onNet(m)+retRev(m))/A[m].s:null,fmt:X,sh:1}];
    let h4=T(CM,cmb);
-   const eb=cmb.map(m=>onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW);
-   const pos=eb.filter(v=>v>0).length;
-   h4+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+(pos>=cmb.length/2?C.grn:C.red)+'"></span><span>'+pos+' of '+cmb.length+' months EBITDA-positive at company level. Best: '+cmb[eb.indexOf(Math.max(...eb))]+' (E&pound; '+money(Math.max(...eb))+'), worst: '+cmb[eb.indexOf(Math.min(...eb))]+' (E&pound; '+money(Math.min(...eb))+').</span></div></div>';
-   pnlCard(g,'ins','Company &mdash; Combined Monthly P&L (online + all branches)','One P&L for the whole business &mdash; months where ads + POS accounting both exist. Excludes HQ rent, utilities and finance costs: not readable from the ERP.',h4);}
+   const ebv=cmb.map(eb);const pos=ebv.filter(v=>v>0).length;
+   h4+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+(pos>=cmb.length/2?C.grn:C.red)+'"></span><span>'+pos+' of '+cmb.length+' months EBITDA-positive. Best: '+cmb[ebv.indexOf(Math.max(...ebv))]+' (E&pound; '+money(Math.max(...ebv))+'), worst: '+cmb[ebv.indexOf(Math.min(...ebv))]+' (E&pound; '+money(Math.min(...ebv))+').</span></div></div>';
+   pnlCard(g,'ins','Company &mdash; Combined Monthly P&L (ACTUAL OpEx)','Online + retail, with the REAL posted expense ledger as OpEx. Months where POS accounting + expenses both exist.',h4);}
   }}
 }
 window.unlock=unlock;window.pnlCtl=pnlCtl;window.rMedia=rMedia;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;
