@@ -131,6 +131,36 @@ def pull_branches():
     log("branches live", {b: int(sum(v)) for b, v in br.items()})
     return out
 
+
+def pull_products():
+    """Top products by revenue, last 30d vs previous 30d, from sale.order.line."""
+    def win(a, b):
+        rows = ogroup("sale.order.line",
+            [["order_id.state", "in", ["sale", "done"]], ["display_type", "=", False],
+             ["product_id", "not in", [24]],
+             ["order_id.date_order", ">=", a.isoformat() + " 00:00:00"],
+             ["order_id.date_order", "<=", b.isoformat() + " 23:59:59"]],
+            ["price_subtotal", "product_uom_qty"], ["product_id"])
+        out = {}
+        for r in rows:
+            p = r.get("product_id")
+            if not p: continue
+            nm = str(p[1])[:48]
+            if "discount" in nm.lower() or "shipping" in nm.lower(): continue
+            out[nm] = [round(r.get("price_subtotal") or 0), int(r.get("product_uom_qty") or 0)]
+        return out
+    cur = win(END - datetime.timedelta(days=29), END)
+    prev = win(END - datetime.timedelta(days=59), END - datetime.timedelta(days=30))
+    top = sorted(cur.items(), key=lambda x: -x[1][0])[:20]
+    prod = [{"n": n, "r": v[0], "q": v[1], "p": prev.get(n, [0, 0])[0]} for n, v in top]
+    # biggest decliners: in prev top but collapsed
+    ptop = sorted(prev.items(), key=lambda x: -x[1][0])[:20]
+    for n, v in ptop:
+        if n not in cur and len(prod) < 28:
+            prod.append({"n": n, "r": 0, "q": 0, "p": v[0]})
+    log("products", len(prod))
+    return prod
+
 # ------------------------------------------------------------------ ADS + SHOP
 GRAPH = "https://graph.facebook.com/v21.0"
 def _av(actions, keys):
@@ -348,6 +378,7 @@ def build():
             log(fn.__name__, "FAILED", str(e)[:200]); return None
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
+    prod = safe(pull_products) or []
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}}
@@ -369,7 +400,7 @@ def build():
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
-    online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {},
+    online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
