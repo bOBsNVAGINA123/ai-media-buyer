@@ -13,7 +13,7 @@ os.makedirs(DOCS, exist_ok=True)
 FIN_START = "2024-08-05"
 today = datetime.date.today()
 END = today - datetime.timedelta(days=1)
-AD_START = END - datetime.timedelta(days=59)
+AD_START = END - datetime.timedelta(days=364)
 BL_START = END - datetime.timedelta(days=119)          # branches: 120d so compare works
 def drange(a, b):
     out, d = [], a
@@ -182,9 +182,14 @@ def meta_accounts(tok):
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
     ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
+    chunks = []
+    a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
+    while a <= endd:
+        b = min(endd, a + datetime.timedelta(days=89)); chunks.append((a.isoformat(), b.isoformat())); a = b + datetime.timedelta(days=1)
     for acct in meta_accounts(tok):
+      for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
-             "time_range": json.dumps({"since": win[0], "until": win[-1]}),
+             "time_range": json.dumps({"since": c0, "until": c1}),
              "fields": "spend,action_values,actions", "limit": 500}
         d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
         for row in (d.get("data") or []):
