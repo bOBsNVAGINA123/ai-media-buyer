@@ -246,7 +246,7 @@ def pull_shopify(win):
     return out
 
 def pull_google(win):
-    out = {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}}
+    out = {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
     dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
     if not (dev and cid): log("google skipped"); return out
     try:
@@ -259,7 +259,7 @@ def pull_google(win):
         with urllib.request.urlopen(req, timeout=60) as r: at = json.loads(r.read()).get("access_token")
     except Exception as e:
         log("google token", str(e)[:120]); return out
-    gql = ("SELECT segments.date, metrics.cost_micros, metrics.conversions_value FROM customer "
+    gql = ("SELECT segments.date, metrics.cost_micros, metrics.conversions_value, metrics.conversions FROM customer "
            "WHERE segments.date BETWEEN '%s' AND '%s'" % (win[0], win[-1]))
     hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
     lc = os.environ.get("GOOGLE_LOGIN_CID", "")
@@ -276,6 +276,7 @@ def pull_google(win):
             if day not in out["gspend"]: continue
             out["gspend"][day] += float(row.get("metrics", {}).get("costMicros", 0)) / 1e6
             out["gecomrev"][day] += float(row.get("metrics", {}).get("conversionsValue", 0))
+            out["gconv"][day] += float(row.get("metrics", {}).get("conversions", 0))
     log("google days", sum(1 for v in out["gspend"].values() if v))
     return out
 
@@ -308,7 +309,7 @@ def merge_fallback(win, shop, goog, tik, meta):
             if d in fdx and not dct[k].get(d):
                 dct[k][d] = fb.get(fk, [0] * len(fdx))[fdx[d]]
     for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]: fill(shop, k, k)
-    fill(goog, "gspend", "gspend"); fill(goog, "gecomrev", "gecomrev")
+    fill(goog, "gspend", "gspend"); fill(goog, "gecomrev", "gecomrev"); fill(goog, "gconv", "gconv")
     fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue")
     for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "mpur"]: fill(meta, k, k)
     log("fallback merged")
@@ -381,7 +382,7 @@ def build():
     prod = safe(pull_products) or []
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
-    goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}}
+    goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
     tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}}
     if not fin:
         log("FATAL: Odoo failed; keeping previous data.js"); return
@@ -391,7 +392,7 @@ def build():
         return [round(m.get(d, 0), 2) if dec else int(round(m.get(d, 0))) for d in win]
     ad = {"start": win[0], "n": len(win),
           "mspend": arr(meta, "mspend"), "gspend": arr(goog, "gspend"), "tspend": arr(tik, "tspend"),
-          "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"),
+          "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"), "gconv": arr(goog, "gconv"),
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
           "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
