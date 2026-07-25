@@ -31,6 +31,7 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .b-odoo{background:#eae9ff;color:#5a5bf0}.b-shop{background:#e5f7ee;color:#12a06e}.b-meta{background:#e6f0ff;color:#2f7fe0}.b-blend{background:#e4f7f4;color:#12b0a4}.b-live{background:#e5f7ee;color:#12a06e}
 .kpis{display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end}.kpi{text-align:right}.kpi .l{font-size:11px;color:var(--mut);font-weight:600}.kpi .v{font-size:20px;font-weight:800;line-height:1.15}.kpi .d{font-size:11px;font-weight:700;margin-top:1px}
 .up{color:var(--grn)}.dn{color:var(--red)}.ft{color:var(--mut)}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px 16px;margin-top:12px;padding:13px 14px;background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px}.kgrid .kpi{text-align:left}.kgrid .kpi .v{font-size:21px}
 .cv{position:relative;height:150px;margin-top:8px}.lgd{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:7px;font-size:11px;color:#5a637a}
 .lg{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 4px;border-radius:6px}.lg.off{opacity:.32;text-decoration:line-through}.sw{width:13px;height:3px;border-radius:2px}
 .chan .r{display:flex;align-items:center;gap:10px;margin:8px 0}.chan .n{width:86px;font-size:12.5px;font-weight:700}.chan .t{flex:1;height:11px;background:#f0f2f7;border-radius:7px;overflow:hidden}.chan .f{height:100%;border-radius:7px}.chan .vl{width:170px;text-align:right;font-size:12px;font-weight:700}
@@ -55,9 +56,9 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Online</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">P&L</div></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
-<label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attribution</label><select id="at"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
+<label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
 <div class="banner" id="bn"></div><div class="grid" id="g1"></div></div>
-<div id="offC" class="hide"><div class="bar"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select><label>Attribution</label><select id="at2"></select><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
+<div id="offC" class="hide"><div class="bar"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
 <div class="banner" id="bn2"></div><div class="grid" id="g2"></div></div>
 <div id="plC" class="hide"><div class="banner" id="bn3"></div><div class="grid" id="g3"></div></div>
 <div id="pnC" class="hide"><div class="banner" id="bn4"></div><div class="grid" id="g4"></div></div>
@@ -70,7 +71,7 @@ document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')
 const C={teal:'#1fc3b6',blue:'#3a9bff',indigo:'#5a5bf0',violet:'#9d6bff',orange:'#ff8b42',pink:'#ff5da2',grn:'#12b886',red:'#e23a63',grey:'#9aa3b5'};
 const CHC={Shopify:C.indigo,Noon:C.blue,Amazon:C.violet,Homzmart:C.teal};
 const ANNC={event:C.indigo,spike:C.grn,drop:C.red,refund:C.orange};
-let O,FF,ch=[],TAB='on',IO=null,ST={s:null,e:null,at:'default',cmp:'prev',ord:null};
+let O,FF,ch=[],TAB='on',IO=null,ST={s:null,e:null,at:'default',att:{meta:'default',google:'default',tt:'default'},cmp:'prev',ord:null,pm0:null,pm1:null,pcust:'nc'};
 const fC=v=>'E£ '+Math.round(v).toLocaleString(),fI=v=>Math.round(v).toLocaleString(),fP=v=>(+v).toFixed(2)+'%',fX=v=>(+v).toFixed(2)+'x';
 const FM={cur:fC,n:fI,pct:fP,x:fX};
 function dl(c,p,gu=1){if(c==null||p==null||!isFinite(c)||!isFinite(p)||(p===0&&c===0))return{cls:'ft',t:'—',p:0};if(!p)return{cls:'ft',t:'new',p:0};const d=c-p,pc=d/p*100;const cls=Math.abs(pc)<.05?'ft':((d>=0)===!!gu?'up':'dn');return{p:pc,cls,t:(d>=0?'+':'−')+Math.abs(pc).toFixed(1)+'% vs prev'};}
@@ -86,7 +87,7 @@ function aD(i){const d=new Date(O.ad.start+'T00:00:00Z');d.setUTCDate(d.getUTCDa
 function aRange(s,e){const st=O.ad.start,en=aD(O.ad.n-1),os=s>st?s:st,oe=e<en?e:en;if(os>oe)return null;return[Math.max(0,Math.round((Date.parse(os)-Date.parse(st))/864e5)),Math.min(O.ad.n-1,Math.round((Date.parse(oe)-Date.parse(st))/864e5))];}
 function aSum(k,r){const A=O.ad[k];if(!A)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=A[i]||0;return t;}
 function aAvg(k,r){const A=O.ad[k];if(!A)return 0;let t=0,n=0;for(let i=r[0];i<=r[1];i++){if(A[i]){t+=A[i];n++;}}return n?t/n:0;}
-function af(p){return O.attr[p][ST.at];}
+function af(p){const k=(ST.att&&ST.att[p])||ST.at;const v=(O.attr[p]||{})[k];return v==null?1:v;}
 function addD(iso,n){const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
 function span(s,e){return Math.round((Date.parse(e)-Date.parse(s))/864e5)+1;}
 function bD(i){const d=new Date(O.bl.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);}
@@ -98,17 +99,17 @@ function boot(){O=window.O;FF=window.F;isoDates();
  ST.e=O.aw[1];ST.s=addD(ST.e,-29);
  const d0=document.getElementById('d0'),d1=document.getElementById('d1');
  d0.value=ST.s;d1.value=ST.e;d0.min=O.fin.start;d1.max=ST.e;
- document.getElementById('pre').innerHTML=[['30d',30],['60d',60],['90d',90],['180d',180],['365d',365],['YTD','ytd'],['All',9999]].map(p=>`<span class="chip" onclick="pre('${p[1]}')">${p[0]}</span>`).join(' ');
- const op=O.attr.order.map(k=>`<option value="${k}">${O.attr.labels[k]}</option>`).join('');
- document.getElementById('at').innerHTML=op;document.getElementById('at2').innerHTML=op;
- document.getElementById('at').onchange=e=>{ST.at=e.target.value;document.getElementById('at2').value=e.target.value;rOn();};
- document.getElementById('at2').onchange=e=>{ST.at=e.target.value;document.getElementById('at').value=e.target.value;rOff();};
+ document.getElementById('pre').innerHTML=[['L7D',7],['MTD','mtd'],['30d',30],['60d',60],['90d',90],['180d',180],['365d',365],['YTD','ytd'],['All',9999]].map(p=>`<span class="chip" onclick="pre('${p[1]}')">${p[0]}</span>`).join(' ');
+ const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
+ [['am','meta'],['ag','google'],['ax','tt']].forEach(pr=>{const op2=O.attr.order.filter(k=>(O.attr[pr[1]]||{})[k]!=null).map(k=>`<option value="${k}">${SL[k]||k}</option>`).join('');
+  [pr[0],pr[0]+'2'].forEach(id=>{const el=document.getElementById(id);el.innerHTML=op2;el.value=ST.att[pr[1]];
+   el.onchange=e=>{ST.att[pr[1]]=e.target.value;document.getElementById(id===pr[0]?pr[0]+'2':pr[0]).value=e.target.value;if(TAB==='off')rOff();else rOn();};});});
  d0.onchange=e=>{ST.s=e.target.value;rOn();};d1.onchange=e=>{ST.e=e.target.value;rOn();};
  document.getElementById('c0').onchange=rOn;document.getElementById('c1').onchange=rOn;
  ['gp','rf','tgt'].forEach(id=>document.getElementById(id).oninput=rOff);document.getElementById('oh').onchange=rOff;
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours.';}
-function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;document.getElementById('d0').value=ST.s;document.getElementById('d1').value=ST.e;rOn();}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. · <b>v4.7</b>';}
+function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;document.getElementById('d0').value=ST.s;document.getElementById('d1').value=ST.e;rOn();}
 function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else rPnl();}
 
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));rOn();}
@@ -140,6 +141,8 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   o.mpur=[S('mpur'),P('mpur')];o.gconv=[S('gconv'),P('gconv')];
   o.gcpp=[o.gconv[0]?o.gsp[0]/o.gconv[0]:0,rc&&o.gconv[1]?o.gsp[1]/o.gconv[1]:null];
   o.cpp=[o.mpur[0]?o.msp[0]/o.mpur[0]:0,rc&&o.mpur[1]?o.msp[1]/o.mpur[1]:null];
+  o.tcpp=[null,null];const bp0=o.mpur[0]+o.gconv[0],bp1=rc?(o.mpur[1]||0)+(o.gconv[1]||0):0;
+  o.bcpp=[bp0?(o.msp[0]+o.gsp[0])/bp0:0,bp1?(o.msp[1]+o.gsp[1])/bp1:null];
   o.ncrev=[S('ncrev'),P('ncrev')];o.rcrev=[S('rcrev'),P('rcrev')];
   o.amer=[sp?o.ncrev[0]/sp:0,spc&&o.ncrev[1]?o.ncrev[1]/spc:null];
   o.ncaov=[o.nc[0]?o.ncrev[0]/o.nc[0]:0,rc&&o.nc[1]?o.ncrev[1]/o.nc[1]:null];
@@ -169,10 +172,11 @@ function cards(){CARDS=[
   c:o=>({ad:[{l:'Meta',k:'mspend',c:C.blue,f:1},{l:'Google',k:'gspend',c:C.indigo,f:1},{l:'TikTok',k:'tspend',c:C.pink,f:1}],tip:'cur'})},
  {id:'broas',full:1,a:'blend',t:'Website / Online ROAS',src:'broas',cs:'(Google + Meta pixel + TikTok value) ÷ spend. Scales with attribution.',ad:1,k:o=>[['Blended',o.broas[0],o.broas[1],'x',1],['Google',o.groas[0],o.groas[1],'x',1],['Meta',o.mroas[0],o.mroas[1],'x',1],['TikTok',o.troas[0],o.troas[1],'x',1]],
   c:o=>({ad:[{l:'Meta value',k:'mecomrev',c:C.blue,m:af('meta'),f:1},{l:'Google value',k:'gecomrev',c:C.indigo,m:af('google'),f:1},{l:'TikTok value',k:'ttValue',c:C.pink,m:af('tt'),f:1}],tip:'cur'})},
- {id:'sr',full:1,a:'blend',t:'Spend vs Revenue — per platform',src:'broas',cs:'Each platform\'s attributed revenue against its spend, daily. Click legend items to isolate. CPP = spend ÷ purchases on that platform.',ad:1,k:o=>[['Meta ROAS',o.mroas[0],o.mroas[1],'x',1],['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google ROAS',o.groas[0],o.groas[1],'x',1],['Google CPP',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok ROAS',o.troas[0],o.troas[1],'x',1]],c:o=>({ad:[{l:'Meta revenue',k:'mecomrev',c:C.blue,m:af('meta'),f:1},{l:'Meta spend',k:'mspend',c:'#8fc3ff'},{l:'Google revenue',k:'gecomrev',c:C.indigo,m:af('google'),f:1},{l:'Google spend',k:'gspend',c:'#b3b4f7'},{l:'TikTok revenue',k:'ttValue',c:C.pink,m:af('tt')},{l:'TikTok spend',k:'tspend',c:'#ffc2dd'}],tip:'cur'})},
+ {id:'sr',full:1,a:'blend',t:'Spend vs Revenue — per platform',src:'broas',cs:'Each platform\'s attributed revenue against its spend, daily. Click legend items to isolate. CPP = spend ÷ purchases on that platform.',ad:1,k:o=>[['Meta ROAS',o.mroas[0],o.mroas[1],'x',1],['Google ROAS',o.groas[0],o.groas[1],'x',1],['TikTok ROAS',o.troas[0],o.troas[1],'x',1],['Total spend',o.sp[0],o.sp[1],'cur',0]],c:o=>({ad:[{l:'Meta revenue',k:'mecomrev',c:C.blue,m:af('meta')},{l:'Meta spend',k:'mspend',c:'#8fc3ff'},{l:'Google revenue',k:'gecomrev',c:C.indigo,m:af('google')},{l:'Google spend',k:'gspend',c:'#b3b4f7'},{l:'TikTok revenue',k:'ttValue',c:C.pink,m:af('tt')},{l:'TikTok spend',k:'tspend',c:'#ffc2dd'}],tip:'cur'})},
  {id:'tr',a:'blend',t:'Total ROAS — incl. Offline',src:'broas',cs:'(Online value + Meta omni offline) ÷ spend.',ad:1,k:o=>[['Total incl. offline',o.totroas[0],o.totroas[1],'x',1],['Website only',o.broas[0],o.broas[1],'x',1]]},
  {id:'mer',a:'odoo',t:'MER & aMER',src:'mer',cs:'MER = Shopify-channel revenue ÷ spend (Noon/Amazon excluded). aMER = new-customer revenue ÷ spend. All-channel net shown third.',ad:1,k:o=>[['MER (Shopify)',o.merStore[0],o.merStore[1],'x',1],['aMER',o.amer[0],o.amer[1],'x',1],['All-channel net ÷ spend',o.mer[0],o.mer[1],'x',1]],c:o=>({ad:[{l:'Spend',k:'spend',c:C.orange,f:1}],tip:'cur'})},
- {id:'cac',t:'CAC · CPP · GP : CAC',src:'cacgp',cs:'CAC = total spend ÷ new customers. CPP = Meta spend ÷ Meta purchases. GP : CAC = GP-per-order ÷ CAC. 90/180/365d LTGP:CAC needs cohort repeat-purchase data — lands with the customer-level crawl.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['CPP (Meta)',o.cpp[0],o.cpp[1],'cur',0],['GP : CAC',o.gpcac[0],o.gpcac[1],'x',1],['GP:CAC 30d',gcN(30),null,'x',1],['GP:CAC 90d',gcN(90),null,'x',1],['GP:CAC 180d',gcN(180),null,'x',1],['GP:CAC 365d',gcN(365),null,'x',1],['New',o.nc[0],o.nc[1],'n',1]]},
+ {id:'cac',t:'CAC & GP : CAC',src:'cacgp',cs:'CAC = total spend ÷ new customers. GP : CAC = GP-per-order ÷ CAC. 90/180/365d LTGP:CAC needs cohort repeat-purchase data — lands with the customer-level crawl.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['GP : CAC',o.gpcac[0],o.gpcac[1],'x',1],['GP:CAC 30d',gcN(30),null,'x',1],['GP:CAC 90d',gcN(90),null,'x',1],['GP:CAC 180d',gcN(180),null,'x',1],['GP:CAC 365d',gcN(365),null,'x',1],['New',o.nc[0],o.nc[1],'n',1]]},
+ {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: platform spend ÷ platform-reported purchases, scaled by that platform\'s attribution. TikTok does not expose purchase counts in the feed yet — shows — until the TikTok token lands.',ad:1,k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',null,null,'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
  {id:'nvr',full:1,a:'shop',t:'New vs Returning — Revenue, Orders & AOV',src:'orders',cs:'First-time vs returning: revenue, order counts and AOV each, with % vs previous period.',ad:1,k:o=>[['NC revenue',o.ncrev[0],o.ncrev[1],'cur',1],['RC revenue',o.rcrev[0],o.rcrev[1],'cur',1],['NC AOV',o.ncaov[0],o.ncaov[1],'cur',1],['RC AOV',o.rcaov[0],o.rcaov[1],'cur',1],['New',o.nc[0],o.nc[1],'n',1],['Returning',o.rcn[0],o.rcn[1],'n',1]],c:o=>({ad:[{l:'NC revenue',k:'ncrev',c:C.blue,f:1},{l:'RC revenue',k:'rcrev',c:C.indigo,f:1}],tip:'cur'})},
  {id:'fn',a:'shop',t:'Funnel — ATC / Checkout / CVR',src:'cvr',cs:'Shopify cart-adds, checkout, completed ÷ sessions.',ad:1,k:o=>[['ATC %',o.atc[0],o.atc[1],'pct',1],['Checkout %',o.cko[0],o.cko[1],'pct',1],['CVR %',o.cvr[0],o.cvr[1],'pct',1]],c:o=>({ad:[{l:'ATC',k:'atcRatio',c:C.orange},{l:'Checkout',k:'checkoutRatio',c:C.violet},{l:'CVR',k:'cvr',c:C.pink}],tip:'pct'})},
  {id:'ss',a:'shop',t:'Sessions',src:'sessions',cs:'Shopify online store sessions.',ad:1,k:o=>[['Sessions',o.sess[0],o.sess[1],'n',1]],c:o=>({ad:[{l:'Sessions',k:'sessions',c:C.blue,f:1}],tip:'n'})},
@@ -199,7 +203,7 @@ function draw(cv,cfg,big){
   if(Object.keys(annMap).length){const pts=L.map((_,j)=>annMap[j]?sets[0].d[j]:null);
    ds.push({label:'Annotations',data:pts,showLine:false,pointRadius:6,pointHoverRadius:8,pointStyle:'triangle',pointBackgroundColor:L.map((_,j)=>annMap[j]?ANNC[annMap[j][0].k]:C.grey),borderColor:'transparent'});}}
  const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
-  plugins:{legend:{display:0},tooltip:{callbacks:{label:x=>x.dataset.label==='Annotations'?null:x.dataset.label+': '+(FM[cfg.tip]||fI)(x.parsed.y),
+  plugins:{legend:{display:0},tooltip:{filter:x=>x.dataset.label==='Annotations'||(x.parsed.y!=null&&x.parsed.y!==0),callbacks:{label:x=>x.dataset.label==='Annotations'?null:x.dataset.label+': '+(FM[cfg.tip]||fI)(x.parsed.y),
    afterBody:items=>{if(!items.length)return[];const i=items[0].dataIndex;let out=[];if(annMap[i])annMap[i].forEach(a=>out.push('▲ '+a.t));if(cfg.bd&&ixMap)out=out.concat(cfg.bd(origIdxFin(i,ixMap)));return out;}}}},
   scales:{x:{grid:{display:0},ticks:{maxTicksLimit:big?12:6,color:'#9aa3b5',font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:big?8:5,color:'#9aa3b5',font:{size:10},callback:v=>(FM[cfg.tip]||fI)(v)}}}}});
  ch.push(c);return c;}
@@ -222,7 +226,7 @@ function insHTML(o){const rows=[];
 
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
- document.getElementById('bn').innerHTML='<b>Attribution:</b> '+O.attr.labels[ST.at]+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
+ document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
  if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;const k=c.k(o)[0];if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
  ord.forEach(id=>{const c=by(id),el=document.createElement('div');el.className='card'+(c.full?' full':'');if(c.a)el.dataset.a=c.a;el.dataset.id=id;const na=c.ad&&!o.ad;let b;
@@ -230,8 +234,8 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),g=document.getElementBy
   else if(na)b='<div class="cv" style="display:flex;align-items:center;justify-content:center;color:#7c869c;font-size:12px">No ad data in this range · ads cover '+O.aw[0]+' → '+O.aw[1]+'</div>';
   else if(c.chan){const t=Object.values(o.ch).reduce((a,x)=>a+Math.max(0,x),0)||1;
    b='<div class="chan">'+Object.keys(o.ch).map(n=>{const v=o.ch[n],vp=o.chP[n],d=dl(v,vp,1);return `<div class="r"><div class="n">${n}</div><div class="t"><div class="f" style="width:${Math.max(0,v/t*100).toFixed(1)}%;background:${CHC[n]||C.blue}"></div></div><div class="vl" style="${v<0?'color:#e23a63':''}">E£ ${Math.round(v).toLocaleString()} <span class="${d.cls}" style="font-size:10px">${d.t.replace(' vs prev','')}</span></div></div>`;}).join('')+'</div>';}
-  else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='';
-  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div></div><div class="kpis">${kH(c.k(o))}</div></div>${b}`;
+  else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(c.k(o))+'</div>';
+  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div></div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o))}</div></div>${b}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
   if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}});
@@ -315,15 +319,15 @@ function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3'
  const S=[];const add=(t,rows)=>S.push({t,rows:rows.filter(r=>r&&r[1])});
  const money=v=>'E£ '+Math.round(Math.abs(v)).toLocaleString();
  const nm=x=>x.replace(/^\[[^\]]*\]\s*/,'');
- const dRev=o.gross[0]-o.gross[1];const adRev=Math.abs(dRev)||1;
+ const dRev=o.gross[0]-o.gross[1];const base=o.gross[1]||1;
  const dOrdEff=(o.ord[0]-o.ord[1])*o.aov[1];const dAovEff=(o.aov[0]-o.aov[1])*o.ord[0];
- const top=[[dRev>=0?C.grn:C.red,`Online gross moved ${dRev>=0?'+':'−'}${money(dRev)} (${(dRev/o.gross[1]*100).toFixed(1)}%) to ${money(o.gross[0])}. Volume effect ${dOrdEff>=0?'+':'−'}${money(dOrdEff)} (${(Math.abs(dOrdEff)/adRev*100).toFixed(0)}% of the move, ${fI(o.ord[0])} vs ${fI(o.ord[1])} orders). Price/mix effect ${dAovEff>=0?'+':'−'}${money(dAovEff)} (AOV ${fI(o.aov[0])} vs ${fI(o.aov[1])}).`]];
+ const top=[[dRev>=0?C.grn:C.red,`Online gross moved ${dRev>=0?'+':'−'}${money(dRev)} (${(dRev/o.gross[1]*100).toFixed(1)}%) to ${money(o.gross[0])}. Volume effect ${dOrdEff>=0?'+':'−'}${money(dOrdEff)} (${(Math.abs(dOrdEff)/base*100).toFixed(1)}% of prior-period revenue, ${fI(o.ord[0])} vs ${fI(o.ord[1])} orders). Price/mix effect ${dAovEff>=0?'+':'−'}${money(dAovEff)} (${(Math.abs(dAovEff)/base*100).toFixed(1)}% of prior revenue · AOV ${fI(o.aov[0])} vs ${fI(o.aov[1])}).`]];
  const dRef=o.ref[0]-o.ref[1];
  top.push([dRef<=0?C.grn:C.red,`Returns ${dRef>=0?'worsened':'improved'} by ${money(dRef)} (now ${(o.ref[0]/o.gross[0]*100).toFixed(1)}% of gross). Net landed at ${money(o.net[0])}.`]);
  top.push([o.gpct[0]>=o.gpct[1]?C.grn:C.red,`Margin ${(o.gpct[0]-o.gpct[1]>=0?'+':'')+(o.gpct[0]-o.gpct[1]).toFixed(1)} points to ${o.gpct[0].toFixed(1)}%.`]);
  add('1 · Top line — the move, decomposed',top);
- const chR=[];Object.keys(o.ch).forEach(cn=>{const d=o.ch[cn]-o.chP[cn];if(Math.abs(d)>20000)chR.push([d>=0?C.grn:C.red,`${cn}: ${d>=0?'+':'−'}${money(d)} — ${(Math.abs(d)/adRev*100).toFixed(0)}% of the total move. ${d<0?'Primary drag: check stock cover, pricing and (for marketplaces) buy-box health.':'Primary uplift: protect inventory and spend behind it.'}`]);});
- add('2 · Channel drivers — % of the move',chR);
+ const chR=[];const chAbs=Object.keys(o.ch).reduce((a,cn)=>a+Math.abs(o.ch[cn]-o.chP[cn]),0)||1;Object.keys(o.ch).forEach(cn=>{const d=o.ch[cn]-o.chP[cn];if(Math.abs(d)>20000)chR.push([d>=0?C.grn:C.red,`${cn}: ${d>=0?'+':'−'}${money(d)} — ${(Math.abs(d)/chAbs*100).toFixed(0)}% of total channel movement. ${d<0?'Primary drag: check stock cover, pricing and (for marketplaces) buy-box health.':'Primary uplift: protect inventory and spend behind it.'}`]);});
+ add('2 · Channel drivers — share of total channel movement (sums to 100%)',chR);
  const ads=[];if(o.ad){
   const plats=[['Meta',o.msp,o.mroas],['Google',o.gsp,o.groas],['TikTok',o.tsp,o.troas]];
   plats.forEach(p=>{const v0=(p[1][0]||0)*(p[2][0]||0),v1=(p[1][1]||0)*(p[2][1]||0);const dv=v0-v1;const dSp=((p[1][0]||0)-(p[1][1]||0))*(p[2][1]||0);const dRo=dv-dSp;
@@ -332,9 +336,9 @@ function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3'
  add('3 · Ads — spend vs efficiency, separated',ads);
  const br=[];const names=Object.keys(O.bl.b||{});let rc2=0,rp2=0;
  const gr=names.map(n2=>{let c=0,p=0;for(let i=Math.max(0,O.bl.n-30);i<O.bl.n;i++)c+=O.bl.b[n2][i]||0;for(let i=Math.max(0,O.bl.n-60);i<Math.max(0,O.bl.n-30);i++)p+=O.bl.b[n2][i]||0;rc2+=c;rp2+=p;return{n:n2,c,p,d:c-p};}).sort((a,b)=>a.d-b.d);
- const dRet=rc2-rp2,adRet=Math.abs(dRet)||1;
+ const dRet=rc2-rp2,adRet=gr.reduce((a,x)=>a+Math.abs(x.d),0)||1;
  br.push([dRet>=0?C.grn:C.red,`Retail network ${dRet>=0?'+':'−'}${money(dRet)} to ${money(rc2)} over 30 days.`]);
- gr.forEach(x=>{if(Math.abs(x.d)>50000)br.push([x.d>=0?C.grn:C.red,`${x.n}: ${x.d>=0?'+':'−'}${money(x.d)} — ${(Math.abs(x.d)/adRet*100).toFixed(0)}% of the retail move (now ${money(x.c)}).`]);});
+ gr.forEach(x=>{if(Math.abs(x.d)>50000)br.push([x.d>=0?C.grn:C.red,`${x.n}: ${x.d>=0?'+':'−'}${money(x.d)} — ${(Math.abs(x.d)/adRet*100).toFixed(0)}% of total branch movement (now ${money(x.c)}).`]);});
  const worst=gr[0],best=gr[gr.length-1];
  if(worst&&worst.d<0)br.push([C.orange,`Expected outcome: if ${worst.n} only returns to its previous run-rate, that is +${money(-worst.d)} per month back — the biggest recoverable amount in retail.`]);
  if(best&&best.d>0)br.push([C.grn,`Promote/replicate: ${best.n} added ${money(best.d)}. Document what changed and copy it to ${worst?worst.n:'the laggards'}.`]);
@@ -352,63 +356,120 @@ function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3'
   g.appendChild(el);});
  ST.s=sv.s;ST.e=sv.e;}
 function shade(v,mn,mx,good){if(v==null||!isFinite(v)||mx===mn)return'';const t=(v-mn)/(mx-mn);const q=good>=0?t:1-t;return' style="background:hsl('+Math.round(135*q)+',62%,'+(93-q*4).toFixed(0)+'%)"';}
+function pnlCtl(k,v){ST[k]=v;rPnl();}
+function pnlCard(g,a,t,cs2,body){const el=document.createElement('div');el.className='card full';el.dataset.a=a;
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+t+'</div><div class="cs">'+cs2+'</div></div></div>'+body;g.appendChild(el);}
 function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4');g.innerHTML='';
- document.getElementById('bn4').innerHTML='↻ Synced <b>'+(O.lastSync||'')+'</b>. Colour scale: green = best months, red = worst, per row. Ads cover '+O.aw[0]+' → '+O.aw[1]+'; months outside show —.';
+ const money=v=>Math.round(v).toLocaleString();
+ const EP=372076,HQW=1256706,RM=0.219,CO=(FF.company||{});
  const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=O.fin.refund[i]*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
- const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);(A[m]=A[m]||{s:0}).s+=O.ad.spend[i]||0;}
- const mons=Object.keys(M).sort().slice(-13);const EP=372076;const money=v=>Math.round(v).toLocaleString();
+ const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,gs:0,ts:0,nc:0,rc:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.nc+=(O.ad.ncrev||[])[i]||0;a.rc+=(O.ad.rcrev||[])[i]||0;}
+ const BM={},BD={},names=(O.bl&&O.bl.b)?Object.keys(O.bl.b):[];
+ if(O.bl)for(let i=0;i<O.bl.n;i++){const m=bD(i).slice(0,7);BD[m]=(BD[m]||0)+1;BM[m]=BM[m]||{};names.forEach(n=>{BM[m][n]=(BM[m][n]||0)+(O.bl.b[n][i]||0);});}
+ const allM=Object.keys(M).sort();
+ if(!ST.pm0||allM.indexOf(ST.pm0)<0)ST.pm0=allM[Math.max(0,allM.length-13)];
+ if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
+ if(ST.pm0>ST.pm1){const t0=ST.pm0;ST.pm0=ST.pm1;ST.pm1=t0;}
+ const mons=allM.filter(m=>m>=ST.pm0&&m<=ST.pm1);
+ document.getElementById('bn4').innerHTML='&#8635; Synced <b>'+(O.lastSync||'')+'</b>. Colour scale per row: green = best month, red = worst. Ads cover '+O.aw[0]+' &rarr; '+O.aw[1]+(O.bl&&O.bl.n?'; retail POS accounting covers '+bD(0)+' &rarr; '+bD(O.bl.n-1):'')+'. Months outside a feed show &mdash;.';
+ const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
+ const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
+ ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><label>Customer type</label><select onchange="pnlCtl(&quot;pcust&quot;,this.value)"><option value="nc"'+(ST.pcust==='nc'?' selected':'')+'>First-time</option><option value="rc"'+(ST.pcust==='rc'?' selected':'')+'>Returning</option></select><div class="sp"></div><span class="cs">Filter applies to every table on this tab.</span></div>';
+ g.appendChild(ctl);
  const nf=x=>x.g?1-x.r/x.g:1;
- const LINES=[
-  ['Gross sales',x=>x.g,money,1,''],
-  ['Less: refunds',x=>-x.r,v=>'−'+money(-v),1,'Posted credit notes'],
-  ['Net revenue',x=>x.g-x.r,v=>'<b>'+money(v)+'</b>',1,''],
-  ['COGS',x=>-(x.g-x.gp),v=>'−'+money(-v),0,'Gross − Odoo margin'],
-  ['Gross profit',x=>x.gp,v=>'<b>'+money(v)+'</b>',1,''],
-  ['GP %',x=>x.g?x.gp/x.g*100:null,v=>v.toFixed(1)+'%',1,''],
-  ['Ad spend',(x,a)=>a&&a.s?-a.s:null,v=>'−'+money(-v),0,'Meta + Google + TikTok where the feed covers the month'],
-  ['Profit contribution',(x,a)=>a&&a.s?x.gp*nf(x)-a.s:null,v=>'<b>'+money(v)+'</b>',1,'GP net of returns − ads'],
-  ['E-com payroll',()=>-EP,v=>'−'+money(-v),0,'Fulfilment + marketplaces, Excel Jun-2026'],
-  ['EBITDA est (online)',(x,a)=>a&&a.s?x.gp*nf(x)-a.s-EP:null,v=>'<b>'+money(v)+'</b>',1,''],
-  ['MER x (net ÷ ads)',(x,a)=>a&&a.s?(x.g-x.r)/a.s:null,v=>v.toFixed(2)+'x',1,'']];
- let html='<div style="overflow-x:auto"><table class="bt" style="min-width:980px"><tr><th style="text-align:left">Line</th>'+mons.map(m=>'<th>'+m+'</th>').join('')+'</tr>';
- LINES.forEach(L=>{const vals=mons.map(m=>L[1](M[m],A[m]));const nums=vals.filter(v=>v!=null&&isFinite(v));const mn=Math.min(...nums),mx=Math.max(...nums);
-  html+='<tr><td'+(L[4]?' title="'+L[4]+'"':'')+'>'+L[0]+'</td>'+vals.map(v=>'<td'+(L[3]?shade(v,mn,mx,1):'')+'>'+(v==null?'—':L[2](v))+'</td>').join('')+'</tr>';});
- html+='</table></div>';
- // findings
+ const T=(lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+'</th>').join('')+'</tr>';
+  lines.forEach(L=>{if(L===null){h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:2px;border:0"></td></tr>';return;}
+   const vals=cols.map(L.f);const nums=vals.filter(v=>v!=null&&isFinite(v));const mn=nums.length?Math.min(...nums):0,mx=nums.length?Math.max(...nums):0;
+   h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left">'+L.n+'</td>'+vals.map(v=>'<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+(v==null||!isFinite(v)?'&mdash;':L.fmt(v))+'</td>').join('')+'</tr>';});
+  return h+'</table></div>';};
+ const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
+ const OL=[
+  {n:'Gross sales',f:m=>M[m].g,fmt:POS,sh:1,tt:'Odoo confirmed sale.order'},
+  {n:'Less: refunds',f:m=>-M[m].r,fmt:NEG,sh:1,tt:'Posted credit notes'},
+  {n:'Net revenue',f:m=>M[m].g-M[m].r,fmt:POS,sh:1,b:1},
+  {n:'COGS',f:m=>-(M[m].g-M[m].gp),fmt:NEG,sh:0,tt:'Gross &minus; Odoo margin'},
+  {n:'Gross profit',f:m=>M[m].gp,fmt:POS,sh:1,b:1},
+  {n:'Direct advertising &mdash; Meta',f:m=>A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0},
+  {n:'Direct advertising &mdash; Google',f:m=>A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
+  {n:'Direct advertising &mdash; TikTok',f:m=>A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0},
+  {n:'Direct advertising &mdash; total',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Platform-reported spend, months the ads feed covers'},
+  {n:'Profit contribution',f:m=>A[m]&&A[m].s?M[m].gp*nf(M[m])-A[m].s:null,fmt:POS,sh:1,b:1,tt:'GP net of returns &minus; ads'},
+  {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team &mdash; Excel payroll Jun-2026'},
+  {n:'EBITDA est (online)',f:m=>A[m]&&A[m].s?M[m].gp*nf(M[m])-A[m].s-EP:null,fmt:POS,sh:1,b:1},
+  null,
+  {n:'Orders',f:m=>M[m].o,fmt:v=>Math.round(v).toLocaleString(),sh:1},
+  {n:'AOV',f:m=>M[m].o?M[m].g/M[m].o:null,fmt:POS,sh:1},
+  {n:'Refunds, %',f:m=>M[m].g?M[m].r/M[m].g*100:null,fmt:PCT,sh:1,gd:-1},
+  {n:'COGS, %',f:m=>M[m].g?(M[m].g-M[m].gp)/M[m].g*100:null,fmt:PCT,sh:1,gd:-1},
+  {n:'Gross profit margin, %',f:m=>M[m].g?M[m].gp/M[m].g*100:null,fmt:PCT,sh:1},
+  {n:'Contribution margin, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?(M[m].gp*nf(M[m])-A[m].s)/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1},
+  {n:'MER, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?A[m].s/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1,gd:-1,tt:'Ads &divide; net revenue'},
+  {n:'MER, x',f:m=>A[m]&&A[m].s?(M[m].g-M[m].r)/A[m].s:null,fmt:X,sh:1},
+  {n:'EBITDA, %',f:m=>A[m]&&A[m].s&&(M[m].g-M[m].r)?(M[m].gp*nf(M[m])-A[m].s-EP)/(M[m].g-M[m].r)*100:null,fmt:PCT,sh:1}];
+ let h1=T(OL,mons);
  const nr=mons.map(m=>M[m].g-M[m].r);const bi=nr.indexOf(Math.max(...nr)),wi=nr.indexOf(Math.min(...nr));
  const rr=mons.map(m=>M[m].g?M[m].r/M[m].g*100:0);const wri=rr.indexOf(Math.max(...rr));
- html+='<div class="ins" style="margin-top:8px">'+
- '<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Best month: '+mons[bi]+' — E£ '+money(nr[bi])+' net.</span></div>'+
- '<div class="row"><span class="dot" style="background:'+C.red+'"></span><span>Worst month: '+mons[wi]+' — E£ '+money(nr[wi])+' net.</span></div>'+
- '<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>Highest refund pressure: '+mons[wri]+' at '+rr[wri].toFixed(1)+'% of gross.</span></div></div>';
- const t1=document.createElement('div');t1.className='card full';t1.dataset.a='odoo';
- t1.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Online — Normalised Monthly P&L</div><div class="cs">Odoo daily, rolled up. Hover any line for its definition.</div></div></div>'+html;
- g.appendChild(t1);
- if(O.bl&&O.bl.n){const BM={};const names=Object.keys(O.bl.b);
-  for(let i=0;i<O.bl.n;i++){const m=bD(i).slice(0,7);BM[m]=BM[m]||{};names.forEach(n=>{BM[m][n]=(BM[m][n]||0)+(O.bl.b[n][i]||0);});}
-  const bm=Object.keys(BM).sort();const cm2=0.219;const money2=money;
-  const FX={};FF.branches.forEach(b=>FX[b.name]=b.payroll+b.rentEst+b.opexEst);
-  let h2='<div style="overflow-x:auto"><table class="bt" style="min-width:820px"><tr><th style="text-align:left">Branch</th>'+bm.map(m=>'<th>'+m+'</th>').join('')+'<th>Total</th></tr>';
-  names.forEach(n=>{const vals=bm.map(m=>BM[m][n]||0);const mn=Math.min(...vals),mx=Math.max(...vals);
-   h2+='<tr><td>'+n+'</td>'+vals.map(v=>'<td'+shade(v,mn,mx,1)+'>'+money2(v)+'</td>').join('')+'<td><b>'+money2(vals.reduce((a,b)=>a+b,0))+'</b></td></tr>';});
-  const net=bm.map(m=>names.reduce((a,n)=>a+(BM[m][n]||0),0));
-  h2+='<tr style="font-weight:800"><td>Network</td>'+net.map(v=>'<td>'+money2(v)+'</td>').join('')+'<td>'+money2(net.reduce((a,b)=>a+b,0))+'</td></tr>';
-  const ctr=bm.map(m=>names.reduce((a,n)=>a+((BM[m][n]||0)*cm2-(FX[n]||0)),0));
-  h2+='<tr><td title="Revenue × 21.9% − monthly fixed per branch (partial months look worse — full fixed charged)">Est. contribution</td>'+ctr.map(v=>'<td style="color:'+(v>=0?'#12a06e':'#e23a63')+'">'+money2(v)+'</td>').join('')+'<td></td></tr></table></div>';
-  const gr2=names.map(n=>{const vs=bm.slice(-3,-1).map(m=>BM[m][n]||0);return{n,d:vs.length>1?vs[1]-vs[0]:0};}).sort((a,b)=>b.d-a.d);
-  h2+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Strongest month-over-month mover: '+gr2[0].n+' ('+(gr2[0].d>=0?'+':'−')+'E£ '+money2(Math.abs(gr2[0].d))+').</span></div>'+
-  '<div class="row"><span class="dot" style="background:'+C.red+'"></span><span>Weakest: '+gr2[gr2.length-1].n+' ('+(gr2[gr2.length-1].d>=0?'+':'−')+'E£ '+money2(Math.abs(gr2[gr2.length-1].d))+').</span></div></div>';
-  const t2=document.createElement('div');t2.className='card full';t2.dataset.a='odoo';
-  t2.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Retail — Monthly by Branch (live POS accounting)</div><div class="cs">Colour graded per branch across months. First/last months may be partial.</div></div></div>'+h2;
-  g.appendChild(t2);
-  // company table (months where both online ads + retail exist)
-  const HQW=1256706;let h3='<table class="bt"><tr><th style="text-align:left">Month</th><th>Online EBITDA est</th><th>Retail contribution est</th><th>HQ + warehouses + envelope</th><th>Company EBITDA est</th></tr>';
-  bm.forEach((m,i2)=>{const x=M[m],a=A[m];if(!x||!a||!a.s)return;const onE=x.gp*nf(x)-a.s-EP;const cv=onE+ctr[i2]-HQW;
-   h3+='<tr><td>'+m+'</td><td>'+money2(onE)+'</td><td>'+money2(ctr[i2])+'</td><td>−'+money2(HQW)+'</td><td style="font-weight:800;color:'+(cv>=0?'#12a06e':'#e23a63')+'">'+money2(cv)+'</td></tr>';});
-  h3+='</table>';
-  const t3=document.createElement('div');t3.className='card full';t3.dataset.a='ins';
-  t3.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Company — Monthly EBITDA estimate</div><div class="cs">Online EBITDA + retail contribution − unallocated payroll (HQ E£ 783,651 + warehouses E£ 420,305 + envelope E£ 52,750). Excludes HQ rent, utilities and finance costs — not readable.</div></div></div>'+h3;
-  g.appendChild(t3);}
+ h1+='<div class="ins" style="margin-top:8px">'
+ +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Best month: '+mons[bi]+' &mdash; E&pound; '+money(nr[bi])+' net.</span></div>'
+ +'<div class="row"><span class="dot" style="background:'+C.red+'"></span><span>Worst month: '+mons[wi]+' &mdash; E&pound; '+money(nr[wi])+' net.</span></div>'
+ +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>Highest refund pressure: '+mons[wri]+' at '+rr[wri].toFixed(1)+'% of gross.</span></div></div>';
+ pnlCard(g,'odoo','Online &mdash; Normalised Monthly P&L','Odoo daily, rolled up per month. Sales &rarr; refunds &rarr; net &rarr; COGS &rarr; GP &rarr; ads (per platform) &rarr; contribution &rarr; OpEx &rarr; EBITDA, then the % block. Hover a line for its definition.',h1);
+ const ck=ST.pcust;const cmons=mons.filter(m=>A[m]&&(A[m].nc>0||A[m].rc>0));
+ if(cmons.length){const gpP=CO.gpPct||0.266;const CV=m=>ck==='nc'?A[m].nc:A[m].rc;
+  const CL=[
+   {n:'Gross revenue',f:m=>CV(m)||null,fmt:POS,sh:1,tt:'Shopify revenue by customer type'},
+   {n:'COGS est ('+((1-gpP)*100).toFixed(1)+'%)',f:m=>CV(m)?-CV(m)*(1-gpP):null,fmt:NEG,sh:0,tt:'Blended Odoo GP% applied &mdash; per-type COGS needs the customer crawl'},
+   {n:'Gross profit est',f:m=>CV(m)?CV(m)*gpP:null,fmt:POS,sh:1,b:1},
+   {n:'Direct advertising & marketing',f:m=>ck==='nc'&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:ck==='nc'?'Full ad spend charged to first-time (acquisition view)':'Ads are charged to first-time &mdash; returning carries none'},
+   {n:'Profit contribution',f:m=>CV(m)?(ck==='nc'?CV(m)*gpP-(A[m].s||0):CV(m)*gpP):null,fmt:POS,sh:1,b:1},
+   {n:ck==='nc'?'aMER, x (NC rev &divide; ads)':'Share of online gross, %',f:m=>ck==='nc'?(A[m].s?A[m].nc/A[m].s:null):(M[m]&&M[m].g?A[m].rc/M[m].g*100:null),fmt:ck==='nc'?X:PCT,sh:1}];
+  pnlCard(g,'shop',(ck==='nc'?'First-time':'Returning')+' Customers &mdash; Monthly P&L','Switch First-time / Returning in the filter bar above. Months without Shopify customer-type coverage are hidden.',T(CL,cmons));}
+ if(O.bl&&O.bl.n&&names.length){
+  const bm=Object.keys(BM).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
+  if(bm.length){
+  const dim=m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();};
+  const cov=m=>Math.min(1,(BD[m]||0)/dim(m));
+  const h2=T(names.map(n=>({n:n,f:m=>BM[m][n]||0,fmt:POS,sh:1}))
+    .concat([{n:'Network',f:m=>names.reduce((a2,n)=>a2+(BM[m][n]||0),0),fmt:POS,sh:1,b:1}]),bm);
+  pnlCard(g,'odoo','Retail &mdash; Monthly Revenue by Branch (live POS accounting)','Colour graded per branch across months. Fixed costs in the P&L blocks below are pro-rated for partial months.',h2);
+  const FXB={};FF.branches.forEach(b=>FXB[b.name]=b);
+  let h3='';
+  names.slice().sort((a,b)=>bm.reduce((s2,m)=>s2+(BM[m][b]||0),0)-bm.reduce((s2,m)=>s2+(BM[m][a]||0),0)).forEach(n=>{
+   const B=FXB[n]||{payroll:0,rentEst:0,opexEst:0};
+   const BL=[
+    {n:'Revenue',f:m=>BM[m][n]||0,fmt:POS,sh:1},
+    {n:'Est. GP net of returns (21.9%)',f:m=>(BM[m][n]||0)*RM,fmt:POS,sh:1,tt:'Odoo GP 26.6% &times; (1 &minus; refund rate 17.5%)'},
+    {n:'Payroll',f:m=>-B.payroll*cov(m),fmt:NEG,sh:0,tt:'Excel payroll Jun-2026 &mdash; pro-rated for partial months'},
+    {n:'Rent est',f:m=>-B.rentEst*cov(m),fmt:NEG,sh:0,tt:'Editable estimate (8% of revenue benchmark)'},
+    {n:'OpEx est',f:m=>-B.opexEst*cov(m),fmt:NEG,sh:0,tt:'Editable estimate (5% of revenue benchmark)'},
+    {n:'Contribution',f:m=>(BM[m][n]||0)*RM-(B.payroll+B.rentEst+B.opexEst)*cov(m),fmt:POS,sh:1,b:1},
+    {n:'Contribution margin, %',f:m=>(BM[m][n]||0)?((BM[m][n]||0)*RM-(B.payroll+B.rentEst+B.opexEst)*cov(m))/(BM[m][n]||1)*100:null,fmt:PCT,sh:1}];
+   h3+='<div style="font-weight:800;font-size:13.5px;margin:14px 0 2px">'+n+'</div>'+T(BL,bm);});
+  pnlCard(g,'odoo','Retail &mdash; P&L per Branch','Each branch separately: revenue &rarr; est. GP &rarr; payroll &rarr; rent &rarr; opex &rarr; contribution. Payroll exact; rent/opex are the editable estimates from the Offline tab.',h3);
+  const cmb=mons.filter(m=>A[m]&&A[m].s&&BM[m]);
+  if(cmb.length){
+   const retRev=m=>names.reduce((a2,n)=>a2+(BM[m][n]||0),0);
+   const brFix=m=>names.reduce((a2,n)=>{const B=FXB[n]||{payroll:0,rentEst:0,opexEst:0};return a2+(B.payroll+B.rentEst+B.opexEst)*cov(m);},0);
+   const onNet=m=>M[m].g-M[m].r,onGpN=m=>M[m].gp*nf(M[m]);
+   const CM=[
+    {n:'Online net revenue',f:m=>onNet(m),fmt:POS,sh:1},
+    {n:'Retail revenue',f:m=>retRev(m),fmt:POS,sh:1},
+    {n:'Total revenue',f:m=>onNet(m)+retRev(m),fmt:POS,sh:1,b:1},
+    {n:'Gross profit (online net + retail est)',f:m=>onGpN(m)+retRev(m)*RM,fmt:POS,sh:1,b:1},
+    {n:'Direct advertising & marketing',f:m=>-A[m].s,fmt:NEG,sh:0},
+    {n:'Profit contribution',f:m=>onGpN(m)+retRev(m)*RM-A[m].s,fmt:POS,sh:1,b:1},
+    {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0},
+    {n:'OpEx: branch payroll + rent + opex',f:m=>-brFix(m),fmt:NEG,sh:0,tt:'All 7 branches, pro-rated for partial months'},
+    {n:'OpEx: HQ + warehouses + envelope',f:m=>-HQW,fmt:NEG,sh:0,tt:'HQ 783,651 + warehouses 420,305 + envelope 52,750 &mdash; payroll only; HQ rent/utilities/finance not readable'},
+    {n:'Company EBITDA est',f:m=>onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW,fmt:POS,sh:1,b:1},
+    {n:'EBITDA, %',f:m=>{const tr2=onNet(m)+retRev(m);return tr2?(onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW)/tr2*100:null;},fmt:PCT,sh:1},
+    {n:'MER, x (total rev &divide; ads)',f:m=>(onNet(m)+retRev(m))/A[m].s,fmt:X,sh:1}];
+   let h4=T(CM,cmb);
+   const eb=cmb.map(m=>onGpN(m)+retRev(m)*RM-A[m].s-EP-brFix(m)-HQW);
+   const pos=eb.filter(v=>v>0).length;
+   h4+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+(pos>=cmb.length/2?C.grn:C.red)+'"></span><span>'+pos+' of '+cmb.length+' months EBITDA-positive at company level. Best: '+cmb[eb.indexOf(Math.max(...eb))]+' (E&pound; '+money(Math.max(...eb))+'), worst: '+cmb[eb.indexOf(Math.min(...eb))]+' (E&pound; '+money(Math.min(...eb))+').</span></div></div>';
+   pnlCard(g,'ins','Company &mdash; Combined Monthly P&L (online + all branches)','One P&L for the whole business &mdash; months where ads + POS accounting both exist. Excludes HQ rent, utilities and finance costs: not readable from the ERP.',h4);}
+  }}
 }
-window.unlock=unlock;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;
+window.unlock=unlock;window.pnlCtl=pnlCtl;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;
 </script></body></html>
