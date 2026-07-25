@@ -437,6 +437,58 @@ def pull_expenses():
         log("expenses fail", str(e)[:150])
     return exp, rentB
 
+
+POS_CFG = [("Dokki", "Dokki"), ("New  Cairo", "New Cairo"), ("New Cairo", "New Cairo"), ("October", "October"),
+           ("Zayed", "Zayed"), ("Nasr City", "Nasr City"), ("Smouha", "Smouha"), ("Mall OF Arabia", "Mall of Arabia"), ("Mall of Arabia", "Mall of Arabia")]
+ANA_BR = {"18": "Dokki", "19": "New Cairo", "20": "Nasr City", "21": "October", "22": "Zayed", "38": "Smouha", "39": "Mall of Arabia",
+          "41": "Dokki", "42": "Nasr City", "43": "New Cairo", "44": "October", "46": "Zayed"}
+
+def pull_pos_branches():
+    """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
+    out = {}
+    try:
+        g = oexec("report.pos.order", "read_group",
+                  [[["date", ">=", "2024-08-01"]], ["price_total", "margin"], ["config_id", "date:month"]], {"lazy": False})
+        for r in g:
+            cfg = (r.get("config_id") or [0, ""])[1]
+            br = next((b for k, b in POS_CFG if k in cfg), None)
+            if not br: continue
+            try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
+            except Exception: continue
+            c = out.setdefault(br, {}).setdefault(mon, [0, 0, 0])
+            c[0] += round(r["price_total"]); c[1] += round(r["margin"]); c[2] += r["__count"]
+        log("pos branches", len(out), "months", len(next(iter(out.values()), {})))
+    except Exception as e:
+        log("pos branches fail", str(e)[:150])
+    return out
+
+def pull_branch_costs():
+    """ACTUAL per-branch monthly rent + salaries from expense lines' analytic distribution."""
+    out = {}
+    try:
+        acc = oexec("account.account", "search_read", [["|", ["code", "=like", "31.01.04.02%"], ["code", "=like", "31.01.01.%"]]],
+                    {"fields": ["code"], "limit": 40})
+        rent_ids = [a["id"] for a in acc if a["code"].startswith("31.01.04")]
+        sal_ids = [a["id"] for a in acc if a["code"].startswith("31.01.01")]
+        lines = oexec("account.move.line", "search_read",
+                      [[["account_id", "in", rent_ids + sal_ids], ["parent_state", "=", "posted"], ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]]],
+                      {"fields": ["account_id", "balance", "date", "analytic_distribution"], "limit": 20000})
+        for l in lines:
+            ad2 = l.get("analytic_distribution") or {}
+            mon = l["date"][:7]; kind = "rent" if l["account_id"][0] in rent_ids else "sal"
+            for aid, pct in ad2.items():
+                br = ANA_BR.get(str(aid))
+                if not br: continue
+                c = out.setdefault(br, {}).setdefault(mon, {"rent": 0, "sal": 0})
+                c[kind] += l["balance"] * (float(pct) / 100.0)
+        for br in out:
+            for mon in out[br]:
+                out[br][mon] = {k: round(v) for k, v in out[br][mon].items()}
+        log("branch costs", {b: len(v) for b, v in out.items()})
+    except Exception as e:
+        log("branch costs fail", str(e)[:150])
+    return out
+
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
     p = os.path.join(DOCS, "fallback_ad.json")
@@ -524,6 +576,8 @@ def build():
     tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
     coh = safe(pull_cohorts) or []
+    pos = safe(pull_pos_branches) or {}
+    bcost = safe(pull_branch_costs) or {}
     _er = safe(pull_expenses)
     exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
     if not fin:
@@ -555,7 +609,7 @@ def build():
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "exp": exp, "rentB": rentB,
+              "shop": sh, "coh": coh, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost,
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
@@ -566,7 +620,7 @@ def build():
     open(os.path.join(DOCS, "data.js"), "w").write(out)
     log("WROTE data.js", len(out), "bytes  synced", ts)
 
-OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental (modeled)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."}}'''
+OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental (modeled)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
 if __name__ == "__main__":
     build()
