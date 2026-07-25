@@ -35,6 +35,8 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .lg{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 4px;border-radius:6px}.lg.off{opacity:.32;text-decoration:line-through}.sw{width:13px;height:3px;border-radius:2px}
 .chan .r{display:flex;align-items:center;gap:10px;margin:8px 0}.chan .n{width:86px;font-size:12.5px;font-weight:700}.chan .t{flex:1;height:11px;background:#f0f2f7;border-radius:7px;overflow:hidden}.chan .f{height:100%;border-radius:7px}.chan .vl{width:170px;text-align:right;font-size:12px;font-weight:700}
 table.bt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}table.bt th{text-align:right;color:var(--mut);font-size:10px;text-transform:uppercase;padding:6px 7px;border-bottom:1px solid #eef0f5}table.bt th:first-child{text-align:left}table.bt td{padding:6px 7px;border-bottom:1px solid #f4f6fa;text-align:right}table.bt td:first-child{text-align:left;font-weight:700}table.bt input{width:88px;text-align:right;padding:4px 6px;font-size:12px}
+table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[title]:hover::after,table.bt td[title]:hover::after{content:attr(title);position:absolute;right:0;top:100%;min-width:210px;max-width:300px;background:#161d2e;color:#fff;font-size:11px;font-weight:500;line-height:1.5;padding:8px 10px;border-radius:8px;z-index:50;white-space:normal;text-align:left;text-transform:none}
+.grid{align-items:start}
 .tg{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px}.tg.a{background:#e5f7ee;color:#12a06e}.tg.b{background:#fde8ee;color:#e23a63}
 .ins .row{display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f4f6fa;font-size:12.5px;line-height:1.5}
 .ins .dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
@@ -50,13 +52,14 @@ table.bt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}tab
 <div class="wrap hide" id="app">
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
-<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Online</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div></div>
+<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Online</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="ST.cmp=this.value;rOn()"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="yoy">Same period last year</option></select>
 <label>Attribution</label><select id="at"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
 <div class="banner" id="bn"></div><div class="grid" id="g1"></div></div>
-<div id="offC" class="hide"><div class="bar"><label>Attribution</label><select id="at2"></select><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
+<div id="offC" class="hide"><div class="bar"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select><label>Attribution</label><select id="at2"></select><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
 <div class="banner" id="bn2"></div><div class="grid" id="g2"></div></div>
+<div id="plC" class="hide"><div class="banner" id="bn3"></div><div class="grid" id="g3"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -104,7 +107,7 @@ function boot(){O=window.O;FF=window.F;isoDates();
  cards();rOn();
  document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours.';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;document.getElementById('d0').value=ST.s;document.getElementById('d1').value=ST.e;rOn();}
-function tab(t){TAB=t;document.getElementById('t1').classList.toggle('on',t==='on');document.getElementById('t2').classList.toggle('on',t==='off');document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');if(t==='on')rOn();else rOff();}
+function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');if(t==='on')rOn();else if(t==='off')rOff();else rPlan();}
 
 function cmpW(){const ln=span(ST.s,ST.e);return ST.cmp==='yoy'?[addD(ST.s,-365),addD(ST.e,-365)]:[addD(ST.s,-ln),addD(ST.s,-1)];}
 function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
@@ -137,6 +140,8 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   o.amer=[sp?o.ncrev[0]/sp:0,spc&&o.ncrev[1]?o.ncrev[1]/spc:null];
   o.ncaov=[o.nc[0]?o.ncrev[0]/o.nc[0]:0,rc&&o.nc[1]?o.ncrev[1]/o.nc[1]:null];
   o.rcaov=[o.rcn[0]?o.rcrev[0]/o.rcn[0]:0,rc&&o.rcn[1]?o.rcrev[1]/o.rcn[1]:null];
+  const dn=span(s,e);const ep=372076*dn/30.44,epP=ep;
+  o.onp=[o.gp[0]-sp-ep,spc!=null?o.gp[1]-spc-epP:null];
   o.atc=[aAvg('atcRatio',ra),rc?aAvg('atcRatio',rc):null];o.cko=[aAvg('checkoutRatio',ra),rc?aAvg('checkoutRatio',rc):null];o.cvr=[aAvg('cvr',ra),rc?aAvg('cvr',rc):null];}
  return o;}
 function fSeriesR(k,s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push((O.fin[k][i]||0)*(SC[k]||1));}return{L,d};}
@@ -164,6 +169,7 @@ function cards(){CARDS=[
  {id:'nvr',full:1,a:'shop',t:'New vs Returning — Revenue, Orders & AOV',src:'orders',cs:'First-time vs returning: revenue, order counts and AOV each, with % vs previous period.',ad:1,k:o=>[['NC revenue',o.ncrev[0],o.ncrev[1],'cur',1],['RC revenue',o.rcrev[0],o.rcrev[1],'cur',1],['NC AOV',o.ncaov[0],o.ncaov[1],'cur',1],['RC AOV',o.rcaov[0],o.rcaov[1],'cur',1],['New',o.nc[0],o.nc[1],'n',1],['Returning',o.rcn[0],o.rcn[1],'n',1]],c:o=>({ad:[{l:'NC revenue',k:'ncrev',c:C.blue,f:1},{l:'RC revenue',k:'rcrev',c:C.indigo,f:1}],tip:'cur'})},
  {id:'fn',a:'shop',t:'Funnel — ATC / Checkout / CVR',src:'cvr',cs:'Shopify cart-adds, checkout, completed ÷ sessions.',ad:1,k:o=>[['ATC %',o.atc[0],o.atc[1],'pct',1],['Checkout %',o.cko[0],o.cko[1],'pct',1],['CVR %',o.cvr[0],o.cvr[1],'pct',1]],c:o=>({ad:[{l:'ATC',k:'atcRatio',c:C.orange},{l:'Checkout',k:'checkoutRatio',c:C.violet},{l:'CVR',k:'cvr',c:C.pink}],tip:'pct'})},
  {id:'ss',a:'shop',t:'Sessions',src:'sessions',cs:'Shopify online store sessions.',ad:1,k:o=>[['Sessions',o.sess[0],o.sess[1],'n',1]],c:o=>({ad:[{l:'Sessions',k:'sessions',c:C.blue,f:1}],tip:'n'})},
+ {id:'np',a:'odoo',t:'Online Net Contribution (est)',src:'gp',cs:'Odoo GP − ad spend − e-com payroll (E£ 372,076/mo prorated: fulfilment centre + marketplaces team). Before HQ overhead.',ad:1,k:o=>[['Net contribution',o.onp[0],o.onp[1],'cur',1],['GP',o.gp[0],o.gp[1],'cur',1],['Ad spend',o.sp[0],o.sp[1],'cur',0]]},
  {id:'is',a:'meta',t:'In-store Revenue from Meta',src:'instoreMeta',cs:'Meta omni − pixel = offline/in-store attributed.',ad:1,k:o=>[['Meta offline value',o.instore[0],o.instore[1],'cur',1]],c:o=>({ad:[{l:'Meta offline',k:'instoreMeta',c:C.orange,m:af('meta'),f:1}],tip:'cur'})}
 ];ST.ord=CARDS.map(c=>c.id);}
 function kH(l){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">(${f(k[2])})</span>`:''}</div></div>`;}).join('');}
@@ -240,7 +246,9 @@ function pearson(a,b){const n=Math.min(a.length,b.length);if(n<3)return 0;let sa
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
- const s30=live?[Math.max(0,O.bl.n-30),O.bl.n-1]:null,p30=live?[Math.max(0,O.bl.n-60),Math.max(0,O.bl.n-31)]:null;
+ const N=+document.getElementById('bw').value||30;
+ const s30=live?[Math.max(0,O.bl.n-N),O.bl.n-1]:null,p30=live?[Math.max(0,O.bl.n-2*N),Math.max(0,O.bl.n-N-1)]:null;
+ let mvN=0,mpN=0;for(let i=Math.max(0,O.ad.n-N);i<O.ad.n;i++){mvN+=O.ad.instoreMeta[i]||0;mpN+=O.ad.metaOfflinePur?O.ad.metaOfflinePur[i]||0:0;}
  const B=FF.branches.map(b=>{const lv=live?bSum(b.name,s30):0,pv=live?bSum(b.name,p30):0;
   const r=ov[b.name+'_rev']!=null?ov[b.name+'_rev']:(lv||b.revEst);
   const rn=ov[b.name+'_rent']!=null?ov[b.name+'_rent']:b.rentEst,op=ov[b.name+'_opex']!=null?ov[b.name+'_opex']:b.opexEst;
@@ -248,37 +256,88 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
  const tot=B.reduce((a,b)=>a+b.rev,0)||1,pool=oh?FF.company.overheadPoolDefault:0;
  B.forEach(b=>{b.al=oh?Math.round(pool*b.rev/tot):0;b.fx=b.payroll+b.rent+b.opex+b.al;b.be=b.fx/cm;b.ov=b.rev-b.be;b.pf=b.rev*cm-b.fx;});
  document.getElementById('pp').innerHTML='Branch model · <b>'+FF.branches.length+' branches</b>'+(live?' · retail revenue <b>LIVE from Odoo</b>':'');
- const mv=Math.round(FF.meta.offlineValue*FF.attr.meta[ST.at]),mp=mv/tot*100;
+ const mv=Math.round(mvN*af('meta')),mp=tot?mv/tot*100:0;
  document.getElementById('bn2').innerHTML='↻ Last synced <b>'+(O.lastSync||'—')+'</b>. <b>Live:</b> branch retail revenue comes from Odoo POS journal accounting (income lines per branch, daily). Payroll exact from Excel. Meta offline value live. <b>Editable:</b> rent + opex (leases are not in any system I can read). Contribution margin = GP% × (1 − refund%) = <b>'+(cm*100).toFixed(1)+'%</b>.';
  const t1=document.createElement('div');t1.className='card full';t1.dataset.a='odoo';
- t1.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Branch Breakeven <span class="bg b-live">revenue live</span><span class="info" data-t="${(O.src.branch||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">Revenue = last 30 days of real POS journal income per branch. Breakeven = fixed ÷ contribution margin (${(cm*100).toFixed(1)}%). Rent / opex editable.</div></div></div>
- <table class="bt"><tr><th>Branch</th><th title="Headcount on payroll">HC</th><th title="True comp: Bluworks net + envelope, June 2026 Excel — exact">Payroll</th><th title="Monthly lease — editable placeholder, not in any system I can read">Rent</th><th title="Running costs: utilities, packaging, misc — editable placeholder (5% of revenue default)">Opex</th>${oh?'<th>OH</th>':''}<th title="Payroll + rent + opex + allocated overhead">Fixed</th><th title="Real POS journal income, last 30 days, live from Odoo accounting">Revenue 30d</th><th title="vs the 30 days before">vs prev 30d</th><th title="Fixed ÷ contribution margin — revenue needed to cover costs">Breakeven</th><th title="Revenue × contribution − fixed">Profit</th><th></th></tr>
+ t1.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Branch Breakeven <span class="bg b-live">revenue live</span><span class="info" data-t="${(O.src.branch||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">Revenue = last ${N} days of real POS journal income per branch. Breakeven = fixed ÷ contribution margin (${(cm*100).toFixed(1)}%). Rent / opex editable.</div></div></div>
+ <table class="bt"><tr><th>Branch</th><th title="Headcount on payroll">HC</th><th title="True comp: Bluworks net + envelope, June 2026 Excel — exact">Payroll</th><th title="Monthly lease — editable placeholder, not in any system I can read">Rent</th><th title="Running costs: utilities, packaging, misc — editable placeholder (5% of revenue default)">Opex</th>${oh?'<th>OH</th>':''}<th title="Payroll + rent + opex + allocated overhead">Fixed</th><th title="Real POS journal income, last ${N} days, live from Odoo accounting">Revenue ${N}d</th><th title="vs the ${N} days before">vs prev ${N}d</th><th title="Fixed ÷ contribution margin — revenue needed to cover costs">Breakeven</th><th title="Revenue × contribution − fixed">Profit</th><th></th></tr>
  ${B.map(b=>{const d=dl(b.liveRev,b.prevRev);return `<tr><td>${b.name}</td><td>${b.hc}</td><td>${b.payroll.toLocaleString()}</td><td><input value="${b.rent}" data-k="${b.name}_rent"></td><td><input value="${b.opex}" data-k="${b.name}_opex"></td>${oh?`<td title="Share of E£ ${pool.toLocaleString()} overhead pool (warehouses E£ ${FF.company.warehousePayroll.toLocaleString()} + HQ E£ ${FF.company.hqPayroll.toLocaleString()}), allocated by revenue weight ${(100*(tot?b.rev/tot:0)).toFixed(1)}%">${b.al.toLocaleString()}</td>`:''}<td title="Payroll ${b.payroll.toLocaleString()} + rent ${b.rent.toLocaleString()} + opex ${b.opex.toLocaleString()}${oh?' + overhead '+b.al.toLocaleString():''}">${Math.round(b.fx).toLocaleString()}</td><td><input value="${Math.round(b.rev)}" data-k="${b.name}_rev"></td><td class="${d.cls}">${d.t.replace(' vs prev','')}</td><td>${Math.round(b.be).toLocaleString()}</td><td title="Revenue ${Math.round(b.rev).toLocaleString()} × contribution ${(cm*100).toFixed(1)}% − fixed ${Math.round(b.fx).toLocaleString()}" style="color:${b.pf>=0?'#12a06e':'#e23a63'};font-weight:700">${Math.round(b.pf).toLocaleString()}</td><td><span class="tg ${b.ov>=0?'a':'b'}">${b.ov>=0?'ABOVE':'BELOW'}</span></td></tr>`;}).join('')}
  <tr style="font-weight:800"><td>Network</td><td>${B.reduce((a,b)=>a+b.hc,0)}</td><td>${B.reduce((a,b)=>a+b.payroll,0).toLocaleString()}</td><td>${B.reduce((a,b)=>a+b.rent,0).toLocaleString()}</td><td>${B.reduce((a,b)=>a+b.opex,0).toLocaleString()}</td>${oh?`<td>${B.reduce((a,b)=>a+b.al,0).toLocaleString()}</td>`:''}<td>${Math.round(B.reduce((a,b)=>a+b.fx,0)).toLocaleString()}</td><td>${Math.round(tot).toLocaleString()}</td><td></td><td>${Math.round(B.reduce((a,b)=>a+b.be,0)).toLocaleString()}</td><td style="color:#12a06e">${Math.round(B.reduce((a,b)=>a+b.pf,0)).toLocaleString()}</td><td></td></tr></table>`;
  g.appendChild(t1);
  if(live){B.forEach(b=>{const el=document.createElement('div');el.className='card';el.dataset.a='odoo';
   const d=dl(b.liveRev,b.prevRev);const share=tot?b.rev/tot:0;const metaShare=Math.round(mv*share);
   el.innerHTML=`<div class="chead" style="padding-right:0"><div><div class="ct" style="padding-left:0">${b.name} <span class="bg b-live">live</span></div><div class="cs">Daily POS journal income · Meta share estimated by revenue weight.</div></div>
-   <div class="kpis"><div class="kpi"><div class="l">Revenue 30d</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t}</div></div>
+   <div class="kpis"><div class="kpi"><div class="l">Revenue ${N}d</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t}</div></div>
    <div class="kpi"><div class="l">Meta-attributed est.</div><div class="v">${fC(metaShare)}</div><div class="d ft">${(mv&&b.liveRev?(metaShare/b.liveRev*100).toFixed(1):0)}% of rev</div></div>
    <div class="kpi"><div class="l">Profit / mo</div><div class="v" style="color:${b.pf>=0?'#12a06e':'#e23a63'}">${fC(b.pf)}</div><div class="d ft">${b.be?(b.rev/b.be*100).toFixed(0):0}% of breakeven</div></div></div></div>
    <div class="cv"><canvas></canvas></div>`;
   g.appendChild(el);
   lazyDraw(el,()=>{const r=[Math.max(0,O.bl.n-60),O.bl.n-1];const sr=blSeries(b.name,r);const dd=dec(sr.L,sr.d,120);
-   const cc=new Chart(el.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'Revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:.3,fill:true,backgroundColor:C.indigo+'22'}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,plugins:{legend:{display:0},tooltip:{callbacks:{label:x=>'Revenue: '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:6,color:'#9aa3b5',font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}}}}});ch.push(cc);});});
+   const me=[];for(let i=r[0];i<=r[1];i++){let td2=0;Object.keys(O.bl.b).forEach(nn=>td2+=O.bl.b[nn][i]||0);const ai=Math.round((Date.parse(bD(i))-Date.parse(O.ad.start))/864e5);const iv=(ai>=0&&ai<O.ad.n)?(O.ad.instoreMeta[ai]||0)*af('meta'):0;me.push(td2?iv*(O.bl.b[b.name][i]||0)/td2:0);}const dm=dec(sr.L,me,120);
+   const cc=new Chart(el.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'Revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:.3,fill:true,backgroundColor:C.indigo+'22'},{label:'Meta-attributed est.',data:dm.d,borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:.3}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,plugins:{legend:{display:0},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:6,color:'#9aa3b5',font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}}}}});ch.push(cc);});});
   const el2=document.createElement('div');el2.className='card full';el2.dataset.a='meta';
   const r=[Math.max(0,O.bl.n-60),O.bl.n-1];
   const totD=[],Lb=[];for(let i=r[0];i<=r[1];i++){let t2=0;Object.keys(O.bl.b).forEach(n=>t2+=O.bl.b[n][i]||0);totD.push(t2);Lb.push(bD(i));}
   const spD=Lb.map(d2=>{const ai=Math.round((Date.parse(d2)-Date.parse(O.ad.start))/864e5);return(ai>=0&&ai<O.ad.n)?O.ad.mspend[ai]:null;});
   const pa=[],pb=[];Lb.forEach((d2,i)=>{if(spD[i]!=null){pa.push(spD[i]);pb.push(totD[i]);}});
   const rr=pearson(pa,pb);
-  el2.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Online → Offline Impact <span class="bg b-meta">meta × pos</span></div><div class="cs">Daily Meta spend against total in-store revenue (all 7 branches, real POS journals). Correlation r = <b>${rr.toFixed(2)}</b> — ${Math.abs(rr)<0.2?'weak':Math.abs(rr)<0.5?'moderate':'strong'} ${rr>=0?'positive':'negative'} relationship. Meta reports ${fC(mv)} of in-store value (${mp.toFixed(1)}% of branch revenue) on ${FF.attr.labels[ST.at]}.</div></div></div><div class="cv" style="height:200px"><canvas></canvas></div><div class="lgd"><span class="lg"><i class="sw" style="background:${C.indigo}"></i>In-store revenue</span><span class="lg"><i class="sw" style="background:${C.blue}"></i>Meta spend (right axis)</span></div>`;
+  el2.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Online → Offline Impact <span class="bg b-meta">meta × pos</span></div><div class="cs">Daily Meta spend against total in-store revenue (all 7 branches, real POS journals). Correlation r = <b>${rr.toFixed(2)}</b> — ${Math.abs(rr)<0.2?'weak':Math.abs(rr)<0.5?'moderate':'strong'} ${rr>=0?'positive':'negative'} relationship. Meta reports ${fC(mv)} of in-store value (${mp.toFixed(1)}% of branch revenue) on ${FF.attr.labels[ST.at]}.</div></div></div><div class="cv" style="height:200px"><canvas></canvas></div><div class="lgd"><span class="lg"><i class="sw" style="background:${C.indigo}"></i>In-store revenue</span><span class="lg"><i class="sw" style="background:${C.blue}"></i>Meta spend (right axis)</span><span class="lg"><i class="sw" style="background:${C.orange}"></i>Meta-attributed in-store (right axis)</span></div>`;
   g.appendChild(el2);
   lazyDraw(el2,()=>{const dd=dec(Lb.map(x=>x.slice(5)),totD,150),ds2=dec(Lb.map(x=>x.slice(5)),spD.map(v=>v==null?0:v),150);
-   const cc=new Chart(el2.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'In-store revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:.3,fill:true,backgroundColor:C.indigo+'18',yAxisID:'y'},{label:'Meta spend',data:ds2.d,borderColor:C.blue,borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y2'}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},plugins:{legend:{display:0},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:8,color:'#9aa3b5',font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}},y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}}}}});ch.push(cc);});}
+   const cc=new Chart(el2.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'In-store revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:.3,fill:true,backgroundColor:C.indigo+'18',yAxisID:'y'},{label:'Meta spend',data:ds2.d,borderColor:C.blue,borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y2'},{label:'Meta-attributed in-store',data:(function(){const a=[];for(let i=r[0];i<=r[1];i++){const ai=Math.round((Date.parse(bD(i))-Date.parse(O.ad.start))/864e5);a.push((ai>=0&&ai<O.ad.n)?(O.ad.instoreMeta[ai]||0)*af('meta'):0);}return dec(Lb.map(x=>x.slice(5)),a,150).d;})(),borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:.3,yAxisID:'y2'}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},plugins:{legend:{display:0},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:8,color:'#9aa3b5',font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}},y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:5,color:'#9aa3b5',font:{size:10},callback:v=>fC(v)}}}}});ch.push(cc);});}
+ (function(){const co=FF.company;const dn2=30.44;const onGp=fSum('gp',addD(O.aw[1],-29),O.aw[1]);let onSp=0;for(let i=Math.max(0,O.ad.n-30);i<O.ad.n;i++)onSp+=O.ad.spend[i]||0;
+  const brC=B.reduce((a,b2)=>a+b2.pf,0);const onC=onGp-onSp-(co.ecomPayroll||372076);
+  const hqw=oh?0:(co.hqPayroll+co.warehousePayroll+co.envelope);
+  const net=brC+onC-hqw;
+  const t6=document.createElement('div');t6.className='card full';t6.dataset.a='odoo';
+  t6.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Company Net Profit (estimate, monthly run-rate)</div><div class="cs">Every expense I can read, one place. Branch side uses your editable rent/opex; online side is Odoo GP minus ads minus e-com payroll.</div></div></div>
+  <table class="bt"><tr><th>Component</th><th>E£ / month</th></tr>
+  <tr><td title="Sum of branch profit rows above (contribution − payroll − rent − opex${oh?' − allocated overhead':''})">Branches contribution (7 stores)</td><td style="color:${brC>=0?'#12a06e':'#e23a63'}">${Math.round(brC).toLocaleString()}</td></tr>
+  <tr><td title="Odoo online GP last 30d ${Math.round(onGp).toLocaleString()} − ad spend ${Math.round(onSp).toLocaleString()} − e-com payroll ${(co.ecomPayroll||372076).toLocaleString()}">Online contribution (GP − ads − e-com payroll)</td><td style="color:${onC>=0?'#12a06e':'#e23a63'}">${Math.round(onC).toLocaleString()}</td></tr>
+  ${oh?'':`<tr><td title="HQ ${co.hqPayroll.toLocaleString()} + warehouses ${co.warehousePayroll.toLocaleString()} + envelope ${co.envelope.toLocaleString()} — not yet allocated (tick load overhead to push into branches)">HQ + warehouses + envelope payroll</td><td style="color:#e23a63">−${hqw.toLocaleString()}</td></tr>`}
+  <tr style="font-weight:800"><td>Company net (est) — excludes HQ rent, utilities and finance costs I cannot read</td><td style="color:${net>=0?'#12a06e':'#e23a63'}">${Math.round(net).toLocaleString()}</td></tr></table>`;
+  g.appendChild(t6);})();
  const co=FF.company,pt=co.payrollTotal,pr=[['Branches',co.branchPayroll,C.indigo],['Warehouses',co.warehousePayroll,C.blue],['E-com & Marketplaces',co.ecomPayroll,C.teal],['HQ',co.hqPayroll,C.violet],['Envelope',co.envelope,C.orange]];
  const t5=document.createElement('div');t5.className='card full';t5.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Company Payroll — ${fC(pt)}/mo</div><div class="cs">Exact from payroll by function, June 2026 · 230 people.</div></div></div><div class="chan">${pr.map(p=>`<div class="r"><div class="n" style="width:150px">${p[0]}</div><div class="t"><div class="f" style="width:${(p[1]/pt*100).toFixed(1)}%;background:${p[2]}"></div></div><div class="vl">E£ ${p[1].toLocaleString()} · ${(p[1]/pt*100).toFixed(1)}%</div></div>`).join('')}</div>`;
  g.appendChild(t5);
  g.querySelectorAll('input[data-k]').forEach(i=>{i.oninput=()=>{const v=+i.value;if(isFinite(v))offI()[i.dataset.k]=v;clearTimeout(window._t);window._t=setTimeout(rOff,500);};});}
-window.unlock=unlock;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;
+function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3');g.innerHTML='';
+ const sv={s:ST.s,e:ST.e};ST.s=addD(O.aw[1],-29);ST.e=O.aw[1];const o=calc();
+ document.getElementById('bn3').innerHTML='↻ Synced <b>'+(O.lastSync||'')+'</b>. Commercial-director read of the LAST 30 DAYS vs the 30 before, from live Odoo + ads data. Every number is traceable to a card on the other tabs.';
+ const S=[];const add=(t,rows)=>S.push({t,rows});
+ const pc=(a,b)=>b?((a-b)/b*100).toFixed(1):'—';
+ // topline
+ add('1 · Top line — what happened',[
+  [o.gross[0]>=o.gross[1]?C.grn:C.red,`Online gross E£ ${fI(o.gross[0])} (${pc(o.gross[0],o.gross[1])}% vs prev). Net after E£ ${fI(o.ref[0])} returns: E£ ${fI(o.net[0])}.`],
+  [o.gpct[0]>=o.gpct[1]?C.grn:C.red,`Margin ${o.gpct[0].toFixed(1)}% (${(o.gpct[0]-o.gpct[1]>=0?'+':'')+(o.gpct[0]-o.gpct[1]).toFixed(1)} points). GP E£ ${fI(o.gp[0])}, GP/order E£ ${fI(o.gpp[0])}.`],
+  [C.indigo,`Retail: network E£ ${(function(){let t=0;Object.keys(O.bl.b||{}).forEach(n=>{for(let i=Math.max(0,O.bl.n-30);i<O.bl.n;i++)t+=O.bl.b[n][i]||0;});return fI(t);})()} across 7 branches in 30d.`]]);
+ // causes
+ const chRows=[];const t1=Object.values(o.ch).reduce((a,b)=>a+b,0)||1;
+ Object.keys(o.ch).forEach(cn=>{const d=o.ch[cn]-o.chP[cn];if(Math.abs(d)>50000)chRows.push([d>=0?C.grn:C.red,`${cn}: ${d>=0?'+':''}E£ ${fI(d)} vs prev (now ${(o.ch[cn]/t1*100).toFixed(1)}% of mix). ${d<0?'This is the biggest drag — check stock cover and feed health for '+cn+'.':'Protect what is working here.'}`]);});
+ const ann30=O.ann.filter(a=>a.d>=ST.s&&a.d<=ST.e).map(a=>[ANNC[a.k],a.d+' — '+a.t]);
+ add('2 · What caused it — channels and events',chRows.concat(ann30).slice(0,8));
+ // ads
+ const adr=[];
+ if(o.ad){adr.push([o.mroas[0]>=(o.mroas[1]||0)?C.grn:C.red,`Meta ${o.mroas[0].toFixed(2)}x (prev ${(o.mroas[1]||0).toFixed(2)}x), CPP E£ ${fI(o.cpp[0])}. ${o.mroas[0]<(o.mroas[1]||0)?'Efficiency slipping: audit top ad sets for fatigue (frequency and CTR) before adding budget.':'Room to scale the winners ~20% while ROAS holds.'}`]);
+  adr.push([o.groas[0]>=(o.groas[1]||0)?C.grn:C.red,`Google ${o.groas[0].toFixed(2)}x on E£ ${fI(o.gsp[0])}. ${o.gsp[0]<o.msp[0]*0.15?'Underweighted vs Meta — test lifting Google budget; its ROAS supports it.':''}`]);
+  adr.push([o.gpcac[0]>=1?C.grn:C.red,`CAC E£ ${fI(o.cac[0])} vs GP/order E£ ${fI(o.gpp[0])} → GP:CAC ${o.gpcac[0].toFixed(2)}x. ${o.gpcac[0]>=1?'Acquisition pays for itself on the first order — safe to push new-customer spend.':'You lose money on the first order — either raise AOV, cut CAC, or accept it only if repeat rate justifies it.'}`]);
+  adr.push([C.orange,`aMER ${o.amer[0].toFixed(2)}x. New customers ${fI(o.nc[0])} (${pc(o.nc[0],o.nc[1])}% vs prev)${o.nc[0]<o.nc[1]?' — acquisition volume is shrinking while spend holds: creative refresh is the first lever.':'.'}`]);}
+ add('3 · Ads — where the money works',adr);
+ // branches
+ const br=[];const names=Object.keys(O.bl.b||{});
+ const gr=names.map(n=>{let c=0,p=0;for(let i=Math.max(0,O.bl.n-30);i<O.bl.n;i++)c+=O.bl.b[n][i]||0;for(let i=Math.max(0,O.bl.n-60);i<Math.max(0,O.bl.n-30);i++)p+=O.bl.b[n][i]||0;return{n,c,p,g:p?(c-p)/p*100:0};}).sort((a,b)=>b.g-a.g);
+ if(gr.length){const best=gr[0],worst=gr[gr.length-1];
+  br.push([C.grn,`Promote / reward: ${best.n} — ${best.g>=0?'+':''}${best.g.toFixed(1)}% to E£ ${fI(best.c)} while the network averaged ${(gr.reduce((a,x)=>a+x.g,0)/gr.length).toFixed(1)}%. Ask its manager what changed and replicate it.`]);
+  br.push([C.red,`Investigate: ${worst.n} — ${worst.g.toFixed(1)}% to E£ ${fI(worst.c)}. Walk the store: staffing roster vs footfall hours, stock depth on the top 20 products, and local competition.`]);
+  gr.slice(1,-1).forEach(x=>br.push([x.g>=0?C.grn:C.orange,`${x.n}: ${x.g>=0?'+':''}${x.g.toFixed(1)}% → E£ ${fI(x.c)}.`]));}
+ add('4 · Branches — who is winning',br);
+ // products
+ const pr2=[];(O.prod||[]).slice(0,10).forEach(p=>{const d=p.r-p.p;pr2.push([d>=0?C.grn:C.red,`${p.n.replace(/^\[[^\]]*\]\s*/,'')}: E£ ${fI(p.r)} (${p.q} units), ${d>=0?'+':''}E£ ${fI(d)} vs prev. ${d>0&&p.r>80000?'Push in ads + check stock cover across branches.':d<0&&p.p>60000?'Falling — check availability first, price second.':''}`]);});
+ (O.prod||[]).filter(p=>p.r===0&&p.p>40000).slice(0,4).forEach(p=>pr2.push([C.red,`${p.n.replace(/^\[[^\]]*\]\s*/,'')}: was E£ ${fI(p.p)} last period, ZERO now — almost certainly out of stock. Reorder or delist.`]));
+ add('5 · Products — what to push, what to fix',pr2);
+ S.forEach(sec=>{const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
+  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+sec.t+'</div></div></div><div class="ins">'+sec.rows.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>';
+  g.appendChild(el);});
+ ST.s=sv.s;ST.e=sv.e;}
+window.unlock=unlock;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;
 </script></body></html>
