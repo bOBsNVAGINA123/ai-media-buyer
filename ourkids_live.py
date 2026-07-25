@@ -194,6 +194,8 @@ def meta_accounts(tok):
            if "ourkid" in (a.get("name") or "").lower() and a.get("account_status") == 1]
     return out or [os.environ.get("META_ACCOUNT_ID", "act_336343742536460")]
 
+MACC = {}
+
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
     ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
@@ -201,7 +203,14 @@ def pull_meta(win):
     a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
     while a <= endd:
         b = min(endd, a + datetime.timedelta(days=89)); chunks.append((a.isoformat(), b.isoformat())); a = b + datetime.timedelta(days=1)
+    anames = {}
+    try:
+        if tok:
+            d0 = http_json("%s/me/adaccounts?fields=name,account_id&limit=100&access_token=%s" % (GRAPH, tok))
+            for a in (d0.get("data") or []): anames["act_" + str(a.get("account_id"))] = a.get("name", "")
+    except Exception: pass
     for acct in meta_accounts(tok):
+      an = anames.get(acct, acct)
       for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
              "time_range": json.dumps({"since": c0, "until": c1}),
@@ -222,6 +231,9 @@ def pull_meta(win):
             ad["instoreMeta"][day] += max(0.0, omni - pixel)
             ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
+            mo = day[:7]
+            mc = MACC.setdefault(an, {}).setdefault(mo, {"sp": 0, "pv": 0, "ov": 0})
+            mc["sp"] += float(row.get("spend") or 0); mc["pv"] += pixel; mc["ov"] += omni
     log("meta days", sum(1 for v in ad["mspend"].values() if v))
     return ad
 
@@ -459,7 +471,7 @@ def pull_pos_branches():
     out = {}
     try:
         g = oexec("report.pos.order", "read_group",
-                  [[["date", ">=", "2024-08-01"]], ["price_total", "margin"], ["config_id", "date:month"]], {"lazy": False})
+                  [[["date", ">=", "2024-08-01"]], ["price_total", "margin", "order_id:count_distinct"], ["config_id", "date:month"]], {"lazy": False})
         for r in g:
             cfg = (r.get("config_id") or [0, ""])[1]
             br = next((b for k, b in POS_CFG if k in cfg), None)
@@ -467,7 +479,7 @@ def pull_pos_branches():
             try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
             except Exception: continue
             c = out.setdefault(br, {}).setdefault(mon, [0, 0, 0])
-            c[0] += round(r["price_total"]); c[1] += round(r["margin"]); c[2] += r["__count"]
+            c[0] += round(r["price_total"]); c[1] += round(r["margin"]); c[2] += int(r.get("order_id") or r["__count"])
         log("pos branches", len(out), "months", len(next(iter(out.values()), {})))
     except Exception as e:
         log("pos branches fail", str(e)[:150])
@@ -513,30 +525,53 @@ def pull_pos_customers():
             while off < 400000:
                 page = oexec("report.pos.order", "search_read",
                              [[["partner_id", "!=", False], ["date", ">=", q.isoformat()], ["date", "<", q2.isoformat()]]],
-                             {"fields": ["partner_id", "config_id", "date", "margin"],
+                             {"fields": ["partner_id", "config_id", "date", "margin", "order_id"],
                               "limit": 10000, "offset": off, "order": "id"})
                 if not page: break
                 for r in page:
                     cfg = (r.get("config_id") or [0, ""])[1]
                     br = next((b for k, b in POS_CFG if k in cfg), None)
-                    if br: rows.append((r["partner_id"][0], r["date"][:10], br, float(r.get("margin") or 0), 0.0))
+                    if br: rows.append((r["partner_id"][0], r["date"][:10], br, float(r.get("margin") or 0), (r.get("order_id") or [0])[0]))
                 off += len(page)
                 if len(page) < 10000: break
             q = q2
         rows.sort(key=lambda x: (x[1], x[0]))
-        first = {}; cnt = {}; ltg = {}
-        for pid, d, br, mg, pt in rows:
+        first = {}; cnt = {}; ltg = {}; seenOrd = set()
+        for pid, d, br, mg, oid in rows:
             if pid not in first: first[pid] = (d, br)
-            cnt[pid] = cnt.get(pid, 0) + 1
+            if oid and (pid, oid) not in seenOrd:
+                seenOrd.add((pid, oid)); cnt[pid] = cnt.get(pid, 0) + 1
             ltg[pid] = ltg.get(pid, 0.0) + mg
-        newSeen = set()
-        for pid, d, br, mg, pt in rows:
+        newSeen = set(); ordSeen = set()
+        for pid, d, br, mg, oid in rows:
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
-            if pid not in newSeen and first[pid][0] == d and first[pid][1] == br:
-                newSeen.add(pid); c["nc"] += 1; c["ng"] += round(mg)
+            isNew = pid not in newSeen and first[pid][0] == d and first[pid][1] == br
+            if isNew: newSeen.add(pid); c["nc"] += 1
+            newOrd = oid and (pid, oid, "b") not in ordSeen
+            if newOrd: ordSeen.add((pid, oid, "b"))
+            if isNew: c["ng"] += round(mg)
             else:
-                c["rc"] += 1; c["rg"] += round(mg)
+                if newOrd: c["rc"] += 1
+                c["rg"] += round(mg)
+        # branch cohorts: LTGP per customer acquired at each branch, by cohort month
+        pm_ = {}
+        for pid, d, br, mg, oid in rows: pm_.setdefault(pid, []).append((d, mg))
+        bcoh = {}
+        for pid, (fd, fb) in first.items():
+            m = fd[:7]
+            c2 = bcoh.setdefault(fb, {}).setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0})
+            c2["size"] += 1
+            f0 = datetime.date.fromisoformat(fd)
+            for d, mg in pm_[pid]:
+                dd = (datetime.date.fromisoformat(d) - f0).days
+                if dd < 0: continue
+                if dd <= 30: c2["g30"] += mg
+                if dd <= 90: c2["g90"] += mg
+                if dd <= 180: c2["g180"] += mg
+                if dd <= 365: c2["g365"] += mg
+        for b2 in bcoh:
+            for m in bcoh[b2]: bcoh[b2][m] = {k: (round(v) if isinstance(v, float) else v) for k, v in bcoh[b2][m].items()}
         fb = {}
         for pid, (d, br) in first.items(): fb.setdefault(br, []).append(pid)
         for br, pids in fb.items():
@@ -545,9 +580,10 @@ def pull_pos_customers():
                          "ordPerCust": round(sum(cnt.get(p2, 0) for p2 in pids) / len(pids), 2) if pids else 0,
                          "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / len(pids)) if pids else 0}
         log("pos customers", len(first), "branches", list(bstat.keys()))
+        return bnr, bstat, bcoh
     except Exception as e:
         log("pos customers fail", str(e)[:160])
-    return bnr, bstat
+    return bnr, bstat, {}
 
 def pull_meta_ads(tok):
     """Top ads last 30d with website + omni value and viewable thumbnails."""
@@ -692,11 +728,11 @@ def build():
     except Exception: pass
     heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr"))
     if heavy:
-        _bc = safe(pull_pos_customers) or ({}, {})
-        bnr, bstat = _bc if isinstance(_bc, tuple) else ({}, {})
-        if not bnr: bnr, bstat = prev.get("bnr", {}), prev.get("bstat", {})
+        _bc = safe(pull_pos_customers) or ({}, {}, {})
+        bnr, bstat, bcoh = _bc if isinstance(_bc, tuple) and len(_bc) == 3 else ({}, {}, {})
+        if not bnr: bnr, bstat, bcoh = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {})
     else:
-        bnr, bstat = prev.get("bnr", {}), prev.get("bstat", {})
+        bnr, bstat, bcoh = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
     mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
     bcost = safe(pull_branch_costs) or {}
@@ -731,7 +767,7 @@ def build():
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "mads": mads,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "mads": mads, "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
