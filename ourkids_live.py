@@ -139,24 +139,35 @@ def _av(actions, keys):
             try: return float(a.get("value") or 0)
             except Exception: return 0.0
     return 0.0
+def meta_accounts(tok):
+    ids = os.environ.get("META_ACCOUNT_IDS", "").strip()
+    if ids:
+        return [x if x.startswith("act_") else "act_" + x for x in ids.split(",") if x.strip()]
+    d = http_json(GRAPH + "/me/adaccounts?" + urllib.parse.urlencode(
+        {"fields": "name,account_status", "limit": 200, "access_token": tok}))
+    out = [a["id"] for a in (d.get("data") or [])
+           if "ourkid" in (a.get("name") or "").lower() and a.get("account_status") == 1]
+    return out or [os.environ.get("META_ACCOUNT_ID", "act_336343742536460")]
+
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    acct = os.environ.get("META_ACCOUNT_ID", "act_336343742536460").strip()
-    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur"]}
-    p = {"level": "account", "time_increment": 1, "access_token": tok,
-         "time_range": json.dumps({"since": win[0], "until": win[-1]}),
-         "fields": "spend,action_values,actions", "limit": 500}
-    d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
-    for row in (d.get("data") or []):
-        day = row.get("date_start")
-        if day not in ad["mspend"]: continue
-        ad["mspend"][day] = float(row.get("spend") or 0)
-        av = row.get("action_values") or []
-        pixel = _av(av, ("offsite_conversion.fb_pixel_purchase",))
-        omni = _av(av, ("omni_purchase",)) or pixel
-        ad["mecomrev"][day] = pixel; ad["metaOmniValue"][day] = omni
-        ad["instoreMeta"][day] = max(0.0, omni - pixel)
-        ad["metaOfflinePur"][day] = _av(row.get("actions"), ("offline_conversion.purchase",))
+    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
+    for acct in meta_accounts(tok):
+        p = {"level": "account", "time_increment": 1, "access_token": tok,
+             "time_range": json.dumps({"since": win[0], "until": win[-1]}),
+             "fields": "spend,action_values,actions", "limit": 500}
+        d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+        for row in (d.get("data") or []):
+            day = row.get("date_start")
+            if day not in ad["mspend"]: continue
+            ad["mspend"][day] += float(row.get("spend") or 0)
+            av = row.get("action_values") or []
+            pixel = _av(av, ("offsite_conversion.fb_pixel_purchase",))
+            omni = _av(av, ("omni_purchase",)) or pixel
+            ad["mecomrev"][day] += pixel; ad["metaOmniValue"][day] += omni
+            ad["instoreMeta"][day] += max(0.0, omni - pixel)
+            ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
+            ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
     log("meta days", sum(1 for v in ad["mspend"].values() if v))
     return ad
 
@@ -257,7 +268,7 @@ def pull_tiktok(win):
     log("tiktok days", sum(1 for v in out["tspend"].values() if v))
     return out
 
-def merge_fallback(win, shop, goog, tik):
+def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
     p = os.path.join(DOCS, "fallback_ad.json")
     if not os.path.exists(p): return
@@ -269,6 +280,7 @@ def merge_fallback(win, shop, goog, tik):
     for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]: fill(shop, k, k)
     fill(goog, "gspend", "gspend"); fill(goog, "gecomrev", "gecomrev")
     fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue")
+    for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "mpur"]: fill(meta, k, k)
     log("fallback merged")
 
 # ------------------------------------------------------------------ ANNOTATIONS
@@ -336,13 +348,13 @@ def build():
             log(fn.__name__, "FAILED", str(e)[:200]); return None
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
-    meta = safe(pull_meta, win) or {}
+    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}}
     tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}}
     if not fin:
         log("FATAL: Odoo failed; keeping previous data.js"); return
-    merge_fallback(win, shop, goog, tik)
+    merge_fallback(win, shop, goog, tik, meta)
     def arr(dct, k, dec=0):
         m = dct.get(k, {}) if dct else {}
         return [round(m.get(d, 0), 2) if dec else int(round(m.get(d, 0))) for d in win]
@@ -351,7 +363,7 @@ def build():
           "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"),
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
-          "metaOfflinePur": arr(meta, "metaOfflinePur"),
+          "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
           "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"),
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
