@@ -1,0 +1,51 @@
+name: OurKids Live Dashboard
+
+# Runs on GitHub's servers. Laptop off, nobody online. Rebuilds docs/ourkids/data.js
+# from the live APIs and commits it, so GitHub Pages always serves fresh numbers.
+on:
+  schedule:
+    - cron: "0 */3 * * *"      # every 3 hours, off the :00 rush would throttle; GitHub is UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ourkids-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the dashboard data
+        env:
+          ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:      ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:   ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY:  ${{ secrets.ODOO_APIKEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACCOUNT_ID:   ${{ secrets.META_ACCOUNT_ID }}
+          SHOPIFY_STORE:     ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:     ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:  ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
+          GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
+          GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
+          TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+        run: python ourkids_live.py
+      - name: Commit fresh data
+        run: |
+          git config user.name "ourkids-dashboard"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/ourkids/data.js docs/ourkids/index.html || true
+          git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
+          git push || echo "nothing to push"
