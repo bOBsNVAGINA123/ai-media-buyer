@@ -317,12 +317,13 @@ def pull_google(win):
     return out
 
 def pull_tiktok(win):
-    out = {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
+    out = {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win},
+           "ttOffValue": {d: 0.0 for d in win}, "ttOffPur": {d: 0.0 for d in win}}
     tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
     if not (tok and adv): log("tiktok skipped"); return out
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_ADVERTISER",
          "dimensions": json.dumps(["stat_time_day"]),
-         "metrics": json.dumps(["spend", "complete_payment"]),
+         "metrics": json.dumps(["spend", "complete_payment", "offline_shopping_events", "offline_shopping_events_value"]),
          "start_date": win[0], "end_date": win[-1], "page_size": 1000}
     d = http_json("https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/?" + urllib.parse.urlencode(p),
                   None, {"Access-Token": tok})
@@ -331,6 +332,8 @@ def pull_tiktok(win):
         if day not in out["tspend"]: continue
         m = row.get("metrics", {})
         out["tspend"][day] = float(m.get("spend") or 0)
+        out["ttOffValue"][day] += float(row.get("metrics", {}).get("offline_shopping_events_value") or 0)
+        out["ttOffPur"][day] += float(row.get("metrics", {}).get("offline_shopping_events") or 0)
         out["ttValue"][day] = float(m.get("complete_payment") or 0)
     log("tiktok days", sum(1 for v in out["tspend"].values() if v))
     return out
@@ -542,6 +545,9 @@ def pull_pos_customers():
             if oid and (pid, oid) not in seenOrd:
                 seenOrd.add((pid, oid)); cnt[pid] = cnt.get(pid, 0) + 1
             ltg[pid] = ltg.get(pid, 0.0) + mg
+        ordNet = {}
+        for pid, d, br, mg, oid in rows:
+            if oid: ordNet[(pid, oid)] = ordNet.get((pid, oid), 0.0) + mg
         newSeen = set(); ordSeen = set()
         for pid, d, br, mg, oid in rows:
             m = d[:7]
@@ -552,7 +558,9 @@ def pull_pos_customers():
             if newOrd: ordSeen.add((pid, oid, "b"))
             if isNew: c["ng"] += round(mg)
             else:
-                if newOrd: c["rc"] += 1
+                if newOrd:
+                    c["rc"] += 1
+                    if ordNet.get((pid, oid), 0) > 0: c["rcx"] = c.get("rcx", 0) + 1
                 c["rg"] += round(mg)
         # branch cohorts: LTGP per customer acquired at each branch, by cohort month
         pm_ = {}
@@ -572,11 +580,16 @@ def pull_pos_customers():
                 if dd <= 365: c2["g365"] += mg
         for b2 in bcoh:
             for m in bcoh[b2]: bcoh[b2][m] = {k: (round(v) if isinstance(v, float) else v) for k, v in bcoh[b2][m].items()}
+        cntX = {}
+        for (pid, oid), net in ordNet.items():
+            if net > 0: cntX[pid] = cntX.get(pid, 0) + 1
         fb = {}
         for pid, (d, br) in first.items(): fb.setdefault(br, []).append(pid)
         for br, pids in fb.items():
             rep2 = sum(1 for p2 in pids if cnt.get(p2, 0) >= 2)
+            rep2x = sum(1 for p2 in pids if cntX.get(p2, 0) >= 2)
             bstat[br] = {"cust": len(pids), "repeatRate": round(rep2 / len(pids) * 100, 1) if pids else 0,
+                         "repeatRateX": round(rep2x / len(pids) * 100, 1) if pids else 0,
                          "ordPerCust": round(sum(cnt.get(p2, 0) for p2 in pids) / len(pids), 2) if pids else 0,
                          "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / len(pids)) if pids else 0}
         log("pos customers", len(first), "branches", list(bstat.keys()))
@@ -643,7 +656,7 @@ def merge_fallback(win, shop, goog, tik, meta):
                 dct[k][d] = fb.get(fk, [0] * len(fdx))[fdx[d]]
     for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]: fill(shop, k, k)
     fill(goog, "gspend", "gspend"); fill(goog, "gecomrev", "gecomrev"); fill(goog, "gconv", "gconv")
-    fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue"); fill(tik, "tpur", "tpur")
+    fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue"); fill(tik, "tpur", "tpur"); fill(tik, "ttOffValue", "ttOffValue"); fill(tik, "ttOffPur", "ttOffPur")
     for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "mpur"]: fill(meta, k, k)
     log("fallback merged")
 
@@ -752,6 +765,7 @@ def build():
           "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
           "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"), "tpur": arr(tik, "tpur"),
+          "ttOffValue": arr(tik, "ttOffValue"), "ttOffPur": arr(tik, "ttOffPur"),
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
