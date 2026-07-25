@@ -389,10 +389,21 @@ def pull_cohorts():
                 if dd <= 365: c["g365"] += mg
         out = [{"m": m, "size": c["size"], "g30": round(c["g30"]), "g90": round(c["g90"]),
                 "g180": round(c["g180"]), "g365": round(c["g365"])} for m, c in sorted(coh.items())]
-        log("cohorts", len(out), "customers", len(first))
-        return out
+        nr = {}
+        seen = set()
+        for pid, d, amt, mg in sorted(orders, key=lambda o: (o[1], o[0])):
+            m = d[:7]
+            if m < "2024-08": continue
+            c = nr.setdefault(m, {"nrev": 0.0, "ngp": 0.0, "nord": 0, "rrev": 0.0, "rgp": 0.0, "rord": 0})
+            if pid and pid not in seen and first.get(pid) == d:
+                seen.add(pid); c["nrev"] += amt; c["ngp"] += mg; c["nord"] += 1
+            else:
+                c["rrev"] += amt; c["rgp"] += mg; c["rord"] += 1
+        for m in nr: nr[m] = {k: (round(v) if isinstance(v, float) else v) for k, v in nr[m].items()}
+        log("cohorts", len(out), "customers", len(first), "nr months", len(nr))
+        return {"coh": out, "nr": nr}
     except Exception as e:
-        log("cohorts fail", str(e)[:150]); return []
+        log("cohorts fail", str(e)[:150]); return {"coh": [], "nr": {}}
 
 EXPG = [("Payroll & benefits", ("31.01.01.", "31.01.09.")), ("Rent — branches", ("31.01.04.02",)),
         ("Rent — HQ / warehouses / flats", ("31.01.04.01", "31.01.04.03", "31.01.04.04")),
@@ -489,6 +500,102 @@ def pull_branch_costs():
         log("branch costs fail", str(e)[:150])
     return out
 
+
+def pull_pos_customers():
+    """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP."""
+    bnr = {}; bstat = {}
+    try:
+        rows = []
+        q = datetime.date(2024, 8, 1)
+        while q <= END:
+            q2 = (q.replace(day=1) + datetime.timedelta(days=95)).replace(day=1)
+            off = 0
+            while off < 400000:
+                page = oexec("report.pos.order", "search_read",
+                             [[["partner_id", "!=", False], ["date", ">=", q.isoformat()], ["date", "<", q2.isoformat()]]],
+                             {"fields": ["partner_id", "config_id", "date", "margin"],
+                              "limit": 10000, "offset": off, "order": "id"})
+                if not page: break
+                for r in page:
+                    cfg = (r.get("config_id") or [0, ""])[1]
+                    br = next((b for k, b in POS_CFG if k in cfg), None)
+                    if br: rows.append((r["partner_id"][0], r["date"][:10], br, float(r.get("margin") or 0), 0.0))
+                off += len(page)
+                if len(page) < 10000: break
+            q = q2
+        rows.sort(key=lambda x: (x[1], x[0]))
+        first = {}; cnt = {}; ltg = {}
+        for pid, d, br, mg, pt in rows:
+            if pid not in first: first[pid] = (d, br)
+            cnt[pid] = cnt.get(pid, 0) + 1
+            ltg[pid] = ltg.get(pid, 0.0) + mg
+        newSeen = set()
+        for pid, d, br, mg, pt in rows:
+            m = d[:7]
+            c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
+            if pid not in newSeen and first[pid][0] == d and first[pid][1] == br:
+                newSeen.add(pid); c["nc"] += 1; c["ng"] += round(mg)
+            else:
+                c["rc"] += 1; c["rg"] += round(mg)
+        fb = {}
+        for pid, (d, br) in first.items(): fb.setdefault(br, []).append(pid)
+        for br, pids in fb.items():
+            rep2 = sum(1 for p2 in pids if cnt.get(p2, 0) >= 2)
+            bstat[br] = {"cust": len(pids), "repeatRate": round(rep2 / len(pids) * 100, 1) if pids else 0,
+                         "ordPerCust": round(sum(cnt.get(p2, 0) for p2 in pids) / len(pids), 2) if pids else 0,
+                         "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / len(pids)) if pids else 0}
+        log("pos customers", len(first), "branches", list(bstat.keys()))
+    except Exception as e:
+        log("pos customers fail", str(e)[:160])
+    return bnr, bstat
+
+def pull_meta_ads(tok):
+    """Top ads last 30d with website + omni value and viewable thumbnails."""
+    out = []
+    if not tok:
+        p2 = os.path.join(DOCS, "mads_fallback.json")
+        if os.path.exists(p2):
+            try: return json.load(open(p2))
+            except Exception: pass
+        return out
+    try:
+        c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
+        rows = []
+        for acct in meta_accounts(tok):
+            p = {"level": "ad", "access_token": tok, "time_range": json.dumps({"since": c0, "until": c1}),
+                 "fields": "ad_id,ad_name,spend,action_values,actions", "limit": 300}
+            d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+            rows += (d.get("data") or [])
+        ads = []
+        for r in rows:
+            sp = float(r.get("spend") or 0)
+            if sp < 1000: continue
+            av = r.get("action_values") or []
+            pv = _av(av, ("offsite_conversion.fb_pixel_purchase",))
+            ov = _av(av, ("omni_purchase",)) or pv
+            pur = _av(r.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
+            ads.append({"id": r.get("ad_id"), "n": (r.get("ad_name") or "")[:80], "sp": round(sp),
+                        "pv": round(pv), "ov": round(ov), "pur": int(pur)})
+        ads.sort(key=lambda a: -a["sp"]); ads = ads[:40]
+        ids = [a["id"] for a in ads if a["id"]]
+        for i in range(0, len(ids), 25):
+            d = http_json("%s/?ids=%s&fields=creative{thumbnail_url}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
+            for a in ads:
+                info = (d or {}).get(a["id"]) or {}
+                th = ((info.get("creative") or {}).get("thumbnail_url"))
+                if th: a["th"] = th
+        log("meta ads", len(ads))
+        try: json.dump(ads, open(os.path.join(DOCS, "mads_fallback.json"), "w"))
+        except Exception: pass
+        return ads
+    except Exception as e:
+        log("meta ads fail", str(e)[:150])
+        p2 = os.path.join(DOCS, "mads_fallback.json")
+        if os.path.exists(p2):
+            try: return json.load(open(p2))
+            except Exception: pass
+        return out
+
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
     p = os.path.join(DOCS, "fallback_ad.json")
@@ -575,8 +682,23 @@ def build():
     goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
     tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
-    coh = safe(pull_cohorts) or []
+    _ch = safe(pull_cohorts) or {"coh": [], "nr": {}}
+    coh, nrm = _ch.get("coh", []), _ch.get("nr", {})
     pos = safe(pull_pos_branches) or {}
+    prev = {}
+    try:
+        pd0 = open(os.path.join(DOCS, "data.js")).read()
+        prev = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
+    except Exception: pass
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr"))
+    if heavy:
+        _bc = safe(pull_pos_customers) or ({}, {})
+        bnr, bstat = _bc if isinstance(_bc, tuple) else ({}, {})
+        if not bnr: bnr, bstat = prev.get("bnr", {}), prev.get("bstat", {})
+    else:
+        bnr, bstat = prev.get("bnr", {}), prev.get("bstat", {})
+        log("pos customers carried forward (heavy crawl runs on first sync of the day)")
+    mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
     bcost = safe(pull_branch_costs) or {}
     _er = safe(pull_expenses)
     exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
@@ -609,7 +731,7 @@ def build():
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "mads": mads,
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
