@@ -64,6 +64,12 @@ def ogroup(model, domain, fields, groupby):
     if _UID[0] is None: _UID[0] = _rpc("common", "authenticate", [db, lo, k, {}])
     return _rpc("object", "execute_kw",
         [db, _UID[0], k, model, "read_group", [domain, fields, groupby], {"lazy": False}]) or []
+def oexec(model, method, args, kw=None):
+    if _CR[0] is None: _CR[0] = odoo_creds()
+    sv, db, lo, k = _CR[0]
+    if _UID[0] is None: _UID[0] = _rpc("common", "authenticate", [db, lo, k, {}])
+    return _rpc("object", "execute_kw", [db, _UID[0], k, model, method, args, kw or {}]) or []
+
 def dkey(s):
     return datetime.datetime.strptime(s, "%d %b %Y").date().isoformat()
 
@@ -299,7 +305,7 @@ def pull_google(win):
     return out
 
 def pull_tiktok(win):
-    out = {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}}
+    out = {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
     tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
     if not (tok and adv): log("tiktok skipped"); return out
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_ADVERTISER",
@@ -317,6 +323,120 @@ def pull_tiktok(win):
     log("tiktok days", sum(1 for v in out["tspend"].values() if v))
     return out
 
+
+def pull_shop_channel(fin_win):
+    """Shopify-team daily actuals: revenue, margin, orders, refunds (credit notes are team-tagged)."""
+    out = {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
+    try:
+        g = oexec("sale.order", "read_group",
+                  [[["state", "in", ["sale", "done"]], ["team_id.name", "=", "Shopify"], ["date_order", ">=", fin_win[0]]],
+                   ["amount_total", "margin"], ["date_order:day"]], {"lazy": False})
+        for r in g:
+            d = _gday(r.get("date_order:day"))
+            if d: out["srev"][d] = round(r["amount_total"]); out["sgp"][d] = round(r["margin"]); out["sord"][d] = r["__count"]
+        g = oexec("account.move", "read_group",
+                  [[["move_type", "=", "out_refund"], ["state", "=", "posted"], ["team_id.name", "=", "Shopify"], ["invoice_date", ">=", fin_win[0]]],
+                   ["amount_total"], ["invoice_date:day"]], {"lazy": False})
+        for r in g:
+            d = _gday(r.get("invoice_date:day"))
+            if d: out["sref"][d] = round(r["amount_total"])
+        log("shop-channel days", len(out["srev"]))
+    except Exception as e:
+        log("shop-channel fail", str(e)[:150])
+    return out
+
+def _gday(lbl):
+    """Odoo read_group day label '05 Aug 2024' -> ISO."""
+    try:
+        return datetime.datetime.strptime(str(lbl), "%d %b %Y").date().isoformat()
+    except Exception:
+        try: return datetime.date.fromisoformat(str(lbl)[:10]).isoformat()
+        except Exception: return None
+
+def pull_cohorts():
+    """REAL customer-level cohorts: Shopify-team orders, first-order month, cumulative GP at 30/90/180/365d."""
+    try:
+        orders = []; off = 0
+        while True:
+            page = oexec("sale.order", "search_read",
+                         [[["state", "in", ["sale", "done"]], ["team_id.name", "=", "Shopify"], ["date_order", ">=", "2023-06-01"]]],
+                         {"fields": ["partner_id", "date_order", "amount_total", "margin"], "limit": 10000, "offset": off, "order": "id"})
+            if not page: break
+            for o in page:
+                orders.append((o["partner_id"][0] if o.get("partner_id") else 0, o["date_order"][:10],
+                               float(o.get("amount_total") or 0), float(o.get("margin") or 0)))
+            off += len(page)
+            if len(page) < 10000: break
+        first = {}
+        for pid, d, amt, mg in sorted(orders, key=lambda o: o[1]):
+            if pid and pid not in first: first[pid] = d
+        by_p = {}
+        for pid, d, amt, mg in orders:
+            if pid: by_p.setdefault(pid, []).append((d, amt, mg))
+        coh = {}
+        for pid, f in first.items():
+            m = f[:7]
+            if m < "2024-08": continue
+            c = coh.setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0})
+            c["size"] += 1
+            f0 = datetime.date.fromisoformat(f)
+            for d, amt, mg in by_p[pid]:
+                dd = (datetime.date.fromisoformat(d) - f0).days
+                if dd < 0: continue
+                if dd <= 30: c["g30"] += mg
+                if dd <= 90: c["g90"] += mg
+                if dd <= 180: c["g180"] += mg
+                if dd <= 365: c["g365"] += mg
+        out = [{"m": m, "size": c["size"], "g30": round(c["g30"]), "g90": round(c["g90"]),
+                "g180": round(c["g180"]), "g365": round(c["g365"])} for m, c in sorted(coh.items())]
+        log("cohorts", len(out), "customers", len(first))
+        return out
+    except Exception as e:
+        log("cohorts fail", str(e)[:150]); return []
+
+EXPG = [("Payroll & benefits", ("31.01.01.", "31.01.09.")), ("Rent — branches", ("31.01.04.02",)),
+        ("Rent — HQ / warehouses / flats", ("31.01.04.01", "31.01.04.03", "31.01.04.04")),
+        ("Utilities (elec/water/gas)", ("31.01.08.01", "31.01.08.02", "31.01.08.03")),
+        ("Packing & bags", ("31.01.08.10",)), ("Payment & collection fees", ("31.01.08.17", "31.01.08.31", "31.01.08.32", "31.01.08.33", "31.01.08.34", "31.01.08.35", "31.01.08.36", "31.01.08.37")),
+        ("Cargo & transport", ("31.01.06.", "31.01.08.08", "31.01.08.09")),
+        ("Offline advertising & gifts", ("31.01.05.",)), ("Maintenance", ("31.01.02.",)),
+        ("Comms & internet", ("31.01.03.",))]
+
+BRANCH_AR = [("\u0645\u0648\u0644 \u0627\u0644\u0639\u0631\u0628", "Mall of Arabia"), ("\u0627\u0644\u0639\u0631\u0628", "Mall of Arabia"),
+             ("\u0627\u0644\u062a\u062c\u0645\u0639", "New Cairo"), ("\u0646\u0635\u0631", "Nasr City"), ("\u062f\u0642", "Dokki"),
+             ("\u0643\u062a\u0648\u0628\u0631", "October"), ("\u0632\u0627\u064a\u062f", "Zayed"), ("\u0633\u0645\u0648\u062d", "Smouha")]
+
+def pull_expenses():
+    """Monthly OpEx from the real 31.* expense accounts + per-branch rent parsed from line descriptions."""
+    exp = {}; rentB = {}
+    try:
+        acc = oexec("account.account", "search_read", [[["code", "=like", "31.%"]]], {"fields": ["code", "name"], "limit": 300})
+        amap = {a["id"]: a["code"] for a in acc}
+        g = oexec("account.move.line", "read_group",
+                  [[["account_id", "in", list(amap.keys())], ["parent_state", "=", "posted"], ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]],
+                   ["balance"], ["account_id", "date:month"]], {"lazy": False})
+        for r in g:
+            code = amap.get(r["account_id"][0], "")
+            try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
+            except Exception: continue
+            grp = "Other OpEx"
+            for name, prefixes in EXPG:
+                if any(code.startswith(px) for px in prefixes): grp = name; break
+            exp.setdefault(mon, {})[grp] = exp.setdefault(mon, {}).get(grp, 0) + round(r["balance"])
+        rb = [a["id"] for a in acc if "RENT Branches" in a["name"]]
+        lines = oexec("account.move.line", "search_read",
+                      [[["account_id", "in", rb], ["parent_state", "=", "posted"], ["date", ">=", "2025-01-01"], ["date", "<=", END.isoformat()]]],
+                      {"fields": ["name", "balance", "date"], "limit": 2000})
+        for l in lines:
+            nm = str(l.get("name") or ""); mon = l["date"][:7]; b = "(unlabelled)"
+            for k, v in BRANCH_AR:
+                if k in nm: b = v; break
+            rentB.setdefault(b, {})[mon] = rentB.setdefault(b, {}).get(mon, 0) + round(l["balance"])
+        log("expenses months", len(exp), "rent branches", len(rentB))
+    except Exception as e:
+        log("expenses fail", str(e)[:150])
+    return exp, rentB
+
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
     p = os.path.join(DOCS, "fallback_ad.json")
@@ -328,7 +448,7 @@ def merge_fallback(win, shop, goog, tik, meta):
                 dct[k][d] = fb.get(fk, [0] * len(fdx))[fdx[d]]
     for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]: fill(shop, k, k)
     fill(goog, "gspend", "gspend"); fill(goog, "gecomrev", "gecomrev"); fill(goog, "gconv", "gconv")
-    fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue")
+    fill(tik, "tspend", "tspend"); fill(tik, "ttValue", "ttValue"); fill(tik, "tpur", "tpur")
     for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "mpur"]: fill(meta, k, k)
     log("fallback merged")
 
@@ -401,7 +521,11 @@ def build():
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
-    tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}}
+    tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
+    shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
+    coh = safe(pull_cohorts) or []
+    _er = safe(pull_expenses)
+    exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
     if not fin:
         log("FATAL: Odoo failed; keeping previous data.js"); return
     merge_fallback(win, shop, goog, tik, meta)
@@ -415,7 +539,7 @@ def build():
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
           "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
-          "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"),
+          "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"), "tpur": arr(tik, "tpur"),
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
@@ -425,7 +549,13 @@ def build():
         ATTR["labels"]["7dc"] = "7-day click (measured: %.0f%% of live)" % (ATTR["meta"]["7dc"] * 100)
         ATTR["labels"]["1dc"] = "1-day click (measured: %.0f%% of live)" % (ATTR["meta"]["1dc"] * 100)
         log("meta attribution measured", ATTR["meta"]["7dc"], ATTR["meta"]["1dc"])
+    fwin = drange(datetime.date.fromisoformat(fin["start"]), END)
+    sh = {"rev": [int(round(shc["srev"].get(d, 0) / 1000.0)) for d in fwin],
+          "gp": [int(round(shc["sgp"].get(d, 0) / 1000.0)) for d in fwin],
+          "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
+          "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
+              "shop": sh, "coh": coh, "exp": exp, "rentB": rentB,
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
