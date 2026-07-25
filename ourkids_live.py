@@ -163,6 +163,15 @@ def pull_products():
 
 # ------------------------------------------------------------------ ADS + SHOP
 GRAPH = "https://graph.facebook.com/v21.0"
+def _avw(actions, keys, wk):
+    for a in actions or []:
+        if a.get("action_type") in keys:
+            try: return float(a.get(wk) or 0)
+            except Exception: return 0.0
+    return 0.0
+
+MEAS = {"base": 0.0, "w7": 0.0, "w1": 0.0}
+
 def _av(actions, keys):
     for a in actions or []:
         if a.get("action_type") in keys:
@@ -190,7 +199,8 @@ def pull_meta(win):
       for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
              "time_range": json.dumps({"since": c0, "until": c1}),
-             "fields": "spend,action_values,actions", "limit": 500}
+             "fields": "spend,action_values,actions", "limit": 500,
+             "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"])}
         d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
         for row in (d.get("data") or []):
             day = row.get("date_start")
@@ -200,6 +210,9 @@ def pull_meta(win):
             pixel = _av(av, ("offsite_conversion.fb_pixel_purchase",))
             omni = _av(av, ("omni_purchase",)) or pixel
             ad["mecomrev"][day] += pixel; ad["metaOmniValue"][day] += omni
+            MEAS["base"] += pixel
+            MEAS["w7"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "7d_click")
+            MEAS["w1"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "1d_click")
             ad["instoreMeta"][day] += max(0.0, omni - pixel)
             ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
@@ -270,7 +283,7 @@ def pull_google(win):
     lc = os.environ.get("GOOGLE_LOGIN_CID", "")
     if lc: hd["login-customer-id"] = lc
     try:
-        req = urllib.request.Request("https://googleads.googleapis.com/v18/customers/%s/googleAds:searchStream" % cid,
+        req = urllib.request.Request("https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid,
                                      data=json.dumps({"query": gql}).encode(), headers=hd)
         with urllib.request.urlopen(req, timeout=90) as r: batches = json.loads(r.read())
     except Exception as e:
@@ -406,6 +419,12 @@ def build():
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
+    if MEAS["base"] > 0:
+        ATTR["meta"]["7dc"] = round(min(1.2, MEAS["w7"] / MEAS["base"]), 3)
+        ATTR["meta"]["1dc"] = round(min(1.2, MEAS["w1"] / MEAS["base"]), 3)
+        ATTR["labels"]["7dc"] = "7-day click (measured: %.0f%% of live)" % (ATTR["meta"]["7dc"] * 100)
+        ATTR["labels"]["1dc"] = "1-day click (measured: %.0f%% of live)" % (ATTR["meta"]["1dc"] * 100)
+        log("meta attribution measured", ATTR["meta"]["7dc"], ATTR["meta"]["1dc"])
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
