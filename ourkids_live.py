@@ -11,7 +11,12 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(ROOT, "docs", "ourkids")
 os.makedirs(DOCS, exist_ok=True)
 FIN_START = "2024-08-05"
-today = datetime.date.today()
+# The business runs on Cairo time (UTC+3). GitHub Actions runners are UTC, so
+# datetime.date.today() there is one calendar day behind Egypt for the three
+# hours after Cairo midnight -- which silently dropped the most recent FULL
+# Egyptian trading day from every chart. Anchor the window to Cairo.
+CAIRO = datetime.timezone(datetime.timedelta(hours=3))
+today = datetime.datetime.now(CAIRO).date()
 END = today - datetime.timedelta(days=1)
 AD_START = END - datetime.timedelta(days=364)
 BL_START = END - datetime.timedelta(days=119)          # branches: 120d so compare works
@@ -717,7 +722,7 @@ SRC = {"revenue": "Odoo sale.order (state sale/done), amount_total, all 4 online
        "ins": "Computed automatically from Odoo daily sales, refunds, margin and the ads feed for the selected range."}
 
 def build():
-    ts = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
