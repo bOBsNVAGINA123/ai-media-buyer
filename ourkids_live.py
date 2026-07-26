@@ -201,9 +201,46 @@ def meta_accounts(tok):
 
 MACC = {}
 
+# ---------- REAL per-branch in-store attribution (v6.0) --------------------
+# These are live custom conversions on the Ourkids Pixel (770014046405609).
+# Each one is a branch-scoped rule over the in-store CAPI events, so Meta
+# reports attributed in-store VALUE, PURCHASES and NEW CUSTOMERS per branch
+# natively. They arrive inside the actions / action_values arrays we already
+# request, as action_type "offsite_conversion.custom.<ID>" - no extra API call.
+MCC_VAL = {                       # "In-store - <Branch>"  (purchases + value)
+    "1315893053867849": "Dokki",
+    "1591145186067475": "Nasr City",
+    "1741617780517292": "Smouha",
+    "1942459063110536": "Mall of Arabia",
+    "2557183011463248": "October",
+    "2883144848696205": "New Cairo",
+    "4432019077021060": "Zayed"}
+MCC_NC = {                        # "In-store New Customer - <Branch>"
+    "1565724141655319": "Dokki",
+    "2466166093832059": "Nasr City",
+    "1682582056306615": "Smouha",
+    "1242391012293410": "Mall of Arabia",
+    "2364091880790447": "October",
+    "1400874301918902": "New Cairo",
+    "1339358398390619": "Zayed"}
+MCC_ALLNC = "1043047855247769"    # "In-store New Customers - All Branches"
+
+MBR = {}                          # branch -> "YYYY-MM" -> {v, p, nc}
+
+def _cc(lst):
+    """Pull every offsite_conversion.custom.<id> entry out of an actions or
+    action_values array and return {custom_conversion_id: float}."""
+    out = {}
+    for a in lst or []:
+        t = a.get("action_type") or ""
+        if t.startswith("offsite_conversion.custom."):
+            try: out[t.rsplit(".", 1)[-1]] = float(a.get("value") or 0)
+            except Exception: pass
+    return out
+
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
+    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC"]}
     chunks = []
     a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
     while a <= endd:
@@ -237,9 +274,23 @@ def pull_meta(win):
             ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
             mo = day[:7]
+            cv = _cc(av); ca = _cc(row.get("actions"))
+            for cid, br in MCC_VAL.items():
+                v = cv.get(cid, 0.0); pu = ca.get(cid, 0.0)
+                if v or pu:
+                    e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
+                    e["v"] += v; e["p"] += pu
+            for cid, br in MCC_NC.items():
+                n = ca.get(cid, 0.0)
+                if n:
+                    e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
+                    e["nc"] += n
+            ad["instoreNC"][day] += ca.get(MCC_ALLNC, 0.0)
             mc = MACC.setdefault(an, {}).setdefault(mo, {"sp": 0, "pv": 0, "ov": 0})
             mc["sp"] += float(row.get("spend") or 0); mc["pv"] += pixel; mc["ov"] += omni
-    log("meta days", sum(1 for v in ad["mspend"].values() if v))
+    log("meta days", sum(1 for v in ad["mspend"].values() if v),
+        "| per-branch in-store days", sum(len(v) for v in MBR.values()),
+        "| branches", len(MBR))
     return ad
 
 def shopify_ql(ql):
@@ -521,9 +572,34 @@ def pull_branch_costs():
     return out
 
 
+BR_TOKENS = ("dokki", "new cairo", "newcairo", "october", "zayed", "nasr", "smouha", "arabia", "al ahli", "alahli")
+
+def anon_partner_ids():
+    """POS partners that are NOT a real registered customer: the generic walk-in partner and the
+    per-branch house accounts cashiers use when the shopper gives no phone number.
+    Resolved by name every run so a new branch house account is caught automatically."""
+    ids = {}
+    try:
+        ps = oexec("res.partner", "search_read", [["|", ["name", "ilike", "pos customer"], ["name", "ilike", "ourkids"]]],
+                   {"fields": ["name"], "limit": 200})
+        for p in ps:
+            nm = (p.get("name") or "").strip().lower()
+            if "pos customer" in nm:
+                ids[p["id"]] = p["name"]; continue
+            if nm.startswith("ourkids") or nm.startswith("our kids"):
+                tail = nm.replace("our kids", "").replace("ourkids", "").strip()
+                if any(t in tail for t in BR_TOKENS): ids[p["id"]] = p["name"]
+        log("anon partners", len(ids), list(ids.values())[:12])
+    except Exception as e:
+        log("anon partners fail", str(e)[:140])
+    return ids
+
+
 def pull_pos_customers():
-    """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP."""
-    bnr = {}; bstat = {}
+    """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
+    Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
+    bnr = {}; bstat = {}; bun = {}
+    ANON = anon_partner_ids()
     try:
         rows = []
         q = datetime.date(2024, 8, 1)
@@ -539,7 +615,13 @@ def pull_pos_customers():
                 for r in page:
                     cfg = (r.get("config_id") or [0, ""])[1]
                     br = next((b for k, b in POS_CFG if k in cfg), None)
-                    if br: rows.append((r["partner_id"][0], r["date"][:10], br, float(r.get("margin") or 0), (r.get("order_id") or [0])[0]))
+                    if not br: continue
+                    pid = r["partner_id"][0]
+                    if pid in ANON:
+                        oid = (r.get("order_id") or [0])[0]
+                        bun.setdefault(br, {}).setdefault(r["date"][:7], set()).add(oid)
+                        continue
+                    rows.append((pid, r["date"][:10], br, float(r.get("margin") or 0), oid))
                 off += len(page)
                 if len(page) < 10000: break
             q = q2
@@ -597,11 +679,13 @@ def pull_pos_customers():
                          "repeatRateX": round(rep2x / len(pids) * 100, 1) if pids else 0,
                          "ordPerCust": round(sum(cnt.get(p2, 0) for p2 in pids) / len(pids), 2) if pids else 0,
                          "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / len(pids)) if pids else 0}
-        log("pos customers", len(first), "branches", list(bstat.keys()))
-        return bnr, bstat, bcoh
+        bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
+        log("pos customers", len(first), "branches", list(bstat.keys()),
+            "unregistered receipts", sum(sum(v.values()) for v in bun.values()))
+        return bnr, bstat, bcoh, bun
     except Exception as e:
         log("pos customers fail", str(e)[:160])
-    return bnr, bstat, {}
+    return bnr, bstat, {}, {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
 
 def pull_meta_ads(tok):
     """Top ads last 30d with website + omni value and viewable thumbnails."""
@@ -628,16 +712,22 @@ def pull_meta_ads(tok):
             pv = _av(av, ("offsite_conversion.fb_pixel_purchase",))
             ov = _av(av, ("omni_purchase",)) or pv
             pur = _av(r.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
+            opur = _av(r.get("actions"), ("offline_conversion.purchase",))
             ads.append({"id": r.get("ad_id"), "n": (r.get("ad_name") or "")[:80], "sp": round(sp),
-                        "pv": round(pv), "ov": round(ov), "pur": int(pur)})
+                        "pv": round(pv), "ov": round(ov), "pur": int(pur), "opur": int(opur)})
         ads.sort(key=lambda a: -a["sp"]); ads = ads[:40]
         ids = [a["id"] for a in ads if a["id"]]
         for i in range(0, len(ids), 25):
-            d = http_json("%s/?ids=%s&fields=creative{thumbnail_url},effective_status,adset{name},campaign{name}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
+            d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status,adset{name},campaign{name}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
             for a in ads:
                 info = (d or {}).get(a["id"]) or {}
-                th = ((info.get("creative") or {}).get("thumbnail_url"))
+                cr = info.get("creative") or {}
+                th = cr.get("thumbnail_url")
                 if th: a["th"] = th
+                iu = cr.get("image_url")
+                if iu: a["im"] = iu
+                pl = info.get("preview_shareable_link")
+                if pl: a["pl"] = pl
                 es = info.get("effective_status")
                 if es: a["st"] = str(es)[:32]
                 cn = ((info.get("campaign") or {}).get("name"))
@@ -737,7 +827,7 @@ def build():
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
     prod = safe(pull_products) or []
-    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur"]}
+    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
     tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
@@ -750,13 +840,13 @@ def build():
         pd0 = open(os.path.join(DOCS, "data.js")).read()
         prev = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
     except Exception: pass
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr"))
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun"))
     if heavy:
-        _bc = safe(pull_pos_customers) or ({}, {}, {})
-        bnr, bstat, bcoh = _bc if isinstance(_bc, tuple) and len(_bc) == 3 else ({}, {}, {})
-        if not bnr: bnr, bstat, bcoh = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {})
+        _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
+        bnr, bstat, bcoh, bun = _bc if isinstance(_bc, tuple) and len(_bc) == 4 else ({}, {}, {}, {})
+        if not bnr: bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
     else:
-        bnr, bstat, bcoh = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {})
+        bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
     mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
     bcost = safe(pull_branch_costs) or {}
@@ -774,6 +864,7 @@ def build():
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
           "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
+          "instoreNC": arr(meta, "instoreNC"),
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
           "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"), "tpur": arr(tik, "tpur"),
           "ttOffValue": arr(tik, "ttOffValue"), "ttOffPur": arr(tik, "ttOffPur"),
@@ -792,7 +883,12 @@ def build():
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "mads": mads, "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "bmeta": {b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
+                            "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
+                            "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
+                        for b, ms in MBR.items()},
+              "mads": mads, "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
