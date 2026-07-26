@@ -633,11 +633,17 @@ def pull_meta_ads(tok):
         ads.sort(key=lambda a: -a["sp"]); ads = ads[:40]
         ids = [a["id"] for a in ads if a["id"]]
         for i in range(0, len(ids), 25):
-            d = http_json("%s/?ids=%s&fields=creative{thumbnail_url}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
+            d = http_json("%s/?ids=%s&fields=creative{thumbnail_url},effective_status,adset{name},campaign{name}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
             for a in ads:
                 info = (d or {}).get(a["id"]) or {}
                 th = ((info.get("creative") or {}).get("thumbnail_url"))
                 if th: a["th"] = th
+                es = info.get("effective_status")
+                if es: a["st"] = str(es)[:32]
+                cn = ((info.get("campaign") or {}).get("name"))
+                if cn: a["cmp"] = str(cn)[:60]
+                an = ((info.get("adset") or {}).get("name"))
+                if an: a["as"] = str(an)[:60]
         log("meta ads", len(ads))
         try: json.dump(ads, open(os.path.join(DOCS, "mads_fallback.json"), "w"))
         except Exception: pass
