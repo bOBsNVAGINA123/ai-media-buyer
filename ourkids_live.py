@@ -17,7 +17,11 @@ FIN_START = "2024-08-05"
 # Egyptian trading day from every chart. Anchor the window to Cairo.
 CAIRO = datetime.timezone(datetime.timedelta(hours=3))
 today = datetime.datetime.now(CAIRO).date()
-END = today - datetime.timedelta(days=1)
+# v6.2: END used to be yesterday, which left the dashboard permanently 1-2 days
+# behind on MTD. END is now TODAY. The last calendar day is a PARTIAL day and is
+# flagged in the payload (O.partial) so the frontend can mark it.
+END = today
+FULLEND = today - datetime.timedelta(days=1)
 AD_START = END - datetime.timedelta(days=364)
 BL_START = END - datetime.timedelta(days=119)          # branches: 120d so compare works
 def drange(a, b):
@@ -106,6 +110,22 @@ def pull_odoo():
             try: m[dkey(r["date_order:day"])] = r.get("amount_total") or 0
             except Exception: continue
         chD[name] = m
+    # v6.2 CANCELLED. Revenue above only ever reads state in (sale, done), so cancelled
+    # orders were already excluded -- but they were invisible, which read as "not handled".
+    # Pull them explicitly, both network-wide and Shopify-only, so the number is on screen.
+    cx = {}; cxn = {}; cxs = {}; cxsn = {}
+    for dom, dv, dn in ((None, cx, cxn), ("Shopify", cxs, cxsn)):
+        d0 = [["state", "=", "cancel"], ["date_order", ">=", FIN_START + " 00:00:00"]]
+        if dom: d0 = d0 + [["team_id.name", "=", dom]]
+        for r in ogroup("sale.order", d0, ["amount_total"], ["date_order:day"]):
+            try: d = dkey(r["date_order:day"])
+            except Exception: continue
+            dv[d] = r.get("amount_total") or 0; dn[d] = r.get("__count", 0) or 0
+    cxt = {}
+    for r in ogroup("sale.order",
+                    [["state", "=", "cancel"], ["date_order", ">=", FIN_START + " 00:00:00"]],
+                    ["amount_total"], ["team_id"]):
+        cxt[(r.get("team_id") or [0, "(no team)"])[1]] = [round(r.get("amount_total") or 0), r.get("__count", 0) or 0]
     ds = drange(datetime.date.fromisoformat(FIN_START), END)
     k = lambda v: int(round(v / 1000))
     fin = {"start": FIN_START, "n": len(ds), "k": 1000,
@@ -113,7 +133,12 @@ def pull_odoo():
            "gp": [k(daily.get(d, {}).get("gp", 0)) for d in ds],
            "refund": [k(refund.get(d, 0)) for d in ds],
            "orders": [int(daily.get(d, {}).get("orders", 0)) for d in ds],
-           "chD": {c: [k(chD[c].get(d, 0)) for d in ds] for c in chD}}
+           "chD": {c: [k(chD[c].get(d, 0)) for d in ds] for c in chD},
+           "cxv": [k(cx.get(d, 0)) for d in ds],
+           "cxn": [int(cxn.get(d, 0)) for d in ds],
+           "cxsv": [k(cxs.get(d, 0)) for d in ds],
+           "cxsn": [int(cxsn.get(d, 0)) for d in ds],
+           "cxTeam": cxt}
     log("odoo days", len(ds))
     return fin
 
@@ -240,7 +265,7 @@ def _cc(lst):
 
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC"]}
+    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv"]}
     chunks = []
     a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
     while a <= endd:
@@ -256,13 +281,15 @@ def pull_meta(win):
       for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
              "time_range": json.dumps({"since": c0, "until": c1}),
-             "fields": "spend,action_values,actions", "limit": 500,
+             "fields": "spend,impressions,clicks,action_values,actions", "limit": 500,
              "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"])}
         d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
         for row in (d.get("data") or []):
             day = row.get("date_start")
             if day not in ad["mspend"]: continue
             ad["mspend"][day] += float(row.get("spend") or 0)
+            ad["mimp"][day] += float(row.get("impressions") or 0)
+            ad["mclk"][day] += float(row.get("clicks") or 0)
             av = row.get("action_values") or []
             pixel = _av(av, ("offsite_conversion.fb_pixel_purchase",))
             omni = _av(av, ("omni_purchase",)) or pixel
@@ -272,6 +299,7 @@ def pull_meta(win):
             MEAS["w1"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "1d_click")
             ad["instoreMeta"][day] += max(0.0, omni - pixel)
             ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
+            ad["moffv"][day] += _av(av, ("offline_conversion.purchase",))
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
             mo = day[:7]
             cv = _cc(av); ca = _cc(row.get("actions"))
@@ -337,8 +365,10 @@ def pull_shopify(win):
     log("shopify days", sum(1 for v in out["sessions"].values() if v))
     return out
 
+GTOK = [None]
 def pull_google(win):
-    out = {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
+    out = {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win},
+           "gimp": {d: 0.0 for d in win}, "gclk": {d: 0.0 for d in win}}
     dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
     if not (dev and cid): log("google skipped"); return out
     try:
@@ -351,7 +381,9 @@ def pull_google(win):
         with urllib.request.urlopen(req, timeout=60) as r: at = json.loads(r.read()).get("access_token")
     except Exception as e:
         log("google token", str(e)[:120]); return out
-    gql = ("SELECT segments.date, metrics.cost_micros, metrics.conversions_value, metrics.conversions FROM customer "
+    GTOK[0] = at
+    gql = ("SELECT segments.date, metrics.cost_micros, metrics.conversions_value, metrics.conversions, "
+           "metrics.impressions, metrics.clicks FROM customer "
            "WHERE segments.date BETWEEN '%s' AND '%s'" % (win[0], win[-1]))
     hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
     lc = os.environ.get("GOOGLE_LOGIN_CID", "")
@@ -369,17 +401,21 @@ def pull_google(win):
             out["gspend"][day] += float(row.get("metrics", {}).get("costMicros", 0)) / 1e6
             out["gecomrev"][day] += float(row.get("metrics", {}).get("conversionsValue", 0))
             out["gconv"][day] += float(row.get("metrics", {}).get("conversions", 0))
+            out["gimp"][day] += float(row.get("metrics", {}).get("impressions", 0))
+            out["gclk"][day] += float(row.get("metrics", {}).get("clicks", 0))
     log("google days", sum(1 for v in out["gspend"].values() if v))
     return out
 
 def pull_tiktok(win):
     out = {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win},
-           "ttOffValue": {d: 0.0 for d in win}, "ttOffPur": {d: 0.0 for d in win}}
+           "ttOffValue": {d: 0.0 for d in win}, "ttOffPur": {d: 0.0 for d in win},
+           "timp": {d: 0.0 for d in win}, "tclk": {d: 0.0 for d in win}}
     tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
     if not (tok and adv): log("tiktok skipped"); return out
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_ADVERTISER",
          "dimensions": json.dumps(["stat_time_day"]),
-         "metrics": json.dumps(["spend", "complete_payment", "offline_shopping_events", "offline_shopping_events_value"]),
+         "metrics": json.dumps(["spend", "complete_payment", "offline_shopping_events",
+                                "offline_shopping_events_value", "impressions", "clicks"]),
          "start_date": win[0], "end_date": win[-1], "page_size": 1000}
     d = http_json("https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/?" + urllib.parse.urlencode(p),
                   None, {"Access-Token": tok})
@@ -391,7 +427,99 @@ def pull_tiktok(win):
         out["ttOffValue"][day] += float(row.get("metrics", {}).get("offline_shopping_events_value") or 0)
         out["ttOffPur"][day] += float(row.get("metrics", {}).get("offline_shopping_events") or 0)
         out["ttValue"][day] = float(m.get("complete_payment") or 0)
+        out["timp"][day] += float(m.get("impressions") or 0)
+        out["tclk"][day] += float(m.get("clicks") or 0)
     log("tiktok days", sum(1 for v in out["tspend"].values() if v))
+    return out
+
+
+def pull_google_ads():
+    """Google campaigns, last 30d, with real serving status. Same shape as the Meta ad rows
+    so the Paid Insights tab can render all three platforms through one renderer."""
+    out = []
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    at = GTOK[0]
+    if not (dev and cid and at): log("google campaigns skipped"); return out
+    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
+    gql = ("SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, "
+           "metrics.cost_micros, metrics.conversions_value, metrics.conversions, "
+           "metrics.impressions, metrics.clicks FROM campaign "
+           "WHERE segments.date BETWEEN '%s' AND '%s'" % (c0, c1))
+    hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
+    lc = os.environ.get("GOOGLE_LOGIN_CID", "")
+    if lc: hd["login-customer-id"] = lc
+    try:
+        req = urllib.request.Request("https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid,
+                                     data=json.dumps({"query": gql}).encode(), headers=hd)
+        with urllib.request.urlopen(req, timeout=90) as r: batches = json.loads(r.read())
+    except Exception as e:
+        log("google campaigns", str(e)[:160]); return out
+    agg = {}
+    for b in (batches if isinstance(batches, list) else [batches]):
+        for row in b.get("results", []):
+            c = row.get("campaign", {}); m = row.get("metrics", {})
+            k = str(c.get("id"))
+            e = agg.setdefault(k, {"id": k, "n": str(c.get("name") or "")[:80], "sp": 0.0, "pv": 0.0,
+                                   "ov": 0.0, "ofv": 0, "pur": 0.0, "opur": 0, "imp": 0.0, "clk": 0.0,
+                                   "st": str(c.get("status") or "UNKNOWN"),
+                                   "cmp": str(c.get("advertisingChannelType") or ""), "pf": "google"})
+            e["sp"] += float(m.get("costMicros", 0)) / 1e6
+            e["pv"] += float(m.get("conversionsValue", 0))
+            e["pur"] += float(m.get("conversions", 0))
+            e["imp"] += float(m.get("impressions", 0))
+            e["clk"] += float(m.get("clicks", 0))
+    for e in agg.values():
+        e["ov"] = e["pv"]
+        for kk in ("sp", "pv", "ov"): e[kk] = round(e[kk])
+        for kk in ("pur", "imp", "clk"): e[kk] = int(round(e[kk]))
+    out = sorted(agg.values(), key=lambda a: -a["sp"])[:40]
+    log("google campaigns", len(out))
+    return out
+
+
+def pull_tiktok_ads():
+    """TikTok campaigns, last 30d, with operation status."""
+    out = []
+    tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
+    if not (tok and adv): log("tiktok campaigns skipped"); return out
+    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
+    p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_CAMPAIGN",
+         "dimensions": json.dumps(["campaign_id"]),
+         "metrics": json.dumps(["campaign_name", "spend", "complete_payment", "complete_payment_roas",
+                                "impressions", "clicks", "offline_shopping_events",
+                                "offline_shopping_events_value"]),
+         "start_date": c0, "end_date": c1, "page_size": 1000}
+    try:
+        d = http_json("https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/?" + urllib.parse.urlencode(p),
+                      None, {"Access-Token": tok})
+    except Exception as e:
+        log("tiktok campaigns", str(e)[:140]); return out
+    rows = (((d or {}).get("data") or {}).get("list") or [])
+    st = {}
+    try:
+        q = {"advertiser_id": adv, "page_size": 1000,
+             "fields": json.dumps(["campaign_id", "campaign_name", "operation_status", "secondary_status"])}
+        ds = http_json("https://business-api.tiktok.com/open_api/v1.3/campaign/get/?" + urllib.parse.urlencode(q),
+                       None, {"Access-Token": tok})
+        for c in (((ds or {}).get("data") or {}).get("list") or []):
+            st[str(c.get("campaign_id"))] = str(c.get("secondary_status") or c.get("operation_status") or "UNKNOWN")
+    except Exception as e:
+        log("tiktok campaign status", str(e)[:120])
+    for r in rows:
+        cid = str((r.get("dimensions") or {}).get("campaign_id") or "")
+        m = r.get("metrics") or {}
+        sp = float(m.get("spend") or 0)
+        if sp <= 0: continue
+        out.append({"id": cid, "n": str(m.get("campaign_name") or "")[:80], "sp": round(sp),
+                    "pv": round(float(m.get("complete_payment") or 0)),
+                    "ov": round(float(m.get("complete_payment") or 0) + float(m.get("offline_shopping_events_value") or 0)),
+                    "ofv": round(float(m.get("offline_shopping_events_value") or 0)),
+                    "pur": 0, "opur": int(float(m.get("offline_shopping_events") or 0)),
+                    "imp": int(float(m.get("impressions") or 0)),
+                    "clk": int(float(m.get("clicks") or 0)),
+                    "st": st.get(cid, "UNKNOWN"), "cmp": "", "pf": "tiktok"})
+    out.sort(key=lambda a: -a["sp"]); out = out[:40]
+    log("tiktok campaigns", len(out))
     return out
 
 
@@ -637,8 +765,12 @@ def pull_pos_customers():
                     br = next((b for k, b in POS_CFG if k in cfg), None)
                     if not br: continue
                     pid = r["partner_id"][0]
+                    # v6.2 BUGFIX: oid used to be assigned only inside the ANON branch, so every
+                    # registered-customer row reused the PREVIOUS anonymous row's order id -- and the
+                    # very first row of the crawl raised NameError, which the outer except swallowed.
+                    # That is why bun (unregistered receipts) never once reached data.js.
+                    oid = (r.get("order_id") or [0])[0]
                     if pid in ANON:
-                        oid = (r.get("order_id") or [0])[0]
                         bun.setdefault(br, {}).setdefault(r["date"][:7], set()).add(oid)
                         continue
                     d10 = r["date"][:10]
@@ -748,7 +880,7 @@ def pull_meta_ads(tok):
         rows = []
         for acct in meta_accounts(tok):
             p = {"level": "ad", "access_token": tok, "time_range": json.dumps({"since": c0, "until": c1}),
-                 "fields": "ad_id,ad_name,spend,action_values,actions", "limit": 300}
+                 "fields": "ad_id,ad_name,spend,impressions,clicks,action_values,actions", "limit": 300}
             d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
             rows += (d.get("data") or [])
         ads = []
@@ -761,7 +893,11 @@ def pull_meta_ads(tok):
             pur = _av(r.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
             opur = _av(r.get("actions"), ("offline_conversion.purchase",))
             ads.append({"id": r.get("ad_id"), "n": (r.get("ad_name") or "")[:80], "sp": round(sp),
-                        "pv": round(pv), "ov": round(ov), "pur": int(pur), "opur": int(opur)})
+                        "pv": round(pv), "ov": round(ov), "pur": int(pur), "opur": int(opur),
+                        "imp": int(float(r.get("impressions") or 0)),
+                        "clk": int(float(r.get("clicks") or 0)),
+                        "ofv": round(_av(av, ("offline_conversion.purchase",))),
+                        "pf": "meta"})
         ads.sort(key=lambda a: -a["sp"]); ads = ads[:40]
         ids = [a["id"] for a in ads if a["id"]]
         for i in range(0, len(ids), 25):
@@ -1074,10 +1210,10 @@ def build():
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
     prod = safe(pull_products) or []
-    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC"]}
+    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
-    goog = safe(pull_google, win) or {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win}}
-    tik = safe(pull_tiktok, win) or {"tspend": {d: 0.0 for d in win}, "ttValue": {d: 0.0 for d in win}, "tpur": {d: 0.0 for d in win}}
+    goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
+    tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
     _ch = safe(pull_cohorts) or {"coh": [], "nr": {}}
     coh, nrm = _ch.get("coh", []), _ch.get("nr", {})
@@ -1102,6 +1238,8 @@ def build():
     else:
         vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
     mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
+    gads = safe(pull_google_ads) or prev.get("gads", [])
+    tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
     _er = safe(pull_expenses)
     exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
@@ -1121,6 +1259,9 @@ def build():
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
           "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"), "tpur": arr(tik, "tpur"),
           "ttOffValue": arr(tik, "ttOffValue"), "ttOffPur": arr(tik, "ttOffPur"),
+          "mimp": arr(meta, "mimp"), "mclk": arr(meta, "mclk"), "moffv": arr(meta, "moffv"),
+          "gimp": arr(goog, "gimp"), "gclk": arr(goog, "gclk"),
+          "timp": arr(tik, "timp"), "tclk": arr(tik, "tclk"),
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
@@ -1142,7 +1283,9 @@ def build():
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
               "vend": vend, "prodv": prodv,
-              "mads": mads, "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
+              "mads": mads, "gads": gads, "tads": tads,
+              "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
+              "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
