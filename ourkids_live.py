@@ -544,29 +544,47 @@ def pull_pos_branches():
         log("pos branches fail", str(e)[:150])
     return out
 
+RENT_DX = {}
+
 def pull_branch_costs():
     """ACTUAL per-branch monthly rent + salaries from expense lines' analytic distribution."""
     out = {}
+    RENT_DX.clear()
     try:
         acc = oexec("account.account", "search_read", [["|", ["code", "=like", "31.01.04.02%"], ["code", "=like", "31.01.01.%"]]],
                     {"fields": ["code"], "limit": 40})
         rent_ids = [a["id"] for a in acc if a["code"].startswith("31.01.04")]
         sal_ids = [a["id"] for a in acc if a["code"].startswith("31.01.01")]
         lines = oexec("account.move.line", "search_read",
-                      [[["account_id", "in", rent_ids + sal_ids], ["parent_state", "=", "posted"], ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]]],
+                      [[["account_id", "in", rent_ids + sal_ids], ["parent_state", "=", "posted"], ["date", ">=", "2024-08-01"]]],
                       {"fields": ["account_id", "balance", "date", "analytic_distribution"], "limit": 20000})
+        endi = END.isoformat(); fwd = {}
         for l in lines:
             ad2 = l.get("analytic_distribution") or {}
             mon = l["date"][:7]; kind = "rent" if l["account_id"][0] in rent_ids else "sal"
+            future = l["date"] > endi
             for aid, pct in ad2.items():
                 br = ANA_BR.get(str(aid))
                 if not br: continue
+                v = l["balance"] * (float(pct) / 100.0)
+                if future:
+                    if kind == "rent": fwd[br] = fwd.get(br, 0) + v
+                    continue
                 c = out.setdefault(br, {}).setdefault(mon, {"rent": 0, "sal": 0})
-                c[kind] += l["balance"] * (float(pct) / 100.0)
+                c[kind] += v
         for br in out:
             for mon in out[br]:
                 out[br][mon] = {k: round(v) for k, v in out[br][mon].items()}
+        for br in set(list(out.keys()) + list(fwd.keys()) + list(ANA_BR.values())):
+            mv = out.get(br, {})
+            rm = sorted(m for m in mv if mv[m].get("rent", 0) > 0)
+            last6 = [mv[m]["rent"] for m in sorted(mv)[-6:] if mv.get(m, {}).get("rent", 0) > 0]
+            RENT_DX[br] = {"mos": len(rm), "all": len(mv), "last": rm[-1] if rm else None,
+                           "av6": round(sum(last6) / len(last6)) if last6 else 0,
+                           "tot": round(sum(mv[m]["rent"] for m in rm)),
+                           "fwd": round(fwd.get(br, 0))}
         log("branch costs", {b: len(v) for b, v in out.items()})
+        log("rent coverage", {b: (d["mos"], d["av6"]) for b, d in sorted(RENT_DX.items())})
     except Exception as e:
         log("branch costs fail", str(e)[:150])
     return out
@@ -600,6 +618,8 @@ def pull_pos_customers():
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
     bnr = {}; bstat = {}; bun = {}
     ANON = anon_partner_ids()
+    TV = tmpl_vendor_map()
+    VCS = {}; PFD = {}; PFV = {}
     try:
         rows = []
         q = datetime.date(2024, 8, 1)
@@ -609,7 +629,7 @@ def pull_pos_customers():
             while off < 400000:
                 page = oexec("report.pos.order", "search_read",
                              [[["partner_id", "!=", False], ["date", ">=", q.isoformat()], ["date", "<", q2.isoformat()]]],
-                             {"fields": ["partner_id", "config_id", "date", "margin", "order_id"],
+                             {"fields": ["partner_id", "config_id", "date", "margin", "order_id", "product_tmpl_id"],
                               "limit": 10000, "offset": off, "order": "id"})
                 if not page: break
                 for r in page:
@@ -621,7 +641,14 @@ def pull_pos_customers():
                         oid = (r.get("order_id") or [0])[0]
                         bun.setdefault(br, {}).setdefault(r["date"][:7], set()).add(oid)
                         continue
-                    rows.append((pid, r["date"][:10], br, float(r.get("margin") or 0), oid))
+                    d10 = r["date"][:10]
+                    rows.append((pid, d10, br, float(r.get("margin") or 0), oid))
+                    _vn = TV.get((r.get("product_tmpl_id") or [0])[0], ("", "", ""))[0]
+                    if _vn:
+                        VCS.setdefault(_vn, set()).add(pid)
+                        _p0 = PFD.get(pid)
+                        if _p0 is None or d10 < _p0: PFD[pid] = d10; PFV[pid] = set([_vn])
+                        elif d10 == _p0: PFV[pid].add(_vn)
                 off += len(page)
                 if len(page) < 10000: break
             q = q2
@@ -679,6 +706,26 @@ def pull_pos_customers():
                          "repeatRateX": round(rep2x / len(pids) * 100, 1) if pids else 0,
                          "ordPerCust": round(sum(cnt.get(p2, 0) for p2 in pids) / len(pids), 2) if pids else 0,
                          "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / len(pids)) if pids else 0}
+        VACQ = {}
+        for pid, vs in PFV.items():
+            for v in vs: VACQ.setdefault(v, set()).add(pid)
+        VC.clear()
+        for v, pids in VCS.items():
+            n = len(pids)
+            if n < 25: continue
+            VC[v] = {"cust": n,
+                     "acq": len(VACQ.get(v, ())),
+                     "ltgp": round(sum(ltg.get(p2, 0) for p2 in pids) / n),
+                     "rep": round(sum(1 for p2 in pids if cntX.get(p2, 0) >= 2) / n * 100, 1),
+                     "opc": round(sum(cnt.get(p2, 0) for p2 in pids) / n, 2)}
+        allp = list(first.keys())
+        if allp:
+            VC["__net__"] = {"cust": len(allp),
+                             "acq": len(allp),
+                             "ltgp": round(sum(ltg.values()) / len(allp)),
+                             "rep": round(sum(1 for p2 in allp if cntX.get(p2, 0) >= 2) / len(allp) * 100, 1),
+                             "opc": round(sum(cnt.values()) / len(allp), 2)}
+        log("vendor customer economics", len(VC) - 1, "vendors >=25 customers")
         bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
         log("pos customers", len(first), "branches", list(bstat.keys()),
             "unregistered receipts", sum(sum(v.values()) for v in bun.values()))
@@ -817,6 +864,206 @@ SRC = {"revenue": "Odoo sale.order (state sale/done), amount_total, all 4 online
        "branch": "Odoo accounting: income lines on each branch's POS sales journals, daily. This is REAL retail revenue.",
        "ins": "Computed automatically from Odoo daily sales, refunds, margin and the ads feed for the selected range."}
 
+# ------------------------------------------------------------------ VENDOR / PRODUCT LTV
+VC = {}          # vendor code -> customer economics, filled by pull_pos_customers
+_TVC = [None]    # cached product_tmpl_id -> (vendor code, category, Cash/Consignment)
+_PPC = [None]    # cached product_id -> product_tmpl_id
+_VNC = [None]    # cached vendor code -> supplier name
+
+
+def _page(model, domain, fields, size=10000, cap=400000):
+    """Page a search_read in id order until exhausted."""
+    out = []; off = 0
+    while off < cap:
+        pg = oexec(model, "search_read", [domain], {"fields": fields, "limit": size, "offset": off, "order": "id"})
+        if not pg: break
+        out += pg; off += len(pg)
+        if len(pg) < size: break
+    return out
+
+
+def tmpl_vendor_map():
+    """product_tmpl_id -> (vendor code, product category, Cash|Consignment|Service).
+    vendor_num is the supplier code carried on every product template; it joins to res.partner.ref."""
+    if _TVC[0] is not None: return _TVC[0]
+    m = {}
+    try:
+        for r in _page("product.template", [], ["vendor_num", "categ_id", "x_studio_category_type"], 10000, 200000):
+            v = (r.get("vendor_num") or "").strip()
+            m[r["id"]] = (v, (r.get("categ_id") or [0, ""])[1], r.get("x_studio_category_type") or "")
+        log("vendor map", len(m), "templates", sum(1 for x in m.values() if x[0]), "with a vendor code")
+    except Exception as e:
+        log("vendor map fail", str(e)[:160])
+    _TVC[0] = m
+    return m
+
+
+def vendor_names():
+    """vendor code -> supplier display name, from res.partner.ref."""
+    if _VNC[0] is not None: return _VNC[0]
+    n = {}
+    try:
+        for r in _page("res.partner", [["ref", "!=", False]], ["ref", "name"], 5000, 100000):
+            k = (r.get("ref") or "").strip()
+            if k and k not in n: n[k] = r.get("name") or k
+    except Exception as e:
+        log("vendor names fail", str(e)[:160])
+    _VNC[0] = n
+    return n
+
+
+def prod_tmpl_map():
+    """product_id -> product_tmpl_id (needed because sale.order.line cannot be grouped by template)."""
+    if _PPC[0] is not None: return _PPC[0]
+    m = {}
+    try:
+        for r in _page("product.product", [], ["product_tmpl_id"], 10000, 200000):
+            m[r["id"]] = (r.get("product_tmpl_id") or [0])[0]
+    except Exception as e:
+        log("product map fail", str(e)[:160])
+    _PPC[0] = m
+    return m
+
+
+def pos_cfg_branches():
+    """POS config ids grouped by branch, read live so new tills map themselves."""
+    out = {}
+    try:
+        for r in oexec("report.pos.order", "read_group", [[["date", ">=", "2024-08-01"]], ["price_total:sum"], ["config_id"]], {"lazy": False, "limit": 500}):
+            c = r.get("config_id")
+            if not c: continue
+            br = next((b for k, b in POS_CFG if k in c[1]), None)
+            if br: out.setdefault(br, []).append(c[0])
+    except Exception as e:
+        log("pos cfg fail", str(e)[:160])
+    return out
+
+
+def pull_vendors():
+    """Vendor and product economics across every branch and every online channel.
+
+    Retail comes from report.pos.order grouped by product template, once per branch, so the
+    branch split is an actual till-level sum and never an allocation. Online comes from
+    sale.order.line on the Shopify / Noon / Amazon / Homzmart teams. Both are joined to the
+    supplier through product.template.vendor_num -> res.partner.ref. Customer counts, lifetime
+    gross profit and repeat rate per vendor are carried in from the POS customer crawl."""
+    TV = tmpl_vendor_map()
+    if not TV: return {}, {}
+    NM = vendor_names()
+    ven = {}; tmpl = {}
+    def V(code):
+        return ven.setdefault(code, {"v": code, "n": NM.get(code, code), "r": 0.0, "g": 0.0, "q": 0.0,
+                                     "orev": 0.0, "ogp": 0.0, "oq": 0.0, "br": {}, "r90": 0.0, "p90": 0.0,
+                                     "cash": 0.0, "cons": 0.0, "cat": {}})
+    def T(tid):
+        vt = TV.get(tid, ("", "", ""))
+        return tmpl.setdefault(tid, {"t": tid, "n": "", "v": vt[0], "cat": vt[1], "ct": vt[2],
+                                     "r": 0.0, "g": 0.0, "q": 0.0, "orev": 0.0, "ogp": 0.0})
+
+    # ---- retail, one grouped call per branch ----
+    BC = pos_cfg_branches()
+    for br, ids in BC.items():
+        try:
+            g = oexec("report.pos.order", "read_group",
+                      [[["date", ">=", "2024-08-01"], ["config_id", "in", ids]],
+                       ["price_total:sum", "margin:sum", "product_qty:sum"], ["product_tmpl_id"]],
+                      {"lazy": False, "limit": 200000})
+        except Exception as e:
+            log("vendor retail fail", br, str(e)[:120]); continue
+        for r in g:
+            t = r.get("product_tmpl_id")
+            if not t: continue
+            rv = float(r.get("price_total") or 0); gp = float(r.get("margin") or 0); qt = float(r.get("product_qty") or 0)
+            row = T(t[0]); row["n"] = row["n"] or str(t[1]).strip()[:52]
+            row["r"] += rv; row["g"] += gp; row["q"] += qt
+            code = TV.get(t[0], ("", "", ""))[0]
+            if not code: continue
+            d = V(code)
+            d["r"] += rv; d["g"] += gp; d["q"] += qt
+            b = d["br"].setdefault(br, [0.0, 0.0]); b[0] += rv; b[1] += gp
+            ct = TV[t[0]][2]
+            if ct == "Consignment": d["cons"] += rv
+            else: d["cash"] += rv
+            cg = TV[t[0]][1]
+            if cg: d["cat"][cg] = d["cat"].get(cg, 0.0) + rv
+        log("vendor retail", br, len(g), "templates")
+
+    # ---- momentum: last 90 days vs the 90 before it ----
+    for key, a, b in (("r90", END - datetime.timedelta(days=89), END),
+                      ("p90", END - datetime.timedelta(days=179), END - datetime.timedelta(days=90))):
+        try:
+            g = oexec("report.pos.order", "read_group",
+                      [[["date", ">=", a.isoformat()], ["date", "<=", b.isoformat() + " 23:59:59"]],
+                       ["price_total:sum"], ["product_tmpl_id"]], {"lazy": False, "limit": 200000})
+        except Exception as e:
+            log("vendor window fail", key, str(e)[:120]); continue
+        for r in g:
+            t = r.get("product_tmpl_id")
+            if not t: continue
+            code = TV.get(t[0], ("", "", ""))[0]
+            if code: V(code)[key] += float(r.get("price_total") or 0)
+
+    # ---- online, grouped by variant then folded up to the template ----
+    PP = prod_tmpl_map()
+    try:
+        g = oexec("sale.order.line", "read_group",
+                  [[["order_id.state", "in", ["sale", "done"]], ["display_type", "=", False],
+                    ["order_id.team_id.name", "in", ["Shopify", "Noon", "Amazon", "Homzmart"]],
+                    ["order_id.date_order", ">=", "2024-08-01 00:00:00"]],
+                   ["price_subtotal:sum", "margin:sum", "product_uom_qty:sum"], ["product_id"]],
+                  {"lazy": False, "limit": 200000})
+    except Exception as e:
+        log("vendor online fail", str(e)[:160]); g = []
+    for r in g:
+        p = r.get("product_id")
+        if not p: continue
+        tid = PP.get(p[0])
+        if not tid: continue
+        rv = float(r.get("price_subtotal") or 0); gp = float(r.get("margin") or 0); qt = float(r.get("product_uom_qty") or 0)
+        nm = str(p[1]).strip()[:52]
+        if "discount" in nm.lower() or "shipping" in nm.lower(): continue
+        row = T(tid); row["n"] = row["n"] or nm
+        row["orev"] += rv; row["ogp"] += gp
+        code = TV.get(tid, ("", "", ""))[0]
+        if not code: continue
+        d = V(code); d["orev"] += rv; d["ogp"] += gp; d["oq"] += qt
+    log("vendor online", len(g), "variants")
+
+    # ---- fold in customer economics and emit ----
+    net = VC.get("__net__", {})
+    rows = []
+    for code, d in ven.items():
+        tot = d["r"] + d["orev"]
+        if tot < 20000: continue
+        c = VC.get(code, {})
+        cat = max(d["cat"].items(), key=lambda x: x[1])[0] if d["cat"] else ""
+        rows.append({"v": code, "n": d["n"][:44],
+                     "r": round(d["r"]), "g": round(d["g"]), "q": round(d["q"]),
+                     "orev": round(d["orev"]), "ogp": round(d["ogp"]), "oq": round(d["oq"]),
+                     "br": {b: [round(x[0]), round(x[1])] for b, x in d["br"].items()},
+                     "r90": round(d["r90"]), "p90": round(d["p90"]),
+                     "cash": round(d["cash"]), "cons": round(d["cons"]), "cat": cat,
+                     "cust": c.get("cust", 0), "acq": c.get("acq", 0),
+                     "ltgp": c.get("ltgp", 0), "rep": c.get("rep", 0), "opc": c.get("opc", 0)})
+    rows.sort(key=lambda x: -(x["r"] + x["orev"]))
+    rows = rows[:160]
+    prows = sorted(tmpl.values(), key=lambda x: -(x["r"] + x["orev"]))[:200]
+    prods = [{"n": (p["n"] or str(p["t"]))[:52], "v": p["v"], "vn": NM.get(p["v"], p["v"])[:36],
+              "cat": p["cat"][:34], "ct": p["ct"],
+              "r": round(p["r"]), "g": round(p["g"]), "q": round(p["q"]),
+              "orev": round(p["orev"]), "ogp": round(p["ogp"])} for p in prows]
+    covR = sum(d["r"] + d["orev"] for d in ven.values())
+    allR = sum(t["r"] + t["orev"] for t in tmpl.values())
+    vend = {"rows": rows, "net": net, "branches": sorted(BC.keys()),
+            "cov": {"tmpl": len(TV), "tmplVend": sum(1 for x in TV.values() if x[0]),
+                    "vend": len(ven), "shown": len(rows),
+                    "revPct": round(covR / allR * 100, 1) if allR else 0,
+                    "rev": round(allR)},
+            "start": "2024-08-01", "end": END.isoformat()}
+    log("vendors", len(ven), "shown", len(rows), "products", len(prods), "coverage", vend["cov"]["revPct"], "%")
+    return vend, {"rows": prods, "start": "2024-08-01", "end": END.isoformat()}
+
+
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
     win = drange(AD_START, END)
@@ -848,6 +1095,12 @@ def build():
     else:
         bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
+    if heavy:
+        _vd = safe(pull_vendors) or ({}, {})
+        vend, prodv = _vd if isinstance(_vd, tuple) and len(_vd) == 2 else ({}, {})
+        if not vend.get("rows"): vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
+    else:
+        vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
     mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
     bcost = safe(pull_branch_costs) or {}
     _er = safe(pull_expenses)
@@ -883,11 +1136,12 @@ def build():
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
               "bmeta": {b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
                             "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
+              "vend": vend, "prodv": prodv,
               "mads": mads, "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
