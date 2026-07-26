@@ -54,7 +54,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="wrap hide" id="app">
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
-<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Online</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Online P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div></div>
+<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Online</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Online P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Meta insights</div></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
@@ -68,6 +68,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="rpC" class="hide"><div class="banner" id="bn7"></div><div class="grid" id="g7"></div></div>
 <div id="vzC" class="hide"><div class="banner" id="bn8"></div><div class="grid" id="g8"></div></div>
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
+<div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -122,9 +123,9 @@ function boot(){O=window.O;FF=window.F;isoDates();LSC=cairo(O.lastSync);try{NXC=
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. · <b>v5.8</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. · <b>v5.9</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;document.getElementById('d0').value=ST.s;document.getElementById('d1').value=ST.e;rOn();}
-function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else rAds();}
+function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else rAds();}
 
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));rOn();}
 function cmpW(){const ln=span(ST.s,ST.e);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}return ST.cmp==='yoy'?[addD(ST.s,-365),addD(ST.e,-365)]:[addD(ST.s,-ln),addD(ST.s,-1)];}
@@ -529,7 +530,7 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
    h4+='</table></div>';
    pnlCard(g,'meta','Ad &rarr; Branch attributed revenue (top 10 ads, modeled)','Each ad&rsquo;s in-store value split by current branch revenue shares. Store-level per-ad tracking needs offline CAPI with store codes &mdash; this is the honest model until then.',h4);}}
  else{pnlCard(g,'meta','Top Ads','Ad-level feed arrives with the next sync (Meta token runs in the Action).','');}}
-function pnlCtl(k,v){ST[k]=v;if(TAB==='pn')rPnl();else if(TAB==='rp')rRetail();else if(TAB==='me')rMedia();else if(TAB==='ao')rAds();else if(TAB==='vz')rViz();else if(TAB==='iq')rIns();}
+function pnlCtl(k,v){ST[k]=v;if(TAB==='pn')rPnl();else if(TAB==='rp')rRetail();else if(TAB==='me')rMedia();else if(TAB==='ao')rAds();else if(TAB==='vz')rViz();else if(TAB==='iq')rIns();else if(TAB==='mi')rMeta();}
 function pnlCard(g,a,t,cs2,body){const el=document.createElement('div');el.className='card full';el.dataset.a=a;
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+t+'</div><div class="cs">'+cs2+'</div></div></div>'+body;g.appendChild(el);}
 const BCOL={'New Cairo':'#5a5bf0','Mall of Arabia':'#e23a63','Nasr City':'#12a06e','Dokki':'#3a9bff','Zayed':'#ff8b42','Smouha':'#9d6bff','October':'#12b0a4','ALL':'#161d2e'};
@@ -544,7 +545,7 @@ const DLBL={id:'dlbl',afterDatasetsDraw(c){const ctx=c.ctx,ar=c.chartArea;if(!ar
 function INFO(t){return '<span style="display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:#e6e9f2;color:#334155;font-size:10px;font-weight:800;cursor:help;margin-left:6px;vertical-align:middle" title="'+String(t).replace(/"/g,'&quot;').replace(/&mdash;/g,'--').replace(/&minus;/g,'-').replace(/&pound;/g,'')+'">i</span>';}
 function MINUS(what){return '<div class="cs" style="margin-top:6px;padding:7px 9px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:0 6px 6px 0"><b>Reading the minus signs:</b> '+what+'</div>';}
 function attrSet(p,v){ST.att[p]=v;['am','am2','ag','ag2','ax','ax2'].forEach(id=>{const e=document.getElementById(id);if(!e)return;const k=(id[1]==='m')?'meta':(id[1]==='g')?'google':'tt';if(k===p)e.value=v;});rTab();}
-function rTab(){const t=TAB;if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else rAds();}
+function rTab(){const t=TAB;if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else rAds();}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -553,21 +554,53 @@ function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d
   return '<label>'+p[1]+'</label><select onchange="attrSet(&quot;'+p[0]+'&quot;,this.value)">'+ks.map(k=>'<option value="'+k+'"'+(ST.att[p[0]]===k?' selected':'')+'>'+(SL[k]||k)+'</option>').join('')+'</select>';}).join('');}
 // ---- SMALL MULTIPLES: the cure for spaghetti. One panel per series, shared
 // y-scale so panels are comparable, faint network backdrop for context.
+var SMO={};
+function smSet(k,f,v){(SMO[k]=SMO[k]||{})[f]=v;rTab();}
+window.smSet=smSet;
 function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
  const F=fmt||(v=>Math.round(v).toLocaleString());
- const live=series.filter(x=>x.d.some(v=>v!=null));
- if(!live.length)return;
- let mx=0,mn=0;live.forEach(x=>x.d.forEach(v=>{if(v==null)return;if(v>mx)mx=v;if(v<mn)mn=v;}));
+ const KEY=opt.key||title.replace(/[^A-Za-z]/g,'').slice(0,22);
+ const st=SMO[KEY]||(SMO[KEY]={sort:'def',scale:'shared'});
+ const all=series.filter(x=>x.d.some(v=>v!=null));
+ if(!all.length)return;
+ // AGGREGATE series (ONLINE, ALL STORES, NETWORK) must never enter the branch average
+ // or the shared branch scale - they are 5-10x any single branch and flatten every panel.
+ const base=all.filter(x=>!x.agg),aggs=all.filter(x=>x.agg),pool=base.length?base:all;
+ let mx=0,mn=0;pool.forEach(x=>x.d.forEach(v=>{if(v==null)return;if(v>mx)mx=v;if(v<mn)mn=v;}));
  if(mx===mn)mx=mn+1;
- const back=labels.map((_,i)=>{const vs=live.map(x=>x.d[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;});
+ const back=labels.map((_,i)=>{const vs=pool.map(x=>x.d[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;});
+ const lastv=x=>{for(let j=x.d.length-1;j>=0;j--)if(x.d[j]!=null)return x.d[j];return null;};
+ const firstv=x=>{for(let j=0;j<x.d.length;j++)if(x.d[j]!=null)return x.d[j];return null;};
+ const chg=x=>{const a=firstv(x),b=lastv(x);return (a&&b)?(b/a-1):-9;};
+ let ord=pool.slice();
+ if(st.sort==='hi')ord.sort((a,b)=>(lastv(b)||0)-(lastv(a)||0));
+ else if(st.sort==='lo')ord.sort((a,b)=>(lastv(a)||0)-(lastv(b)||0));
+ else if(st.sort==='chg')ord.sort((a,b)=>chg(b)-chg(a));
+ else if(st.sort==='chgd')ord.sort((a,b)=>chg(a)-chg(b));
+ else if(st.sort==='name')ord.sort((a,b)=>a.n<b.n?-1:(a.n>b.n?1:0));
+ const live=ord.concat(aggs);
+ const own=st.scale==='own';
+ const lav=back.slice().reverse().find(v=>v!=null);
+ const SO=[['def','Default order'],['hi','Latest value: high &rarr; low'],['lo','Latest value: low &rarr; high'],['chg','Growth: best &rarr; worst'],['chgd','Growth: worst &rarr; best'],['name','Name A&ndash;Z']];
+ const ctl='<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:8px 0 2px;font-size:11.5px;color:#5a637a;font-weight:700">'
+  +'<span>Sort <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'sort\',this.value)">'+SO.map(o2=>'<option value="'+o2[0]+'"'+(st.sort===o2[0]?' selected':'')+'>'+o2[1]+'</option>').join('')+'</select></span>'
+  +'<span>Scale <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'scale\',this.value)"><option value="shared"'+(own?'':' selected')+'>Shared (compare sizes)</option><option value="own"'+(own?' selected':'')+'>Own (compare shapes)</option></select></span>'
+  +(lav!=null?'<span style="color:#0F172A">Average branch, latest month: <b>'+F(lav)+'</b> &mdash; that is the grey dashed line, and it is the average of the '+pool.length+' BRANCHES only. Online and the network total are excluded from it.</span>':'')
+  +'</div>';
  const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
- el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+title+'</div><div class="cs">'+sub+'</div></div></div>'
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin-top:8px">'
-  +live.map((x,i)=>'<div style="border:1px solid #e8ebf2;border-radius:10px;padding:7px 8px 4px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12px;font-weight:800;color:'+x.c+'">'+x.n+'</span><span style="font-size:12px;font-weight:800;color:#0F172A">'+(function(){for(let j=x.d.length-1;j>=0;j--)if(x.d[j]!=null)return F(x.d[j]);return '&mdash;';})()+'</span></div><div style="height:108px"><canvas data-sm="'+i+'"></canvas></div></div>').join('')
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+title+'</div><div class="cs">'+sub+'</div></div></div>'+ctl
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:10px;margin-top:6px">'
+  +live.map((x,i)=>{const lv=lastv(x);const dv=(!x.agg&&lav!=null&&lv!=null&&lav)?(lv/lav-1)*100:null;
+    return '<div style="border:1px solid '+(x.agg?'#cfd6e6':'#e8ebf2')+';border-radius:10px;padding:7px 8px 4px;'+(x.agg?'background:#fafbfe':'')+'"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12.5px;font-weight:800;color:'+x.c+'">'+x.n+(x.agg?' <span style="font-size:9px;color:#9aa3b5">own scale</span>':'')+'</span><span style="font-size:13px;font-weight:800;color:#0F172A">'+(lv==null?'&mdash;':F(lv))+'</span></div>'
+    +'<div style="font-size:10px;font-weight:700;text-align:right;color:'+(dv==null?'#9aa3b5':(dv>=0?'#12a06e':'#e23a63'))+';height:12px">'+(dv==null?'':(dv>=0?'+':'&minus;')+Math.abs(dv).toFixed(0)+'% vs avg branch')+'</div>'
+    +'<div style="height:132px"><canvas data-sm="'+i+'"></canvas></div></div>';}).join('')
   +'</div>'
   +(opt.cmt&&opt.cmt.length?'<div class="ins" style="margin-top:8px">'+opt.cmt.map(x=>'<div class="row"><span class="dot" style="background:'+(x[0]||'#5a5bf0')+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>':'');
  g.appendChild(el);
  live.forEach((x,i)=>{const cv=el.querySelector('canvas[data-sm="'+i+'"]');if(!cv)return;
+  let ymx=mx,ymn=mn;
+  if(x.agg||own){ymx=0;ymn=0;x.d.forEach(v=>{if(v==null)return;if(v>ymx)ymx=v;if(v<ymn)ymn=v;});if(ymx===ymn)ymx=ymn+1;}
+  const bk=x.agg?labels.map(()=>null):back;
   // which points get a printed number: first, last, highest, lowest (all of them when the series is short)
   const idx=x.d.map((v,j)=>v==null?-1:j).filter(j=>j>=0);
   const pick=new Set();
@@ -588,13 +621,13 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
     ctx.fillStyle=x.c;ctx.fillText(t,X,Y);});
    ctx.restore();}};
   const c=new Chart(cv,{plugins:[LBL],type:'line',data:{labels,datasets:[
-   {label:'network avg',data:back,borderColor:'#cbd2e0',borderWidth:1.2,borderDash:[4,3],pointRadius:0,tension:0,fill:false,spanGaps:true},
+   {label:'average branch',data:bk,borderColor:'#cbd2e0',borderWidth:1.2,borderDash:[4,3],pointRadius:0,tension:0,fill:false,spanGaps:true},
    {label:x.n,data:x.d,borderColor:x.c,backgroundColor:x.c+'1f',borderWidth:2.4,
     pointRadius:(q)=>pick.has(q.dataIndex)?2.6:0,pointBackgroundColor:x.c,pointHoverRadius:5,tension:0,fill:true,spanGaps:true}]},
    options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,interaction:{mode:'index',intersect:false},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:q=>q.dataset.label+': '+F(q.parsed.y)}}},
     scales:{x:{grid:{display:0},ticks:{maxTicksLimit:4,color:'#0F172A',font:{size:10}}},
-     y:{min:mn<0?mn*1.12:0,max:mx*1.14,grid:{color:'#f1f3f8'},ticks:{maxTicksLimit:3,color:'#0F172A',font:{size:10},callback:v=>F(v)}}}}});
+     y:{min:ymn<0?ymn*1.12:0,max:ymx*1.16,grid:{color:'#f1f3f8'},ticks:{maxTicksLimit:3,color:'#0F172A',font:{size:10},callback:v=>F(v)}}}}});
   ch.push(c);});}
 
 // ranked horizontal bars with the NAME on every row - used where a scatter hid the names
@@ -602,7 +635,7 @@ function hbar(g,title,sub,rows,opt){opt=opt||{};if(!rows||!rows.length)return;
  const mx=Math.max.apply(null,rows.map(r=>Math.abs(r.v)))||1;
  let h='<div style="margin-top:8px">'+rows.map(r=>{const w=Math.max(1.5,Math.abs(r.v)/mx*100);
   return '<div style="display:flex;align-items:center;gap:9px;margin:5px 0" title="'+(r.tip||'').replace(/"/g,'&quot;')+'">'
-   +'<div style="width:190px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.n+'</div>'
+   +'<div style="width:'+(opt.nw||190)+'px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.n+'</div>'
    +'<div style="flex:1;background:#f0f2f7;border-radius:6px;height:15px;position:relative"><div style="width:'+w.toFixed(1)+'%;height:100%;border-radius:6px;background:'+r.c+'"></div></div>'
    +'<div style="width:98px;text-align:right;font-weight:800;font-size:12px">'+r.rl+'</div>'
    +'<div style="width:66px;text-align:right;font-size:10.5px;font-weight:800;color:#fff"><span style="background:'+r.c+';border-radius:5px;padding:2px 6px">'+r.b+'</span></div></div>';}).join('')+'</div>';
@@ -621,6 +654,57 @@ function vzCard(g,title,sub,labels,datasets,fmt,opt){opt=opt||{};
   plugins:{legend:{display:(opt.type==='bar'||opt.type==='scatter'),position:'bottom',labels:{boxWidth:14,font:{size:11}}},tooltip:{filter:x=>x.parsed.y!=null,callbacks:{label:x=>(x.raw&&x.raw.n?x.raw.n+': ':x.dataset.label+': ')+(fmt||fC)(x.parsed.y!=null?x.parsed.y:0)+(x.raw&&x.raw.xl?' | '+x.raw.xl:'')}}},
   scales:Object.assign({x:{stacked:!!opt.stacked,grid:{display:0},ticks:{maxTicksLimit:14,color:'#0F172A',font:{size:12}},type:opt.type==='scatter'?'linear':'category',title:opt.xt?{display:true,text:opt.xt,font:{size:10}}:undefined},y:{stacked:!!opt.stacked,grid:{color:'#eef0f5'},ticks:{color:'#0F172A',font:{size:12},callback:v=>(fmt||fC)(v)},title:opt.yt?{display:true,text:opt.yt,font:{size:10}}:undefined}},datasets.some(d=>d.y2)?{y2:{position:'right',grid:{display:0},ticks:{color:'#c9834a',font:{size:10},callback:v=>(fmt||fC)(v)}}}:{}),plugins:[]},plugins:((opt.type||'line')==='line'?[DLBL]:[])});
  ch.push(c);}
+function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10');g.innerHTML='';
+ const money=v=>Math.round(v).toLocaleString();
+ document.getElementById('bn10').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; Meta ad-level data, last 30 days, pulled straight from the Meta API. Every ad that spent more than E&pound; 3,000 is listed by name with its DELIVERY STATUS, so the dashboard can never again tell you to switch off something you already switched off. ROAS here is TOTAL attributed value (website pixel + in-store omni), at the attribution window selected below.';
+ pnlBar(g);
+ const ADS=(O.mads||[]).filter(a=>a.sp>3000);
+ if(!ADS.length){pnlCard(g,'meta','Meta insights &mdash; no funded ads in the window','No Meta ad spent more than E&pound; 3,000 in the last 30 days, so there is nothing to rank. If you know ads are running, the Meta token in the GitHub secrets has expired &mdash; that is the first thing to check.','');return;}
+ const mf2=af('meta');
+ const roas=a=>a.sp?a.ov*mf2/a.sp:0;
+ const stat=a=>{const q=(a.st||'').toUpperCase();if(!q)return null;
+  if(q==='ACTIVE')return['LIVE','#12a06e'];
+  if(q.indexOf('DISAPPROVED')>=0||q.indexOf('REJECT')>=0)return['REJECTED','#e23a63'];
+  if(q.indexOf('PENDING')>=0||q.indexOf('REVIEW')>=0)return['IN REVIEW','#ff8b42'];
+  if(q.indexOf('ARCHIVED')>=0||q.indexOf('DELETED')>=0)return['ARCHIVED','#8b93a7'];
+  if(q.indexOf('LIMIT')>=0||q.indexOf('BUDGET')>=0)return['CAPPED','#ff8b42'];
+  if(q.indexOf('PAUSED')>=0)return[q.indexOf('ADSET')>=0?'ADSET OFF':(q.indexOf('CAMPAIGN')>=0?'CAMPAIGN OFF':'PAUSED'),'#8b93a7'];
+  return [q.replace(/_/g,' ').slice(0,13),'#8b93a7'];};
+ const off=a=>{const q=(a.st||'').toUpperCase();return !!q&&q!=='ACTIVE';};
+ const known=ADS.filter(a=>a.st).length;
+ const vd=a=>{if(off(a))return['ALREADY OFF','#8b93a7'];const t=roas(a);
+  return t>=8?(a.sp>15000?['SCALE','#12a06e']:['SLEEPER','#12b0a4']):t>=4.5?['KEEP','#3a9bff']:t>=3?['WATCH','#ff8b42']:['KILL','#e23a63'];};
+ const sorted=ADS.slice().sort((a,b)=>b.sp-a.sp);
+ const totSp=ADS.reduce((x,a)=>x+a.sp,0);
+ const live=ADS.filter(a=>!off(a));
+ const kill=live.filter(a=>roas(a)<3),killSp=kill.reduce((x,a)=>x+a.sp,0);
+ const dead=ADS.filter(off),deadSp=dead.reduce((x,a)=>x+a.sp,0);
+ const good=live.filter(a=>roas(a)>=8);
+ const gRo=good.length?good.reduce((x,a)=>x+roas(a),0)/good.length:0;
+ const badRo=kill.length?kill.reduce((x,a)=>x+roas(a),0)/kill.length:0;
+ const chip=(t,c)=>'<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+c+';border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:middle">'+t+'</span>';
+ const rows=sorted.map(a=>{const v=vd(a),sc=stat(a);
+  return {n:(sc?chip(sc[0],sc[1]):'')+((a.n||'(unnamed)').slice(0,46)),v:a.sp,c:v[1],b:v[0],
+   rl:'E&pound; '+money(a.sp)+' <span style="color:#64748b;font-weight:700">&middot; '+roas(a).toFixed(1)+'x</span>',
+   tip:(a.n||'')+' | status '+(a.st||'unknown')+' | spend E£ '+money(a.sp)+' | total revenue attributed E£ '+money(a.ov*mf2)+' | '+roas(a).toFixed(2)+'x | '+(a.pur||0)+' purchases'};});
+ const cmt=[[C.blue,'<b>How to read a row.</b> The grey/green chip on the LEFT is Meta&rsquo;s own delivery status for that ad right now &mdash; LIVE means it is still spending your money today, PAUSED / ADSET OFF / CAMPAIGN OFF mean it is already switched off and only appears here because it spent inside the last 30 days. The bar is how much that ONE ad spent. The number is that spend and the total ROAS it returned (website + in-store). The chip on the RIGHT is the verdict.'],
+  [C.indigo,'<b>The verdict thresholds, in plain terms.</b> ROAS of 4.0x means every E&pound; 1 of ad spend brought back E&pound; 4 of revenue. SCALE / SLEEPER = 8x or better (SLEEPER is the same performance on a small budget &mdash; it has not been given a chance yet). KEEP = 4.5x&ndash;8x. WATCH = 3x&ndash;4.5x. KILL = under 3x. ALREADY OFF = the ad is not delivering any more, so no verdict is offered &mdash; there is nothing left to decide. These are REVENUE multiples, not profit: at a ~30% gross margin an ad needs roughly 3.3x just to pay for the goods it sold, which is exactly why 3x is the kill line.']];
+ if(!known)cmt.push([C.orange,'<b>Delivery status is not in this data file yet.</b> The status chips appear as soon as the next 3-hour sync runs with the updated backend &mdash; the Meta pull now asks for each ad&rsquo;s effective_status alongside its spend. Until then every ad below is treated as live, which is the safe assumption.']);
+ else if(dead.length)cmt.push([C.grn,'<b>'+dead.length+' of these '+ADS.length+' ads '+(dead.length>1?'are':'is')+' already switched off in Meta</b> (E&pound; '+money(deadSp)+' of the E&pound; '+money(totSp)+' shown was spent before '+(dead.length>1?'they were':'it was')+' stopped). '+(dead.length>1?'They are':'It is')+' tagged ALREADY OFF, excluded from the kill maths below, and kept on the list only so the 30-day spend adds up. You will not be told to kill something twice again.']);
+ if(kill.length)cmt.push([C.red,'<b>The money on the table right now.</b> '+kill.length+' STILL-LIVE ad'+(kill.length>1?'s are':' is')+' funded below the kill line, burning E&pound; '+money(killSp)+' in the last 30 days ('+(totSp?(killSp/totSp*100).toFixed(0):'0')+'% of all ad spend) at an average '+badRo.toFixed(1)+'x. Your winners average '+gRo.toFixed(1)+'x. Moving that same E&pound; '+money(killSp)+' onto the green rows would return about E&pound; '+money(killSp*gRo)+' instead of E&pound; '+money(killSp*badRo)+' &mdash; a swing of roughly E&pound; '+money(killSp*(gRo-badRo))+' in revenue for zero extra budget. Check frequency and creative age before you switch anything off; a fatigued winner can look like a loser for a fortnight.']);
+ else cmt.push([C.grn,'<b>No live ad is under the 3x kill line right now.</b> Every ad still delivering is at least paying for its own goods. The next move is not cutting, it is feeding: push budget at the '+good.length+' ad'+(good.length===1?'':'s')+' running at 8x or better.']);
+ cmt.push([C.orange,'<b>Attribution matters here.</b> These ROAS numbers move with the attribution selector above. Switch it to 1-day click and every number falls &mdash; that does not mean the ads got worse, it means you are giving Meta less credit. Compare ads to each other within one setting; never compare across settings.']);
+ hbar(g,'Every funded ad, named, status-tagged and ranked by spend'+INFO('One row per Meta ad with more than E£3,000 of spend in the last 30 days. Left chip = Meta delivery status (LIVE / PAUSED / ADSET OFF / CAMPAIGN OFF / REJECTED). Bar = spend. The multiple = total revenue attributed to that ad divided by its spend, counting both website and in-store sales.'),
+  'Last 30 days &middot; '+ADS.length+' funded ads &middot; E&pound; '+money(totSp)+' total spend &middot; '+live.length+' still delivering. Hover a row for status, purchases and attributed revenue.',rows,{cmt:cmt,nw:300});
+ const byS={};ADS.forEach(a=>{const k=(stat(a)||['UNKNOWN','#8b93a7']);byS[k[0]]=byS[k[0]]||{c:k[1],n:0,sp:0};byS[k[0]].n++;byS[k[0]].sp+=a.sp;});
+ const sk=Object.keys(byS);
+ if(sk.length>1){const srows=sk.sort((a,b)=>byS[b].sp-byS[a].sp).map(k=>({n:k,v:byS[k].sp,c:byS[k].c,b:byS[k].n+' ad'+(byS[k].n>1?'s':''),
+   rl:'E&pound; '+money(byS[k].sp),tip:k+' | '+byS[k].n+' ads | E£ '+money(byS[k].sp)+' spent in the window'}));
+  hbar(g,'Where the last 30 days of Meta money actually went, by delivery status'+INFO('Groups the same ads by Meta delivery status and sums their spend. Money against PAUSED rows is already spent and cannot be recovered - it is shown so the 30-day total reconciles.'),
+   'Spend split by status. A large PAUSED block is not waste by itself &mdash; it is budget that ran before somebody stopped the ad.',srows,{nw:180,
+   cmt:[[C.blue,'<b>Use this to sanity-check the list above.</b> If almost all of the spend sits against LIVE rows, the ranking above is a live decision list. If a big share sits against PAUSED or ARCHIVED, most of what you are looking at is history and the real live budget is smaller than the headline.']]});}
+}
+window.rMeta=rMeta;
 function rIns(){if(TAB!=='iq')return;dCh();const g=document.getElementById('g9');g.innerHTML='';
  const money=v=>Math.round(Math.abs(v)).toLocaleString();
  document.getElementById('bn9').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. The whole business read in one place: what changed (ledger findings), what is structurally true, and where the next pound goes. Recomputed every sync.';
@@ -685,7 +769,7 @@ function rIns(){if(TAB!=='iq')return;dCh();const g=document.getElementById('g9')
 function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
  document.getElementById('bn8').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; data complete through <b>'+O.aw[1]+'</b> (Cairo days; the day in progress is never charted as if it were finished). Read top-down: what changed &rarr; who leads &rarr; was it one branch or the market &rarr; who the customers are &rarr; what the company earned. <b>Every chart has an <span style="display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:#e6e9f2;color:#334155;font-size:9px;font-weight:800">i</span> next to its title &mdash; hover it for the definition and a worked example</b>, and a plain-English note underneath saying what it means. Warm-up months (POS go-live Aug&ndash;Nov 2024) are excluded from every trend number.';
- pnlBar(g);
+ pnlBar(g,'<span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label title="Drops POS orders whose net margin is zero or negative - refunds, exchanges and swap tickets - from every repeat-customer number on this tab."><input type="checkbox" style="width:auto" '+(ST.rx?'checked':'')+' onchange="pnlCtl(&quot;rx&quot;,this.checked)"> Exclude returns / exchanges</label>');
  const PS=O.pos||{},BC=O.bcost||{},BNR=O.bnr||{},BCO=O.bcoh||{},NR=O.nr||{};
  const names=Object.keys(PS);if(!names.length){pnlCard(g,'ins','Charts','POS feed missing — run one sync.','');return;}
  const allM=[...new Set([].concat(...names.map(n=>Object.keys(PS[n]))))].sort();
@@ -732,7 +816,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
   const ord=(n,m)=>PS[n][m]?PS[n][m][2]:null;
   const totR=m=>names.reduce((a,n)=>a+(rev(n,m)||0),0);
   const smR=names.map(n=>({n,c:BCOL[n]||'#888',d:Lf.map(m=>rev(n,m))}))
-   .concat([{n:'ALL STORES',c:BCOL.ALL,d:Lf.map(m=>totR(m)||null)}]);
+   .concat([{n:'ALL STORES',c:BCOL.ALL,agg:1,d:Lf.map(m=>totR(m)||null)}]);
   const kfmt=v=>(Math.abs(v)>=1e6?(v/1e6).toFixed(v>=1e7?0:1)+'m':Math.round(v/1000)+'k');
   const fullM=Lf.filter(m=>m!==CURM&&m>WARM);
   const lm=fullM[fullM.length-1],pm2=fullM[fullM.length-2];
@@ -849,8 +933,8 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
   const run=money(Lc.filter(m=>m<CURM).slice(-6).reduce((a,m)=>a+tot(m),0)/(Lc.filter(m=>m<CURM).slice(-6).length||1));
   // A) SMALL MULTIPLES - one panel per branch, shared scale, no spaghetti
   const sm=names.map(n=>({n,c:BCOL[n]||'#888',d:Lf.map(m=>nc(n,m))}))
-   .concat([{n:'ONLINE',c:'#3a9bff',d:Lf.map(m=>(NR[m]?NR[m].nord:null))},
-            {n:'ALL STORES',c:BCOL.ALL,d:Lf.map(m=>tot(m)||null)}]);
+   .concat([{n:'ONLINE',c:'#3a9bff',agg:1,d:Lf.map(m=>(NR[m]?NR[m].nord:null))},
+            {n:'ALL STORES',c:BCOL.ALL,agg:1,d:Lf.map(m=>tot(m)||null)}]);
   smallMult(g,'New customers &mdash; one panel per branch, plus online and the whole network'+INFO('Each panel is ONE branch so the lines never cross each other. Every panel shares the same vertical scale, so a tall panel really is a bigger branch. The grey dashed line inside each panel is the average branch, so you can see instantly whether that branch is above or below its peers.'),
    'Same y-scale in every panel &mdash; heights are directly comparable. Grey dashed = average branch. Number top-right = latest month. Stores = registered first-time POS customers (Odoo). ONLINE = first-time Shopify-channel orders (network-wide; online ships from one fulfilment centre, so it has no branch).',
    Lf.map(m=>m.slice(2)),sm,v=>Math.round(v).toLocaleString(),
@@ -891,19 +975,80 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    Lm.map(m=>m.slice(2)),sm,v=>'E£ '+Math.round(v).toLocaleString(),{cmt});})();
  // ===== 5c · CHURN READ: repeat-order share per branch =====
  (function(){const Lf=L.filter(m=>m<=CURM&&m>WARM);if(Lf.length<2||!Object.keys(BNR).length)return;
-  const rs=(n,m)=>{const b=BNR[n]&&BNR[n][m];if(!b)return null;const t=(b.nc||0)+(b.rc||0);return t?(b.rc||0)/t*100:null;};
-  const tot=m=>{let nc=0,rc=0;names.forEach(n=>{const b=BNR[n]&&BNR[n][m];if(b){nc+=b.nc||0;rc+=b.rc||0;}});return (nc+rc)?rc/(nc+rc)*100:null;};
+  const RXr=!!ST.rx;const rcv=b=>(RXr&&b.rcx!=null)?b.rcx:(b.rc||0);
+  const rs=(n,m)=>{const b=BNR[n]&&BNR[n][m];if(!b)return null;const t=(b.nc||0)+rcv(b);return t?rcv(b)/t*100:null;};
+  const tot=m=>{let nc=0,rc=0;names.forEach(n=>{const b=BNR[n]&&BNR[n][m];if(b){nc+=b.nc||0;rc+=rcv(b);}});return (nc+rc)?rc/(nc+rc)*100:null;};
   const sm=names.map(n=>({n,c:BCOL[n]||'#888',d:Lf.map(m=>rs(n,m))}))
-   .concat([{n:'ALL STORES',c:BCOL.ALL,d:Lf.map(m=>tot(m))}]);
+   .concat([{n:'ALL STORES',c:BCOL.ALL,agg:1,d:Lf.map(m=>tot(m))}]);
   const fullM=Lf.filter(m=>m!==CURM);const lm=fullM[fullM.length-1];
   const cmt=[[C.blue,'<b>What this actually measures.</b> Of every receipt written at that branch this month, what share came from somebody who had bought from you before. High = your customers keep coming back. Low = you are refilling a leaking bucket with new faces every month. Worked example: 1,000 receipts, 400 from first-time customers and 600 from returners = 60% repeat-order share.'],
    [C.indigo,'<b>Why this and not a "churn %".</b> A true churn rate needs each customer tracked to a cancellation date, which a retail POS never gives you &mdash; nobody cancels a shop. This is the honest actual: it is counted from real receipts in Odoo, not modelled. Read the DIRECTION of each panel, not the absolute level: a line sloping up means loyalty is building, sloping down means the branch is becoming more dependent on strangers.']];
   if(lm){const r2=names.map(n=>({n,v:rs(n,lm)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
    if(r2.length>1)cmt.push([C.grn,'<b>'+lm+':</b> most loyal is '+r2[0].n+' at '+r2[0].v.toFixed(0)+'% repeat receipts; most acquisition-dependent is '+r2[r2.length-1].n+' at '+r2[r2.length-1].v.toFixed(0)+'%. The bottom branch has to win '+((100-r2[r2.length-1].v)/(100-r2[0].v)).toFixed(1)+'x as many brand-new customers as the top one just to write the same number of receipts &mdash; that is the real cost of weak retention, paid in media budget every month.']);}
+  (function(){const BS3=O.bstat||{};const have=names.filter(n=>BS3[n]&&BS3[n].repeatRate!=null);
+   if(!have.length)return;
+   const lst=have.map(n=>n+' '+((RXr&&BS3[n].repeatRateX!=null)?BS3[n].repeatRateX:BS3[n].repeatRate)+'%').join(' &middot; ');
+   const rl=have.map(n=>(RXr&&BS3[n].repeatRateX!=null)?BS3[n].repeatRateX:BS3[n].repeatRate).sort((a,b)=>a-b);
+   const pn=names.map(n=>rs(n,lm)).filter(v=>v!=null).sort((a,b)=>a-b);
+   cmt.push([C.red,'<b>Why this chart says ~'+(pn.length?Math.round(pn[Math.floor(pn.length/2)]):70)+'% and the customer table says ~'+Math.round(rl[0])+'&ndash;'+Math.round(rl[rl.length-1])+'% &mdash; and why BOTH are correct.</b> They count different things. THIS chart counts RECEIPTS: of 100 sales slips written this month, how many were rung up for somebody who had bought before. The <i>repeat rate</i> on the Offline / Branches tab counts PEOPLE: of every customer that branch has ever registered, how many came back at least once. A small group of loyal regulars can write most of the receipts while still being a minority of the customer list &mdash; that is exactly what is happening here, and it is a good thing, not a contradiction. Customers-who-returned, by branch: '+lst+'. Rule of thumb: use the PEOPLE number when you are judging how sticky your customer base is, and the RECEIPTS number when you are judging how much of this month&rsquo;s till depends on regulars.']);})();
   cmt.push([C.orange,'<b>Careful with the first months of any branch.</b> A store that opened recently has almost no past customers to return, so its repeat share starts near zero by arithmetic, not by failure. Give a new branch 6 months before judging this panel.']);
-  smallMult(g,'Retention read &mdash; repeat-order share by branch'+INFO('Share of that month POS receipts written to a customer who had already bought from you before (Odoo, actual receipts). 100% would mean nobody new walked in; 0% would mean nobody ever came back.'),
+  smallMult(g,'Retention read &mdash; repeat-order share by branch'+(RXr?' <span style="font-size:10px;color:#e23a63">EXCL. RETURNS</span>':'')+INFO('Share of that month POS receipts written to a customer who had already bought from you before (Odoo, actual receipts). 100% would mean nobody new walked in; 0% would mean nobody ever came back.'),
    'Percentage of receipts from returning customers. Same scale in every panel. Grey dashed = average branch. Numbers on the line = actual %.',
    Lf.map(m=>m.slice(2)),sm,v=>v.toFixed(0)+'%',{cmt:cmt});})();
+ // ===== 5d · NET PROFIT PER BRANCH AND FOR ONLINE =====
+ (function(){const Lf=L.filter(m=>m<=CURM);if(Lf.length<2)return;
+  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M3[m]=M3[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M3[m].r+=O.fin.refund[i]*1000;M3[m].gp+=O.fin.gp[i]*1000;}
+  const A5={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A5[m]=(A5[m]||0)+(O.ad.spend[i]||0);}
+  const epay=(FF.company&&FF.company.ecomPayroll)||372076;
+  const onNP=m=>{if(!M3[m])return null;const gpn=M3[m].gp*(M3[m].g?1-M3[m].r/M3[m].g:1);return gpn-(A5[m]||0)-epay;};
+  const allSt=m=>{const vs=names.map(n=>contrib(n,m)).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0):null;};
+  const sm=names.map(n=>({n,c:BCOL[n]||'#888',d:Lf.map(m=>contrib(n,m))}))
+   .concat([{n:'ONLINE',c:'#3a9bff',agg:1,d:Lf.map(onNP)},
+            {n:'ALL STORES',c:BCOL.ALL,agg:1,d:Lf.map(allSt)}]);
+  const lmN=Lf.filter(m=>m<CURM).slice(-1)[0];
+  const cmt=[[C.blue,'<b>What "net profit" means in each panel.</b> For a BRANCH: its own gross profit, minus the salaries actually posted to that branch, minus the rent actually posted to that branch &mdash; both read from the Odoo analytic ledger, not estimated. Head-office costs, warehouse, marketing and finance are NOT charged to the branches, so a branch panel answers one question only: does this shop cover its own staff and its own lease, and how much is left over for the rest of the company. For ONLINE: gross profit net of refunds, minus ALL platform ad spend (Meta + Google + TikTok), minus e-commerce payroll of E&pound; '+money(epay)+'/mo.'],
+   [C.indigo,'<b>Why the ONLINE and ALL STORES panels are drawn on their own scale.</b> They are the sum of everything, so on a shared axis they would squash every branch line flat. They sit at the end with a tinted background and an "own scale" tag &mdash; read their SHAPE against the branches, not their height.']];
+  if(lmN){const rk=names.map(n=>({n,v:contrib(n,lmN)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
+   const neg=rk.filter(x=>x.v<0);
+   if(rk.length){cmt.push([C.grn,'<b>'+lmN+':</b> best branch was '+rk[0].n+' at E&pound; '+money(rk[0].v)+' of net profit; weakest was '+rk[rk.length-1].n+' at '+(rk[rk.length-1].v<0?'&minus;E&pound; '+money(Math.abs(rk[rk.length-1].v)):'E&pound; '+money(rk[rk.length-1].v))+'. All stores together: '+((allSt(lmN)||0)<0?'&minus;E&pound; '+money(Math.abs(allSt(lmN)||0)):'E&pound; '+money(allSt(lmN)||0))+'. Online: '+((onNP(lmN)||0)<0?'&minus;E&pound; '+money(Math.abs(onNP(lmN)||0)):'E&pound; '+money(onNP(lmN)||0))+'.']);}
+   if(neg.length)cmt.push([C.red,'<b>'+neg.length+' branch'+(neg.length>1?'es did':' did')+' not cover '+(neg.length>1?'their':'its')+' own salaries and rent in '+lmN+':</b> '+neg.map(x=>x.n+' (&minus;E&pound; '+money(Math.abs(x.v))+')').join(', ')+'. That is a real cash loss before a single head-office cost is added. Before closing anything, check whether the shortfall is a rent spike (prepaid leases land in one month) or a genuine revenue collapse &mdash; the rent chart above tells you which.']);
+   else cmt.push([C.grn,'<b>Every branch covered its own salaries and rent in '+lmN+'.</b> Nothing on this page is loss-making at store level; the company-wide result depends on head office and advertising, which are charged further down in section 7.']);}
+  smallMult(g,'Net profit by branch, month by month &mdash; plus online'+INFO('Branch net profit = branch gross profit minus that branch actual posted salaries minus its actual posted rent (Odoo analytic ledger). Online net profit = online gross profit after refunds, minus all platform ad spend, minus e-commerce payroll. Head office is excluded from both.'),
+   'Money left after each shop pays its own people and its own lease. Shared scale across the branch panels; ONLINE and ALL STORES use their own. Numbers on the line = actual E&pound;.',
+   Lf.map(m=>m.slice(2)),sm,v=>'E£ '+Math.round(v).toLocaleString(),{cmt:cmt,key:'netprofitbybranch'});})();
+ // ===== 5e · NETWORK TRENDS: new customers and repeat-order % over time =====
+ (function(){const Lf=L.filter(m=>m<=CURM);if(Lf.length<2)return;const RXn=!!ST.rx;
+  const rcv=b=>(RXn&&b.rcx!=null)?b.rcx:(b.rc||0);
+  const stNew=m=>{const v=names.reduce((a,n)=>a+((BNR[n]&&BNR[n][m])?(BNR[n][m].nc||0):0),0);return v||null;};
+  const onNew=m=>NR[m]?(NR[m].nord||null):null;
+  const tNew=m=>{const a=stNew(m)||0,b=onNew(m)||0;return (a+b)||null;};
+  const lmA=Lf.filter(m=>m<CURM).slice(-1)[0],pmA=Lf.filter(m=>m<CURM).slice(-2)[0];
+  const cA=[[C.blue,'<b>One line per channel, on one axis, because these two compete for the same marketing pound.</b> STORES = people whose first ever registered POS purchase happened that month. ONLINE = first-time Shopify-channel orders that month. TOTAL is the two added together &mdash; it is the denominator of your blended CAC, and it is the only acquisition number no attribution model can inflate.'],
+   [C.orange,'<b>Aug&ndash;Nov 2024 is a data event, not growth.</b> POS went live then, so every existing customer who walked in was registered as "new". Ignore that hump; the honest trend starts at Dec 2024.']];
+  if(lmA&&pmA){const a=tNew(pmA)||0,b=tNew(lmA)||0;
+   cA.push([b>=a?C.grn:C.red,'<b>'+lmA+':</b> '+money(stNew(lmA)||0)+' new store customers + '+money(onNew(lmA)||0)+' new online customers = <b>'+money(b)+'</b> in total, versus '+money(a)+' in '+pmA+' ('+(b>=a?'+':'&minus;')+(a?Math.abs((b/a-1)*100).toFixed(0):'&mdash;')+'%). Stores are '+(b?((stNew(lmA)||0)/b*100).toFixed(0):'0')+'% of all new customers won &mdash; that ratio, not the ad platform dashboards, is where your acquisition really happens.']);}
+  vzCard(g,'New customers won per month &mdash; stores vs online vs total'+INFO('Stores: count of customers whose first ever POS purchase fell in that month (Odoo registered-customer crawl, actual). Online: first-time Shopify-channel orders in that month. Total is the sum, and is the denominator used for blended CAC.'),
+   'Network-wide acquisition over time. Every point is an actual count, not a model.',
+   Lf.map(m=>m.slice(2)),
+   [{l:'Stores (first-time POS customers)',c:'#12a06e',w:3,d:Lf.map(stNew)},
+    {l:'Online (first-time Shopify orders)',c:'#3a9bff',w:3,d:Lf.map(onNew)},
+    {l:'TOTAL new customers',c:'#5a5bf0',w:2,dash:1,d:Lf.map(tNew)}],
+   v=>Math.round(v).toLocaleString(),{cmt:cA});
+  const stR=m=>{let nc=0,rc=0;names.forEach(n=>{const b=BNR[n]&&BNR[n][m];if(b){nc+=b.nc||0;rc+=rcv(b);}});return (nc+rc)?+((rc/(nc+rc))*100).toFixed(1):null;};
+  const onR=m=>{const x=NR[m];if(!x)return null;const t=(x.nord||0)+(x.rord||0);return t?+((x.rord/t)*100).toFixed(1):null;};
+  const blR=m=>{let nc=0,rc=0;names.forEach(n=>{const b=BNR[n]&&BNR[n][m];if(b){nc+=b.nc||0;rc+=rcv(b);}});const x=NR[m];if(x){nc+=x.nord||0;rc+=x.rord||0;}return (nc+rc)?+((rc/(nc+rc))*100).toFixed(1):null;};
+  const cB=[[C.blue,'<b>What this is.</b> Of every order placed in that month, the share that came from a customer who had bought before. Rising = the business is compounding, each month starts with more people who already know you. Falling = you are buying growth and the bucket is leaking. Worked example: 10,000 orders, 3,000 from first-timers and 7,000 from returners = 70%.'],
+   [C.indigo,'<b>Stores and online behave differently on purpose.</b> A shop customer walks past every week; an online customer has to be reminded. If the online line is far below the stores line, the gap is an email/SMS retention job, not an ad-budget job.']];
+  if(lmA){const s1=stR(lmA),o1=onR(lmA),b1=blR(lmA);
+   cB.push([C.grn,'<b>'+lmA+':</b> stores '+(s1==null?'&mdash;':s1.toFixed(0)+'%')+' &middot; online '+(o1==null?'&mdash;':o1.toFixed(0)+'%')+' &middot; blended '+(b1==null?'&mdash;':b1.toFixed(0)+'%')+' of all orders came from returning customers'+(RXn?', with returns and exchanges excluded':'')+'.']);}
+  cB.push([C.orange,'<b>This is orders, not people.</b> A handful of very loyal regulars can push this line high while your customer LIST is still mostly one-time buyers. The per-branch panels above carry both numbers side by side so you never confuse them again.']);
+  vzCard(g,'% of orders placed by returning customers, over time'+(RXn?' &mdash; excl. returns/exchanges':'')+INFO('Repeat-order share = orders from customers who had purchased before, divided by all orders in that month. Counted from actual receipts: POS for stores, Shopify for online. It is an ORDER share, not a share of customers.'),
+   'Network-wide loyalty trend. Stores, online and both combined.',
+   Lf.map(m=>m.slice(2)),
+   [{l:'Stores (POS receipts)',c:'#12a06e',w:3,d:Lf.map(stR)},
+    {l:'Online (Shopify orders)',c:'#3a9bff',w:3,d:Lf.map(onR)},
+    {l:'Blended (all orders)',c:'#5a5bf0',w:2,dash:1,d:Lf.map(blR)}],
+   v=>(+v).toFixed(0)+'%',{cmt:cB});})();
  // ===== 6 · RELATIONSHIPS =====
  (function(){const BS=O.bstat||{};const pts=names.filter(n=>BS[n]&&BCO[n]).map(n=>{
    const cs=Object.keys(BCO[n]).filter(m=>m>WARM&&m<CURM);
@@ -925,42 +1070,6 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
           ? 'NEGATIVE and '+rverd(r)+' (r='+r.toFixed(2)+'): the MORE a branch lives off brand-new faces, the LESS each customer is worth at 90 days. Loyalty is the value engine &mdash; capture-at-till and repeat offers beat buying more foot traffic.'
           : 'POSITIVE and '+rverd(r)+' (r='+r.toFixed(2)+'): branches pulling the MOST new faces also produce the MOST valuable customers &mdash; the opposite of a churn problem. These are young, growing catchments where acquisition still compounds, so funding them is buying durable customers, not a leaky bucket. Watch for the day this flips negative: that is when growth turns into churn.'))
       +' <b>How to read r:</b> it runs &minus;1 to +1. SIGN = direction (+ move together, &minus; move opposite). SIZE = how tightly. |r|&ge;0.7 strong &middot; 0.4&ndash;0.7 moderate &middot; &lt;0.4 weak. r is not proof of cause &mdash; with '+pts.length+' branches one outlier can swing it. Dashed line = least-squares trend.']]});}})();
- (function(){const A3={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A3[m]=(A3[m]||0)+(O.ad.spend[i]||0);}
-  let ms=nm2.filter(m=>A3[m]>0&&m<CURM);
-  if(ms.length<5)ms=Object.keys(NR).sort().filter(m=>m>WARM&&A3[m]>0&&m<CURM);
-  if(ms.length>4){const xs=ms.map(m=>A3[m]),ys=ms.map(m=>NR[m].nord);
-   const mx=xs.reduce((a,b)=>a+b,0)/xs.length,my=ys.reduce((a,b)=>a+b,0)/ys.length;
-   const r=xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0)/Math.sqrt(xs.reduce((a,x)=>a+(x-mx)**2,0)*ys.reduce((a,y)=>a+(y-my)**2,0));
-   const pts2=ms.map((m,i)=>({x:Math.round(xs[i]/1000),y:ys[i],n:m,xl:'E£ '+money(xs[i])+' spend'}));
-   const tl2=trendPts(pts2);
-   vzCard(g,'Does spend buy customers? &mdash; monthly ad spend vs online first-time orders','Each dot is a month (all full months &mdash; this chart ignores the month filter, correlation needs history). r = '+r.toFixed(2)+' ('+rverd(r)+').',null,
-    [{l:'Months',c:'#ff8b42',d:pts2}].concat(tl2?[{l:'trend',c:'#9aa3b5',t:'line',dash:1,w:1.5,pr:0,d:tl2}]:[]),v=>Math.round(v).toLocaleString(),
-    {type:'scatter',xt:'Ad spend (E£ 000)',yt:'Online first-time orders',
-     cmt:[[r>=.4?C.grn:(r<=-0.4?C.red:C.orange),
-      (r>=.4?'POSITIVE and '+rverd(r)+' (r='+r.toFixed(2)+') &mdash; months you spent more were months you acquired more. Media is buying real new customers, not just reshuffling attribution. Worked example: '+pts2[0].n+' = E&pound; '+money(xs[0])+' spend &rarr; '+Math.round(ys[0]).toLocaleString()+' first-time orders; '+pts2[pts2.length-1].n+' = E&pound; '+money(xs[xs.length-1])+' &rarr; '+Math.round(ys[ys.length-1]).toLocaleString()+'.'
-       :(r<=-0.4?'NEGATIVE and '+rverd(r)+' (r='+r.toFixed(2)+') &mdash; you acquired MORE in the months you spent LESS. That is a seasonality or creative-fatigue signal, not a media win. Investigate before adding budget.'
-       :'WEAK link (r='+r.toFixed(2)+') &mdash; acquisition follows season more than spend. Incremental budget needs creative and offer work, not just money.'))
-      +' Each dot is one full month. Dashed line = least-squares trend.']]});}})();
- // ===== 6b · AD PORTFOLIO, NAMED AND RANKED =====
- (function(){const ADS=(O.mads||[]).filter(a=>a.sp>3000);if(ADS.length<3)return;const mf2=af('meta');
-  const roas=a=>a.sp?a.ov*mf2/a.sp:0;
-  const vd=a=>{const t=roas(a);return t>=8?(a.sp>15000?['SCALE','#12a06e']:['SLEEPER','#12b0a4']):t>=4.5?['KEEP','#3a9bff']:t>=3?['WATCH','#ff8b42']:['KILL','#e23a63'];};
-  const sorted=ADS.slice().sort((a,b)=>b.sp-a.sp);
-  const totSp=ADS.reduce((x,a)=>x+a.sp,0);
-  const kill=ADS.filter(a=>roas(a)<3),killSp=kill.reduce((x,a)=>x+a.sp,0);
-  const good=ADS.filter(a=>roas(a)>=8);
-  const gRo=good.length?good.reduce((x,a)=>x+roas(a),0)/good.length:0;
-  const badRo=kill.length?kill.reduce((x,a)=>x+roas(a),0)/kill.length:0;
-  const rows=sorted.map(a=>{const v=vd(a);return {n:(a.n||'(unnamed)').slice(0,44),v:a.sp,c:v[1],b:v[0],
-    rl:'E&pound; '+money(a.sp)+' <span style="color:#64748b;font-weight:700">&middot; '+roas(a).toFixed(1)+'x</span>',
-    tip:(a.n||'')+' | spend E£ '+money(a.sp)+' | total revenue attributed E£ '+money(a.ov*mf2)+' | '+roas(a).toFixed(2)+'x | '+(a.pur||0)+' purchases'};});
-  const cmt=[[C.blue,'<b>How to read a row.</b> The bar length is how much money that ONE ad spent in the last 30 days &mdash; longest bar = biggest budget. The number next to it is that spend and the total ROAS it returned (website + in-store, at the attribution setting above). The chip on the right is the verdict. Sorted by spend, so the ads costing you the most are at the top where you cannot miss them.'],
-   [C.indigo,'<b>The verdict thresholds, in plain terms.</b> ROAS of 4.0x means every E&pound; 1 of ad spend brought back E&pound; 4 of revenue. SCALE / SLEEPER = 8x or better (SLEEPER is the same performance on a small budget &mdash; it has not been given a chance yet). KEEP = 4.5x&ndash;8x. WATCH = 3x&ndash;4.5x. KILL = under 3x. These are REVENUE multiples, not profit: at a '+(O.cur?'':'')+'~30% gross margin an ad needs roughly 3.3x just to pay for the goods it sold, which is exactly why 3x is the kill line.']];
-  if(kill.length)cmt.push([C.red,'<b>The money on the table right now.</b> '+kill.length+' ad'+(kill.length>1?'s are':' is')+' funded below the kill line, burning E&pound; '+money(killSp)+' in the last 30 days ('+(killSp/totSp*100).toFixed(0)+'% of all ad spend) at an average '+badRo.toFixed(1)+'x. Your winners average '+gRo.toFixed(1)+'x. Moving that same E&pound; '+money(killSp)+' onto the green rows would return about E&pound; '+money(killSp*gRo)+' instead of E&pound; '+money(killSp*badRo)+' &mdash; a swing of roughly E&pound; '+money(killSp*(gRo-badRo))+' in revenue for zero extra budget. Check frequency and creative age before you switch anything off; a fatigued winner can look like a loser for a fortnight.']);
-  else cmt.push([C.grn,'<b>No ad is under the 3x kill line right now.</b> Every funded ad is at least paying for its own goods. The next move is not cutting, it is feeding: push budget at the '+good.length+' ad'+(good.length===1?'':'s')+' running at 8x or better.']);
-  cmt.push([C.orange,'<b>Attribution matters here.</b> These ROAS numbers move with the attribution selector at the top of this tab. Switch it to 1-day click and every number falls &mdash; that does not mean the ads got worse, it means you are giving Meta less credit. Compare ads to each other within one setting; never compare across settings.']);
-  hbar(g,'Every funded ad, named and ranked by spend'+INFO('One row per Meta ad with more than E£3,000 of spend in the last 30 days. Bar = spend. The multiple next to it = total revenue attributed to that ad divided by its spend, counting both website and in-store sales.'),
-   'Last 30 days &middot; '+ADS.length+' funded ads &middot; E&pound; '+money(totSp)+' total spend. Hover a row for purchases and attributed revenue.',rows,{cmt:cmt});})();
  // ===== 7 · COMPANY =====
  (function(){const M2={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M2[m]=M2[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M2[m].r+=O.fin.refund[i]*1000;M2[m].gp+=O.fin.gp[i]*1000;}
   const A3={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A3[m]=(A3[m]||0)+(O.ad.spend[i]||0);}
