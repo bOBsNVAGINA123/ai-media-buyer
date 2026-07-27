@@ -2,22 +2,22 @@
  "ok": true,
  "error": "",
  "fresh": true,
- "startedUtc": "2026-07-27 15:01:44 UTC",
- "finishedUtc": "2026-07-27 15:03:39 UTC",
- "seconds": 115,
- "runner": "30277945072",
+ "startedUtc": "2026-07-27 16:26:31 UTC",
+ "finishedUtc": "2026-07-27 16:28:25 UTC",
+ "seconds": 114,
+ "runner": "30284694633",
  "attempt": "1",
  "todayCairo": "2026-07-27",
  "data": {
-  "bytes": 738788,
-  "lastSync": "2026-07-27 18:01 Cairo",
+  "bytes": 738795,
+  "lastSync": "2026-07-27 19:26 Cairo",
   "windowEnd": "2026-07-27",
   "partial": "2026-07-27",
   "today": "2026-07-27"
  },
  "log": [
   "[ourkids] odoo days 722",
-  "[ourkids] branches live {'Dokki': 16691339, 'Smouha': 11674616, 'Nasr City': 18286445, 'New Cairo': 26696314, 'October': 9713844, 'Zayed': 14750184, 'Mall of Arabia': 23900530}",
+  "[ourkids] branches live {'Dokki': 16691339, 'Smouha': 11674616, 'Nasr City': 18286445, 'New Cairo': 26696314, 'October': 9722213, 'Zayed': 14750184, 'Mall of Arabia': 23900530}",
   "[ourkids] products 24",
   "[ourkids] meta days 364 | per-branch in-store days 0 | branches 0",
   "[ourkids] shopifyql fail: {'errors': [{'message': \"No such type TableResponse, so it can't be a fragment condition\", 'locations': [{'line': 1, 'column': 48}], 'path': ['query', 'shopifyqlQuery', '... on TableResponse'], 'exten",
@@ -26,7 +26,7 @@
   "[ourkids] google days 266",
   "[ourkids] tiktok skipped",
   "[ourkids] shop-channel days 722",
-  "[ourkids] cohorts 24 customers 64513 nr months 24",
+  "[ourkids] cohorts 24 customers 64519 nr months 24",
   "[ourkids] pos branches 7 months 24",
   "[ourkids] pos customers carried forward (heavy crawl runs on first sync of the day)",
   "[ourkids] meta ads 40",
@@ -40,6 +40,6 @@
   "[ourkids] fallback merged",
   "[ourkids] meta attribution measured 0.865 0.73",
   "[ourkids] annotations 23",
-  "[ourkids] WROTE data.js 738788 bytes  synced 2026-07-27 18:01 Cairo"
+  "[ourkids] WROTE data.js 738795 bytes  synced 2026-07-27 19:26 Cairo"
  ]
 }
