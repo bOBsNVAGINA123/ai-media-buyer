@@ -55,6 +55,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
 <div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
+<div id="stale"></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
@@ -140,9 +141,45 @@ function cparse(u){const s=String(u).trim();const m=/^(\d{4})-(\d{2})-(\d{2})[T 
  return t;}
 function cfmt(t){const d=new Date(t);let h=d.getUTCHours();const mi=('0'+d.getUTCMinutes()).slice(-2);const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+mi+' '+ap;}
 function cairo(u){const t=cparse(u);return t==null?String(u):cfmt(t);}
-let LSC='—',NXC='—';
-function boot(){O=window.O;FF=window.F;isoDates();LSC=cairo(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
- document.getElementById('sync').innerHTML='↻ Synced <b>'+LSC+'</b> Cairo · next ~<b>'+NXC+'</b>';
+/* v6.2.1 A bare clock time is a trap. "Synced 5:29 PM" reads as today even when the
+   payload is from Saturday -- that is exactly how two days of a dead sync went unnoticed.
+   Every sync stamp now carries its weekday and date. */
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function cday(t){const d=new Date(t);return DOW[d.getUTCDay()]+' '+d.getUTCDate()+' '+MON[d.getUTCMonth()];}
+function cairoFull(u){const t=cparse(u);return t==null?String(u):cday(t)+', '+cfmt(t);}
+/* Cairo "today" without trusting the viewer's machine timezone: UTC epoch + 3h, read back in UTC. */
+function cairoToday(){const d=new Date(Date.now()+3*3600*1000);return d.toISOString().slice(0,10);}
+function dDiff(a,b){return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);}
+let LSC='—',NXC='—',LSF='—';
+/* v6.2.1 THE WATCHDOG.
+   On 25 Jul 2026 the GitHub Action stopped producing runs. The dashboard carried on
+   serving Saturday's numbers under a clock that read "5:29 PM", and nothing anywhere
+   said otherwise -- two days of decisions were made on stale figures. This bar exists so
+   that can never happen quietly again. It compares the last COMPLETE data day in the
+   payload against today in Cairo. One day behind is normal (the day in progress is never
+   charted as finished). Two or more days behind means the sync is not running, and it
+   says so in red across the whole screen. It also surfaces syncError/lastAttempt, which
+   the collector stamps into data.js when a run fails, so the reason is on the page. */
+function staleBar(){const el=document.getElementById('stale');if(!el)return;
+ const end=(O.aw&&O.aw[1])||null,tod=cairoToday();
+ let lag=null;try{lag=dDiff(end,tod);}catch(e){}
+ if(!isFinite(lag))lag=null;   /* a missing or unparseable window is not "0 days old" -- it is unknown, and NaN must never reach the screen */
+ const err=O.syncError||'',att=O.lastAttempt||'';
+ if(lag==null||lag<=1){if(err){el.innerHTML='<div style="background:#fff6ed;border:1px solid #f0a500;border-left:5px solid #f0a500;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:12.5px;color:#7a4b00"><b>Last sync attempt failed, but the data on screen is still current.</b> Attempt at <b>'+att+'</b> reported: <code>'+esc(err)+'</code></div>';}else{el.innerHTML='';}return;}
+ const sev=lag>=3;
+ el.innerHTML='<div style="background:'+(sev?'#fff1f1':'#fff6ed')+';border:1px solid '+(sev?'#d92d20':'#f0a500')+';border-left:6px solid '+(sev?'#d92d20':'#f0a500')+';border-radius:10px;padding:12px 16px;margin:0 0 12px;font-size:13px;line-height:1.6;color:'+(sev?'#7a1010':'#7a4b00')+'">'
+  +'<b style="font-size:14px">⚠ THESE NUMBERS ARE '+lag+' DAYS OLD — THE SYNC IS NOT RUNNING.</b><br>'
+  +'Newest complete day in this payload: <b>'+end+'</b>. Today in Cairo: <b>'+tod+'</b>. '
+  +'Last successful build: <b>'+LSF+' Cairo</b>.'
+  +(att?' Last attempt: <b>'+att+'</b>.':'')
+  +(err?'<br>Reason reported by the collector: <code>'+esc(err)+'</code>':'<br>No failure was reported, which means the scheduled job never started at all — check the Actions tab on the repo.')
+  +'<br><span style="opacity:.85">Everything below is real data, correctly computed — it is just not today’s. Do not read any “last 7 days” figure as if it ended today.</span>'
+  +'</div>';}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function boot(){O=window.O;FF=window.F;isoDates();LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
+ LSF=cairoFull(O.lastSync);
+ document.getElementById('sync').innerHTML='↻ Synced <b>'+LSF+'</b> Cairo · next ~<b>'+NXC+'</b>';
+ staleBar();
  ST.e=O.aw[1];ST.s=addD(ST.e,-29);
  const d0=document.getElementById('d0'),d1=document.getElementById('d1');
  d0.value=ST.s;d1.value=ST.e;d0.min=O.fin.start;d1.max=ST.e;
@@ -162,7 +199,7 @@ function boot(){O=window.O;FF=window.F;isoDates();LSC=cairo(O.lastSync);try{cons
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v6.2</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v6.2.1</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
