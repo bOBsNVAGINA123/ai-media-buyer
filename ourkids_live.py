@@ -1205,6 +1205,171 @@ def pull_vendors():
     return vend, {"rows": prods, "start": "2024-08-01", "end": END.isoformat()}
 
 
+# ---------------------------------------------------------------- SHIPPING & HANDLING ECONOMICS  (v6.3)
+# Three separate money flows that everyone lumps together as "shipping", and which net
+# out to a number nobody at OurKids had ever seen on one line:
+#   1. what the customer PAYS US for delivery   -- sale.order.line on the shipping SKUs
+#   2. what we PAY the couriers                 -- 31.01.08.08 Cargo / .09 Transportation
+#   3. what the courier/gateway SKIMS on collection -- 31.01.08.31..37 + .17 card + .12 bank
+#   4. what we get BACK as negotiated rebate    -- 32.00.00.18 Earned Shipping Discount
+# "Free shipping" is not free: it is flow 2+3 with flow 1 set to zero. Netting them by
+# month is the only way to see what the free-shipping promise actually costs.
+SHIP_ACC = {
+    "31.01.08.08.00": ("Courier & cargo paid",       "paid"),
+    "31.01.08.09.00": ("Transportation paid",        "paid"),
+    "31.01.08.33.00": ("Aramex collection fees",     "coll"),
+    "31.01.08.34.00": ("Bosta collection fees",      "coll"),
+    "31.01.08.31.00": ("Noon collection fees",       "coll"),
+    "31.01.08.32.00": ("Amazon collection fees",     "coll"),
+    "31.01.08.35.00": ("PayMob collection fees",     "coll"),
+    "31.01.08.36.00": ("Symbel collection fees",     "coll"),
+    "31.01.08.37.00": ("Fawry collection fees",      "coll"),
+    "31.01.08.17.00": ("Credit card fees",           "hand"),
+    "31.01.08.12.00": ("Bank charges",               "hand"),
+    "31.01.08.10.00": ("Packing, wrapping & bags",   "hand"),
+    "32.00.00.18.00": ("Earned shipping discount",   "gain"),
+}
+
+def pull_shipping():
+    """Shipping P&L by month: collected from customers, paid to couriers, collection and
+    handling fees skimmed on the way, and rebates earned back. All ACTUAL Odoo postings."""
+    out = {"rev": {}, "acc": {}, "grp": {}, "n": {}, "err": ""}
+    try:
+        prods = oexec("product.product", "search_read",
+                      [["|", ["default_code", "=", "shopifyshippingproduct"],
+                             ["name", "in", ["Bosta Delivery", "POS SHIPPING"]]]],
+                      {"fields": ["name", "default_code"], "limit": 50})
+        pids = [p["id"] for p in prods]
+        pnm = {}
+        for p in prods:
+            nm = "Shopify shipping charged" if p.get("default_code") == "shopifyshippingproduct" else str(p["name"])[:40]
+            pnm[p["id"]] = nm
+        # read_group cannot group on a related date, so walk month by month. ~24 cheap calls.
+        m0 = datetime.date.fromisoformat("2024-08-01")
+        while m0 <= END:
+            nxt = (m0.replace(day=28) + datetime.timedelta(days=6)).replace(day=1)
+            mon = m0.strftime("%Y-%m")
+            if pids:
+                for r in ogroup("sale.order.line",
+                                [["order_id.state", "in", ["sale", "done"]],
+                                 ["product_id", "in", pids],
+                                 ["order_id.date_order", ">=", m0.isoformat() + " 00:00:00"],
+                                 ["order_id.date_order", "<", nxt.isoformat() + " 00:00:00"]],
+                                ["price_subtotal"], ["product_id"]):
+                    nm = pnm.get((r.get("product_id") or [0])[0], "Shipping charged")
+                    out["rev"].setdefault(nm, {})
+                    out["rev"][nm][mon] = out["rev"][nm].get(mon, 0) + round(r.get("price_subtotal") or 0)
+                    out["n"][mon] = out["n"].get(mon, 0) + int(r.get("__count") or 0)
+            m0 = nxt
+        acc = oexec("account.account", "search_read", [[["code", "in", list(SHIP_ACC.keys())]]],
+                    {"fields": ["code"], "limit": 60})
+        amap = {a["id"]: a["code"] for a in acc}
+        if amap:
+            g = oexec("account.move.line", "read_group",
+                      [[["account_id", "in", list(amap.keys())], ["parent_state", "=", "posted"],
+                        ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]],
+                       ["balance"], ["account_id", "date:month"]], {"lazy": False})
+            for r in g:
+                code = amap.get(r["account_id"][0], "")
+                label, bucket = SHIP_ACC.get(code, (code, "hand"))
+                try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
+                except Exception: continue
+                # expense accounts post debit-positive; the gain account posts credit-negative.
+                # Flip the gain so every number on this card reads as "money moving in our favour".
+                v = round(r["balance"]) * (-1 if bucket == "gain" else 1)
+                out["acc"].setdefault(label, {})
+                out["acc"][label][mon] = out["acc"][label].get(mon, 0) + v
+                out["grp"].setdefault(bucket, {})
+                out["grp"][bucket][mon] = out["grp"][bucket].get(mon, 0) + v
+        for nm, mm in out["rev"].items():
+            for mon, v in mm.items():
+                out["grp"].setdefault("rev", {})
+                out["grp"]["rev"][mon] = out["grp"]["rev"].get(mon, 0) + v
+        log("shipping", "rev skus", len(out["rev"]), "accounts", len(out["acc"]),
+            "months", len(out["grp"].get("rev", {})))
+    except Exception as e:
+        out["err"] = str(e)[:200]; log("shipping fail", str(e)[:200])
+    return out
+
+
+# ---------------------------------------------------------------- SALARY DETAIL  (v6.3)
+# "who took what" -- every posting on the 31.01.01.* payroll accounts, not a monthly total.
+# The hard part: partner_id is EMPTY on these lines, so the payee does not exist as a field.
+# What does exist is the Arabic memo, which is written to a house convention:
+#     "<accountant who paid>: رواتب <department or branch> من الخزنه"
+#     "<accountant who paid>: فرق مرتب <person name> فرع <branch>"
+# So the payee/department has to be parsed out of the memo, and the branch cross-checked
+# against the analytic distribution. Both are emitted, and every raw line is shipped so
+# nothing is taken on trust -- the table on screen IS the ledger.
+SAL_STRIP = ["رواتب", "مرتبات", "فرق مرتب",
+             "فرق مرتبات", "مرتب", "من الخزنه",
+             "من الخزينه", "من الخزنة"]
+
+def _sal_who(memo):
+    """Strip the paying accountant's name and the boilerplate, leaving the thing that was paid for."""
+    s = str(memo or "").strip()
+    if ":" in s: s = s.split(":", 1)[1]
+    for w in SAL_STRIP: s = s.replace(w, " ")
+    s = " ".join(s.split())
+    return s[:60] or "(no description)"
+
+def pull_salaries():
+    """Every payroll posting since Aug-2024, line by line, with branch and payee resolved."""
+    out = {"acc": [], "br": [], "who": [], "rows": [], "mon": {}, "err": ""}
+    try:
+        acc = oexec("account.account", "search_read", [[["code", "=like", "31.01.01.%"]]],
+                    {"fields": ["code", "name"], "limit": 40})
+        amap = {a["id"]: str(a["name"]) for a in acc}
+        if not amap: raise RuntimeError("no 31.01.01.* accounts found")
+        lines = []
+        off = 0
+        while True:
+            page = oexec("account.move.line", "search_read",
+                         [[["account_id", "in", list(amap.keys())], ["parent_state", "=", "posted"],
+                           ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]]],
+                         {"fields": ["account_id", "balance", "date", "name", "analytic_distribution", "move_id"],
+                          "limit": 2000, "offset": off, "order": "date asc"})
+            lines += page
+            if len(page) < 2000: break
+            off += 2000
+            if off > 40000: break
+        accs = sorted(set(amap.values()))
+        ai = {n: i for i, n in enumerate(accs)}
+        brs = sorted(set(ANA_BR.values())) + ["HQ / unallocated"]
+        bi = {n: i for i, n in enumerate(brs)}
+        widx = {}
+        for l in lines:
+            memo = str(l.get("name") or "")
+            an = amap.get(l["account_id"][0], "?")
+            mon = str(l["date"])[:7]
+            # branch: analytic distribution first (it is structured data), memo keyword second
+            br = None
+            for aid, pct in (l.get("analytic_distribution") or {}).items():
+                b = ANA_BR.get(str(aid))
+                if b: br = b; break
+            if not br:
+                for kw, b in BRANCH_AR:
+                    if kw in memo: br = b; break
+            if not br: br = "HQ / unallocated"
+            who = _sal_who(memo)[:70]
+            # The payee label is interned. Arabic survives json as \uXXXX escapes at six
+            # bytes a character, so shipping 4,800 raw memos would have added ~900KB to a
+            # 290KB payload. One shared table of ~1,800 labels plus an index per row costs
+            # a fraction of that and loses nothing -- every line still names its payee.
+            if who not in widx:
+                widx[who] = len(out["who"]); out["who"].append(who)
+            amt = round(l.get("balance") or 0)
+            out["rows"].append([str(l["date"]), ai[an], bi[br], amt, widx[who]])
+            out["mon"].setdefault(mon, {})
+            out["mon"][mon][an] = out["mon"][mon].get(an, 0) + amt
+        out["acc"] = accs; out["br"] = brs
+        out["rows"].sort(key=lambda r: r[0])
+        log("salaries", len(out["rows"]), "lines", len(out["who"]), "payees", len(out["mon"]), "months")
+    except Exception as e:
+        out["err"] = str(e)[:200]; log("salaries fail", str(e)[:200])
+    return out
+
+
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
     win = drange(AD_START, END)
@@ -1246,6 +1411,10 @@ def build():
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
+    ship = safe(pull_shipping) or {}
+    if not ship.get("grp"): ship = prev.get("ship", ship)
+    sal = safe(pull_salaries) or {}
+    if not sal.get("rows"): sal = prev.get("sal", sal)
     _er = safe(pull_expenses)
     exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
     if not fin:
@@ -1290,7 +1459,7 @@ def build():
                             "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
-              "vend": vend, "prodv": prodv,
+              "vend": vend, "prodv": prodv, "ship": ship, "sal": sal,
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
