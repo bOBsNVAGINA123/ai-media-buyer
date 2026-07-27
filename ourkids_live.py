@@ -256,6 +256,32 @@ MCC_NC = {                        # "In-store New Customer - <Branch>"
 MCC_ALLNC = "1043047855247769"    # "In-store New Customers - All Branches"
 
 MBR = {}                          # branch -> "YYYY-MM" -> {v, p, nc}
+# v6.5: outputs that several pulls contribute to. vmon/pmon = vendor/product monthly [rev,gp];
+# dec = customer deciles per scope; lag = inter-order gap histograms; bunr = unregistered revenue;
+# mreach/treach = monthly deduplicated reach from Meta / TikTok.
+XTRA = {}
+
+def _decile(agg, ocnt):
+    """agg: pid -> [rev, gp, qty, negrev, first_d, last_d, gross_retail, disc]. ocnt: pid -> orders.
+    Returns 10 rows, D1 = top spenders by lifetime net revenue. Every number is a straight sum."""
+    pids = sorted(agg.keys(), key=lambda p: -agg[p][0])
+    n = len(pids)
+    if n < 50: return []
+    out = []
+    for i in range(10):
+        chunk = pids[n * i // 10: n * (i + 1) // 10]
+        r = g = q = neg = gr = dc = ls = 0.0; o = 0; rep2 = 0
+        for p in chunk:
+            a = agg[p]; r += a[0]; g += a[1]; q += a[2]; neg += a[3]; gr += a[6]; dc += a[7]
+            import datetime as _dt
+            ls += (_dt.date.fromisoformat(a[5]) - _dt.date.fromisoformat(a[4])).days
+            oc = ocnt.get(p, 0); o += oc
+            if oc >= 2: rep2 += 1
+        out.append({"c": len(chunk), "o": o, "r": round(r), "g": round(g), "q": round(q),
+                    "ng": round(neg), "gr": round(gr), "dc": round(dc),
+                    "rep": rep2, "ls": round(ls / len(chunk), 1) if chunk else 0})
+    return out
+
 
 def _cc(lst):
     """Pull every offsite_conversion.custom.<id> entry out of an actions or
@@ -341,6 +367,24 @@ def shopify_ql(ql):
         log("shopifyql fail:", str(sq.get("parseErrors") or d)[:200]); return None
     cols = [c["name"] for c in td.get("columns", [])]
     return [dict(zip(cols, r)) for r in td.get("rows", [])]
+
+def pull_meta_reach(win, tok):
+    """Monthly DEDUPLICATED reach per ad account, summed across accounts, + spend -> CPMR.
+    time_increment=monthly makes Meta dedup people inside each month; months cannot be summed."""
+    if not tok: return
+    MR = {}
+    for acct in meta_accounts(tok):
+        d = http_json(GRAPH + "/" + acct + "/insights?" + urllib.parse.urlencode(
+            {"level": "account", "fields": "reach,spend", "time_increment": "monthly",
+             "time_range": json.dumps({"since": win[0], "until": win[-1]}), "limit": 100, "access_token": tok}))
+        for row in (d.get("data") or []):
+            m = str(row.get("date_start", ""))[:7]
+            if not m: continue
+            e = MR.setdefault(m, {"r": 0, "s": 0.0})
+            e["r"] += int(float(row.get("reach") or 0)); e["s"] += float(row.get("spend") or 0)
+    for m in MR: MR[m]["s"] = round(MR[m]["s"])
+    if MR: XTRA["mreach"] = MR; log("meta reach months", len(MR))
+
 
 def pull_shopify(win):
     out = {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
@@ -435,6 +479,25 @@ def pull_tiktok(win):
         out["timp"][day] += float(m.get("impressions") or 0)
         out["tclk"][day] += float(m.get("clicks") or 0)
     log("tiktok days", sum(1 for v in out["tspend"].values() if v))
+    try:
+        TR = {}
+        months = sorted({d[:7] for d in win})
+        for mo in months:
+            a = mo + "-01"
+            nxt = (datetime.date.fromisoformat(a) + datetime.timedelta(days=35)).replace(day=1)
+            b = min(END, nxt - datetime.timedelta(days=1)).isoformat()
+            if a > END.isoformat(): continue
+            p2 = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_ADVERTISER",
+                  "dimensions": json.dumps(["advertiser_id"]), "metrics": json.dumps(["reach", "spend"]),
+                  "start_date": a, "end_date": b, "page_size": 10}
+            d2 = http_json("https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/?" + urllib.parse.urlencode(p2),
+                           None, {"Access-Token": tok})
+            for row in (((d2 or {}).get("data") or {}).get("list") or []):
+                m2 = row.get("metrics", {})
+                TR[mo] = {"r": int(float(m2.get("reach") or 0)), "s": round(float(m2.get("spend") or 0))}
+        if TR: XTRA["treach"] = TR; log("tiktok reach months", len(TR))
+    except Exception as e:
+        log("tiktok reach fail", str(e)[:120])
     return out
 
 
@@ -581,18 +644,26 @@ def pull_cohorts():
         for pid, f in first.items():
             m = f[:7]
             if m < "2024-08": continue
-            c = coh.setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0})
+            c = coh.setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "r90": 0.0, "r365": 0.0})
             c["size"] += 1
             f0 = datetime.date.fromisoformat(f)
             for d, amt, mg in by_p[pid]:
                 dd = (datetime.date.fromisoformat(d) - f0).days
                 if dd < 0: continue
                 if dd <= 30: c["g30"] += mg
-                if dd <= 90: c["g90"] += mg
+                if dd <= 90: c["g90"] += mg; c["r90"] += amt
                 if dd <= 180: c["g180"] += mg
-                if dd <= 365: c["g365"] += mg
+                if dd <= 365: c["g365"] += mg; c["r365"] += amt
         out = [{"m": m, "size": c["size"], "g30": round(c["g30"]), "g90": round(c["g90"]),
-                "g180": round(c["g180"]), "g365": round(c["g365"])} for m, c in sorted(coh.items())]
+                "g180": round(c["g180"]), "g365": round(c["g365"]),
+                "r90": round(c["r90"]), "r365": round(c["r365"])} for m, c in sorted(coh.items())]
+        lagH = [0] * 15
+        for pid, lst in by_p.items():
+            dl = sorted({d for d, _a, _m in lst})
+            for i in range(1, len(dl)):
+                gap = (datetime.date.fromisoformat(dl[i]) - datetime.date.fromisoformat(dl[i - 1])).days
+                lagH[min(gap // 10, 14)] += 1
+        XTRA.setdefault("lag", {})["shop"] = lagH
         nr = {}
         seen = set()
         for pid, d, amt, mg in sorted(orders, key=lambda o: (o[1], o[0])):
@@ -762,7 +833,7 @@ def pull_pos_customers():
             while off < 400000:
                 page = oexec("report.pos.order", "search_read",
                              [[["partner_id", "!=", False], ["date", ">=", q.isoformat()], ["date", "<", q2.isoformat()]]],
-                             {"fields": ["partner_id", "config_id", "date", "margin", "order_id", "product_tmpl_id"],
+                             {"fields": ["partner_id", "config_id", "date", "margin", "order_id", "product_tmpl_id", "price_total", "product_qty"],
                               "limit": 10000, "offset": off, "order": "id"})
                 if not page: break
                 for r in page:
@@ -775,12 +846,23 @@ def pull_pos_customers():
                     # very first row of the crawl raised NameError, which the outer except swallowed.
                     # That is why bun (unregistered receipts) never once reached data.js.
                     oid = (r.get("order_id") or [0])[0]
+                    rv = float(r.get("price_total") or 0); qy = float(r.get("product_qty") or 0)
+                    _tid = (r.get("product_tmpl_id") or [0])[0]
+                    _vn = TV.get(_tid, ("", "", ""))[0]
+                    _m7 = r["date"][:7]
+                    if _vn:
+                        _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
+                        _vm[0] += rv; _vm[1] += float(r.get("margin") or 0)
+                    if _tid:
+                        _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
+                        _pm[0] += rv; _pm[1] += float(r.get("margin") or 0)
                     if pid in ANON:
-                        bun.setdefault(br, {}).setdefault(r["date"][:7], set()).add(oid)
+                        bun.setdefault(br, {}).setdefault(_m7, set()).add(oid)
+                        _bv = XTRA.setdefault("bunr", {}).setdefault(br, {})
+                        _bv[_m7] = _bv.get(_m7, 0.0) + rv
                         continue
                     d10 = r["date"][:10]
-                    rows.append((pid, d10, br, float(r.get("margin") or 0), oid))
-                    _vn = TV.get((r.get("product_tmpl_id") or [0])[0], ("", "", ""))[0]
+                    rows.append((pid, d10, br, float(r.get("margin") or 0), oid, rv, qy))
                     if _vn:
                         VCS.setdefault(_vn, set()).add(pid)
                         _p0 = PFD.get(pid)
@@ -791,22 +873,30 @@ def pull_pos_customers():
             q = q2
         rows.sort(key=lambda x: (x[1], x[0]))
         first = {}; cnt = {}; ltg = {}; seenOrd = set()
-        for pid, d, br, mg, oid in rows:
+        for pid, d, br, mg, oid, rv, qy in rows:
             if pid not in first: first[pid] = (d, br)
             if oid and (pid, oid) not in seenOrd:
                 seenOrd.add((pid, oid)); cnt[pid] = cnt.get(pid, 0) + 1
             ltg[pid] = ltg.get(pid, 0.0) + mg
         ordNet = {}
-        for pid, d, br, mg, oid in rows:
+        for pid, d, br, mg, oid, rv, qy in rows:
             if oid: ordNet[(pid, oid)] = ordNet.get((pid, oid), 0.0) + mg
         newSeen = set(); ordSeen = set()
-        for pid, d, br, mg, oid in rows:
+        for pid, d, br, mg, oid, rv, qy in rows:
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
             isNew = pid not in newSeen and first[pid][0] == d and first[pid][1] == br
             if isNew: newSeen.add(pid); c["nc"] += 1
             newOrd = oid and (pid, oid, "b") not in ordSeen
             if newOrd: ordSeen.add((pid, oid, "b"))
+            # v6.5: revenue and order counts split by FIRST-DAY (a customer's whole first-day basket
+            # is new-customer money, not just its first line -- ng/rg kept as-is for continuity)
+            isFD = first[pid][0] == d and first[pid][1] == br
+            if isFD: c["nrev"] = c.get("nrev", 0) + round(rv)
+            else: c["rrev"] = c.get("rrev", 0) + round(rv)
+            if newOrd:
+                if isFD: c["nord"] = c.get("nord", 0) + 1
+                else: c["rord"] = c.get("rord", 0) + 1
             if isNew: c["ng"] += round(mg)
             else:
                 if newOrd:
@@ -815,20 +905,20 @@ def pull_pos_customers():
                 c["rg"] += round(mg)
         # branch cohorts: LTGP per customer acquired at each branch, by cohort month
         pm_ = {}
-        for pid, d, br, mg, oid in rows: pm_.setdefault(pid, []).append((d, mg))
+        for pid, d, br, mg, oid, rv, qy in rows: pm_.setdefault(pid, []).append((d, mg, rv))
         bcoh = {}
         for pid, (fd, fb) in first.items():
             m = fd[:7]
-            c2 = bcoh.setdefault(fb, {}).setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0})
+            c2 = bcoh.setdefault(fb, {}).setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "r90": 0.0, "r365": 0.0})
             c2["size"] += 1
             f0 = datetime.date.fromisoformat(fd)
-            for d, mg in pm_[pid]:
+            for d, mg, rv in pm_[pid]:
                 dd = (datetime.date.fromisoformat(d) - f0).days
                 if dd < 0: continue
                 if dd <= 30: c2["g30"] += mg
-                if dd <= 90: c2["g90"] += mg
+                if dd <= 90: c2["g90"] += mg; c2["r90"] += rv
                 if dd <= 180: c2["g180"] += mg
-                if dd <= 365: c2["g365"] += mg
+                if dd <= 365: c2["g365"] += mg; c2["r365"] += rv
         for b2 in bcoh:
             for m in bcoh[b2]: bcoh[b2][m] = {k: (round(v) if isinstance(v, float) else v) for k, v in bcoh[b2][m].items()}
         cntX = {}
@@ -863,6 +953,34 @@ def pull_pos_customers():
                              "rep": round(sum(1 for p2 in allp if cntX.get(p2, 0) >= 2) / len(allp) * 100, 1),
                              "opc": round(sum(cnt.values()) / len(allp), 2)}
         log("vendor customer economics", len(VC) - 1, "vendors >=25 customers")
+        # ---- v6.5 customer deciles, per branch and network, plus inter-order lag ----
+        DA = {}; DOC = {}; DSEEN = {}
+        for pid, d, br, mg, oid, rv, qy in rows:
+            for sc in (br, "ALL STORES"):
+                a = DA.setdefault(sc, {}).get(pid)
+                if a is None: a = DA[sc][pid] = [0.0, 0.0, 0.0, 0.0, d, d, 0.0, 0.0]
+                a[0] += rv; a[1] += mg; a[2] += qy
+                if rv < 0: a[3] += -rv
+                if d < a[4]: a[4] = d
+                if d > a[5]: a[5] = d
+                if oid and (pid, oid) not in DSEEN.setdefault(sc, set()):
+                    DSEEN[sc].add((pid, oid))
+                    _dsc = DOC.setdefault(sc, {})
+                    _dsc[pid] = _dsc.get(pid, 0) + 1
+        XTRA["dec"] = {sc: _decile(DA[sc], DOC.get(sc, {})) for sc in DA}
+        XTRA["posagg"] = {p: (a[0], a[1]) for p, a in DA.get("ALL STORES", {}).items()}
+        XTRA["vcs"] = VCS
+        pdates = {}
+        for pid, d, br, mg, oid, rv, qy in rows:
+            if oid: pdates.setdefault(pid, set()).add(d)
+        lagH = [0] * 15
+        for pid, ds in pdates.items():
+            dl = sorted(ds)
+            for i in range(1, len(dl)):
+                gap = (datetime.date.fromisoformat(dl[i]) - datetime.date.fromisoformat(dl[i - 1])).days
+                lagH[min(gap // 10, 14)] += 1
+        XTRA.setdefault("lag", {})["pos"] = lagH
+        log("deciles", {sc: len(v) for sc, v in XTRA["dec"].items()}, "lag gaps", sum(lagH))
         bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
         log("pos customers", len(first), "branches", list(bstat.keys()),
             "unregistered receipts", sum(sum(v.values()) for v in bun.values()))
@@ -870,6 +988,66 @@ def pull_pos_customers():
     except Exception as e:
         log("pos customers fail", str(e)[:160])
     return bnr, bstat, {}, {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
+
+
+def pull_shop_lines():
+    """Shopify customer deciles at line level from sale.report: net revenue (untaxed, after
+    discount), margin, units, and the discount actually given -- so AUR, UPT, DR%% and gross
+    retail are real sums, not allocations. Also feeds vendor/product monthly for the online side."""
+    TV = tmpl_vendor_map()
+    agg = {}; oc = {}; oseen = set()
+    off = 0
+    while off < 900000:
+        page = oexec("sale.report", "search_read",
+                     [[["team_id.name", "=", "Shopify"], ["date", ">=", "2024-08-01"],
+                       ["state", "not in", ["draft", "sent", "cancel"]], ["partner_id", "!=", False]]],
+                     {"fields": ["partner_id", "date", "price_subtotal", "margin", "product_uom_qty",
+                                 "discount", "order_reference", "product_tmpl_id"],
+                      "limit": 10000, "offset": off, "order": "id"})
+        if not page: break
+        for r in page:
+            pid = r["partner_id"][0]; d = str(r["date"])[:10]
+            rv = float(r.get("price_subtotal") or 0); mg = float(r.get("margin") or 0)
+            qy = float(r.get("product_uom_qty") or 0); dc = float(r.get("discount") or 0)
+            gr = rv / (1 - dc / 100.0) if 0 < dc < 100 else rv
+            _tid = (r.get("product_tmpl_id") or [0])[0]
+            _vn = TV.get(_tid, ("", "", ""))[0]
+            _m7 = d[:7]
+            if _vn:
+                _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
+                _vm[0] += rv; _vm[1] += mg
+            if _tid:
+                _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
+                _pm[0] += rv; _pm[1] += mg
+            a = agg.get(pid)
+            if a is None: a = agg[pid] = [0.0, 0.0, 0.0, 0.0, d, d, 0.0, 0.0]
+            a[0] += rv; a[1] += mg; a[2] += qy
+            if rv < 0: a[3] += -rv
+            if d < a[4]: a[4] = d
+            if d > a[5]: a[5] = d
+            a[6] += gr; a[7] += gr - rv
+            ref = r.get("order_reference") or 0  # reference field -> 'sale.order,<id>' STRING
+            if ref and (pid, ref) not in oseen:
+                oseen.add((pid, ref)); oc[pid] = oc.get(pid, 0) + 1
+        off += len(page)
+        if len(page) < 10000: break
+    XTRA.setdefault("dec", {})["Shopify"] = _decile(agg, oc)
+    log("shopify decile customers", len(agg), "orders", len(oseen))
+    # ---- v6.5 online->offline crossover: the same partner_id on both sides ----
+    pa = XTRA.get("posagg") or {}
+    if pa:
+        inter = set(pa) & set(agg)
+        posr = sum(pa[p][0] for p in inter); posg = sum(pa[p][1] for p in inter)
+        shr = sum(agg[p][0] for p in inter); shg = sum(agg[p][1] for p in inter)
+        vx = []
+        for v, pids in (XTRA.get("vcs") or {}).items():
+            n2 = len(pids & inter)
+            if n2 >= 25: vx.append((v, n2))
+        vx.sort(key=lambda x: -x[1])
+        XTRA["xchan"] = {"cust": len(inter), "shopOnly": len(set(agg) - inter), "posOnly": len(set(pa) - inter),
+                         "posrev": round(posr), "posgp": round(posg), "shoprev": round(shr), "shopgp": round(shg),
+                         "vend": [[v, n2] for v, n2 in vx[:20]]}
+        log("xchan customers", len(inter), "of", len(agg), "online")
 
 def pull_meta_ads(tok):
     """Top ads last 30d with website + omni value and viewable thumbnails."""
@@ -1189,7 +1367,7 @@ def pull_vendors():
     rows.sort(key=lambda x: -(x["r"] + x["orev"]))
     rows = rows[:160]
     prows = sorted(tmpl.values(), key=lambda x: -(x["r"] + x["orev"]))[:200]
-    prods = [{"n": (p["n"] or str(p["t"]))[:52], "v": p["v"], "vn": NM.get(p["v"], p["v"])[:36],
+    prods = [{"n": (p["n"] or str(p["t"]))[:52], "t": p["t"], "v": p["v"], "vn": NM.get(p["v"], p["v"])[:36],
               "cat": p["cat"][:34], "ct": p["ct"],
               "r": round(p["r"]), "g": round(p["g"]), "q": round(p["q"]),
               "orev": round(p["orev"]), "ogp": round(p["ogp"])} for p in prows]
@@ -1385,6 +1563,7 @@ def build():
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
+    safe(pull_meta_reach, win, os.environ.get("META_ACCESS_TOKEN", "").strip())
     _ch = safe(pull_cohorts) or {"coh": [], "nr": {}}
     coh, nrm = _ch.get("coh", []), _ch.get("nr", {})
     pos = safe(pull_pos_branches) or {}
@@ -1407,6 +1586,33 @@ def build():
         if not vend.get("rows"): vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
     else:
         vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
+    if heavy:
+        safe(pull_shop_lines)
+    # v6.5 -- deciles / lag / unregistered revenue / vendor+product monthly, with carry-forward
+    dec = XTRA.get("dec") or prev.get("dec", {})
+    lag = XTRA.get("lag") or prev.get("lag", {})
+    bunr = {b: {m: round(v) for m, v in ms.items()} for b, ms in XTRA.get("bunr", {}).items()} or prev.get("bunr", {})
+    mreach = XTRA.get("mreach") or prev.get("reach", {})
+    xchan = XTRA.get("xchan") or prev.get("xchan", {})
+    treach = XTRA.get("treach") or prev.get("treach", {})
+    vmon = XTRA.get("vmon", {})
+    if vmon and vend.get("rows"):
+        for vr in vend["rows"]:
+            mm = vmon.get(vr["v"])
+            if mm: vr["mon"] = {m: [round(x[0]), round(x[1])] for m, x in mm.items()}
+    elif vend.get("rows") and prev.get("vend", {}).get("rows"):
+        pv = {r["v"]: r.get("mon") for r in prev["vend"]["rows"] if r.get("mon")}
+        for vr in vend["rows"]:
+            if vr["v"] in pv: vr["mon"] = pv[vr["v"]]
+    pmon = XTRA.get("pmon", {})
+    if pmon and prodv.get("rows"):
+        for pr in prodv["rows"]:
+            mm = pmon.get(pr.get("t"))
+            if mm: pr["mon"] = {m: [round(x[0]), round(x[1])] for m, x in mm.items()}
+    elif prodv.get("rows") and prev.get("prodv", {}).get("rows"):
+        pv = {r["n"]: r.get("mon") for r in prev["prodv"]["rows"] if r.get("mon")}
+        for pr in prodv["rows"]:
+            if pr["n"] in pv: pr["mon"] = pv[pr["n"]]
     mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
@@ -1460,6 +1666,7 @@ def build():
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
               "vend": vend, "prodv": prodv, "ship": ship, "sal": sal,
+              "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
