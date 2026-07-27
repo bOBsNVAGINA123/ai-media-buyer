@@ -29,7 +29,12 @@ def drange(a, b):
     while d <= b:
         out.append(d.isoformat()); d += datetime.timedelta(days=1)
     return out
-def log(*a): sys.stderr.write("[ourkids] " + " ".join(str(x) for x in a) + "\n")
+LOGBUF = []
+def log(*a):
+    line = "[ourkids] " + " ".join(str(x) for x in a)
+    LOGBUF.append(line)
+    if len(LOGBUF) > 400: del LOGBUF[:len(LOGBUF) - 400]
+    sys.stderr.write(line + "\n")
 
 def http_json(url, data=None, headers=None, tries=5, timeout=90):
     hd = {"Content-Type": "application/json"}; hd.update(headers or {})
@@ -1244,7 +1249,10 @@ def build():
     _er = safe(pull_expenses)
     exp, rentB = _er if isinstance(_er, tuple) else ({}, {})
     if not fin:
-        log("FATAL: Odoo failed; keeping previous data.js"); return
+        # Odoo is the spine -- without it there are no actuals to write. Raise rather than
+        # return quietly: main() will stamp the reason into data.js and status.json so the
+        # failure is visible in the repo instead of looking like a run that did nothing.
+        raise RuntimeError("Odoo pull returned nothing (pull_odoo failed) -- previous data.js kept")
     merge_fallback(win, shop, goog, tik, meta)
     def arr(dct, k, dec=0):
         m = dct.get(k, {}) if dct else {}
@@ -1298,5 +1306,80 @@ def build():
 
 OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental (modeled)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
+def _dataface():
+    """What is actually sitting in data.js right now, so status.json can report it
+       without anyone having to open the file."""
+    try:
+        t = open(os.path.join(DOCS, "data.js"), encoding="utf-8").read()
+        o = json.loads(t[t.index("window.O=") + 9: t.index(";\nwindow.F=")])
+        return {"bytes": len(t), "lastSync": o.get("lastSync"), "windowEnd": (o.get("aw") or [None, None])[1],
+                "partial": o.get("partial"), "today": o.get("today")}
+    except Exception as e:
+        return {"bytes": 0, "error": str(e)[:200]}
+
+
+def _flag_stale(msg):
+    """The run could not refresh the numbers. Do NOT touch lastSync -- that would be a lie.
+       Stamp the attempt and the reason INTO data.js instead, so the dashboard can say
+       'these numbers are from Saturday and here is why' rather than silently serving
+       two-day-old figures under a clock that looks like today."""
+    try:
+        fp = os.path.join(DOCS, "data.js")
+        t = open(fp, encoding="utf-8").read()
+        i = t.index("window.O=") + 9; j = t.index(";\nwindow.F=")
+        o = json.loads(t[i:j])
+        o["syncError"] = str(msg)[:300]
+        o["lastAttempt"] = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
+        open(fp, "w", encoding="utf-8").write("window.O=" + json.dumps(o, separators=(",", ":"), ensure_ascii=True) + t[j:])
+        log("stale flag written into data.js:", str(msg)[:120])
+    except Exception as e:
+        log("could not write stale flag", str(e)[:120])
+
+
+def main():
+    """Never exit non-zero and never exit silently.
+
+       The workflow used to run `python ourkids_live.py` bare. Any uncaught exception
+       killed the job, the commit step never ran, and the dashboard carried on serving
+       whatever data.js was last committed -- under a clock reading only "5:29 PM", which
+       looks like today. Two days of that went unnoticed. So: every run, success or
+       failure, writes docs/ourkids/status.json and exits 0. The commit step then always
+       has something to push, and the repo itself becomes the run log."""
+    t0 = datetime.datetime.now(datetime.timezone.utc)
+    ok, err = True, ""
+    try:
+        build()
+    except Exception as e:
+        ok = False
+        err = "%s: %s" % (type(e).__name__, e)
+        log("BUILD FAILED", err[:300])
+        try:
+            import traceback
+            for ln in traceback.format_exc().strip().split("\n")[-12:]: log("  " + ln)
+        except Exception: pass
+        _flag_stale(err)
+    t1 = datetime.datetime.now(datetime.timezone.utc)
+    face = _dataface()
+    fresh = False
+    try:
+        we = face.get("windowEnd")
+        fresh = bool(we) and (today - datetime.date.fromisoformat(we)).days <= 1
+    except Exception: pass
+    st = {"ok": ok, "error": err[:300], "fresh": fresh,
+          "startedUtc": t0.strftime("%Y-%m-%d %H:%M:%S UTC"),
+          "finishedUtc": t1.strftime("%Y-%m-%d %H:%M:%S UTC"),
+          "seconds": int((t1 - t0).total_seconds()),
+          "runner": os.environ.get("GITHUB_RUN_ID", "local"),
+          "attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "-"),
+          "todayCairo": today.isoformat(),
+          "data": face, "log": LOGBUF[-60:]}
+    try:
+        open(os.path.join(DOCS, "status.json"), "w", encoding="utf-8").write(json.dumps(st, indent=1))
+        log("WROTE status.json  ok=%s fresh=%s %ss" % (ok, fresh, st["seconds"]))
+    except Exception as e:
+        log("could not write status.json", str(e)[:120])
+    sys.exit(0)
+
+
 if __name__ == "__main__":
-    build()
+    main()
