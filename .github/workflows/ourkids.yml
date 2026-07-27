@@ -2,9 +2,27 @@ name: OurKids Live Dashboard
 
 # Runs on GitHub's servers. Laptop off, nobody online. Rebuilds docs/ourkids/data.js
 # from the live APIs and commits it, so GitHub Pages always serves fresh numbers.
+#
+# v6.2.1 -- hardened after two days of silent failure (25 Jul -> 27 Jul 2026).
+# What went wrong and what stops it recurring:
+#   * cron sat on minute :00, the busiest minute on GitHub's shared scheduler, where
+#     scheduled jobs get DROPPED rather than delayed  -> moved to :23
+#   * the commit step had no `if: always()`, so a crashed build never committed and
+#     looked identical to a run that never happened   -> commit is now always()
+#   * nothing was ever written when a run failed, so the dashboard kept serving old
+#     numbers with no visible reason                   -> status.json every run
+#   * no timeout, so one stuck run could hold the concurrency group for 6h and eat
+#     the next two schedules                           -> timeout-minutes: 50
+#   * no push trigger, so shipping a new collector meant waiting up to 3h to find
+#     out whether it even runs                         -> push trigger on the code
 on:
   schedule:
-    - cron: "0 */3 * * *"      # every 3 hours, off the :00 rush would throttle; GitHub is UTC
+    - cron: "23 */3 * * *"     # every 3 hours at :23 -- off the :00 rush, which GitHub drops. UTC.
+  push:
+    branches: [main]
+    paths:
+      - "ourkids_live.py"
+      - ".github/workflows/ourkids.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -17,12 +35,15 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Build the dashboard data
+        id: build
         env:
           ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
           ODOO_DB:      ${{ secrets.ODOO_DB }}
@@ -42,10 +63,96 @@ jobs:
           TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
         run: python ourkids_live.py
+
+      # The collector exits 0 even on failure (it writes the reason into status.json),
+      # so this only fires on something the collector could not catch at all -- an
+      # interpreter crash, a runner OOM, a network stall killed by the timeout.
+      # One patient retry costs a minute and rescues most transient API blips.
+      - name: Retry once if the build failed
+        if: failure()
+        env:
+          ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:      ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:   ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY:  ${{ secrets.ODOO_APIKEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACCOUNT_ID:   ${{ secrets.META_ACCOUNT_ID }}
+          SHOPIFY_STORE:     ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:     ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:  ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
+          GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
+          GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
+          TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+        run: |
+          echo "first attempt failed; sleeping 60s and trying once more"
+          sleep 60
+          python ourkids_live.py
+
+      # ALWAYS commit. Even a failed run has something to say: status.json carries
+      # ok=false, the exception, and the last 60 log lines, and data.js carries a
+      # syncError + lastAttempt stamp. That turns the repo itself into the run log,
+      # readable with one fetch, without opening the Actions tab.
       - name: Commit fresh data
+        if: always()
         run: |
           git config user.name "ourkids-dashboard"
           git config user.email "bot@users.noreply.github.com"
-          git add docs/ourkids/data.js docs/ourkids/index.html || true
-          git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
-          git push || echo "nothing to push"
+          git add docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/index.html || true
+          git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || { echo "no changes to commit"; exit 0; }
+          for i in 1 2 3; do
+            if git push; then echo "pushed on attempt $i"; exit 0; fi
+            echo "push $i failed -- rebasing on origin/main and retrying"
+            git pull --rebase --autostash origin main || true
+            sleep 5
+          done
+          echo "push failed three times"
+          exit 1
+
+      # Prints the outcome on the run's summary page, so "is it healthy?" is answered
+      # by looking, not by reading logs.
+      - name: Report
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          p = "docs/ourkids/status.json"
+          print("## OurKids sync")
+          if not os.path.exists(p):
+              print("")
+              print("**status.json was never written** -- the collector died before it could report.")
+              print("That means an interpreter-level crash, not an API failure.")
+              raise SystemExit(0)
+          s = json.load(open(p))
+          d = s.get("data") or {}
+          print("")
+          print("| | |")
+          print("|---|---|")
+          print("| ok | %s |" % s.get("ok"))
+          print("| fresh | %s |" % s.get("fresh"))
+          print("| seconds | %s |" % s.get("seconds"))
+          print("| data.js bytes | %s |" % d.get("bytes"))
+          print("| lastSync | %s |" % d.get("lastSync"))
+          print("| window end | %s |" % d.get("windowEnd"))
+          print("| today (Cairo) | %s |" % s.get("todayCairo"))
+          if s.get("error"):
+              print("")
+              print("### Error")
+              print("```")
+              print(s["error"])
+              print("```")
+          log = s.get("log") or []
+          if log:
+              print("")
+              print("<details><summary>last %d log lines</summary>" % len(log))
+              print("")
+              print("```")
+              for ln in log: print(ln)
+              print("```")
+              print("")
+              print("</details>")
+          PY
