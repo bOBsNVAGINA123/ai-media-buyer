@@ -1503,6 +1503,153 @@ def pull_shipping():
     return out
 
 
+# ---------------------------------------------------------------- SHIPPING OUTCOMES  (v7.6)
+# The question this answers: what does the free-delivery promise actually cost, month by
+# month, against what customers actually pay for delivery -- and how do cancelled, returned
+# and delivered orders sit inside that.
+#
+# Two facts had to be dug out of the ledger before any of this was true:
+#
+#  1. BOSTA COST LIVES IN TWO ACCOUNTS, NOT ONE. From Jan 2026 it is posted to
+#     31.01.08.34.00 "Bosta collection fees". BEFORE Jan 2026 the identical postings were
+#     coded to 31.01.08.17.00 "Credit Card Expenses" -- 3.5m EGP of courier cost sitting in
+#     an account named after card fees. They are identifiable because accounting writes the
+#     memo in Arabic as "عموله بوسطه عن تحصيله <date>". Taking only the memo-matched lines
+#     out of .17 and adding them to .34 gives one continuous cost series from Aug 2024.
+#     Without this the dashboard showed ZERO courier cost for the first 17 months.
+#
+#  2. "EARNED SHIPPING DISCOUNT" (32.00.00.18.00) IS NOT A REBATE. It is the ledger side of
+#     the same delivery money the customer already paid on the shipping SKU -- the two
+#     series track within 3% every single month. The old card added it as a separate gain,
+#     which double-counted every pound of shipping revenue. It is kept here only as a
+#     cross-check (colAcc) and is never added to anything.
+#
+# Order outcomes come from sale.order on the four online teams:
+#     cancelled  = state cancel            -- never shipped, costs nothing
+#     returned   = state sale/done AND is_return_total  -- shipped and came back
+#     kept       = state sale/done AND NOT is_return_total
+# CAVEAT CARRIED IN THE DATA: before Jun 2025 the house convention booked a return as a
+# cancellation, so "returned" reads ~0 until then. retFrom marks where the flag became real.
+SHIP2_TEAMS = ["Shopify", "Noon", "Amazon", "Homzmart"]
+SHIP2_MEMO = "\u0628\u0648\u0633\u0637\u0647"   # "Bosta" as accounting spells it in the memo.
+# Returns booked as cancellations before this month (house convention change).
+SHIP2_RETFROM = "2025-06"
+# Matched on the courier name ALONE, not on the full phrase: the phrasing of the memo drifted
+# over time ("عموله بوسطه عن تحصيله" vs other wordings), and a two-word pattern silently
+# dropped Feb 2025 entirely -- 83,876 EGP of real cost reported as zero. The single word is
+# safe here because it is only ever applied inside 31.01.08.17.00, where every memo-matched
+# line reconciles to the Bosta settlement batches.
+_MONNAME = {m: i + 1 for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June",
+     "July", "August", "September", "October", "November", "December"])}
+
+def _monkey(v):
+    """Odoo read_group returns 'March 2026'; we want '2026-03'."""
+    try:
+        a, b = str(v).split()
+        return "%s-%02d" % (b, _MONNAME[a])
+    except Exception:
+        return None
+
+def pull_ship2():
+    out = {"m": [], "conf": [], "kept": [], "ret": [], "canc": [],
+           "keptV": [], "retV": [], "cancV": [], "paidN": [], "freeN": [],
+           "col": [], "colAcc": [], "cost": [], "costN": [],
+           "start": "2024-08", "retFrom": "2025-06", "err": ""}
+    try:
+        m0 = datetime.date(2024, 8, 1)
+        mons = []
+        while m0 <= END:
+            mons.append(m0.strftime("%Y-%m"))
+            m0 = (m0.replace(day=28) + datetime.timedelta(days=6)).replace(day=1)
+        idx = {m: i for i, m in enumerate(mons)}
+        Z = lambda: [0] * len(mons)
+        kept, ret, canc = Z(), Z(), Z()
+        keptV, retV, cancV = Z(), Z(), Z()
+        paidN, col, colAcc, cost, costN = Z(), Z(), Z(), Z(), Z()
+
+        # ---- order outcomes: ONE call, grouped three ways at once
+        g = oexec("sale.order", "read_group",
+                  [[["team_id.name", "in", SHIP2_TEAMS],
+                    ["date_order", ">=", "2024-08-01 00:00:00"]],
+                   ["amount_total"], ["date_order:month", "state", "is_return_total"]],
+                  {"lazy": False})
+        for r in g:
+            mo = _monkey(r.get("date_order:month"))
+            if mo not in idx: continue
+            i = idx[mo]; n = int(r.get("__count") or 0); v = round(r.get("amount_total") or 0)
+            st = r.get("state")
+            if st == "cancel":
+                canc[i] += n; cancV[i] += v
+            elif st in ("sale", "done"):
+                if r.get("is_return_total"): ret[i] += n; retV[i] += v
+                else: kept[i] += n; keptV[i] += v
+
+        # ---- what the customer actually paid us for delivery, per month
+        prods = oexec("product.product", "search_read",
+                      [["|", ["default_code", "=", "shopifyshippingproduct"],
+                             ["name", "in", ["Bosta Delivery", "POS SHIPPING"]]]],
+                      {"fields": ["name"], "limit": 50})
+        pids = [p["id"] for p in prods]
+        if pids:
+            d0 = datetime.date(2024, 8, 1)
+            while d0 <= END:
+                nx = (d0.replace(day=28) + datetime.timedelta(days=6)).replace(day=1)
+                mo = d0.strftime("%Y-%m")
+                rg = ogroup("sale.order.line",
+                            [["order_id.state", "in", ["sale", "done"]],
+                             ["order_id.team_id.name", "in", SHIP2_TEAMS],
+                             ["product_id", "in", pids], ["price_subtotal", ">", 0],
+                             ["order_id.date_order", ">=", d0.isoformat() + " 00:00:00"],
+                             ["order_id.date_order", "<", nx.isoformat() + " 00:00:00"]],
+                            ["price_subtotal"], [])
+                if rg and mo in idx:
+                    paidN[idx[mo]] = int(rg[0].get("__count") or 0)
+                    col[idx[mo]] = round(rg[0].get("price_subtotal") or 0)
+                d0 = nx
+
+        # ---- ledger cross-check on collected (never added, only compared)
+        a18 = oexec("account.account", "search_read", [[["code", "=", "32.00.00.18.00"]]],
+                    {"fields": ["id"], "limit": 1})
+        if a18:
+            for r in oexec("account.move.line", "read_group",
+                           [[["account_id", "=", a18[0]["id"]], ["parent_state", "=", "posted"],
+                             ["date", ">=", "2024-08-01"]], ["balance"], ["date:month"]],
+                           {"lazy": False}):
+                mo = _monkey(r.get("date:month"))
+                if mo in idx: colAcc[idx[mo]] = -round(r.get("balance") or 0)
+
+        # ---- the real courier bill: account .34 in full, plus the memo-matched lines in .17
+        acc = oexec("account.account", "search_read",
+                    [[["code", "in", ["31.01.08.34.00", "31.01.08.17.00"]]]],
+                    {"fields": ["code"], "limit": 5})
+        amap = {a["id"]: a["code"] for a in acc}
+        for aid, code in amap.items():
+            dom = [["account_id", "=", aid], ["parent_state", "=", "posted"],
+                   ["date", ">=", "2024-08-01"]]
+            if code == "31.01.08.17.00":
+                dom.append(["name", "ilike", SHIP2_MEMO])
+            for r in oexec("account.move.line", "read_group",
+                           [dom, ["debit"], ["date:month"]], {"lazy": False}):
+                mo = _monkey(r.get("date:month"))
+                if mo in idx:
+                    cost[idx[mo]] += round(r.get("debit") or 0)
+                    costN[idx[mo]] += int(r.get("__count") or 0)
+
+        conf = [kept[i] + ret[i] for i in range(len(mons))]
+        freeN = [max(conf[i] - paidN[i], 0) for i in range(len(mons))]
+        out.update({"m": mons, "conf": conf, "kept": kept, "ret": ret, "canc": canc,
+                    "keptV": keptV, "retV": retV, "cancV": cancV,
+                    "paidN": paidN, "freeN": freeN, "col": col, "colAcc": colAcc,
+                    "cost": cost, "costN": costN,
+                    "lagM": mons[-1] if mons else "", "retFrom": SHIP2_RETFROM})
+        log("ship2", len(mons), "months, collected", sum(col), "cost", sum(cost),
+            "net", sum(col) - sum(cost))
+    except Exception as e:
+        out["err"] = str(e)[:200]; log("ship2 fail", str(e)[:200])
+    return out
+
+
 # ---------------------------------------------------------------- SALARY DETAIL  (v6.3)
 # "who took what" -- every posting on the 31.01.01.* payroll accounts, not a monthly total.
 # The hard part: partner_id is EMPTY on these lines, so the payee does not exist as a field.
@@ -1678,6 +1825,8 @@ def build():
     bcost = safe(pull_branch_costs) or {}
     ship = safe(pull_shipping) or {}
     if not ship.get("grp"): ship = prev.get("ship", ship)
+    ship2 = safe(pull_ship2) or {}
+    if not ship2.get("m"): ship2 = prev.get("ship2", ship2)
     sal = safe(pull_salaries) or {}
     if not sal.get("rows"): sal = prev.get("sal", sal)
     _er = safe(pull_expenses)
@@ -1739,7 +1888,7 @@ def build():
                             "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
-              "vend": vend, "prodv": prodv, "ship": ship, "sal": sal, "vinv": vinv,
+              "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
