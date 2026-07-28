@@ -261,12 +261,51 @@ MBR = {}                          # branch -> "YYYY-MM" -> {v, p, nc}
 # mreach/treach = monthly deduplicated reach from Meta / TikTok.
 XTRA = {}
 
-def _decile(agg, ocnt):
+def _attr_profile(chunk, attrs, base, baseTot, kind, topn=6):
+    """Revenue share of each attribute inside this decile, plus how far it over-indexes
+    against the whole base (100 = exactly average, 180 = 80% more of their money there)."""
+    cur = {}
+    for p in chunk:
+        a2 = attrs.get(p)
+        if not a2: continue
+        for k, v in (a2.get(kind) or {}).items():
+            if v > 0: cur[k] = cur.get(k, 0.0) + v
+    tot = sum(cur.values())
+    if tot <= 0: return []
+    rows = []
+    for k, v in cur.items():
+        sh = v / tot * 100.0
+        bs = (base[kind].get(k, 0.0) / baseTot[kind] * 100.0) if baseTot[kind] else 0.0
+        if sh < 1.0 and (not bs or sh / bs < 1.5): continue
+        rows.append([k, round(sh, 1), (round(sh / bs * 100) if bs else 999), round(v)])
+    rows.sort(key=lambda x: -x[3])
+    return [r[:3] for r in rows[:topn]]
+
+
+def _catname(c):
+    """Odoo categ_id display name 'All / Kids / Shoes' -> 'Shoes'."""
+    c = str(c or "").strip()
+    if not c or c.lower() == "all": return ""
+    p = [x.strip() for x in c.split("/") if x.strip() and x.strip().lower() != "all"]
+    return p[-1] if p else ""
+
+
+def _decile(agg, ocnt, attrs=None):
     """agg: pid -> [rev, gp, qty, negrev, first_d, last_d, gross_retail, disc]. ocnt: pid -> orders.
-    Returns 10 rows, D1 = top spenders by lifetime net revenue. Every number is a straight sum."""
+    attrs: pid -> {"cat": {name: rev}, "ven": {name: rev}} -- optional, powers the per-decile
+    "these people buy X" profile. Returns 10 rows, D1 = top spenders by lifetime net revenue."""
     pids = sorted(agg.keys(), key=lambda p: -agg[p][0])
     n = len(pids)
     if n < 50: return []
+    base = {"cat": {}, "ven": {}}
+    if attrs:
+        for p in pids:
+            a2 = attrs.get(p)
+            if not a2: continue
+            for kind in ("cat", "ven"):
+                for k, v in (a2.get(kind) or {}).items():
+                    if v > 0: base[kind][k] = base[kind].get(k, 0.0) + v
+    baseTot = {kind: sum(base[kind].values()) for kind in base}
     out = []
     for i in range(10):
         chunk = pids[n * i // 10: n * (i + 1) // 10]
@@ -277,9 +316,13 @@ def _decile(agg, ocnt):
             ls += (_dt.date.fromisoformat(a[5]) - _dt.date.fromisoformat(a[4])).days
             oc = ocnt.get(p, 0); o += oc
             if oc >= 2: rep2 += 1
-        out.append({"c": len(chunk), "o": o, "r": round(r), "g": round(g), "q": round(q),
-                    "ng": round(neg), "gr": round(gr), "dc": round(dc),
-                    "rep": rep2, "ls": round(ls / len(chunk), 1) if chunk else 0})
+        row = {"c": len(chunk), "o": o, "r": round(r), "g": round(g), "q": round(q),
+               "ng": round(neg), "gr": round(gr), "dc": round(dc),
+               "rep": rep2, "ls": round(ls / len(chunk), 1) if chunk else 0}
+        if attrs and baseTot["cat"]:
+            row["ct"] = _attr_profile(chunk, attrs, base, baseTot, "cat")
+            row["vn"] = _attr_profile(chunk, attrs, base, baseTot, "ven")
+        out.append(row)
     return out
 
 
@@ -352,24 +395,42 @@ def pull_meta(win):
         "| branches", len(MBR))
     return ad
 
-def shopify_ql(ql):
+def shopify_ql(ql, tag="ql"):
+    """v7.6: never fail silently. Tries the pinned API version first, then a fallback
+    ladder -- a stale SHOPIFY_API_VERSION secret used to zero the whole funnel with one
+    unexplained log line. Logs version, row count and column names for every attempt."""
     store = os.environ.get("SHOPIFY_STORE", "").strip()
     tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
-    ver = os.environ.get("SHOPIFY_API_VERSION", "2025-07").strip()
-    if not store or not tok: return None
+    if not store or not tok:
+        log("shopifyql", tag, "SKIPPED - SHOPIFY_STORE/SHOPIFY_TOKEN missing from the run env")
+        return None
     host = store if ".myshopify.com" in store else store + ".myshopify.com"
-    # v7.1: shopifyqlQuery now returns ShopifyqlQueryResponse (a plain object) -- the old
-    # "... on TableResponse" union fragment was removed by Shopify and threw "No such type
-    # TableResponse", zeroing every sessions/funnel day. Read the fields directly instead.
+    envv = os.environ.get("SHOPIFY_API_VERSION", "").strip()
+    vers, seen = [], set()
+    for v in [envv, "2025-07", "2025-04", "2025-01", "2024-10"]:
+        if v and v not in seen: seen.add(v); vers.append(v)
+    # v7.1: shopifyqlQuery returns ShopifyqlQueryResponse (a plain object) -- the old
+    # "... on TableResponse" union fragment was removed by Shopify. Read fields directly.
     q = 'query($ql:String!){ shopifyqlQuery(query:$ql){ parseErrors tableData{ columns{ name } rows } } }'
-    d = http_json("https://%s/admin/api/%s/graphql.json" % (host, ver),
-                  {"query": q, "variables": {"ql": ql}}, {"X-Shopify-Access-Token": tok})
-    sq = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {})
-    td = sq.get("tableData")
-    if not td:
-        log("shopifyql fail:", str(sq.get("parseErrors") or d)[:200]); return None
-    cols = [c["name"] for c in td.get("columns", [])]
-    return [dict(zip(cols, r)) for r in td.get("rows", [])]
+    last = ""
+    for ver in vers:
+        d = http_json("https://%s/admin/api/%s/graphql.json" % (host, ver),
+                      {"query": q, "variables": {"ql": ql}}, {"X-Shopify-Access-Token": tok})
+        sq = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {})
+        td = sq.get("tableData")
+        if not td:
+            last = str(sq.get("parseErrors") or (d or {}).get("errors") or d)[:200]
+            log("shopifyql", tag, "v" + ver, "no tableData ::", last)
+            continue
+        cols = [c["name"] for c in td.get("columns", [])]
+        rows = td.get("rows", []) or []
+        log("shopifyql", tag, "v" + ver, "rows", len(rows), "cols", ",".join(cols))
+        if not rows:
+            last = "tableData returned 0 rows on v" + ver
+            continue
+        return [dict(zip(cols, r)) for r in rows]
+    log("shopifyql fail:", tag, "::", last)
+    return None
 
 def pull_meta_reach(win, tok):
     """Monthly DEDUPLICATED reach per ad account, summed across accounts, + spend -> CPMR.
@@ -393,7 +454,11 @@ def pull_shopify(win):
     out = {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     rows = shopify_ql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
                       "sessions_that_reached_checkout, sessions_that_completed_checkout "
-                      "TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1))
+                      "TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1), "sessions")
+    if not rows:
+        rows = shopify_ql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
+                          "sessions_that_reached_checkout, sessions_that_completed_checkout "
+                          "TIMESERIES day SINCE -90d UNTIL today", "sessions90")
     for r in (rows or []):
         day = str(r.get("day"))[:10]
         if day not in out["sessions"]: continue
@@ -404,17 +469,24 @@ def pull_shopify(win):
             out["atcRatio"][day] = round(atc / s * 100, 2)
             out["checkoutRatio"][day] = round(chk / s * 100, 2)
             out["cvr"][day] = round(comp / s * 100, 2)
-    nr = shopify_ql("FROM orders SHOW orders, total_sales GROUP BY customer_type TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1))
+    # v7.6: modern ShopifyQL has NO `orders` dataset and no `customer_type` dimension --
+    # "FROM orders ... GROUP BY customer_type" was a hard parse error on every single run,
+    # which is what produced the four parseErrors in the log. Counts come from `FROM sales`
+    # (verified live against the store); build() then overwrites all four series with
+    # customer-level ACTUALS from Odoo, which is the only source that can split revenue.
+    nr = shopify_ql("FROM sales SHOW orders, total_sales, customers, returning_customers "
+                    "TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1), "custsplit")
     for r in (nr or []):
         day = str(r.get("day"))[:10]
         if day not in out["newcust"]: continue
-        ct = str(r.get("customer_type") or "").lower(); o = float(r.get("orders") or 0)
+        cu = float(r.get("customers") or 0); rc = float(r.get("returning_customers") or 0)
         ts = float(r.get("total_sales") or 0)
-        if "return" in ct:
-            out["retcust"][day] += o; out["rcrev"][day] += ts
-        else:
-            out["newcust"][day] += o; out["ncrev"][day] += ts
-    log("shopify days", sum(1 for v in out["sessions"].values() if v))
+        out["retcust"][day] = rc; out["newcust"][day] = max(0.0, cu - rc)
+        if cu:
+            out["rcrev"][day] = round(ts * rc / cu, 2)
+            out["ncrev"][day] = round(ts - ts * rc / cu, 2)
+    log("shopify days", sum(1 for v in out["sessions"].values() if v),
+        "| cust-split days", sum(1 for v in out["retcust"].values() if v))
     return out
 
 GTOK = [None]
@@ -678,10 +750,19 @@ def pull_cohorts():
             else:
                 c["rrev"] += amt; c["rgp"] += mg; c["rord"] += 1
         for m in nr: nr[m] = {k: (round(v) if isinstance(v, float) else v) for k, v in nr[m].items()}
-        log("cohorts", len(out), "customers", len(first), "nr months", len(nr))
-        return {"coh": out, "nr": nr}
+        # v7.6: same split at DAY grain -- this is what feeds New vs Returning on the
+        # dashboard. Actual first-order date per customer, not a ShopifyQL allocation.
+        nrd = {}; seen2 = set()
+        for pid, d, amt, mg in sorted(orders, key=lambda o: (o[1], o[0])):
+            c = nrd.setdefault(d, {"nrev": 0.0, "nord": 0, "rrev": 0.0, "rord": 0})
+            if pid and pid not in seen2 and first.get(pid) == d:
+                seen2.add(pid); c["nrev"] += amt; c["nord"] += 1
+            else:
+                c["rrev"] += amt; c["rord"] += 1
+        log("cohorts", len(out), "customers", len(first), "nr months", len(nr), "nr days", len(nrd))
+        return {"coh": out, "nr": nr, "nrd": nrd}
     except Exception as e:
-        log("cohorts fail", str(e)[:150]); return {"coh": [], "nr": {}}
+        log("cohorts fail", str(e)[:150]); return {"coh": [], "nr": {}, "nrd": {}}
 
 EXPG = [("Payroll & benefits", ("31.01.01.", "31.01.09.")), ("Rent — branches", ("31.01.04.02",)),
         ("Rent — HQ / warehouses / flats", ("31.01.04.01", "31.01.04.03", "31.01.04.04")),
@@ -825,8 +906,8 @@ def pull_pos_customers():
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
     bnr = {}; bstat = {}; bun = {}
     ANON = anon_partner_ids()
-    TV = tmpl_vendor_map()
-    VCS = {}; PFD = {}; PFV = {}
+    TV = tmpl_vendor_map(); VNM = vendor_names()
+    VCS = {}; PFD = {}; PFV = {}; PATTR = {}
     try:
         rows = []
         q = datetime.date(2024, 8, 1)
@@ -851,7 +932,8 @@ def pull_pos_customers():
                     oid = (r.get("order_id") or [0])[0]
                     rv = float(r.get("price_total") or 0); qy = float(r.get("product_qty") or 0)
                     _tid = (r.get("product_tmpl_id") or [0])[0]
-                    _vn = TV.get(_tid, ("", "", ""))[0]
+                    _tv = TV.get(_tid, ("", "", ""))
+                    _vn = _tv[0]
                     _m7 = r["date"][:7]
                     if _vn:
                         _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
@@ -866,6 +948,13 @@ def pull_pos_customers():
                         continue
                     d10 = r["date"][:10]
                     rows.append((pid, d10, br, float(r.get("margin") or 0), oid, rv, qy))
+                    if rv > 0:
+                        _at = PATTR.setdefault(pid, {"cat": {}, "ven": {}})
+                        _cg = _catname(_tv[1])
+                        if _cg: _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                        if _vn:
+                            _vl = VNM.get(_vn) or _vn
+                            _at["ven"][_vl] = _at["ven"].get(_vl, 0.0) + rv
                     if _vn:
                         VCS.setdefault(_vn, set()).add(pid)
                         _p0 = PFD.get(pid)
@@ -970,7 +1059,7 @@ def pull_pos_customers():
                     DSEEN[sc].add((pid, oid))
                     _dsc = DOC.setdefault(sc, {})
                     _dsc[pid] = _dsc.get(pid, 0) + 1
-        XTRA["dec"] = {sc: _decile(DA[sc], DOC.get(sc, {})) for sc in DA}
+        XTRA["dec"] = {sc: _decile(DA[sc], DOC.get(sc, {}), PATTR) for sc in DA}
         XTRA["posagg"] = {p: (a[0], a[1]) for p, a in DA.get("ALL STORES", {}).items()}
         XTRA["vcs"] = VCS
         pdates = {}
@@ -997,8 +1086,8 @@ def pull_shop_lines():
     """Shopify customer deciles at line level from sale.report: net revenue (untaxed, after
     discount), margin, units, and the discount actually given -- so AUR, UPT, DR%% and gross
     retail are real sums, not allocations. Also feeds vendor/product monthly for the online side."""
-    TV = tmpl_vendor_map()
-    agg = {}; oc = {}; oseen = set()
+    TV = tmpl_vendor_map(); VNM = vendor_names()
+    agg = {}; oc = {}; oseen = set(); SATTR = {}
     off = 0
     while off < 900000:
         page = oexec("sale.report", "search_read",
@@ -1014,8 +1103,16 @@ def pull_shop_lines():
             qy = float(r.get("product_uom_qty") or 0); dc = float(r.get("discount") or 0)
             gr = rv / (1 - dc / 100.0) if 0 < dc < 100 else rv
             _tid = (r.get("product_tmpl_id") or [0])[0]
-            _vn = TV.get(_tid, ("", "", ""))[0]
+            _tv = TV.get(_tid, ("", "", ""))
+            _vn = _tv[0]
             _m7 = d[:7]
+            if rv > 0:
+                _at = SATTR.setdefault(pid, {"cat": {}, "ven": {}})
+                _cg = _catname(_tv[1])
+                if _cg: _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                if _vn:
+                    _vl = VNM.get(_vn) or _vn
+                    _at["ven"][_vl] = _at["ven"].get(_vl, 0.0) + rv
             if _vn:
                 _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
                 _vm[0] += rv; _vm[1] += mg
@@ -1034,7 +1131,7 @@ def pull_shop_lines():
                 oseen.add((pid, ref)); oc[pid] = oc.get(pid, 0) + 1
         off += len(page)
         if len(page) < 10000: break
-    XTRA.setdefault("dec", {})["Shopify"] = _decile(agg, oc)
+    XTRA.setdefault("dec", {})["Shopify"] = _decile(agg, oc, SATTR)
     log("shopify decile customers", len(agg), "orders", len(oseen))
     # ---- v6.5 online->offline crossover: the same partner_id on both sides ----
     pa = XTRA.get("posagg") or {}
@@ -1730,7 +1827,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v7.1 (shopifyql fix + deciles + vendor inventory)")
+    log("collector v7.6 (shopifyql version-ladder + real new/returning + shipping P&L)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -1747,6 +1844,18 @@ def build():
     safe(pull_meta_reach, win, os.environ.get("META_ACCESS_TOKEN", "").strip())
     _ch = safe(pull_cohorts) or {"coh": [], "nr": {}}
     coh, nrm = _ch.get("coh", []), _ch.get("nr", {})
+    # v7.6: overwrite new/returning orders AND revenue with customer-level Odoo actuals.
+    # ShopifyQL cannot split revenue by customer type at all, so this is the only honest
+    # source; the ShopifyQL counts above are the fallback if Odoo is down.
+    _nrd = _ch.get("nrd") or {}
+    _nrdOK = 0
+    for _d in win:
+        _c = _nrd.get(_d)
+        if not _c: continue
+        _nrdOK += 1
+        shop["newcust"][_d] = _c["nord"]; shop["retcust"][_d] = _c["rord"]
+        shop["ncrev"][_d] = round(_c["nrev"]); shop["rcrev"][_d] = round(_c["rrev"])
+    if _nrdOK: log("new/returning from Odoo customer actuals, days", _nrdOK)
     pos = safe(pull_pos_branches) or {}
     prev = {}
     try:
@@ -1757,7 +1866,8 @@ def build():
     # empty (fetch gap or an API change like the ShopifyQL rename) but the previous payload
     # had it, carry the last-known values forward instead of writing a cliff of zeros.
     try:
-        SHK = ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]
+        SHK = ["sessions", "atcRatio", "checkoutRatio", "cvr"] if _nrdOK else \
+              ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]
         pad = prev.get("ad") or {}
         if pad.get("start"):
             _pd0 = datetime.date.fromisoformat(pad["start"])
@@ -1777,7 +1887,8 @@ def build():
                 log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
     except Exception as e:
         log("carry-forward skipped", str(e)[:120])
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan"))
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not any(
+        r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
         bnr, bstat, bcoh, bun = _bc if isinstance(_bc, tuple) and len(_bc) == 4 else ({}, {}, {}, {})
