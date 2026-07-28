@@ -211,9 +211,9 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.4</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.6</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
-function tab(t){TAB=t;PREVLBL='';[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -265,7 +265,10 @@ function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c
 function RDR(){syncMonthly();syncBars();rTab();}
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));RDR();}
 function cmpW(){return cmpWr(ST.s,ST.e);}
-function cmpWr(_S,_E){const ln=span(_S,_E);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(ST.cmp==='yoy')return[addD(_S,-365),addD(_E,-365)];if(ST.cmp==='wk')return[addD(_S,-7),addD(_E,-7)];if(ST.cmp==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
+function ppHdr(){const p=document.getElementById('pp');if(!p)return;
+ const w=cmpW(),mg=['pl','pn','vl','cs','ao','me','mi'].indexOf(TAB)>=0;
+ p.innerHTML='Range <b>'+ST.s+'</b> &rarr; '+ST.e+(mg?' &middot; months <b>'+(ST.pm0||'&mdash;')+'</b> &rarr; '+(ST.pm1||'&mdash;'):'')+' &middot; vs '+(ST.cmp==='off'?'<b>no comparison</b>':'<b>'+w[0]+'</b> &rarr; '+w[1]);}
+function cmpWr(_S,_E,_C){_C=_C||ST.cmp;const ln=span(_S,_E);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(_C==='yoy')return[addD(_S,-365),addD(_E,-365)];if(_C==='wk')return[addD(_S,-7),addD(_E,-7)];if(_C==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
 function shS(k,s2,e2){if(!O.shop||!O.shop[k])return 0;const r=rng(s2,e2);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[k][i]||0;return t;}
 function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
  const o={cs,ce};PREVLBL='prev '+cs.slice(5)+' &rarr; '+ce.slice(5);const G=(k,a,b)=>fSum(k,a,b);
@@ -347,11 +350,23 @@ let CWIN={};
 function cwS(id){return (CWIN[id]&&CWIN[id].s)||ST.s;}
 function cwE(id){return (CWIN[id]&&CWIN[id].e)||ST.e;}
 function cwOn(id){return !!(CWIN[id]&&(CWIN[id].s||CWIN[id].e));}
-function cwSet(id,f,v){const o=CWIN[id]=CWIN[id]||{};o[f]=v||null;if(!o.s&&!o.e)delete CWIN[id];rTab();}
+function cwCmp(id){return (CWIN[id]&&CWIN[id].c)||ST.cmp;}
+function cwAny(id){return !!(CWIN[id]&&(CWIN[id].s||CWIN[id].e||CWIN[id].c));}
+function withCW(id,fn){if(!cwAny(id))return fn();
+ const bs=ST.s,be=ST.e,b0=ST.pm0,b1=ST.pm1,bc=ST.cmp;
+ ST.s=cwS(id);ST.e=cwE(id);ST.cmp=cwCmp(id);try{syncMonthly();}catch(x){}
+ try{return fn();}finally{ST.s=bs;ST.e=be;ST.pm0=b0;ST.pm1=b1;ST.cmp=bc;}}
+function cwSet(id,f,v){const o=CWIN[id]=CWIN[id]||{};o[f]=v||null;if(!o.s&&!o.e&&!o.c)delete CWIN[id];rTab();}
 function cwClr(id){delete CWIN[id];rTab();}
-function cwBar(id){const lo=(O.fin&&O.fin.start)||'2024-01-01',hi=(O.aw&&O.aw[1])||ST.e;const on=cwOn(id);
- return '<div class="cwb'+(on?' on':'')+'">'+(on?'<b style="color:#4f46e5">This chart only</b>':'Chart window')+' <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwS(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;s&quot;,this.value)"> &rarr; <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwE(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;e&quot;,this.value)">'+(on?' <span class="cwx" onclick="cwClr(&quot;'+id+'&quot;)">&times; follow page range</span>':'')+'</div>';}
-function cardCalc(id){const ss=ST.s,ee=ST.e;ST.s=cwS(id);ST.e=cwE(id);let r=null;try{r=calc();}catch(x){r=null;}ST.s=ss;ST.e=ee;return r;}
+function cwBar(id){const lo=(O.fin&&O.fin.start)||'2024-01-01',hi=(O.aw&&O.aw[1])||ST.e;const on=cwAny(id);
+ const cm=cwCmp(id),w=cmpWr(cwS(id),cwE(id),cm);
+ const CO=[['off','no comparison'],['prev','previous period'],['wk','same days last week'],['mo','same days last month'],['yoy','same days last year']];
+ return '<div class="cwb'+(on?' on':'')+'">'+(on?'<b style="color:#4f46e5">This card only</b>':'This card')
+  +' <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwS(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;s&quot;,this.value)"> &rarr; <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwE(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;e&quot;,this.value)">'
+  +' &middot; vs <select onchange="cwSet(&quot;'+id+'&quot;,&quot;c&quot;,this.value)">'+CO.map(o=>'<option value="'+o[0]+'"'+(o[0]===cm?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'
+  +(cm==='off'?'':' <b style="color:#4f46e5">'+w[0]+' &rarr; '+w[1]+'</b>')
+  +(on?' <span class="cwx" onclick="cwClr(&quot;'+id+'&quot;)">&times; follow page range</span>':'')+'</div>';}
+function cardCalc(id){return withCW(id,function(){try{return calc();}catch(x){return null;}});}
 let CARDS=[];
 function cards(){CARDS=[
  {id:'ins',full:1,a:'ins',t:'Insights — auto-read from the data',src:'ins',cs:'Computed live from Odoo sales, refunds, margin, channels and the ads feed for this range.',k:o=>[],ins:1},
@@ -390,7 +405,8 @@ function draw(cv,cfg,big,cid){
  const WS=cid?cwS(cid):ST.s,WE=cid?cwE(cid):ST.e;
  if(cfg.fin){cfg.fin.forEach(sd=>{const sr=sd.k==='_net'?fNetR(WS,WE):fSeriesR(sd.k,WS,WE);const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2,_sd:sd});});}
  else{let ok=1;cfg.ad.forEach(sd=>{const sr=aSeriesR(sd.k,sd.m,WS,WE);if(!sr){ok=0;return;}const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2,_sd:sd});});if(!ok)return null;}
- if(ST.cmp!=='off'&&sets.length){const w=cmpWr(WS,WE),cs=w[0],ce=w[1];
+ const WC=cid?cwCmp(cid):ST.cmp;
+ if(WC!=='off'&&sets.length){const w=cmpWr(WS,WE,WC),cs=w[0],ce=w[1];
   const plb=cs.slice(5)+'\u2192'+ce.slice(5)+' \u00b7 ';
   sets.slice().forEach(bs=>{const sd=bs._sd;if(!sd)return;
    const pr=cfg.fin?(sd.k==='_net'?fNetR(cs,ce):fSeriesR(sd.k,cs,ce)):aSeriesR(sd.k,sd.m,cs,ce);
@@ -442,7 +458,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
-  if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf,0,id);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}})(cwOn(id)?(cardCalc(id)||O0):O0);PREVLBL=_pl;});
+  if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf,0,id);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}})(cwAny(id)?(cardCalc(id)||O0):O0);PREVLBL=_pl;});
  wDrag(g);}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
@@ -476,7 +492,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   return{...b,rev:r,liveRev:lv,prevRev:pv,rent:rn,opex:op};});
  const tot=B.reduce((a,b)=>a+b.rev,0)||1,pool=oh?FF.company.overheadPoolDefault:0;
  B.forEach(b=>{b.al=oh?Math.round(pool*b.rev/tot):0;b.fx=(b.payroll+b.rent+b.opex+b.al)*wf;b.be=b.fx/cm;b.ov=b.rev-b.be;b.pf=b.rev*cm-b.fx;});
- document.getElementById('pp').innerHTML='Branch model · <b>'+FF.branches.length+' branches</b>'+(live?' · retail revenue <b>LIVE from Odoo</b>':'');
+ document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> \u2192 '+ST.e+' \u00b7 branch model, <b>'+FF.branches.length+' branches</b>'+(live?' · retail revenue <b>LIVE from Odoo</b>':'');
  const mv=Math.round(mvN*af('meta')),mp=tot?mv/tot*100:0;
  document.getElementById('bn2').innerHTML='↻ Last synced <b>'+(O.lastSync||'—')+'</b>. <b>Live:</b> branch retail revenue comes from Odoo POS journal accounting (income lines per branch, daily). Payroll exact from Excel. Meta offline value live. <b>Rent, payroll & opex are prefilled from the ACTUAL analytic ledger</b> (6-month averages) and stay editable. Contribution margin = GP% × (1 − refund%) = <b>'+(cm*100).toFixed(1)+'%</b>.';
  const t1=document.createElement('div');t1.className='card full';t1.dataset.a='odoo';
@@ -623,7 +639,10 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
  const A2={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A2[m]=A2[m]||{io:0,ov:0,ms:0,tio:0,tip:0,ts:0});a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.tio+=(O.ad.ttOffValue||[])[i]||0;a.tip+=(O.ad.ttOffPur||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;}
  const PS=O.pos||{};const names=Object.keys(PS).length?Object.keys(PS):((O.bl&&O.bl.b)?Object.keys(O.bl.b):[]);
  const SIG=m=>A2[m]&&A2[m].ov>0&&A2[m].io>Math.max(50000,A2[m].ov*0.02);
- const mons=Object.keys(A2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1&&SIG(m));
+ const monsAll=Object.keys(A2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
+ const mons=monsAll.filter(m=>SIG(m));
+ const dropped=monsAll.filter(m=>!SIG(m));
+ if(dropped.length)document.getElementById('bn6').innerHTML+=' <b style="color:#c0392b">Your window '+ST.pm0+' &rarr; '+ST.pm1+' covers '+monsAll.length+' month'+(monsAll.length===1?'':'s')+', and '+dropped.length+' of them ('+dropped.join(', ')+') are NOT in the table below: Meta reported no omni value, or in-store value under the noise floor, in those months. That is missing measurement, not missing sales &mdash; the filter is working.</b>';
  const totPos=m=>names.reduce((a2,n)=>a2+((PS[n]&&PS[n][m])?PS[n][m][0]:0),0);
  const share=(n,m)=>{const tp=totPos(m);return tp&&PS[n]&&PS[n][m]?PS[n][m][0]/tp:0;};
  const mf=af('meta');
@@ -864,7 +883,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15'};
-function rTab(){const t=TAB;PREVLBL='';if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -2048,6 +2067,58 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    'The bottom line, month by month. Formula: gross profit &minus; ad spend &minus; all OpEx. Green above zero = profit, red below = loss.',Le.map(m=>m.slice(2)),
    [{l:'Net profit',c:'#5a5bf0',w:3,f:'zero',d:eb},{l:'zero',c:'#0F172A',dash:1,w:1,pr:0,d:Le.map(()=>0)}],null,
    {cmt:cmt5});})();
+ /* ---------- DELIVERY ECONOMICS (v7.6) ---------- */
+ (function(){
+  if(!S2f())return;
+  const Ls=S2f().m.slice(),lag=S2f().lagM;
+  const Lp=Ls.filter(m=>m!==lag);           // settled months only, for money charts
+  const lab=x=>x.slice(2);
+  const ser=(k,src)=>src.map(m=>s2(k,m));
+  const money2=v=>Math.round(v).toLocaleString();
+  const tc=Lp.reduce((a,m)=>a+s2('col',m),0),tk=Lp.reduce((a,m)=>a+s2('cost',m),0);
+  const tf=Lp.reduce((a,m)=>a+s2free(m),0);
+  const lagNote=' <b>'+lag+' is left off every money chart here</b> &mdash; Bosta settles COD on a lag, so only its first batch has posted and charting it would draw a cliff that is not real.';
+
+  vzCard(g,'What delivery costs you, month by month'+INFO('Blue = what customers paid us for delivery (shipping SKU lines). Red = what Bosta actually billed us. The shaded band between them is the subsidy: every month the red line is above the blue one, product margin is paying for delivery.'),
+   'Collected from customers vs the real courier bill vs the net.'+lagNote,Lp.map(lab),
+   [{l:'Collected from customers',c:'#3b7dd8',w:2.6,d:ser('col',Lp)},
+    {l:'Courier bill (Bosta, actual)',c:'#e23a63',w:2.6,d:ser('cost',Lp)},
+    {l:'NET delivery',c:'#5a5bf0',w:3,f:'zero',d:Lp.map(m=>s2('col',m)-s2('cost',m))},
+    {l:'zero',c:'#0F172A',dash:1,w:1,pr:0,d:Lp.map(()=>0)}],null,
+   {cmt:[['#e23a63','<b>Over the '+Lp.length+' settled months charted here, delivery has cost E&pound;'+money2(tk)+' and brought back E&pound;'+money2(tc)+' &mdash; a net of '+(tc-tk<0?'&minus;':'')+'E&pound;'+money2(Math.abs(tc-tk))+'.</b> Customers cover '+(tk?(tc/tk*100).toFixed(0):0)+'% of the bill. The rest comes out of product margin, which is why the Shopify P&amp;L now subtracts it before it gets to profit contribution.'],
+     ['#3b7dd8','<b>The blue line is a pricing decision, the red line is not.</b> The courier bill tracks order volume almost mechanically. What you collect tracks how much of the time you are running free delivery. When blue falls while red keeps climbing, that is a promotion, not a cost problem.']]});
+
+  vzCard(g,'The cost of free delivery, over time'+INFO('The courier bill for each month split by whether the customer paid for delivery. The orange band is the money you spent shipping orders that were advertised as free delivery: that month bill multiplied by the share of confirmed orders carrying no paid shipping line. Bosta bills a near-flat rate per shipment so the order-share split is the honest allocation.'),
+   'Allocated from the actual courier bill by free-order share. Orange is what the free-delivery offer costs you.'+lagNote,Lp.map(lab),
+   [{l:'Cost of orders shipped FREE (allocated)',c:'#c9834a',w:2.6,f:1,d:Lp.map(m=>s2free(m))},
+    {l:'Cost of orders the customer paid for',c:'#12a06e',w:2.2,d:Lp.map(m=>s2('cost',m)-s2free(m))},
+    {l:'Collected from customers',c:'#3b7dd8',w:2,dash:1,d:ser('col',Lp)}],null,
+   {stacked:1,type:'bar',cmt:[['#c9834a','<b>Free delivery has cost E&pound;'+money2(tf)+' over these '+Lp.length+' months</b> &mdash; '+(tk?(tf/tk*100).toFixed(0):0)+'% of the entire courier bill. That is the price of the offer, and it is a marketing line, not a logistics line.'],
+     ['#5a5bf0','<b>The dashed blue line is what you collected.</b> Where it sits below the top of the green bar, even your paying customers are not covering their own delivery.']]});
+
+  vzCard(g,'Who pays for delivery &mdash; free vs paid orders'+INFO('Every confirmed order in the month, split by whether a paid shipping line was attached to it. The purple line is the free share as a percentage, on the right-hand axis.'),
+   'Order counts, not money. The purple line is the free-delivery share of confirmed orders.',Ls.map(lab),
+   [{l:'Shipped free',c:'#c9834a',d:ser('freeN',Ls)},
+    {l:'Customer paid delivery',c:'#12a06e',d:ser('paidN',Ls)},
+    {l:'Free share, %',c:'#8b5cf6',t:'line',w:2.6,pr:0,y2:1,d:Ls.map(m=>s2('conf',m)?s2('freeN',m)/s2('conf',m)*100:null)}],null,
+   {stacked:1,type:'bar',cmt:[['#8b5cf6','<b>The free share swings between roughly a third and three quarters of all orders.</b> It is the single biggest lever on the net delivery line &mdash; bigger than negotiating the courier rate &mdash; because the courier charges the same either way.']]});
+
+  vzCard(g,'What happened to every order &mdash; delivered, returned, cancelled'+INFO('Green = confirmed and kept. Purple = confirmed, delivered, then returned. Grey = cancelled before it ever shipped. A cancellation costs no courier money; a return costs the delivery leg AND the pickup leg.'),
+   'Order outcomes by the month the order was placed. Returns before '+S2f().retFrom+' were booked as cancellations, so the purple band only becomes real from there.',Ls.map(lab),
+   [{l:'Delivered &amp; kept',c:'#12a06e',d:ser('kept',Ls)},
+    {l:'Returned',c:'#8b5cf6',d:ser('ret',Ls)},
+    {l:'Cancelled (never shipped)',c:'#9aa3b5',d:ser('canc',Ls)}],null,
+   {stacked:1,type:'bar',cmt:[['#8b5cf6','<b>A return and a cancellation are not the same loss.</b> A cancelled order costs nothing to ship. A returned order has already been paid for twice &mdash; E&pound;'+BOSTA.cls[0][2].toFixed(0)+' out, E&pound;'+BOSTA.cls[3][2].toFixed(0)+' back &mdash; and the cash you collected goes out with it.'],
+     ['#7c869c','<b>Read the purple band from '+S2f().retFrom+' onward only.</b> Before that date the house convention posted a return as a cancellation, so the grey band is carrying returns that belong in purple. That is a bookkeeping change, not a real shift in customer behaviour.']]});
+
+  vzCard(g,'Courier cost per order &mdash; and what returns add to it'+INFO('Red = the courier bill divided by every confirmed order. Purple = the same bill divided only by the orders that were actually kept. The gap between the two lines is what returned orders add to the cost of each delivery that stuck.'),
+   'The bill per order, both ways.'+lagNote,Lp.map(lab),
+   [{l:'Cost per confirmed order',c:'#e23a63',w:2.4,d:Lp.map(m=>s2('conf',m)?s2('cost',m)/s2('conf',m):null)},
+    {l:'Cost per DELIVERED (kept) order',c:'#8b5cf6',w:2.4,d:Lp.map(m=>s2('kept',m)?s2('cost',m)/s2('kept',m):null)},
+    {l:'Collected per confirmed order',c:'#3b7dd8',w:2,dash:1,d:Lp.map(m=>s2('conf',m)?s2('col',m)/s2('conf',m):null)}],null,
+   {cmt:[['#e23a63','<b>Cost per order has climbed from about E&pound;'+(s2('conf',Lp[0])?(s2('cost',Lp[0])/s2('conf',Lp[0])).toFixed(0):'?')+' at the start of this series to about E&pound;'+(s2('conf',Lp[Lp.length-1])?(s2('cost',Lp[Lp.length-1])/s2('conf',Lp[Lp.length-1])).toFixed(0):'?')+' now.</b> Courier rates went up; the amount you collect per order did not follow.'],
+     ['#8b5cf6','<b>The purple line is the honest one</b> if you want to know what it costs to get a sale into a customer hands and keep it there. Every returned order is billed but leaves no revenue, so it loads onto the deliveries that survived.']]});
+ })();
  vzOrder(g);
 }
 
@@ -2331,12 +2402,45 @@ function decIns(D,tt,money){
  rows.push([C.orange,'<b>The middle (D4&ndash;D6) is the cheapest growth.</b> They already buy, at about E&pound; '+money(acv(D[4]))+' per head. A bundle or a second-purchase nudge moves them toward D1&ndash;D3 economics with no new acquisition cost.']);
  return '<div class="ins" style="margin-top:10px">'+rows.map(x=>'<div class="row"><span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>';
 }
+function decSel(sc){const ks=Object.keys(O.dec||{}).filter(k=>k!=='Shopify').sort();
+ return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;decSc&quot;,this.value)"><option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>'+ks.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+'</select></div>';}
+function decTot(D){return D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});}
+function decMatrix(g,ks){
+ const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
+ const H=['Scope','Customers','Revenue','Gross profit','D1 % of revenue','D1&ndash;D3 % of revenue','D8&ndash;D10 % of revenue','Avg value D1','Avg value D10','D1 : D10','D1 repeat %','Whole-base repeat %'];
+ const rows=ks.map(k=>{const D=O.dec[k]||[];if(D.length<10)return null;const t=decTot(D),d1=D[0],d10=D[9];
+  const t3=D.slice(0,3).reduce((a,d)=>a+d.r,0),b3=D.slice(7).reduce((a,d)=>a+d.r,0);
+  const a1=d1.c?d1.r/d1.c:0,a10=d10.c?d10.r/d10.c:0;
+  return {k,c:t.c,r:t.r,g:t.g,p1:t.r?d1.r/t.r*100:0,p3:t.r?t3/t.r*100:0,pb:t.r?b3/t.r*100:0,a1,a10,ra:a10?a1/a10:0,r1:d1.c?d1.rep/d1.c*100:0,rt:t.c?t.rep/t.c*100:0};}).filter(Boolean);
+ if(!rows.length)return;
+ const mxr=Math.max.apply(null,rows.map(r=>r.p1)),mnr=Math.min.apply(null,rows.map(r=>r.p1));
+ const sh=(v)=>{const t=(mxr-mnr)?(v-mnr)/(mxr-mnr):0;return 'background:rgba(79,70,229,'+(0.06+t*0.30).toFixed(3)+')';};
+ let h='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>'+H.map((x,i)=>'<th style="text-align:'+(i?'right':'left')+';padding:6px 7px;font-size:10.5px;font-weight:800;color:#64748b;border-bottom:2px solid #e6e9f2;white-space:nowrap">'+x+'</th>').join('')+'</tr></thead><tbody>';
+ rows.sort((a,b)=>b.r-a.r).forEach(r=>{const net=r.k==='ALL STORES';
+  const td=(v,st)=>'<td style="text-align:right;padding:5px 7px;font-size:11.5px;white-space:nowrap;'+(st||'')+'">'+v+'</td>';
+  h+='<tr'+(net?' style="background:#f6f7fb"':'')+'><td style="text-align:left;padding:5px 7px;font-size:11.5px;font-weight:'+(net?'800':'700')+';white-space:nowrap">'+r.k+(net?' <span style="font-size:9px;color:#4f46e5">NETWORK</span>':'')+'</td>'
+   +td(money(r.c))+td(E+money(r.r))+td(E+money(r.g))
+   +td('<b>'+r.p1.toFixed(1)+'%</b>',sh(r.p1))+td(r.p3.toFixed(1)+'%')+td(r.pb.toFixed(1)+'%')
+   +td(E+money(r.a1))+td(E+money(r.a10))+td('<b>'+(r.ra?r.ra.toFixed(1):'&mdash;')+'&times;</b>')
+   +td(r.r1.toFixed(0)+'%')+td(r.rt.toFixed(0)+'%')+'</tr>';});
+ h+='</tbody></table></div>';
+ const br=rows.filter(r=>r.k!=='ALL STORES');
+ const top=br.slice().sort((a,b)=>b.p1-a.p1)[0],bot=br.slice().sort((a,b)=>a.p1-b.p1)[0];
+ const rich=br.slice().sort((a,b)=>b.a1-a.a1)[0],flat=br.slice().sort((a,b)=>a.ra-b.ra)[0];
+ let ins='';
+ if(top&&bot&&top.k!==bot.k)ins+='<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span><b>'+top.k+' is your most top-heavy branch</b> &mdash; its top 10% of customers carry '+top.p1.toFixed(1)+'% of its revenue, against '+bot.p1.toFixed(1)+'% at '+bot.k+'. A loyalty or VIP programme pays back fastest at '+top.k+', because a small named list moves most of the money. '+bot.k+' is the opposite: its revenue is spread across the base, so broad-reach offers work better there than personal outreach.</span></div>';
+ if(rich)ins+='<div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>The most valuable individual customers are at '+rich.k+'</b> &mdash; '+E+money(rich.a1)+' of lifetime revenue for an average D1 shopper. That is the branch whose D1 list is worth the most per name, so it is the one to hand a personal shopper, an early-access window, or a birthday call.</span></div>';
+ if(flat)ins+='<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>'+flat.k+' has the flattest value curve</b> ('+(flat.ra?flat.ra.toFixed(1):'&mdash;')+'&times; between D1 and D10 against '+(br.length?(br.reduce((a,r)=>a+r.ra,0)/br.length).toFixed(1):'&mdash;')+'&times; across the branches). Flat means no strong top tier has formed yet &mdash; usually a younger catchment or a newer store. The upside is that moving a handful of its D2&ndash;D4 customers up one step is worth more there than anywhere else.</span></div>';
+ pnlCard(g,'odoo','Every branch side by side &mdash; customer value concentration',
+  'One row per branch, all deciles collapsed into the numbers that actually differ between stores. D1 = each branch&rsquo;s own top 10% of customers, so the comparison is like-for-like even though the branches are different sizes. The individual decile tables follow underneath, one per branch.',
+  decSel('__ALL__')+h+(ins?'<div class="ins" style="margin-top:10px">'+ins+'</div>':''));}
 function rDec(g,sc,withSel){
  const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
  const DD2=O.dec||{};let sel='';
  if(withSel){const ks=Object.keys(DD2).filter(k=>k!=='Shopify').sort();
+  if(sc==='__ALL__'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
   if(ks.length&&(!sc||!DD2[sc]))sc=ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0];
-  sel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;decSc&quot;,this.value)">'+ks.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+'</select></div>';}
+  sel=decSel(sc);}
  const D=DD2[sc]||[];
  if(!D.length){pnlCard(g,'odoo','Customer portfolio by decile &mdash; awaiting first v6.5 sync','The per-customer decile crawl ships with this version and lands automatically on the next heavy sync. Nothing to do on your side.','');return;}
  const tt=D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});
@@ -2376,7 +2480,7 @@ function rDec(g,sc,withSel){
  h+='</table></div>';
  const d1=D[0];
  pnlCard(g,'odoo','Customer portfolio by decile &mdash; '+sc+' (D1 = top spenders)',
-  'Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
+  'Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals. <b>This card carries no date window on purpose:</b> a decile IS a lifetime rank, so filtering it by a date range would silently change what D1 means. The windowed views live on the vendor league table, the P&amp;L and every daily card.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
   sel+h+decIns(D,tt,money));}
 
 function rReach(g){
@@ -2456,8 +2560,64 @@ function rCost(){if(TAB!=='cs')return;const g=document.getElementById('g14');g.i
  g.appendChild(ctl);
  const CURM=O.aw[1].slice(0,7);const T=MKT(CURM);
  const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
+ rShip2(g,mons,T,{money:money,NEG:NEG,POS:POS,PCT:PCT,X:X},SH);
  rShipping(g,mons,T,{money:money,NEG:NEG,POS:POS,PCT:PCT,X:X},SH);
  rSalary(g,mons,T,{money:money,NEG:NEG,POS:POS,PCT:PCT,X:X});}
+function rShip2(g,mons,T,F,SH){
+ if(!S2f())return;
+ const money=F.money,SIG=v=>v<0?'&minus;'+money(-v):money(v),N=v=>Math.round(v).toLocaleString();
+ const cols=s2cols(mons,0);if(!cols.length)return;
+ const lag=S2f().lagM,rf=S2f().retFrom;
+ const L=[
+  {n:'Confirmed orders (shipped or shippable)',f:m=>s2('conf',m)||null,fmt:N,sh:1,tt:'Sale orders in state sale or done, e-commerce teams (Shopify, Noon, Amazon, Homzmart), counted in the month the order was placed. Kept + returned.'},
+  {n:'&nbsp;&nbsp;delivered and KEPT',f:m=>s2('kept',m)||null,fmt:N,sh:1,tt:'Confirmed and not flagged as a total return. This is the order count the courier bill should be divided by when you want a true cost per delivery that stuck.'},
+  {n:'&nbsp;&nbsp;RETURNED (delivered, then came back)',f:m=>s2('ret',m)||null,fmt:N,sh:1,gd:-1,tt:'Confirmed orders carrying the total-return flag. Before '+rf+' the house convention booked a return as a cancellation, so this row reads near zero until then -- that is a bookkeeping change, not a real jump in returns.'},
+  {n:'CANCELLED (never shipped, never billed)',f:m=>s2('canc',m)||null,fmt:N,sh:1,gd:-1,tt:'State = cancel. These cost no courier money at all, which is exactly why they are shown separately from returns: a cancellation is lost demand, a return is lost demand PLUS a bill.'},
+  {n:'Return rate, % of confirmed',f:m=>s2('conf',m)?s2('ret',m)/s2('conf',m)*100:null,fmt:F.PCT,sh:1,gd:-1},
+  {n:'Cancel rate, % of everything placed',f:m=>{const t=s2('conf',m)+s2('canc',m);return t?s2('canc',m)/t*100:null;},fmt:F.PCT,sh:1,gd:-1},
+  null,
+  {n:'Value delivered &amp; kept',f:m=>s2('keptV',m)||null,fmt:F.POS,sh:1},
+  {n:'Value returned',f:m=>s2('retV',m)||null,fmt:F.POS,sh:1,gd:-1},
+  {n:'Value cancelled',f:m=>s2('cancV',m)||null,fmt:F.POS,sh:1,gd:-1},
+  null,
+  {n:'Orders shipped FREE (customer paid nothing)',f:m=>s2('freeN',m)||null,fmt:N,sh:1,gd:-1,tt:'Confirmed orders minus the orders carrying a paid shipping line. These are the ones the free-delivery offer is paying for.'},
+  {n:'Orders where the customer PAID delivery',f:m=>s2('paidN',m)||null,fmt:N,sh:1,tt:'Orders with a shipping SKU line above zero.'},
+  {n:'Free-delivery share, % of confirmed orders',f:m=>s2('conf',m)?s2('freeN',m)/s2('conf',m)*100:null,fmt:F.PCT,sh:1,gd:-1},
+  null,
+  {n:'Shipping collected from customers',f:m=>s2('col',m)||null,fmt:F.POS,sh:1,tt:'Sale-order lines on the shipping SKUs, price above zero.'},
+  {n:'&nbsp;&nbsp;cross-check: account 32.00.00.18.00',f:m=>s2('colAcc',m)||null,fmt:F.POS,sh:0,tt:'Earned Shipping Discount. The ledger mirror of the row above -- the two track within 3% every month, which is the proof that it is NOT a separate rebate. Shown here only so you can see them agree. It is never added to anything.'},
+  {n:'Courier bill paid to Bosta',f:m=>s2('cost',m)?-s2('cost',m):null,fmt:SIG,sh:1,gd:-1,tt:'31.01.08.34.00 from Jan 2026 + the same postings hidden in 31.01.08.17.00 before that.'},
+  {n:'NET delivery P&L',f:m=>s2('col',m)-s2('cost',m)||null,fmt:SIG,sh:1,b:1,tt:'Collected minus the courier bill. Nothing else is added.'},
+  {n:'Recovery, % of the courier bill customers cover',f:m=>s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:F.PCT,sh:1},
+  null,
+  {n:'COST OF FREE DELIVERY (allocated)',f:m=>s2free(m)?-s2free(m):null,fmt:SIG,sh:1,b:1,gd:-1,tt:'Courier bill x free-order share. The price of the offer, in pounds.'},
+  {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
+  {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
+  {n:'Net delivery per confirmed order',f:m=>s2('conf',m)?(s2('col',m)-s2('cost',m))/s2('conf',m):null,fmt:SIG,sh:1},
+  {n:'Net delivery as % of Shopify gross',f:m=>{const gr=SH[m]&&SH[m].g;return gr?(s2('col',m)-s2('cost',m))/gr*100:null;},fmt:F.PCT,sh:1}];
+ const full=cols.filter(m=>m!==lag);
+ const tc=full.reduce((a,m)=>a+s2('col',m),0),tk=full.reduce((a,m)=>a+s2('cost',m),0);
+ const tf=full.reduce((a,m)=>a+s2free(m),0);
+ const nt=tc-tk;
+ let sub='Across the '+full.length+' settled months in this window you collected <b>E&pound;'+money(tc)+'</b> in delivery charges against a courier bill of <b>E&pound;'+money(tk)+'</b> &mdash; a net of <b>'+(nt<0?'&minus;E&pound;'+money(-nt)+', i.e. delivery is a subsidy you fund out of product margin':'E&pound;'+money(nt))+'</b>. Customers cover <b>'+(tk?(tc/tk*100).toFixed(0):0)+'%</b> of it. Of that bill, <b>E&pound;'+money(tf)+'</b> is the allocated cost of orders shipped free.';
+ if(cols.indexOf(lag)>=0)sub+=' <b style="color:#e23a63">'+lag+' is excluded from those totals</b> &mdash; Bosta settles COD on a lag, so only the first batch of the newest month has posted. Its column is still shown so you can watch it fill in.';
+ sub+=' Returns before '+rf+' were booked as cancellations, so the returned rows read near zero until then.';
+ pnlCard(g,'odoo','Delivery Economics &mdash; what free shipping actually costs (ACTUAL)',sub,T(L,cols));
+ /* Per-order outcome costs. Odoo cannot answer this: the ledger holds one
+    settlement total per Bosta batch, not a per-shipment breakdown. This comes
+    from the Bosta cash-cycle export, deduplicated by Order Id. */
+ const B=BOSTA;
+ let bh='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:680px"><tr><th style="text-align:left">Shipment outcome</th><th>Shipments</th><th>Share</th><th>Avg all-in fee</th><th>Avg base shipping</th><th>Avg cash collected</th><th>Total billed</th></tr>';
+ B.cls.forEach(r=>{bh+='<tr><td style="text-align:left"><span class="dot" style="background:'+r[5]+'"></span> '+r[0]+'</td><td>'+N(r[1])+'</td><td>'+(r[1]/B.n*100).toFixed(1)+'%</td><td><b>E&pound;'+r[2].toFixed(1)+'</b></td><td>E&pound;'+r[3].toFixed(1)+'</td><td>'+(r[4]<0?'&minus;E&pound;'+money(-r[4]):'E&pound;'+money(r[4]))+'</td><td>E&pound;'+money(r[1]*r[2])+'</td></tr>';});
+ bh+='<tr style="font-weight:800;border-top:1.5px solid #dfe3ec"><td style="text-align:left">All shipments</td><td>'+N(B.n)+'</td><td>100%</td><td>E&pound;'+(B.tot/B.n).toFixed(1)+'</td><td>&mdash;</td><td>&mdash;</td><td>E&pound;'+money(B.tot)+'</td></tr></table></div>';
+ const dk=B.cls[0],rf2=B.cls[1],rp=B.cls[3];
+ bh+='<div class="ins" style="margin-top:10px">'
+  +'<div class="row"><span class="dot" style="background:#e23a63"></span><span><b>A refused order costs E&pound;'+rf2[2].toFixed(0)+' and brings back nothing.</b> '+N(rf2[1])+' shipments &mdash; '+(rf2[1]/B.n*100).toFixed(0)+'% of everything you have ever sent &mdash; were refused at the door. Bosta still bills the leg. That is <b>E&pound;'+money(rf2[1]*rf2[2])+'</b> paid to carry boxes to people who did not take them, with zero cash collected against it.</span></div>'
+  +'<div class="row"><span class="dot" style="background:#8b5cf6"></span><span><b>A delivered-then-returned order costs you TWICE.</b> You pay E&pound;'+dk[2].toFixed(0)+' to deliver it, then E&pound;'+rp[2].toFixed(0)+' for the return pickup &mdash; <b>E&pound;'+(dk[2]+rp[2]).toFixed(0)+' all in</b>, and the COD you already collected goes back out (average E&pound;'+money(-rp[4])+' refunded per pickup). This is the answer to &ldquo;do returns cost more&rdquo;: yes, '+((dk[2]+rp[2])/dk[2]).toFixed(1)+'x a clean delivery, before the product even comes back to stock.</span></div>'
+  +'<div class="row"><span class="dot" style="background:#12a06e"></span><span><b>A clean delivery costs E&pound;'+dk[2].toFixed(0)+'</b> (E&pound;'+dk[3].toFixed(0)+' base + VAT + collection) and brings in E&pound;'+money(dk[4])+' of cash on average. '+(dk[1]/B.n*100).toFixed(0)+'% of shipments land here.</span></div>'
+  +'<div class="row"><span class="dot" style="background:#7c869c"></span><span><b>Where this comes from and what it does not do.</b> Bosta cash-cycle export, '+B.from+' to '+B.to+', '+N(B.n)+' unique shipments after de-duplication by Order Id. It is a manual export from the Bosta portal, so unlike everything else on this dashboard <b>it does not refresh on the 3-hourly sync</b> &mdash; it is a fixed window, stated here so you always know how old it is. The monthly table above IS live.</span></div>'
+  +'</div>';
+ pnlCard(g,'odoo','Cost by shipment outcome &mdash; delivered vs refused vs returned (Bosta export '+B.from+' &rarr; '+B.to+')','Odoo cannot answer this question: the ledger records one settlement total per Bosta batch, not a fee per shipment. This is the per-order billing file, so it is the only place the true cost of a refusal or a return leg is visible.',bh);}
 function rShipping(g,mons,T,F,SH){
  const S=O.ship;if(!S||!S.grp||!S.grp.rev)return;
  const G=(k,m)=>(S.grp[k]&&S.grp[k][m])||0;
@@ -2474,18 +2634,16 @@ function rShipping(g,mons,T,F,SH){
    tt:'Posted balance on the matching 31.01.08.* account for that month.'}));
  L.push({n:'Total paid out',f:m=>has(m)?-(G('paid',m)+G('coll',m)+G('hand',m)):null,fmt:SIG,sh:1,b:1,gd:-1,
    tt:'Courier and cargo + every collection fee + card, bank and packing. Everything it costs to get the box to the door and the money back to us.'});
- L.push({n:'Earned shipping discount (rebate back)',f:m=>G('gain',m)||null,fmt:F.POS,sh:1,
-   tt:'Account 32.00.00.18.00 -- the volume rebate the couriers credit back. Sign flipped so it reads as money in our favour.'});
+ L.push({n:'Earned shipping discount 32.00.00.18 (MIRROR &mdash; not added)',f:m=>G('gain',m)||null,fmt:F.POS,sh:0,
+   tt:'NOT a rebate. It is the ledger side of the same delivery money the customer already paid on the shipping SKU -- the two series track within 3% every month. The earlier version of this card added it as a separate gain, which double-counted every pound of shipping revenue. It is shown for cross-check only and is excluded from the net below.'});
  L.push(null);
- L.push({n:'NET shipping P&L',f:m=>has(m)?G('rev',m)+G('gain',m)-G('paid',m)-G('coll',m)-G('hand',m):null,fmt:SIG,sh:1,b:1,
-   tt:'Collected + rebate &minus; everything paid out. Negative means shipping is a subsidy you are funding out of product margin.'});
- L.push({n:'Recovery rate, % of outlay covered by customers',f:m=>{const o=G('paid',m)+G('coll',m)+G('hand',m);return o?(G('rev',m)+G('gain',m))/o*100:null;},fmt:F.PCT,sh:1});
- L.push({n:'Net shipping per Shopify order',f:m=>{const o=SH[m]&&SH[m].o;return o?(G('rev',m)+G('gain',m)-G('paid',m)-G('coll',m)-G('hand',m))/o:null;},fmt:SIG,sh:1});
- L.push({n:'Net shipping as % of Shopify gross',f:m=>{const gr=SH[m]&&SH[m].g;return gr?(G('rev',m)+G('gain',m)-G('paid',m)-G('coll',m)-G('hand',m))/gr*100:null;},fmt:F.PCT,sh:1});
+ L.push({n:'NET on these accounts (incl. packing &amp; gateway)',f:m=>has(m)?G('rev',m)-G('paid',m)-G('coll',m)-G('hand',m):null,fmt:SIG,sh:1,b:1,
+   tt:'Collected minus everything paid out on the 31.01.08.* tree. The mirror account is NOT added. This is a wider net than the delivery card above -- it also carries packing, bags and the payment-gateway cut, and those accounts are company-wide rather than e-commerce only. For the courier question, read the card above; read this one for the account detail.'});
+ L.push({n:'Recovery rate, % of outlay covered by customers',f:m=>{const o=G('paid',m)+G('coll',m)+G('hand',m);return o?G('rev',m)/o*100:null;},fmt:F.PCT,sh:1});
  const tot=k=>cols.reduce((a,m)=>a+G(k,m),0);
- const net=tot('rev')+tot('gain')-tot('paid')-tot('coll')-tot('hand');
- pnlCard(g,'odoo','Shipping &amp; Handling Economics (ACTUAL)',
-  'Over these '+cols.length+' months you collected <b>E&pound;'+Math.round(tot('rev')).toLocaleString()+'</b> in delivery charges and earned <b>E&pound;'+Math.round(tot('gain')).toLocaleString()+'</b> back in rebates, against <b>E&pound;'+Math.round(tot('paid')+tot('coll')+tot('hand')).toLocaleString()+'</b> paid out to couriers, gateways and packing &mdash; a net of <b>'+(net<0?'&minus;E&pound;'+Math.round(-net).toLocaleString()+', i.e. shipping costs you money':'E&pound;'+Math.round(net).toLocaleString()+', i.e. shipping pays for itself')+'</b>.',
+ const net=tot('rev')-tot('paid')-tot('coll')-tot('hand');
+ pnlCard(g,'odoo','Shipping accounts &mdash; line-by-line ledger detail (cross-check)',
+  'The 31.01.08.* tree account by account, for people who want to see which posting moved. Over these '+cols.length+' months: collected <b>E&pound;'+Math.round(tot('rev')).toLocaleString()+'</b> against <b>E&pound;'+Math.round(tot('paid')+tot('coll')+tot('hand')).toLocaleString()+'</b> paid out to couriers, gateways and packing &mdash; net <b>'+(net<0?'&minus;E&pound;'+Math.round(-net).toLocaleString():'E&pound;'+Math.round(net).toLocaleString())+'</b>. <b>This card under-reports the courier line before Jan 2026</b>, because those postings were coded to Credit Card Expenses and only the delivery card above digs them out. Read the card above for the real courier number.',
   T(L,cols));}
 
 /* v6.3 ---------------------------------------------------------------- SALARY DETAIL
@@ -2544,6 +2702,33 @@ function rSalary(g,mons,T,F){
  rh+='</table></div><div class="cs" style="margin-top:6px">Newest first. Showing '+show.length.toLocaleString()+' of '+rows.length.toLocaleString()+' matching postings &mdash; narrow the month range, branch, category or search box above to see the rest. Negative amounts are reversals and accrual corrections, shown exactly as Odoo holds them rather than netted away.</div>';
  pnlCard(g,'odoo','Salary Ledger &mdash; Every Posting',
   'The actual account.move.line rows behind every number on this tab. Nothing is aggregated, nothing is estimated.',rh);}
+var _S2C=null;
+function S2f(){if(_S2C===null)_S2C=(window.O&&O.ship2&&O.ship2.m&&O.ship2.m.length)?O.ship2:0;return _S2C||null;}
+var _S2IC=null;
+function S2If(){if(_S2IC===null){_S2IC={};const q=S2f();if(q)q.m.forEach((m,i)=>{_S2IC[m]=i;});}return _S2IC;}
+function s2h(m){return S2f()&&S2If()[m]!=null;}
+function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];return (a&&a[S2If()[m]])||0;}
+/* The final month is ALWAYS understated: Bosta settles COD on a lag, so only the
+   first settlement batch of that month has hit the ledger when we read it. Every
+   cost-bearing chart drops it rather than drawing a cliff that is not real. */
+function s2lag(m){return S2f()&&S2f().lagM===m;}
+function s2cols(mons,dropLag){return mons.filter(m=>s2h(m)&&!(dropLag&&s2lag(m)));}
+/* Cost of free delivery: total courier bill for the month x the share of that
+   month's confirmed orders that the customer paid NOTHING to have delivered.
+   Bosta bills per shipment at a near-flat rate (E-pound 53.6 average across
+   85,240 delivered orders in the raw export), so a straight order-share split is
+   the honest allocation -- it is labelled ALLOCATED everywhere it appears. */
+function s2free(m){const c=s2('conf',m);return c?s2('cost',m)*s2('freeN',m)/c:0;}
+/* Static, from the Bosta cash-cycle export parsed off the Mac. This CANNOT come
+   from Odoo -- the ledger records one settlement total per batch, not per-order
+   outcomes -- and it CANNOT refresh in the 3-hourly Action, because the source is
+   a manual xlsx export. Coverage window is printed on the card, always. */
+const BOSTA={exp:'2026-07',from:'2023-12',to:'2026-07',n:105367,tot:6433443,
+ cls:[['Delivered &amp; kept by the customer',85240,61.7,53.6,906.0,'#12a06e'],
+      ['Refused at the door (returned unopened)',13194,50.5,44.0,0.0,'#e23a63'],
+      ['Exchange leg',4264,74.9,65.4,24.1,'#c9834a'],
+      ['Delivered, then returned (2nd pickup leg)',2584,72.2,63.3,-800.0,'#8b5cf6'],
+      ['Cash collection only',85,46.7,41.0,-668.0,'#7c869c']]};
 function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
  const EP=372076,RM=0.219,CO=(FF.company||{});
@@ -2568,8 +2753,8 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
  const SIG=v=>v<0?'&minus;'+money(-v):money(v);
  const SP=(O.ship&&O.ship.grp)||null,SG=(k,m)=>(SP&&SP[k]&&SP[k][m])||0;
- const shipHas=m=>SP?(SG('rev',m)||SG('paid',m)||SG('coll',m)||SG('hand',m)||SG('gain',m)):0;
- const shipNet=m=>shipHas(m)?SG('rev',m)+SG('gain',m)-SG('paid',m)-SG('coll',m)-SG('hand',m):0;
+ const shipHas=m=>s2h(m)?1:(SP?(SG('rev',m)||SG('paid',m)||SG('coll',m)||SG('hand',m)||SG('gain',m)):0);
+ const shipNet=m=>s2h(m)?(s2('col',m)-s2('cost',m)):(shipHas(m)?SG('rev',m)-SG('paid',m)-SG('coll',m)-SG('hand',m):0);
  const GPF=m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null;
  // ---- 1 · SHOPIFY P&L — ACTUALS ----
  if(O.shop){
@@ -2581,12 +2766,11 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Net revenue',f:m=>SH[m]&&SH[m].g?SH[m].g-SH[m].r:null,fmt:POS,sh:1,b:1},
    {n:'COGS (actual)',f:m=>SH[m]&&SH[m].g?-((SH[m].g-SH[m].r)-SH[m].gp*(1-SH[m].r/SH[m].g)):null,fmt:NEG,sh:0,q:'sh_cogs',tt:'Net revenue &minus; net gross profit. Cost of the goods that were KEPT: refunded orders take their COGS out with them, so COGS is struck off NET sales, not gross.'},
    {n:'Gross profit',f:m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null,fmt:POS,sh:1,b:1,q:'sh_gp',tt:'Odoo margin on the Shopify channel, less the margin that went back out with refunds. Net revenue &minus; COGS = this line, exactly.'},
-   {n:'Shipping collected from customers',f:m=>SG('rev',m)||null,fmt:POS,sh:1,q:'ship',tt:'What customers paid us for delivery &mdash; the sale-order lines on the Shopify shipping SKU, Bosta Delivery and POS SHIPPING. On a free-shipping promotion this line goes to zero while the rows below stay exactly where they were, which is what makes the net turn negative.'},
-   {n:'Courier rebate earned (32.00.00.18)',f:m=>SG('gain',m)||null,fmt:POS,sh:1,q:'ship',tt:'The volume discount the couriers credit back to us. Real money in, posted to account 32.00.00.18.00.'},
-   {n:'Less: courier &amp; cargo paid',f:m=>SG('paid',m)?-SG('paid',m):null,fmt:NEG,sh:1,q:'ship',tt:'Accounts 31.01.08.08 courier &amp; cargo and .09 transportation. What it costs to put the box on a van.'},
-   {n:'Less: collection &amp; gateway fees (Bosta, PayMob, card, bank)',f:m=>SG('coll',m)?-SG('coll',m):null,fmt:NEG,sh:1,q:'ship',tt:'The cash-collection cut: Bosta .34, PayMob .35, Noon .31, Amazon .32, Aramex .33, Symbel .36, Fawry .37, plus card fees .17 and bank charges .12. This is the money the courier and the gateway keep out of the cash they collect on your behalf.'},
-   {n:'Less: packing, wrapping &amp; bags',f:m=>SG('hand',m)?-SG('hand',m):null,fmt:NEG,sh:1,q:'ship',tt:'Account 31.01.08.10 &mdash; the physical handling cost of getting the order out the door.'},
-   {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship',tt:'Collected + rebate &minus; courier &minus; collection fees &minus; packing. Negative means delivery is a subsidy funded out of product margin. NOTE: these accounts are company-wide, so a small slice of card fees and bags belongs to the branches, not to Shopify. The e-commerce channel is the overwhelming majority of them.'},
+   {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed. On a free-delivery promotion this line falls while the courier bill underneath does not move at all -- that gap is what makes the net negative.'},
+   {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that -- 3.5m EGP of courier cost sitting in an account named after card fees. Until this was found the dashboard reported ZERO courier cost for the first 17 months.'},
+   {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin. The old version of this line also added account 32.00.00.18.00 as a rebate; that account is the ledger mirror of the shipping revenue already counted above, so adding it double-counted every pound. It is gone.'},
+   {n:'&nbsp;&nbsp;of which: COST OF FREE DELIVERY (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The courier bill for the month multiplied by the share of that month\u2019s confirmed orders on which the customer paid nothing for delivery. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. This is the price of the free-delivery offer, in pounds, month by month.'},
+   {n:'Shipping recovery, % of the courier bill covered by customers',f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself. Anything below that is the share of every delivery you are funding yourself.'},
    {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below this line now subtracts from THIS number, not from the gross profit row above it.'},
    {n:'Ads &mdash; Meta',f:m=>A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0},
    {n:'Ads &mdash; Google',f:m=>A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
@@ -2678,11 +2862,12 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
   ctl+='<div style="margin:2px 0 10px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">TIMEFRAME</span><label style="font-size:10.5px">From</label> <select onchange="vtime(0,this.value)">'+op(ST.pm0||'')+'</select> <label style="font-size:10.5px">To</label> <select onchange="vtime(1,this.value)">'+op(ST.pm1||'')+'</select>'+((ST.pm0||ST.pm1)?' <span style="font-size:10.5px;color:#e23a63;font-weight:700">Total / GP / GP% show the window only (retail + Shopify merged). Customer columns stay lifetime.</span>':'')+'</div>';}
  else ctl+='<div style="margin:2px 0 10px;font-size:10.5px;color:#8a93a6">Timeframe filter needs the monthly split — it lands automatically on the next heavy sync.</div>';
  // ---------- 3. league table ----------
+ const nAvg=net.ltgp||0,rAvg=net.rep||0;
+ withCW('vl_league',function(){
  const R=vRows().slice().sort((a,b)=>{const x=vVal(a,VSK),y=vVal(b,VSK);return (x<y?-1:x>y?1:0)*VSD;});
  const WON=!!(ST.pm0||ST.pm1);
  const H=[['n','Supplier','left'],['r',(VBR==='all'?'Retail':VBR)+(WON?' (all-time)':''),'right'],['orev','Shopify'+(WON?' (all-time)':''),'right'],['tot','Total'+(WON?' (window)':''),'right'],['g','Gross profit'+(WON?' (window)':''),'right'],['gpp','GP%','right'],['onp','% Shopify','right'],['mom','90d vs prior','right'],['trend','Rev trend 3mo','right'],['cust','Customers','right'],['acq','Acquired','right'],['ltgp','LTGP / cust','right'],['lift','LTGP lift (vs E&pound; '+Math.round(net.ltgp||0).toLocaleString()+' avg)','right'],['rep','Repeat %','right'],['stk','Stock units','right'],['stkc','Stock @cost','right'],['cov','Mo. cover','right']];
  const th=H.map(h=>'<th onclick="vsort(\''+h[0]+'\')" style="cursor:pointer;text-align:'+h[2]+';padding:6px 7px;font-size:10.5px;font-weight:800;color:'+(VSK===h[0]?'#161d2e':'#64748b')+';border-bottom:2px solid '+(VSK===h[0]?'#161d2e':'#e6e9f2')+';white-space:nowrap">'+h[1]+(VSK===h[0]?(VSD<0?' &darr;':' &uarr;'):'')+'</th>').join('');
- const nAvg=net.ltgp||0,rAvg=net.rep||0;
  const td=(v,al,c,b)=>'<td style="text-align:'+(al||'right')+';padding:5px 7px;font-size:11.5px;'+(b?'font-weight:800;':'')+(c?'color:'+c+';':'')+'white-space:nowrap">'+v+'</td>';
  const body=R.slice(0,120).map(r=>{const w=vWin(r);const t2=w?w.r:r.r+r.orev,gp2=w?w.g:r.g+r.ogp,mom=vVal(r,'mom');
   const rv=VBR==='all'?r.r:(r.br[VBR]?r.br[VBR][0]:0),gv=VBR==='all'?gp2:(r.br[VBR]?r.br[VBR][1]:0);
@@ -2702,10 +2887,11 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
    +td(r.cust>=25?fP(r.rep):'&mdash;','right',rc)+td((function(){const iv=vInv(r);return iv&&iv.u?fI(iv.u):'&mdash;';})())+td((function(){const iv=vInv(r);return iv&&iv.c?E+money(iv.c):'&mdash;';})())+td((function(){const c=vCover(r);return c==null?'&mdash;':c.toFixed(1)+' mo';})(),'right',(function(){const c=vCover(r);return c==null?'':(c>12?'#e23a63':c<1.5?'#e08a1e':'#334155');})())+'</tr>';}).join('');
  pnlCard(g,'ins','Vendor league table &mdash; every supplier, sortable'+INFO('Click any column header to re-sort. Retail is the sum of report.pos.order price_total on that supplier product templates; Shopify is sale.order.line price_subtotal on the four Shopify sales teams. LTGP per customer and repeat rate are only shown once a supplier has at least 25 registered POS customers.'),
   R.length+' suppliers'+(VFC!=='all'?' ('+(VFC==='cash'?'cash / owned stock':'consignment')+' only)':'')+(VBR!=='all'?', selling at '+VBR:'')+'. Green LTGP or repeat means that supplier customers are worth more than the network average of '+E+money(nAvg)+' and '+fP(rAvg)+'; red means less. Showing the first 120 rows.',
-  ctl+'<div style="overflow:auto;max-height:640px"><table data-nosort style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff;z-index:2"><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+  cwBar('vl_league')+ctl+'<div style="overflow:auto;max-height:640px"><table data-nosort style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff;z-index:2"><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
   +'<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>How to read the two customer columns.</b> <b>Customers</b> is every registered POS customer who has ever bought this supplier at least once &mdash; a shopper who buys four suppliers in one basket counts once for each of them, so these columns deliberately do not sum to the network total. <b>Acquired</b> is the stricter number: customers whose very first-ever OurKids basket contained this supplier. A supplier with a high Acquired count is pulling new people through the door; one with a high Customers count but low Acquired is riding traffic that somebody else won.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>LTGP per customer is the planning number, not revenue.</b> It is the total lifetime gross profit of everyone who ever bought this supplier, divided by how many of them there are. A supplier can be small in revenue and still sit at the top of this column, which means its buyers are unusually valuable overall &mdash; those are the ranges to widen. Read it next to Repeat %: high LTGP with high repeat is a habit-forming range; high LTGP with low repeat is one big-ticket purchase and will not compound.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>Attribution caveat, stated plainly.</b> These customer columns are correlational. They tell you what buyers of a supplier are worth in total, across every supplier they buy. They do not prove the supplier caused that value. The Acquired column is the closest thing here to a causal read, because it only counts people whose relationship with you started in that basket.</span></div></div>');
+ });
  // ---------- 4. branch index matrix ----------
  const brTot={};BRS.forEach(b=>brTot[b]=V.reduce((a,r)=>a+((r.br&&r.br[b])?r.br[b][0]:0),0));
  const netRet=V.reduce((a,r)=>a+r.r,0);
