@@ -1258,6 +1258,36 @@ def pos_cfg_branches():
     return out
 
 
+def pull_vendor_inventory():
+    """Stock on hand per vendor: units, cost value (qty x standard_price) and retail
+    value (qty x list_price), from product.template.qty_available joined on vendor_num.
+    Keyed by vendor code to join the vend rows (r['v'])."""
+    inv = {}
+    try:
+        for r in _page("product.template", [["qty_available", ">", 0]],
+                       ["vendor_num", "qty_available", "standard_price", "list_price"], 5000, 300000):
+            v = (r.get("vendor_num") or "").strip()
+            if not v:
+                continue
+            q = r.get("qty_available") or 0
+            sp = r.get("standard_price") or 0
+            lp = r.get("list_price") or 0
+            d = inv.setdefault(v, {"u": 0.0, "c": 0.0, "rt": 0.0, "sk": 0})
+            d["u"] += q
+            d["c"] += q * sp
+            d["rt"] += q * lp
+            d["sk"] += 1
+    except Exception as e:
+        log("vendor inventory failed", type(e).__name__, str(e)[:120])
+        return {}
+    for v in inv:
+        inv[v]["u"] = round(inv[v]["u"])
+        inv[v]["c"] = round(inv[v]["c"])
+        inv[v]["rt"] = round(inv[v]["rt"])
+    log("vendor inventory", len(inv), "vendors with stock on hand")
+    return inv
+
+
 def pull_vendors():
     """Vendor and product economics across every branch and every online channel.
 
@@ -1572,7 +1602,7 @@ def build():
         pd0 = open(os.path.join(DOCS, "data.js")).read()
         prev = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
     except Exception: pass
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun"))
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan"))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
         bnr, bstat, bcoh, bun = _bc if isinstance(_bc, tuple) and len(_bc) == 4 else ({}, {}, {}, {})
@@ -1588,6 +1618,7 @@ def build():
         vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
     if heavy:
         safe(pull_shop_lines)
+    vinv = (safe(pull_vendor_inventory) if heavy else None) or prev.get("vinv", {})
     # v6.5 -- deciles / lag / unregistered revenue / vendor+product monthly, with carry-forward
     dec = XTRA.get("dec") or prev.get("dec", {})
     lag = XTRA.get("lag") or prev.get("lag", {})
@@ -1665,7 +1696,7 @@ def build():
                             "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                         for b, ms in MBR.items()},
-              "vend": vend, "prodv": prodv, "ship": ship, "sal": sal,
+              "vend": vend, "prodv": prodv, "ship": ship, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
