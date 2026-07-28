@@ -395,6 +395,24 @@ def pull_meta(win):
         "| branches", len(MBR))
     return ad
 
+_SHOPV = []
+def _shopify_versions(host, tok):
+    """v7.9: the sessions dataset only exists in recent ShopifyQL. A pinned
+    SHOPIFY_API_VERSION secret that has aged out returns tableData with ZERO ROWS --
+    no error, no parseError, just an empty table that silently flatlines the funnel.
+    So ask the store which versions it supports and try the newest first."""
+    if _SHOPV: return _SHOPV
+    d = http_json("https://%s/admin/api/2025-07/graphql.json" % host,
+                  {"query": "{publicApiVersions{handle supported}}"},
+                  {"X-Shopify-Access-Token": tok})
+    raw = (((d or {}).get("data") or {}).get("publicApiVersions") or [])
+    vs = sorted([v.get("handle") for v in raw
+                 if v.get("supported") and re.match(r"^\d{4}-\d{2}$", str(v.get("handle") or ""))],
+                reverse=True)
+    _SHOPV.extend(vs)
+    log("shopify api versions supported:", ",".join(vs) if vs else "NONE DISCOVERED (falling back to the hardcoded ladder)")
+    return _SHOPV
+
 def shopify_ql(ql, tag="ql"):
     """v7.6: never fail silently. Tries the pinned API version first, then a fallback
     ladder -- a stale SHOPIFY_API_VERSION secret used to zero the whole funnel with one
@@ -407,7 +425,7 @@ def shopify_ql(ql, tag="ql"):
     host = store if ".myshopify.com" in store else store + ".myshopify.com"
     envv = os.environ.get("SHOPIFY_API_VERSION", "").strip()
     vers, seen = [], set()
-    for v in [envv, "2025-07", "2025-04", "2025-01", "2024-10"]:
+    for v in _shopify_versions(host, tok) + [envv, "2025-07", "2025-04", "2025-01", "2024-10"]:
         if v and v not in seen: seen.add(v); vers.append(v)
     # v7.1: shopifyqlQuery returns ShopifyqlQueryResponse (a plain object) -- the old
     # "... on TableResponse" union fragment was removed by Shopify. Read fields directly.
@@ -429,7 +447,13 @@ def shopify_ql(ql, tag="ql"):
             last = "tableData returned 0 rows on v" + ver
             continue
         return [dict(zip(cols, r)) for r in rows]
-    log("shopifyql fail:", tag, "::", last)
+    if "0 rows" in last:
+        log("shopifyql fail:", tag, ":: every supported API version returned an EMPTY table. "
+            "The query parsed fine, so this is not a syntax problem -- the app's access token "
+            "is most likely missing the read_analytics/read_reports scope for this dataset. "
+            "Last attempt ::", last)
+    else:
+        log("shopifyql fail:", tag, "::", last)
     return None
 
 def pull_meta_reach(win, tok):
@@ -485,11 +509,16 @@ def pull_shopify(win):
         if cu:
             out["rcrev"][day] = round(ts * rc / cu, 2)
             out["ncrev"][day] = round(ts - ts * rc / cu, 2)
+    SRCOK["shopify"] = bool(rows)
     log("shopify days", sum(1 for v in out["sessions"].values() if v),
         "| cust-split days", sum(1 for v in out["retcust"].values() if v))
     return out
 
 GTOK = [None]
+# v7.8: did the API actually answer? Lets us tell "the feed is broken" apart from
+# "the account simply spent nothing" -- two very different problems that both look
+# like a flat zero on a chart.
+SRCOK = {}
 def pull_google(win):
     out = {"gspend": {d: 0.0 for d in win}, "gecomrev": {d: 0.0 for d in win}, "gconv": {d: 0.0 for d in win},
            "gimp": {d: 0.0 for d in win}, "gclk": {d: 0.0 for d in win}}
@@ -527,6 +556,7 @@ def pull_google(win):
             out["gconv"][day] += float(row.get("metrics", {}).get("conversions", 0))
             out["gimp"][day] += float(row.get("metrics", {}).get("impressions", 0))
             out["gclk"][day] += float(row.get("metrics", {}).get("clicks", 0))
+    SRCOK["google"] = True
     log("google days", sum(1 for v in out["gspend"].values() if v))
     return out
 
@@ -1827,7 +1857,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v7.6 (shopifyql version-ladder + real new/returning + shipping P&L)")
+    log("collector v7.9 (live API-version discovery + Odoo new/returning + decile attributes + idle-vs-stale)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -1985,12 +2015,23 @@ def build():
     freshmap = {"odoo": END.isoformat(), "shopify": _lastnz(shop.get("sessions")),
                 "meta": _lastnz(meta.get("mspend")), "google": _lastnz(goog.get("gspend")),
                 "tiktok": (_lastnz(tik.get("tspend")) if _ttok else "off")}
-    def _isstale(v):
+    def _isstale(k, v):
+        # v7.8: STALE now means the pipe is broken, not that the account is idle.
+        # If the API answered and simply had no spend to report, that is a business
+        # fact, not a sync failure -- it gets logged as idle and left off the alarm.
         if v == "off": return False
-        if not v: return True
-        try: return (today - datetime.date.fromisoformat(v)).days > 2
+        if not v: return not SRCOK.get(k)
+        try: fresh = (today - datetime.date.fromisoformat(v)).days <= 2
         except Exception: return True
-    stalelist = [k for k, v in freshmap.items() if _isstale(v)]
+        if fresh: return False
+        return not SRCOK.get(k)
+    stalelist = [k for k, v in freshmap.items() if _isstale(k, v)]
+    idlelist = [k for k, v in freshmap.items()
+                if v not in ("off", None) and k not in stalelist and SRCOK.get(k)
+                and (today - datetime.date.fromisoformat(v)).days > 2]
+    for k in idlelist:
+        log("IDLE source: %s -- API answered fine, no activity recorded since %s. "
+            "Not a sync failure; nothing was spent/tracked." % (k, freshmap[k]))
     log("freshness", freshmap)
     log("STALE sources: " + (",".join(stalelist) if stalelist else "none - all fresh to date"))
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
@@ -2004,7 +2045,7 @@ def build():
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
-              "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "aw": [win[0], win[-1]]}
+              "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "idle": idlelist, "srcok": {k: bool(v) for k, v in SRCOK.items()}, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
     off["meta"]["offlineValue"] = int(round(sum(meta.get("instoreMeta", {}).values()))) or off["meta"].get("offlineValue", 0)
