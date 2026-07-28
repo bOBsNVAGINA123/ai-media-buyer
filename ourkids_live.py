@@ -1606,6 +1606,30 @@ def build():
         pd0 = open(os.path.join(DOCS, "data.js")).read()
         prev = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
     except Exception: pass
+    # v7.1 RESILIENCE: a broken source must NEVER zero the chart. If a Shopify day came back
+    # empty (fetch gap or an API change like the ShopifyQL rename) but the previous payload
+    # had it, carry the last-known values forward instead of writing a cliff of zeros.
+    try:
+        SHK = ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]
+        pad = prev.get("ad") or {}
+        if pad.get("start"):
+            _pd0 = datetime.date.fromisoformat(pad["start"])
+            def _pm(key):
+                a = pad.get(key) or []
+                return {(_pd0 + datetime.timedelta(days=i)).isoformat(): v for i, v in enumerate(a)}
+            pmaps = {k: _pm(k) for k in SHK}
+            healed = 0
+            for d in list(shop.get("sessions", {})):
+                if not shop["sessions"].get(d) and pmaps["sessions"].get(d):
+                    for k in SHK:
+                        pv = pmaps[k].get(d)
+                        if pv:
+                            shop[k][d] = pv
+                    healed += 1
+            if healed:
+                log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
+    except Exception as e:
+        log("carry-forward skipped", str(e)[:120])
     heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan"))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
@@ -1694,6 +1718,21 @@ def build():
           "gp": [int(round(shc["sgp"].get(d, 0) / 1000.0)) for d in fwin],
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
+    def _lastnz(m):
+        ds = [d for d, v in (m or {}).items() if v]
+        return max(ds) if ds else None
+    _ttok = bool(os.environ.get("TIKTOK_TOKEN", "").strip())
+    freshmap = {"odoo": END.isoformat(), "shopify": _lastnz(shop.get("sessions")),
+                "meta": _lastnz(meta.get("mspend")), "google": _lastnz(goog.get("gspend")),
+                "tiktok": (_lastnz(tik.get("tspend")) if _ttok else "off")}
+    def _isstale(v):
+        if v == "off": return False
+        if not v: return True
+        try: return (today - datetime.date.fromisoformat(v)).days > 2
+        except Exception: return True
+    stalelist = [k for k, v in freshmap.items() if _isstale(v)]
+    log("freshness", freshmap)
+    log("STALE sources: " + (",".join(stalelist) if stalelist else "none - all fresh to date"))
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
               "bmeta": {b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
@@ -1705,7 +1744,7 @@ def build():
               "mads": mads, "gads": gads, "tads": tads,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
-              "ann": annotations(fin), "attr": ATTR, "src": SRC, "aw": [win[0], win[-1]]}
+              "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
     off["meta"]["offlineValue"] = int(round(sum(meta.get("instoreMeta", {}).values()))) or off["meta"].get("offlineValue", 0)
@@ -1724,7 +1763,8 @@ def _dataface():
         t = open(os.path.join(DOCS, "data.js"), encoding="utf-8").read()
         o = json.loads(t[t.index("window.O=") + 9: t.index(";\nwindow.F=")])
         return {"bytes": len(t), "lastSync": o.get("lastSync"), "windowEnd": (o.get("aw") or [None, None])[1],
-                "partial": o.get("partial"), "today": o.get("today")}
+                "partial": o.get("partial"), "today": o.get("today"),
+                "fresh": o.get("fresh"), "stale": o.get("stale")}
     except Exception as e:
         return {"bytes": 0, "error": str(e)[:200]}
 
