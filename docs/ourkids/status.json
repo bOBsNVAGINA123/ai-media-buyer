@@ -2,15 +2,15 @@
  "ok": true,
  "error": "",
  "fresh": true,
- "startedUtc": "2026-07-27 22:29:12 UTC",
- "finishedUtc": "2026-07-27 22:31:37 UTC",
- "seconds": 145,
- "runner": "30310866733",
+ "startedUtc": "2026-07-28 03:41:05 UTC",
+ "finishedUtc": "2026-07-28 03:42:45 UTC",
+ "seconds": 99,
+ "runner": "30326582658",
  "attempt": "1",
  "todayCairo": "2026-07-28",
  "data": {
-  "bytes": 739855,
-  "lastSync": "2026-07-28 01:29 Cairo",
+  "bytes": 739865,
+  "lastSync": "2026-07-28 06:41 Cairo",
   "windowEnd": "2026-07-28",
   "partial": "2026-07-28",
   "today": "2026-07-28"
@@ -25,9 +25,9 @@
   "[ourkids] shopify days 0",
   "[ourkids] google days 265",
   "[ourkids] tiktok skipped",
-  "[ourkids] shop-channel days 722",
+  "[ourkids] shop-channel days 723",
   "[ourkids] meta reach months 13",
-  "[ourkids] cohorts 24 customers 64547 nr months 24",
+  "[ourkids] cohorts 24 customers 64560 nr months 24",
   "[ourkids] pos branches 7 months 24",
   "[ourkids] pos customers carried forward (heavy crawl runs on first sync of the day)",
   "[ourkids] meta ads 40",
@@ -41,6 +41,6 @@
   "[ourkids] fallback merged",
   "[ourkids] meta attribution measured 0.865 0.73",
   "[ourkids] annotations 23",
-  "[ourkids] WROTE data.js 739855 bytes  synced 2026-07-28 01:29 Cairo"
+  "[ourkids] WROTE data.js 739865 bytes  synced 2026-07-28 06:41 Cairo"
  ]
 }
