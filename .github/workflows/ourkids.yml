@@ -3,6 +3,7 @@ name: OurKids Live Dashboard
 # Runs on GitHub's servers. Laptop off, nobody online. Rebuilds docs/ourkids/data.js
 # from the live APIs and commits it, so GitHub Pages always serves fresh numbers.
 #
+# v6.3 -- push-race hardening (28 Jul 2026); see the Commit step.
 # v6.2.1 -- hardened after two days of silent failure (25 Jul -> 27 Jul 2026).
 # What went wrong and what stops it recurring:
 #   * cron sat on minute :00, the busiest minute on GitHub's shared scheduler, where
@@ -104,13 +105,20 @@ jobs:
           git config user.email "bot@users.noreply.github.com"
           git add docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/index.html || true
           git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || { echo "no changes to commit"; exit 0; }
-          for i in 1 2 3; do
+          # v6.3: rebase BEFORE the first push, not only after a rejection. A manual
+          # workflow_dispatch fired while a scheduled run is already in flight queues on
+          # the concurrency group, then both runs push the same two files -- the second
+          # one loses the race, burns all its retries, and reports the whole job as
+          # "Process completed with exit code 1" even though its data was perfectly good.
+          for i in 1 2 3 4 5; do
+            git fetch origin main --quiet || true
+            git pull --rebase --autostash origin main || echo "rebase attempt $i had nothing to replay"
             if git push; then echo "pushed on attempt $i"; exit 0; fi
-            echo "push $i failed -- rebasing on origin/main and retrying"
-            git pull --rebase --autostash origin main || true
-            sleep 5
+            echo "push attempt $i was rejected -- another run pushed first; re-syncing"
+            sleep $((i * 5))
           done
-          echo "push failed three times"
+          echo "COMMIT STEP FAILED: five pushes rejected in a row. The data itself is fine"
+          echo "(see the status.json summary below) -- this is purely a git race."
           exit 1
 
       # Prints the outcome on the run's summary page, so "is it healthy?" is answered
