@@ -2,15 +2,15 @@
  "ok": true,
  "error": "",
  "fresh": true,
- "startedUtc": "2026-07-28 16:52:38 UTC",
- "finishedUtc": "2026-07-28 16:54:55 UTC",
- "seconds": 137,
- "runner": "30380250066",
+ "startedUtc": "2026-07-28 19:56:36 UTC",
+ "finishedUtc": "2026-07-28 19:58:37 UTC",
+ "seconds": 121,
+ "runner": "30394008835",
  "attempt": "1",
  "todayCairo": "2026-07-28",
  "data": {
-  "bytes": 955108,
-  "lastSync": "2026-07-28 19:52 Cairo",
+  "bytes": 955126,
+  "lastSync": "2026-07-28 22:56 Cairo",
   "windowEnd": "2026-07-28",
   "partial": "2026-07-28",
   "today": "2026-07-28",
@@ -26,7 +26,7 @@
  "log": [
   "[ourkids] collector v8.0 (ShopifyQL object-row fix + API-version discovery + decile attributes + idle-vs-stale)",
   "[ourkids] odoo days 723",
-  "[ourkids] branches live {'Dokki': 16768916, 'Smouha': 11707382, 'Nasr City': 18356142, 'New Cairo': 26735364, 'October': 9742489, 'Zayed': 14793628, 'Mall of Arabia': 23923770}",
+  "[ourkids] branches live {'Dokki': 16788089, 'Smouha': 11707382, 'Nasr City': 18444937, 'New Cairo': 26816895, 'October': 9742489, 'Zayed': 14829382, 'Mall of Arabia': 24007081}",
   "[ourkids] products 23",
   "[ourkids] meta days 364 | per-branch in-store days 0 | branches 0",
   "[ourkids] shopify api versions supported: 2026-07,2026-04,2026-01,2025-10",
@@ -39,7 +39,7 @@
   "[ourkids] tiktok skipped",
   "[ourkids] shop-channel days 723",
   "[ourkids] meta reach months 13",
-  "[ourkids] cohorts 24 customers 64601 nr months 24 nr days 723",
+  "[ourkids] cohorts 24 customers 64614 nr months 24 nr days 723",
   "[ourkids] new/returning from Odoo customer actuals, days 365",
   "[ourkids] pos branches 7 months 24",
   "[ourkids] pos customers carried forward (heavy crawl runs on first sync of the day)",
@@ -49,7 +49,7 @@
   "[ourkids] branch costs {'Zayed': 24, 'New Cairo': 24, 'Nasr City': 22, 'Smouha': 20, 'Dokki': 24, 'Mall of Arabia': 13, 'October': 24}",
   "[ourkids] rent coverage {'Dokki': (0, 0), 'Mall of Arabia': (13, 542740), 'Nasr City': (8, 582840), 'New Cairo': (22, 373290), 'October': (24, 437000), 'Smouha': (18, 304750), 'Zayed': (21, 406620)}",
   "[ourkids] shipping rev skus 3 accounts 8 months 24",
-  "[ourkids] ship2 24 months, collected 2690806 cost 6076443 net -3385637",
+  "[ourkids] ship2 24 months, collected 2691995 cost 6076443 net -3384448",
   "[ourkids] salaries 4778 lines 1814 payees 24 months",
   "[ourkids] expenses months 24 rent branches 7",
   "[ourkids] fallback merged",
@@ -58,6 +58,6 @@
   "[ourkids] freshness {'odoo': '2026-07-28', 'shopify': '2026-07-28', 'meta': '2026-07-28', 'google': '2026-07-11', 'tiktok': 'off'}",
   "[ourkids] STALE sources: none - all fresh to date",
   "[ourkids] annotations 23",
-  "[ourkids] WROTE data.js 955108 bytes  synced 2026-07-28 19:52 Cairo"
+  "[ourkids] WROTE data.js 955126 bytes  synced 2026-07-28 22:56 Cairo"
  ]
 }
