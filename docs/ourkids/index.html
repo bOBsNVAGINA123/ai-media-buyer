@@ -54,7 +54,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="wrap hide" id="app">
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
-<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
+<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline / Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t15" onclick="tab('cp')">Customer Portfolio</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
 <div id="stale"></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
@@ -71,7 +71,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -181,7 +181,7 @@ function insWrap(id){const el=document.getElementById(id);if(!el||!el.querySelec
   const d=document.createElement('details');d.className='insx';const sm=document.createElement('summary');sm.innerHTML='Read insights';
   d.appendChild(sm);x.parentNode.insertBefore(d,x);d.appendChild(x);});}catch(e){}}
 function boot(){O=window.O;FF=window.F;isoDates();SORTON();
- if(typeof MutationObserver!=='undefined')try{['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g12','g13','g14'].forEach(id=>{const el=document.getElementById(id);if(!el)return;new MutationObserver(()=>insWrap(id)).observe(el,{childList:true,subtree:true});});}catch(e){}LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
+ if(typeof MutationObserver!=='undefined')try{['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g12','g13','g14','g15'].forEach(id=>{const el=document.getElementById(id);if(!el)return;new MutationObserver(()=>insWrap(id)).observe(el,{childList:true,subtree:true});});}catch(e){}LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
  LSF=cairoFull(O.lastSync);
  document.getElementById('sync').innerHTML='↻ Synced <b>'+LSF+'</b> Cairo · next ~<b>'+NXC+'</b>';
  staleBar();
@@ -204,9 +204,9 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v6.6</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v6.8</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
-function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function tab(t){TAB=t;[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -842,7 +842,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   if(el.setAttribute)el.setAttribute('data-q','1');
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
-const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14'};
+const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15'};
 function rTab(){const t=TAB;if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
@@ -860,6 +860,8 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
  const SF=opt.sf||F;   /* v6.2: short form for on-chart labels and axis ticks */
  const KEY=opt.key||title.replace(/[^A-Za-z]/g,'').slice(0,22);
  const st=SMO[KEY]||(SMO[KEY]={sort:'def',scale:'shared'});
+ const _origL=(labels||[]).slice();const _mono=_origL.length>2&&_origL.every(x=>/^\d{2,4}-\d{2}/.test(x));
+ if(_mono){let i0=0,i1=_origL.length-1;if(st.w0){const k=_origL.indexOf(st.w0);if(k>=0)i0=k;}if(st.w1){const k=_origL.indexOf(st.w1);if(k>=0)i1=k;}if(i1<i0){const z=i0;i0=i1;i1=z;}if(i0>0||i1<_origL.length-1){labels=_origL.slice(i0,i1+1);series=series.map(x=>Object.assign({},x,{d:(x.d||[]).slice(i0,i1+1)}));}}
  const all=series.filter(x=>x.d.some(v=>v!=null));
  if(!all.length)return;
  // AGGREGATE series (SHOPIFY, ALL STORES, NETWORK) must never enter the branch average
@@ -884,6 +886,7 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
  const ctl='<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:8px 0 2px;font-size:11.5px;color:#5a637a;font-weight:700">'
   +'<span>Sort <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'sort\',this.value)">'+SO.map(o2=>'<option value="'+o2[0]+'"'+(st.sort===o2[0]?' selected':'')+'>'+o2[1]+'</option>').join('')+'</select></span>'
   +'<span>Scale <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'scale\',this.value)"><option value="shared"'+(own?'':' selected')+'>Shared (compare sizes)</option><option value="own"'+(own?' selected':'')+'>Own (compare shapes)</option></select></span>'
+  +(_mono?'<span>Window <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(&#39;'+KEY+'&#39;,&#39;w0&#39;,this.value)"><option value="">start</option>'+_origL.map(m=>'<option'+(st.w0===m?' selected':'')+'>'+m+'</option>').join('')+'</select> &rarr; <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(&#39;'+KEY+'&#39;,&#39;w1&#39;,this.value)"><option value="">end</option>'+_origL.map(m=>'<option'+(st.w1===m?' selected':'')+'>'+m+'</option>').join('')+'</select></span>':'')
   +(lav!=null?'<span style="color:#0F172A">Average branch, latest month: <b>'+F(lav)+'</b> &mdash; that is the grey dashed line, and it is the average of the '+pool.length+' BRANCHES only. Shopify and the network total are excluded from it.</span>':'')
   +'</div>';
  const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
@@ -2288,7 +2291,12 @@ function rFind(g,M,SH,A,names){try{
      gateway skim on collection, and what we claw back as a negotiated rebate.
    Free shipping is not free -- it is this table with the top line set to zero. */
 /* v6.5 ---------------------------------------------------------------- DECILES / REACH / LAG / SORT */
-function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();}
+function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
+function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
+ document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch.';
+ rDec(g,ST.decSc||'ALL STORES',1);
+ rDec(g,'Shopify',0);
+ qsweep('g15');}
 function rDec(g,sc,withSel){
  const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
  const DD2=O.dec||{};let sel='';
@@ -2379,6 +2387,13 @@ function bmSel(v){ST.bmet=v;rViz();}
 function aoRk(v){ST.aoR=v;rAds();}
 function vtime(k,v){if(k===0)VM0=v;else VM1=v;rVend();}
 let VM0='',VM1='';
+function vMOS(){const nm=(O.aw&&O.aw[1])||'2026-07-01';return Math.max(1,(+nm.slice(0,4)-2024)*12+(+nm.slice(5,7)-8)+1);}
+function vInv(r){return (O.vinv&&O.vinv[r.v])||null;}
+function vTrend(r){if(!r.mon)return null;const ms=Object.keys(r.mon).sort();if(ms.length<4)return null;
+ const last=ms.slice(-3),prev=ms.slice(-6,-3);if(!prev.length)return null;
+ const s2=a=>a.reduce((x,m)=>x+(r.mon[m]?r.mon[m][0]:0),0)/a.length;
+ const L=s2(last),Pv=s2(prev);if(!Pv)return null;return {pct:(L-Pv)/Pv*100};}
+function vCover(r){const iv=vInv(r);if(!iv||!iv.u)return null;const spm=(r.q||0)/vMOS();return spm>0?iv.u/spm:null;}
 function vWin(r){if(!VM0&&!VM1)return null;if(!r.mon)return {r:0,g:0,has:0};let a=0,b=0,n=0;for(const m in r.mon){if(VM0&&m<VM0)continue;if(VM1&&m>VM1)continue;a+=r.mon[m][0];b+=r.mon[m][1];n++;}return {r:a,g:b,has:n};}
 /* v6.4 -- the month-column table renderer, hoisted out of rPnl so the Costs tab can use it too. */
 function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+(m===CURM?' <span style="color:#5a5bf0">(MTD)</span>':'')+'</th>').join('')+'</tr>';
@@ -2600,7 +2615,7 @@ function vVal(r,k){let tot=r.r+r.orev,gp=r.g+r.ogp;
  if(k==='mom')return r.p90?(r.r90-r.p90)/r.p90*100:(r.r90?100:0);
  if(k==='cust')return r.cust;if(k==='ltgp')return r.ltgp;if(k==='rep')return r.rep;
  if(k==='acq')return r.acq;if(k==='onp')return tot?r.orev/tot*100:0;
- if(k==='n')return r.n.toLowerCase();return 0;}
+ if(k==='trend'){const t=vTrend(r);return t?t.pct:-999;}if(k==='stk'){const iv=vInv(r);return iv?iv.u:0;}if(k==='stkc'){const iv=vInv(r);return iv?iv.c:0;}if(k==='cov'){const c=vCover(r);return c==null?-1:c;}if(k==='n')return r.n.toLowerCase();return 0;}
 function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12');g.innerHTML='';
  const money=v=>Math.round(Math.abs(v)).toLocaleString(),E='E&pound; ';
  const V=(O.vend&&O.vend.rows)||[],cov=(O.vend&&O.vend.cov)||{},net=(O.vend&&O.vend.net)||{};
@@ -2609,6 +2624,7 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
  if(!V.length){pnlCard(g,'ins','Vendor and product economics &mdash; not synced yet','The vendor pull runs inside the heavy nightly crawl. It will populate on the next sync after 03:00 UTC, or immediately on a manual run with FORCE_CRAWL=1.','');return;}
  const tot=V.reduce((a,r)=>a+r.r+r.orev,0),gpT=V.reduce((a,r)=>a+r.g+r.ogp,0);
  const onT=V.reduce((a,r)=>a+r.orev,0);
+ const stkTot=Object.values(O.vinv||{}).reduce((a,d)=>a+(d.c||0),0);
  const top10=V.slice().sort((a,b)=>(b.r+b.orev)-(a.r+a.orev)).slice(0,10).reduce((a,r)=>a+r.r+r.orev,0);
  const cons=V.filter(r=>r.cons>r.cash),consR=cons.reduce((a,r)=>a+r.r+r.orev,0);
  const withC=V.filter(r=>r.cust>=25);
@@ -2616,7 +2632,7 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
  // ---------- 1. headline ----------
  const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">The supplier book at a glance'+Q('vend')+'</div><div class="cs">'+cov.vend+' suppliers carry sales since Aug 2024 and together cover '+(cov.revPct||0).toFixed(1)+'% of the E&pound; '+money(cov.rev||0)+' of merchandise revenue in the period. The '+cov.shown+' biggest are listed below and account for '+fP(tot/(cov.rev||1)*100)+' of that revenue on their own. The remaining '+(100-(cov.revPct||0)).toFixed(1)+'% sits on product templates carrying no supplier code and is excluded from every row on this tab.</div></div></div>'
-  +'<div class="kpis">'+kH([['Vendors with sales',cov.vend,null,'n'],['Revenue on named vendors',tot,null,'cur'],['Gross profit,'+String.fromCharCode(160)+'same',gpT,null,'cur'],['Blended GP%',tot?gpT/tot*100:0,null,'pct'],['Top 10 concentration',tot?top10/tot*100:0,null,'pct'],['Consignment share of revenue',tot?consR/tot*100:0,null,'pct'],['Shopify share of vendor revenue',tot?onT/tot*100:0,null,'pct'],['Network LTGP per customer',net.ltgp||0,null,'cur']],'vend')+'</div>';
+  +'<div class="kpis">'+kH([['Vendors with sales',cov.vend,null,'n'],['Revenue on named vendors',tot,null,'cur'],['Gross profit,'+String.fromCharCode(160)+'same',gpT,null,'cur'],['Blended GP%',tot?gpT/tot*100:0,null,'pct'],['Top 10 concentration',tot?top10/tot*100:0,null,'pct'],['Consignment share of revenue',tot?consR/tot*100:0,null,'pct'],['Shopify share of vendor revenue',tot?onT/tot*100:0,null,'pct'],['Network LTGP per customer',net.ltgp||0,null,'cur'],['Stock on hand @cost',stkTot,null,'cur']],'vend')+'</div>';
  g.appendChild(el);
  // ---------- 2. controls ----------
  const btn=(lab,on,fn)=>'<span onclick="'+fn+'" style="cursor:pointer;display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:7px;margin:0 6px 6px 0;background:'+(on?'#161d2e':'#eef0f5')+';color:'+(on?'#fff':'#475569')+'">'+lab+'</span>';
@@ -2630,7 +2646,7 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
  // ---------- 3. league table ----------
  const R=vRows().slice().sort((a,b)=>{const x=vVal(a,VSK),y=vVal(b,VSK);return (x<y?-1:x>y?1:0)*VSD;});
  const WON=!!(VM0||VM1);
- const H=[['n','Supplier','left'],['r',(VBR==='all'?'Retail':VBR)+(WON?' (all-time)':''),'right'],['orev','Shopify'+(WON?' (all-time)':''),'right'],['tot','Total'+(WON?' (window)':''),'right'],['g','Gross profit'+(WON?' (window)':''),'right'],['gpp','GP%','right'],['onp','% Shopify','right'],['mom','90d vs prior','right'],['cust','Customers','right'],['acq','Acquired','right'],['ltgp','LTGP / cust','right'],['lift','LTGP lift','right'],['rep','Repeat %','right']];
+ const H=[['n','Supplier','left'],['r',(VBR==='all'?'Retail':VBR)+(WON?' (all-time)':''),'right'],['orev','Shopify'+(WON?' (all-time)':''),'right'],['tot','Total'+(WON?' (window)':''),'right'],['g','Gross profit'+(WON?' (window)':''),'right'],['gpp','GP%','right'],['onp','% Shopify','right'],['mom','90d vs prior','right'],['trend','Rev trend 3mo','right'],['cust','Customers','right'],['acq','Acquired','right'],['ltgp','LTGP / cust','right'],['lift','LTGP lift (vs E&pound; '+Math.round(net.ltgp||0).toLocaleString()+' avg)','right'],['rep','Repeat %','right'],['stk','Stock units','right'],['stkc','Stock @cost','right'],['cov','Mo. cover','right']];
  const th=H.map(h=>'<th onclick="vsort(\''+h[0]+'\')" style="cursor:pointer;text-align:'+h[2]+';padding:6px 7px;font-size:10.5px;font-weight:800;color:'+(VSK===h[0]?'#161d2e':'#64748b')+';border-bottom:2px solid '+(VSK===h[0]?'#161d2e':'#e6e9f2')+';white-space:nowrap">'+h[1]+(VSK===h[0]?(VSD<0?' &darr;':' &uarr;'):'')+'</th>').join('');
  const nAvg=net.ltgp||0,rAvg=net.rep||0;
  const td=(v,al,c,b)=>'<td style="text-align:'+(al||'right')+';padding:5px 7px;font-size:11.5px;'+(b?'font-weight:800;':'')+(c?'color:'+c+';':'')+'white-space:nowrap">'+v+'</td>';
@@ -2645,13 +2661,14 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
    +td(E+money(rv))+td(E+money(r.orev))+td(E+money(t2),'right','',1)
    +td(E+money(gv))+td(fP(t2?gp2/t2*100:0))+td(fP(t2?r.orev/t2*100:0))
    +td((mom>=0?'+':'&minus;')+Math.abs(mom).toFixed(0)+'%','right',mc,1)
+   +td((function(){const t=vTrend(r);if(!t)return '&mdash;';const up=t.pct>=0;return '<span style="color:'+(up?'#12a06e':'#e23a63')+'">'+(up?'&#9650; ':'&#9660; ')+Math.abs(t.pct).toFixed(0)+'%</span>';})(),'right','',1)
    +td(r.cust?fI(r.cust):'&mdash;')+td(r.acq?fI(r.acq):'&mdash;')
    +td(r.cust>=25?E+money(r.ltgp):'&mdash;','right',lc,1)
    +td(r.cust>=25&&nAvg?(r.ltgp/nAvg).toFixed(2)+'x':'&mdash;','right',lc,1)
-   +td(r.cust>=25?fP(r.rep):'&mdash;','right',rc)+'</tr>';}).join('');
+   +td(r.cust>=25?fP(r.rep):'&mdash;','right',rc)+td((function(){const iv=vInv(r);return iv&&iv.u?fI(iv.u):'&mdash;';})())+td((function(){const iv=vInv(r);return iv&&iv.c?E+money(iv.c):'&mdash;';})())+td((function(){const c=vCover(r);return c==null?'&mdash;':c.toFixed(1)+' mo';})(),'right',(function(){const c=vCover(r);return c==null?'':(c>12?'#e23a63':c<1.5?'#e08a1e':'#334155');})())+'</tr>';}).join('');
  pnlCard(g,'ins','Vendor league table &mdash; every supplier, sortable'+INFO('Click any column header to re-sort. Retail is the sum of report.pos.order price_total on that supplier product templates; Shopify is sale.order.line price_subtotal on the four Shopify sales teams. LTGP per customer and repeat rate are only shown once a supplier has at least 25 registered POS customers.'),
   R.length+' suppliers'+(VFC!=='all'?' ('+(VFC==='cash'?'cash / owned stock':'consignment')+' only)':'')+(VBR!=='all'?', selling at '+VBR:'')+'. Green LTGP or repeat means that supplier customers are worth more than the network average of '+E+money(nAvg)+' and '+fP(rAvg)+'; red means less. Showing the first 120 rows.',
-  ctl+'<div style="overflow:auto;max-height:640px"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff;z-index:2"><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+  ctl+'<div style="overflow:auto;max-height:640px"><table data-nosort style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff;z-index:2"><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
   +'<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>How to read the two customer columns.</b> <b>Customers</b> is every registered POS customer who has ever bought this supplier at least once &mdash; a shopper who buys four suppliers in one basket counts once for each of them, so these columns deliberately do not sum to the network total. <b>Acquired</b> is the stricter number: customers whose very first-ever OurKids basket contained this supplier. A supplier with a high Acquired count is pulling new people through the door; one with a high Customers count but low Acquired is riding traffic that somebody else won.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>LTGP per customer is the planning number, not revenue.</b> It is the total lifetime gross profit of everyone who ever bought this supplier, divided by how many of them there are. A supplier can be small in revenue and still sit at the top of this column, which means its buyers are unusually valuable overall &mdash; those are the ranges to widen. Read it next to Repeat %: high LTGP with high repeat is a habit-forming range; high LTGP with low repeat is one big-ticket purchase and will not compound.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>Attribution caveat, stated plainly.</b> These customer columns are correlational. They tell you what buyers of a supplier are worth in total, across every supplier they buy. They do not prove the supplier caused that value. The Acquired column is the closest thing here to a causal read, because it only counts people whose relationship with you started in that basket.</span></div></div>');
@@ -2731,5 +2748,5 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
 }
 window.rVend=rVend;
 window.rVend=rVend;window.vsort=vsort;window.vfilt=vfilt;window.vbr=vbr;
-window.unlock=unlock;window.pnlCtl=pnlCtl;window.rMedia=rMedia;window.rAds=rAds;window.rRetail=rRetail;window.rViz=rViz;window.rIns=rIns;window.brWater=brWater;window.coWater=coWater;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;window.prov=prov;window.rReadme=rReadme;window.Q=Q;window.PRV=PRV;window.QK=QK;window.PGRP=PGRP;window.pBody=pBody;window.ctKey=ctKey;window.qsweep=qsweep;window.CTQ=CTQ;window.QGRID=QGRID;window.QT=QT;window.rCost=rCost;window.csCtl=csCtl;window.MKT=MKT;window.rDec=rDec;window.decCtl=decCtl;window.rReach=rReach;window.rLag=rLag;window.unmSel=unmSel;window.bmSel=bmSel;window.aoRk=aoRk;window.vtime=vtime;window.insWrap=insWrap;
+window.unlock=unlock;window.pnlCtl=pnlCtl;window.rMedia=rMedia;window.rAds=rAds;window.rRetail=rRetail;window.rViz=rViz;window.rIns=rIns;window.brWater=brWater;window.coWater=coWater;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;window.prov=prov;window.rReadme=rReadme;window.Q=Q;window.PRV=PRV;window.QK=QK;window.PGRP=PGRP;window.pBody=pBody;window.ctKey=ctKey;window.qsweep=qsweep;window.CTQ=CTQ;window.QGRID=QGRID;window.QT=QT;window.rCost=rCost;window.csCtl=csCtl;window.MKT=MKT;window.rDec=rDec;window.rCP=rCP;window.decCtl=decCtl;window.rReach=rReach;window.rLag=rLag;window.unmSel=unmSel;window.bmSel=bmSel;window.aoRk=aoRk;window.vtime=vtime;window.insWrap=insWrap;
 </script></body></html>
