@@ -446,7 +446,13 @@ def shopify_ql(ql, tag="ql"):
         if not rows:
             last = "tableData returned 0 rows on v" + ver
             continue
-        return [dict(zip(cols, r)) for r in rows]
+        # v8.0: rows may arrive as positional arrays OR as objects keyed by column
+        # name -- Shopify serves the object form on current API versions. Zipping cols
+        # against an object yields its KEYS, which silently zeroed the whole funnel.
+        shaped = [r if isinstance(r, dict) else dict(zip(cols, r)) for r in rows]
+        log("shopifyql", tag, "row shape", "object" if isinstance(rows[0], dict) else "array",
+            ":: first ::", str(shaped[0])[:160])
+        return shaped
     if "0 rows" in last:
         log("shopifyql fail:", tag, ":: every supported API version returned an EMPTY table. "
             "The query parsed fine, so this is not a syntax problem -- the app's access token "
@@ -1857,7 +1863,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v7.9 (live API-version discovery + Odoo new/returning + decile attributes + idle-vs-stale)")
+    log("collector v8.0 (ShopifyQL object-row fix + API-version discovery + decile attributes + idle-vs-stale)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
