@@ -355,10 +355,13 @@ def pull_meta(win):
 def shopify_ql(ql):
     store = os.environ.get("SHOPIFY_STORE", "").strip()
     tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
-    ver = os.environ.get("SHOPIFY_API_VERSION", "2025-01").strip()
+    ver = os.environ.get("SHOPIFY_API_VERSION", "2025-07").strip()
     if not store or not tok: return None
     host = store if ".myshopify.com" in store else store + ".myshopify.com"
-    q = 'query($ql:String!){ shopifyqlQuery(query:$ql){ ... on TableResponse { parseErrors tableData{ columns{ name } rows } } } }'
+    # v7.1: shopifyqlQuery now returns ShopifyqlQueryResponse (a plain object) -- the old
+    # "... on TableResponse" union fragment was removed by Shopify and threw "No such type
+    # TableResponse", zeroing every sessions/funnel day. Read the fields directly instead.
+    q = 'query($ql:String!){ shopifyqlQuery(query:$ql){ parseErrors tableData{ columns{ name } rows } } }'
     d = http_json("https://%s/admin/api/%s/graphql.json" % (host, ver),
                   {"query": q, "variables": {"ql": ql}}, {"X-Shopify-Access-Token": tok})
     sq = (((d or {}).get("data") or {}).get("shopifyqlQuery") or {})
@@ -1580,6 +1583,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
+    log("collector v7.1 (shopifyql fix + deciles + vendor inventory)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
