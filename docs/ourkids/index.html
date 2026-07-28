@@ -162,10 +162,10 @@ let LSC='—',NXC='—',LSF='—';
    says so in red across the whole screen. It also surfaces syncError/lastAttempt, which
    the collector stamps into data.js when a run fails, so the reason is on the page. */
 function srcHealth(){if(!O.fresh)return '';const lbl={odoo:'Odoo',shopify:'Shopify',meta:'Meta',google:'Google',tiktok:'TikTok'};
- const st=new Set(O.stale||[]);
- return ' &nbsp;&middot;&nbsp; data: '+Object.keys(lbl).map(k=>{const v=O.fresh[k];const off=(v==='off');const bad=st.has(k);
-  const col=off?'#9aa3b5':(bad?'#e23a63':'#12a06e');const txt=off?'off (no token)':(v||'no data');
-  return '<span title="'+lbl[k]+' &mdash; last data: '+txt+(bad?' (STALE &gt;2 days behind)':'')+'" style="display:inline-block;margin-left:7px;font-size:11px;font-weight:800;color:'+col+'"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+col+';margin-right:3px;vertical-align:middle"></span>'+lbl[k]+(off?'':(' '+(v?v.slice(5):'—')))+'</span>';}).join('');}
+ const st=new Set(O.stale||[]),idl=new Set(O.idle||[]);
+ return ' &nbsp;&middot;&nbsp; data: '+Object.keys(lbl).map(k=>{const v=O.fresh[k];const off=(v==='off');const bad=st.has(k);const idle=idl.has(k);
+  const col=off?'#9aa3b5':(bad?'#e23a63':(idle?'#d97706':'#12a06e'));const txt=off?'off (no token)':(v||'no data');
+  return '<span title="'+lbl[k]+' &mdash; last data: '+txt+(bad?' (STALE &gt;2 days behind &mdash; the feed is broken, not the account)':(idle?' (IDLE &mdash; the API answers fine, there has simply been no activity since this date. Nothing is broken; nothing was spent or tracked.)':''))+'" style="display:inline-block;margin-left:7px;font-size:11px;font-weight:800;color:'+col+'"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+col+';margin-right:3px;vertical-align:middle"></span>'+lbl[k]+(off?'':(' '+(v?v.slice(5):'—')))+'</span>';}).join('');}
 function staleBar(){const el=document.getElementById('stale');if(!el)return;
  const end=(O.aw&&O.aw[1])||null,tod=cairoToday();
  let lag=null;try{lag=dDiff(end,tod);}catch(e){}
@@ -211,7 +211,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.7</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.9</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -2067,7 +2067,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    'The bottom line, month by month. Formula: gross profit &minus; ad spend &minus; all OpEx. Green above zero = profit, red below = loss.',Le.map(m=>m.slice(2)),
    [{l:'Net profit',c:'#5a5bf0',w:3,f:'zero',d:eb},{l:'zero',c:'#0F172A',dash:1,w:1,pr:0,d:Le.map(()=>0)}],null,
    {cmt:cmt5});})();
- /* ---------- DELIVERY ECONOMICS (v7.7) ---------- */
+ /* ---------- DELIVERY ECONOMICS (v7.9) ---------- */
  (function(){
   if(!S2f())return;
   const Ls=S2f().m.slice(),lag=S2f().lagM;
