@@ -211,7 +211,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.6</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.7</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -2067,7 +2067,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    'The bottom line, month by month. Formula: gross profit &minus; ad spend &minus; all OpEx. Green above zero = profit, red below = loss.',Le.map(m=>m.slice(2)),
    [{l:'Net profit',c:'#5a5bf0',w:3,f:'zero',d:eb},{l:'zero',c:'#0F172A',dash:1,w:1,pr:0,d:Le.map(()=>0)}],null,
    {cmt:cmt5});})();
- /* ---------- DELIVERY ECONOMICS (v7.6) ---------- */
+ /* ---------- DELIVERY ECONOMICS (v7.7) ---------- */
  (function(){
   if(!S2f())return;
   const Ls=S2f().m.slice(),lag=S2f().lagM;
@@ -2385,7 +2385,7 @@ function rFind(g,M,SH,A,names){try{
 /* v6.5 ---------------------------------------------------------------- DECILES / REACH / LAG / SORT */
 function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
- document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch.';
+ document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
  rDec(g,ST.decSc||'ALL STORES',1);
  rDec(g,'Shopify',0);
  qsweep('g15');}
@@ -2402,6 +2402,66 @@ function decIns(D,tt,money){
  rows.push([C.orange,'<b>The middle (D4&ndash;D6) is the cheapest growth.</b> They already buy, at about E&pound; '+money(acv(D[4]))+' per head. A bundle or a second-purchase nudge moves them toward D1&ndash;D3 economics with no new acquisition cost.']);
  return '<div class="ins" style="margin-top:10px">'+rows.map(x=>'<div class="row"><span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>';
 }
+function decAttr(D,tt,sc,money){
+ if(!D||D.length<10)return '';
+ const E='E&pound; ';
+ const acv=d=>d.c?d.r/d.c:0,aov=d=>d.o?d.r/d.o:0,upt=d=>d.o?d.q/d.o:0,aur=d=>d.q?d.r/d.q:0,
+       rr=d=>d.c?d.rep/d.c*100:0,apf=d=>d.c?d.o/d.c:0,gmp=d=>d.r?d.g/d.r*100:0,
+       acl=d=>d.ls/365,rrt=d=>(d.r+d.ng)?d.ng/(d.r+d.ng)*100:0,drt=d=>d.gr?d.dc/d.gr*100:0;
+ const dl=(a,b)=>b?Math.round((a/b-1)*100):0;
+ const sg=v=>(v>0?'+':'')+v+'%';
+ const cl=v=>v>=15?C.grn:(v<=-15?C.red:'#64748b');
+ const chip=(lbl,v,suf)=>'<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700;background:'+(v>=15?'#e7f8f1':(v<=-15?'#fdeaf0':'#f1f3f8'))+';color:'+cl(v)+'">'+lbl+' '+sg(v)+(suf||'')+'</span>';
+ const has=D.some(d=>(d.ct&&d.ct.length)||(d.vn&&d.vn.length));
+ const fa=x=>'<b>'+x[0]+'</b> '+Math.round(x[1])+'% of their spend <span style="color:'+(x[2]>=115?C.grn:(x[2]<=85?C.red:'#64748b'))+';font-weight:700">('+(x[2]>=100?'+'+(x[2]-100):(x[2]-100))+'% vs base)</span>';
+ const attrLine=(list,noun,plural)=>{
+  if(!list||!list.length)return '';
+  const over=list.filter(x=>x[2]>=115),und=list.filter(x=>x[2]<=85);
+  let s2='<b>'+noun+'.</b> '+list.slice(0,4).map(fa).join(', ')+'.';
+  if(over.length)s2+=' They over-index hardest on <b>'+over[0][0]+'</b> &mdash; '+(over[0][2]-100)+'% more of their money goes there than the average customer in this scope. Stock it deep, put it in front of this decile first, and never let it go out of size.';
+  if(und.length)s2+=' They barely touch <b>'+und[0][0]+'</b> ('+(100-und[0][2])+'% below base) &mdash; that is the obvious cross-sell to open next.';
+  return s2;};
+ const act=(i,d,tc,tv)=>{
+  const nm=tc?tc[0]:'',vn=tv?tv[0]:'';
+  const rd=dl(rr(d),rr(tt));
+  if(i<3)return '<b>Do this:</b> treat these '+money(d.c)+' people as a named list, not a segment. Early access and reserved sizes on '+(vn||nm||'your best lines')+' before every drop, a WhatsApp message from a human, and no blanket discount &mdash; they already pay '+E+Math.round(aov(d)).toLocaleString()+' an order at '+gmp(d).toFixed(0)+'% margin. Discounting them is burning money you were going to get anyway.';
+  if(i<6)return '<b>Do this:</b> this is your cheapest growth. They already trust you (' +apf(d).toFixed(1)+' orders each, repeat '+rr(d).toFixed(0)+'%'+(rd?', '+Math.abs(rd)+'% '+(rd>0?'above':'below')+' base':'')+'). Bundle '+(nm||'their core category')+' with one adjacent line and give a second-purchase trigger inside 30 days &mdash; moving one step up the deciles here costs nothing in acquisition.';
+  return '<b>Do this:</b> entry and reactivation. '+money(d.c)+' people at '+E+Math.round(acv(d)).toLocaleString()+' lifetime each and '+acl(d).toFixed(2)+' years of life. Do not spend retention money per head &mdash; use broad reach, an entry-price hero in '+(nm||'their category')+', and a win-back flow. Their job is to graduate to D6, not to be nursed one by one.';};
+ var h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:1040px"><tr>'
+  +['Decile','Customers','% of revenue','Lifetime value each','Repeat rate','vs base','Orders each','AOV','Top category they over-index on','Top vendor they over-index on'].map((x,i)=>'<th style="text-align:'+(i?'right':'left')+'">'+x+'</th>').join('')+'</tr>';
+ D.forEach((d,i)=>{
+  const rd=dl(rr(d),rr(tt));
+  const tc=(d.ct||[]).slice().sort((a,b)=>b[2]-a[2])[0],tv=(d.vn||[]).slice().sort((a,b)=>b[2]-a[2])[0];
+  const td=(v,st)=>'<td style="text-align:right;'+(st||'')+'">'+v+'</td>';
+  h+='<tr><td style="text-align:left;font-weight:800">D'+(i+1)+(i===0?' <span style="font-size:9px;color:#4f46e5">TOP</span>':'')+'</td>'
+   +td(money(d.c))+td((tt.r?(d.r/tt.r*100):0).toFixed(1)+'%')+td(E+money(acv(d)))
+   +td(rr(d).toFixed(0)+'%')+td('<b style="color:'+cl(rd)+'">'+sg(rd)+'</b>')
+   +td(apf(d).toFixed(2))+td(E+money(aov(d)))
+   +td(tc?tc[0]+' <span style="color:'+(tc[2]>=115?C.grn:'#64748b')+';font-weight:700">'+sg(tc[2]-100)+'</span>':'&mdash;')
+   +td(tv?tv[0]+' <span style="color:'+(tv[2]>=115?C.grn:'#64748b')+';font-weight:700">'+sg(tv[2]-100)+'</span>':'&mdash;')+'</tr>';});
+ h+='</table></div>';
+ var blocks='';
+ D.forEach((d,i)=>{
+  const rd=dl(rr(d),rr(tt)),ad=dl(aov(d),aov(tt)),ud=dl(upt(d),upt(tt)),urd=dl(aur(d),aur(tt)),
+        fd=dl(apf(d),apf(tt)),vd=dl(acv(d),acv(tt)),ld=dl(acl(d),acl(tt));
+  const tc=(d.ct||[]).slice().sort((a,b)=>b[2]-a[2])[0],tv=(d.vn||[]).slice().sort((a,b)=>b[2]-a[2])[0];
+  const rows=[];
+  rows.push([C.indigo,'<b>Who they are.</b> '+money(d.c)+' customers, '+(tt.c?(d.c/tt.c*100).toFixed(0):0)+'% of the base, carrying '+(tt.r?(d.r/tt.r*100).toFixed(1):0)+'% of revenue and '+(tt.g?(d.g/tt.g*100).toFixed(1):0)+'% of gross profit. '+E+money(acv(d))+' of lifetime revenue each ('+sg(vd)+' vs the average customer) at '+gmp(d).toFixed(1)+'% gross margin, over '+acl(d).toFixed(2)+' years of life so far.']);
+  rows.push([rd>=15?C.grn:(rd<=-15?C.red:C.blue),'<b>How they repeat.</b> '+rr(d).toFixed(1)+'% of them bought two or more times, against '+rr(tt).toFixed(1)+'% across the whole base &mdash; <b>they repeat '+Math.abs(rd)+'% '+(rd>=0?'more':'less')+' than the average customer here.</b> '+apf(d).toFixed(2)+' orders each ('+sg(fd)+'), and '+(rrt(d)?rrt(d).toFixed(1)+'% of their value comes back as returns':'no measurable returns')+'.']);
+  rows.push([C.violet,'<b>How they shop.</b> '+chip('AOV',ad)+chip('units per order',ud)+chip('price per unit',urd)+chip('lifespan',ld)+' &mdash; '+E+money(aov(d))+' an order, '+upt(d).toFixed(2)+' units at '+E+money(aur(d))+' each'+(d.gr?', '+drt(d).toFixed(1)+'% discount rate':'')+'.']);
+  const cl2=attrLine(d.ct,'Categories they actually buy');
+  const vl2=attrLine(d.vn,'Vendors they actually buy');
+  if(cl2)rows.push([C.orange,cl2]);
+  if(vl2)rows.push([C.teal,vl2]);
+  rows.push([C.pink,act(i,d,tc,tv)]);
+  blocks+='<details class="insx"><summary>D'+(i+1)+' &mdash; '+money(d.c)+' customers &middot; '+(tt.r?(d.r/tt.r*100).toFixed(1):0)+'% of revenue &middot; '+E+money(acv(d))+' each &middot; repeats '+sg(rd)+' vs base'+(tc?' &middot; over-indexes on '+tc[0]:'')+'</summary>'
+   +'<div class="ins" style="margin-top:6px">'+rows.map(x=>'<div class="row"><span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span></div>').join('')+'</div></details>';});
+ const note=has?'Every share below is that decile&rsquo;s own money: what percentage of their lifetime spend went to each category and vendor, and how that compares with the whole base of this scope. <b>+72% vs base</b> means they put 72% more of their wallet into that line than the average customer here &mdash; that is an over-index, not a growth rate. Categories and vendors both come from the same Odoo order lines that build the deciles, so the shares reconcile to the revenue row above.'
+  :'Category and vendor profiles land on the next heavy sync (the collector now tags every order line with its product category and supplier before ranking customers). Repeat, basket and frequency comparisons below are live already.';
+ pnlCard(document.getElementById('g15'),'odoo','What each decile actually buys &mdash; '+sc,
+  note,
+  h+'<div style="margin-top:10px">'+blocks+'</div>');
+ return '';}
 function decSel(sc){const ks=Object.keys(O.dec||{}).filter(k=>k!=='Shopify').sort();
  return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;decSc&quot;,this.value)"><option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>'+ks.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+'</select></div>';}
 function decTot(D){return D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});}
@@ -2481,7 +2541,8 @@ function rDec(g,sc,withSel){
  const d1=D[0];
  pnlCard(g,'odoo','Customer portfolio by decile &mdash; '+sc+' (D1 = top spenders)',
   'Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals. <b>This card carries no date window on purpose:</b> a decile IS a lifetime rank, so filtering it by a date range would silently change what D1 means. The windowed views live on the vendor league table, the P&amp;L and every daily card.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
-  sel+h+decIns(D,tt,money));}
+  sel+h+decIns(D,tt,money));
+ decAttr(D,tt,sc,money);}
 
 function rReach(g){
  const money=v=>Math.round(v).toLocaleString();
