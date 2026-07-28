@@ -33,7 +33,7 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .up{color:var(--grn)}.dn{color:var(--red)}.ft{color:var(--mut)}
 .adg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}.adc{background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:10px}.adc img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:#e8ebf3}.adc .ph{width:100%;height:110px;border-radius:8px;background:linear-gradient(135deg,#5a5bf0,#3a9bff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px}.adc .an{font-size:11.5px;font-weight:700;margin:7px 0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.adc .ak{display:flex;justify-content:space-between;font-size:11px;color:#5a637a;margin-top:2px}.adc .ak b{color:#161d2e}
 .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px 16px;margin-top:12px;padding:13px 14px;background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px}.kgrid .kpi{text-align:left}.kgrid .kpi .v{font-size:21px}
-.cv{position:relative;height:150px;margin-top:8px}.lgd{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:7px;font-size:11px;color:#5a637a}
+.cwb{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:10px;color:#7c869c;flex-wrap:wrap}.cwb input{font:inherit;font-size:10px;padding:2px 4px;border:1px solid #dfe3ea;border-radius:5px;color:#0F172A;background:#fff}.cwb.on input{border-color:#4f46e5;color:#4f46e5;font-weight:700}.cwx{cursor:pointer;color:#4f46e5;font-weight:700;border:1px solid #c7c9f5;border-radius:99px;padding:1px 7px;background:#eef0ff}.cv{position:relative;height:150px;margin-top:8px}.lgd{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:7px;font-size:11px;color:#5a637a}
 .lg{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 4px;border-radius:6px}.lg.off{opacity:.32;text-decoration:line-through}.sw{width:13px;height:3px;border-radius:2px}
 .chan .r{display:flex;align-items:center;gap:10px;margin:8px 0}.chan .n{width:86px;font-size:12.5px;font-weight:700}.chan .t{flex:1;height:11px;background:#f0f2f7;border-radius:7px;overflow:hidden}.chan .f{height:100%;border-radius:7px}.chan .vl{width:170px;text-align:right;font-size:12px;font-weight:700}
 table.bt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}table.bt th{text-align:right;color:var(--mut);font-size:10px;text-transform:uppercase;padding:6px 7px;border-bottom:1px solid #eef0f5}table.bt th:first-child{text-align:left}table.bt td{padding:6px 7px;border-bottom:1px solid #f4f6fa;text-align:right}table.bt td:first-child{text-align:left;font-weight:700}table.bt input{width:88px;text-align:right;padding:4px 6px;font-size:12px}
@@ -211,7 +211,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.2</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v7.4</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -264,7 +264,8 @@ function monEnd(m){let y=+m.slice(0,4),mo=+m.slice(5,7);mo++;if(mo>12){mo=1;y++;
 function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);ST.pm0=c(ST.s.slice(0,7));ST.pm1=c(ST.e.slice(0,7));}
 function RDR(){syncMonthly();syncBars();rTab();}
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));RDR();}
-function cmpW(){const ln=span(ST.s,ST.e);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(ST.cmp==='yoy')return[addD(ST.s,-365),addD(ST.e,-365)];if(ST.cmp==='wk')return[addD(ST.s,-7),addD(ST.e,-7)];if(ST.cmp==='mo')return[addD(ST.s,-30),addD(ST.e,-30)];return[addD(ST.s,-ln),addD(ST.s,-1)];}
+function cmpW(){return cmpWr(ST.s,ST.e);}
+function cmpWr(_S,_E){const ln=span(_S,_E);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(ST.cmp==='yoy')return[addD(_S,-365),addD(_E,-365)];if(ST.cmp==='wk')return[addD(_S,-7),addD(_E,-7)];if(ST.cmp==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
 function shS(k,s2,e2){if(!O.shop||!O.shop[k])return 0;const r=rng(s2,e2);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[k][i]||0;return t;}
 function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
  const o={cs,ce};PREVLBL='prev '+cs.slice(5)+' &rarr; '+ce.slice(5);const G=(k,a,b)=>fSum(k,a,b);
@@ -342,6 +343,15 @@ function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const 
   const ln365=(age>=335&&c.size&&c.r365!=null&&ncac)?(c.r365/c.size)/ncac:null;
   return {m:c.m,size:c.size,ms:a?a.ms:null,gs:a?a.gs:null,ts:a?a.ts:null,s:a?a.s:null,ncac,gp30,gp90a,nr90a,ln90,ln365,l30:r(30),l90:r(90),l180:r(180),l365:r(365),age};});}
 
+let CWIN={};
+function cwS(id){return (CWIN[id]&&CWIN[id].s)||ST.s;}
+function cwE(id){return (CWIN[id]&&CWIN[id].e)||ST.e;}
+function cwOn(id){return !!(CWIN[id]&&(CWIN[id].s||CWIN[id].e));}
+function cwSet(id,f,v){const o=CWIN[id]=CWIN[id]||{};o[f]=v||null;if(!o.s&&!o.e)delete CWIN[id];rTab();}
+function cwClr(id){delete CWIN[id];rTab();}
+function cwBar(id){const lo=(O.fin&&O.fin.start)||'2024-01-01',hi=(O.aw&&O.aw[1])||ST.e;const on=cwOn(id);
+ return '<div class="cwb'+(on?' on':'')+'">'+(on?'<b style="color:#4f46e5">This chart only</b>':'Chart window')+' <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwS(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;s&quot;,this.value)"> &rarr; <input type="date" min="'+lo+'" max="'+hi+'" value="'+cwE(id)+'" onchange="cwSet(&quot;'+id+'&quot;,&quot;e&quot;,this.value)">'+(on?' <span class="cwx" onclick="cwClr(&quot;'+id+'&quot;)">&times; follow page range</span>':'')+'</div>';}
+function cardCalc(id){const ss=ST.s,ee=ST.e;ST.s=cwS(id);ST.e=cwE(id);let r=null;try{r=calc();}catch(x){r=null;}ST.s=ss;ST.e=ee;return r;}
 let CARDS=[];
 function cards(){CARDS=[
  {id:'ins',full:1,a:'ins',t:'Insights — auto-read from the data',src:'ins',cs:'Computed live from Odoo sales, refunds, margin, channels and the ads feed for this range.',k:o=>[],ins:1},
@@ -374,22 +384,26 @@ function cards(){CARDS=[
 ];if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
 function kH(l,src){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}${QF(k[0],src)}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">prev ${f(k[2])}</span>`:''}</div></div>`;}).join('');}
 
-function draw(cv,cfg,big){
+function draw(cv,cfg,big,cid){
  let sets=[],L=[],ixMap=null;
  const max=big?300:120;
- if(cfg.fin){cfg.fin.forEach(sd=>{const sr=sd.k==='_net'?fNetR(ST.s,ST.e):fSeriesR(sd.k,ST.s,ST.e);const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2});});}
- else{let ok=1;cfg.ad.forEach(sd=>{const sr=aSeriesR(sd.k,sd.m,ST.s,ST.e);if(!sr){ok=0;return;}const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2});});if(!ok)return null;}
- if(ST.cmp!=='off'&&sets.length){const w=cmpW(),cs=w[0],ce=w[1];
-  let pr=null;
-  if(cfg.fin){const sd=cfg.fin[0];pr=sd.k==='_net'?fNetR(cs,ce):fSeriesR(sd.k,cs,ce);}
-  else{const sd=cfg.ad[0];pr=aSeriesR(sd.k,sd.m,cs,ce);}
-  if(pr&&pr.d.length){const dd=dec(pr.L,pr.d,max);while(dd.d.length<L.length)dd.d.push(null);dd.d.length=L.length;
-   sets.push({l:'Prev · '+sets[0].l,d:dd.d,c:C.grey,dash:1});}}
+ const WS=cid?cwS(cid):ST.s,WE=cid?cwE(cid):ST.e;
+ if(cfg.fin){cfg.fin.forEach(sd=>{const sr=sd.k==='_net'?fNetR(WS,WE):fSeriesR(sd.k,WS,WE);const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2,_sd:sd});});}
+ else{let ok=1;cfg.ad.forEach(sd=>{const sr=aSeriesR(sd.k,sd.m,WS,WE);if(!sr){ok=0;return;}const dd=dec(sr.L,sr.d,max);if(!ixMap)ixMap=dd.ix;L=dd.L;sets.push({l:sd.l,d:dd.d,c:sd.c,f:sd.f,y2:sd.y2,_sd:sd});});if(!ok)return null;}
+ if(ST.cmp!=='off'&&sets.length){const w=cmpWr(WS,WE),cs=w[0],ce=w[1];
+  const plb=cs.slice(5)+'\u2192'+ce.slice(5)+' \u00b7 ';
+  sets.slice().forEach(bs=>{const sd=bs._sd;if(!sd)return;
+   const pr=cfg.fin?(sd.k==='_net'?fNetR(cs,ce):fSeriesR(sd.k,cs,ce)):aSeriesR(sd.k,sd.m,cs,ce);
+   if(!pr||!pr.d.length)return;
+   let nz=0;for(let z=0;z<pr.d.length;z++)if(pr.d[z])nz++;
+   if(!nz)return;
+   const dd=dec(pr.L,pr.d,max);while(dd.d.length<L.length)dd.d.push(null);dd.d.length=L.length;
+   sets.push({l:plb+bs.l,d:dd.d,c:bs.c,dash:1,y2:bs.y2});});}
  const ds=sets.map(s=>({label:s.l,data:s.d,borderColor:s.c,borderWidth:s.dash?1.6:2.2,borderDash:s.dash?[5,4]:(s.y2?[3,3]:[]),pointRadius:0,pointHoverRadius:4,tension:0,fill:!!s.f,backgroundColor:s.f?s.c+'22':'transparent',yAxisID:s.y2?'y2':'y'}));
  const hasY2=sets.some(s=>s.y2);
  let annMap={};
- if(cfg.ann&&ixMap){const r=rng(ST.s,ST.e);
-  O.ann.forEach(a=>{if(a.d<ST.s||a.d>ST.e)return;const oi=idxOf(a.d,1);let best=0,bd2=1e9;for(let j=0;j<ixMap.length;j++){const d2=Math.abs(r[0]+ixMap[j]-oi);if(d2<bd2){bd2=d2;best=j;}}(annMap[best]=annMap[best]||[]).push(a);});
+ if(cfg.ann&&ixMap){const r=rng(WS,WE);
+  O.ann.forEach(a=>{if(a.d<WS||a.d>WE)return;const oi=idxOf(a.d,1);let best=0,bd2=1e9;for(let j=0;j<ixMap.length;j++){const d2=Math.abs(r[0]+ixMap[j]-oi);if(d2<bd2){bd2=d2;best=j;}}(annMap[best]=annMap[best]||[]).push(a);});
   if(Object.keys(annMap).length){const pts=L.map((_,j)=>annMap[j]?sets[0].d[j]:null);
    ds.push({label:'Annotations',data:pts,showLine:false,pointRadius:6,pointHoverRadius:8,pointStyle:'triangle',pointBackgroundColor:L.map((_,j)=>annMap[j]?ANNC[annMap[j][0].k]:C.grey),borderColor:'transparent'});}}
  const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
@@ -414,21 +428,21 @@ function insHTML(o){const rows=[];
  O.ann.filter(a=>a.d>=ST.s&&a.d<=ST.e).slice(-8).forEach(a=>rows.push([ANNC[a.k],a.d+' — '+a.t]));
  return '<div class="ins">'+rows.map(x=>`<div class="row"><span class="dot" style="background:${x[0]}"></span><span>${x[1]}</span></div>`).join('')+'</div>';}
 
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),g=document.getElementById('g1');g.innerHTML='';
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
  if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;const k=c.k(o)[0];if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
- ord.forEach(id=>{const c=by(id),el=document.createElement('div');el.className='card'+(c.full?' full':'');if(c.a)el.dataset.a=c.a;el.dataset.id=id;const na=c.ad&&!o.ad;let b;
+ ord.forEach(id=>{const _pl=PREVLBL;(function(o){const c=by(id),el=document.createElement('div');el.className='card'+(c.full?' full':'');if(c.a)el.dataset.a=c.a;el.dataset.id=id;const na=c.ad&&!o.ad;let b;
   if(c.ins)b=insHTML(o);
   else if(na)b='<div class="cv" style="display:flex;align-items:center;justify-content:center;color:#7c869c;font-size:12px">No ad data in this range · ads cover '+O.aw[0]+' → '+O.aw[1]+'</div>';
   else if(c.chan){const t=Object.values(o.ch).reduce((a,x)=>a+Math.max(0,x),0)||1;
    b='<div class="chan">'+Object.keys(o.ch).map(n=>{const v=o.ch[n],vp=o.chP[n],d=dl(v,vp,1);return `<div class="r"><div class="n">${n}</div><div class="t"><div class="f" style="width:${Math.max(0,v/t*100).toFixed(1)}%;background:${CHC[n]||C.blue}"></div></div><div class="vl" style="${v<0?'color:#e23a63':''}">E£ ${Math.round(v).toLocaleString()} <span class="${d.cls}" style="font-size:10px">${d.t.replace(' vs prev','')}</span></div></div>`;}).join('')+'</div>';}
   else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(c.k(o),c.src)+'</div>';
-  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div></div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}`;
+  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
-  if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}});
+  if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf,0,id);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}})(cwOn(id)?(cardCalc(id)||O0):O0);PREVLBL=_pl;});
  wDrag(g);}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
@@ -443,7 +457,7 @@ function expand(c,o){
  else if(c.c)body='<div style="position:relative;height:55vh"><canvas id="mcv"></canvas></div>';
  else body='<table class="bt"><tr><th>Metric</th><th>This period</th><th>Previous</th></tr>'+c.k(o).map(k=>{const f=FM[k[3]]||fI;return `<tr><td>${k[0]}${QF(k[0],c.src)}</td><td>${k[1]==null?'—':f(k[1])}</td><td>${k[2]==null?'—':f(k[2])}</td></tr>`;}).join('')+'</table>';
  w.innerHTML=`<div class="modal" onclick="if(event.target===this)this.parentNode.innerHTML=''"><div class="mbox"><span class="mx" onclick="document.getElementById('mwrap').innerHTML=''">✕</span><div class="ct" style="margin-bottom:2px">${c.t}</div><div class="cs" style="margin-bottom:12px">${ST.s} → ${ST.e} · ${(O.src[c.src]||'')}</div>${body}</div></div>`;
- if(c.c&&!c.chan&&!c.ins)draw(document.getElementById('mcv'),c.c(o),1);}
+ if(c.c&&!c.chan&&!c.ins)draw(document.getElementById('mcv'),c.c(o),1,c.id);}
 function wDrag(g){let dg=null;g.querySelectorAll('.card').forEach(card=>{const h=card.querySelector('.drag');if(!h)return;h.addEventListener('dragstart',()=>{dg=card.dataset.id;card.classList.add('drg');});h.addEventListener('dragend',()=>{card.classList.remove('drg');dg=null;});card.addEventListener('dragover',e=>e.preventDefault());card.addEventListener('drop',e=>{e.preventDefault();if(!dg||dg===card.dataset.id)return;const o2=ST.ord,f=o2.indexOf(dg),t=o2.indexOf(card.dataset.id);o2.splice(f,1);o2.splice(t,0,dg);document.getElementById('so').value='def';rOn();});});}
 
 function offI(){return FF._ov||(FF._ov={});}
@@ -2304,6 +2318,19 @@ function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15')
  rDec(g,ST.decSc||'ALL STORES',1);
  rDec(g,'Shopify',0);
  qsweep('g15');}
+function decIns(D,tt,money){
+ if(!D||D.length<10)return '';
+ const pc=(a,b)=>b?(a/b*100):0,acv=d=>d.c?d.r/d.c:0,rep=d=>d.c?d.rep/d.c*100:0;
+ const d1=D[0],d10=D[9];
+ const top3=D.slice(0,3).reduce((a,d)=>a+d.r,0),bot3=D.slice(7).reduce((a,d)=>a+d.r,0);
+ const ratio=acv(d10)?(acv(d1)/acv(d10)):0;
+ const rows=[];
+ rows.push([C.indigo,'<b>Your top 10% of customers (D1) carry this branch.</b> '+money(d1.c)+' people &mdash; '+pc(d1.c,tt.c).toFixed(0)+'% of the customers &mdash; generate '+pc(d1.r,tt.r).toFixed(0)+'% of revenue and '+pc(d1.g,tt.g).toFixed(0)+'% of gross profit. One D1 customer is worth about '+(ratio?Math.round(ratio):'many')+' D10 customers.']);
+ rows.push([C.violet,'<b>Steep value curve.</b> The top 30% (D1&ndash;D3) are '+pc(top3,tt.r).toFixed(0)+'% of revenue; the bottom 30% (D8&ndash;D10) are only '+pc(bot3,tt.r).toFixed(0)+'%. Retention money belongs on D1&ndash;D3, not spread evenly across the base.']);
+ rows.push([ratio>=5?C.grn:C.blue,'<b>Average customer value: D1 E&pound; '+money(acv(d1))+' vs D10 E&pound; '+money(acv(d10))+'</b> ('+(ratio?ratio.toFixed(1):'&infin;')+'&times;).'+(rep(d1)>=rep(d10)*1.3?' D1 also repeats far more &mdash; '+rep(d1).toFixed(0)+'% vs '+rep(d10).toFixed(0)+'% &mdash; so the gap compounds every month.':'')]);
+ rows.push([C.orange,'<b>The middle (D4&ndash;D6) is the cheapest growth.</b> They already buy, at about E&pound; '+money(acv(D[4]))+' per head. A bundle or a second-purchase nudge moves them toward D1&ndash;D3 economics with no new acquisition cost.']);
+ return '<div class="ins" style="margin-top:10px">'+rows.map(x=>'<div class="row"><span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>';
+}
 function rDec(g,sc,withSel){
  const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
  const DD2=O.dec||{};let sel='';
@@ -2350,7 +2377,7 @@ function rDec(g,sc,withSel){
  const d1=D[0];
  pnlCard(g,'odoo','Customer portfolio by decile &mdash; '+sc+' (D1 = top spenders)',
   'Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
-  sel+h);}
+  sel+h+decIns(D,tt,money));}
 
 function rReach(g){
  const money=v=>Math.round(v).toLocaleString();
