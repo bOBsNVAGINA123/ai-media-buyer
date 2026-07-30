@@ -211,7 +211,13 @@ def _avw(actions, keys, wk):
             except Exception: return 0.0
     return 0.0
 
-MEAS = {"base": 0.0, "w7": 0.0, "w1": 0.0}
+MEAS = {"base": 0.0, "w7": 0.0, "w1": 0.0,
+        # v8.1: the OFFLINE (in-store) leg is measured separately from the pixel leg.
+        # Meta's incremental discount on in-store is nothing like its discount on web --
+        # for 22-29 Jul 2026 Ads Manager reported offline default 4,840,137, 7d-click
+        # 2,033,416 and Incremental 835,852. One shared coefficient cannot express that.
+        "off_base": 0.0, "off_w7": 0.0, "off_w1": 0.0,
+        "incr_pix": 0.0, "incr_off": 0.0, "incr_ok": False, "incr_err": ""}
 
 def _av(actions, keys):
     for a in actions or []:
@@ -337,9 +343,38 @@ def _cc(lst):
             except Exception: pass
     return out
 
+def _meta_incremental(acct, c0, c1, tok):
+    """v8.1: Meta's ACTUAL Incremental-attribution column, not a coefficient I made up.
+
+    The dashboard used to render "Incremental" by multiplying live value by a hardcoded
+    0.6. That is an estimate sitting on top of a number Meta will hand over for free, and
+    it was wrong by a mile: over 22-29 Jul 2026 the real offline incremental was 835,852
+    against a live offline figure of 4,840,137 -- a factor of 0.17, not 0.60.
+
+    "incrementality" is an action_attribution_windows value referenced in Meta's
+    breakdowns documentation but absent from the canonical enum on the insights reference
+    page, so it may be rejected or may quietly disappear. This runs as its own isolated
+    request: if it fails, the main pull is untouched and the dashboard falls back to the
+    modelled coefficient WITH A LABEL SAYING SO, rather than pretending."""
+    p = {"level": "account", "access_token": tok,
+         "time_range": json.dumps({"since": c0, "until": c1}),
+         "fields": "action_values", "limit": 500,
+         "action_attribution_windows": json.dumps(["incrementality"])}
+    d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+    rows = (d or {}).get("data")
+    if rows is None:
+        e = ((d or {}).get("error") or {})
+        return None, str(e.get("message") or d)[:180]
+    pix = off = 0.0
+    for row in rows:
+        av = row.get("action_values") or []
+        pix += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "incrementality")
+        off += _avw(av, ("offline_conversion.purchase",), "incrementality")
+    return (pix, off), ""
+
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv"]}
+    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
     chunks = []
     a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
     while a <= endd:
@@ -371,9 +406,14 @@ def pull_meta(win):
             MEAS["base"] += pixel
             MEAS["w7"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "7d_click")
             MEAS["w1"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "1d_click")
-            ad["instoreMeta"][day] += max(0.0, omni - pixel)
+            offv = _av(av, ("offline_conversion.purchase",))
+            ad["instoreMeta"][day] += offv
+            ad["moffv"][day] += offv
+            ad["instoreOnsite"][day] += max(0.0, omni - pixel - offv)
             ad["metaOfflinePur"][day] += _av(row.get("actions"), ("offline_conversion.purchase",))
-            ad["moffv"][day] += _av(av, ("offline_conversion.purchase",))
+            MEAS["off_base"] += offv
+            MEAS["off_w7"] += _avw(av, ("offline_conversion.purchase",), "7d_click")
+            MEAS["off_w1"] += _avw(av, ("offline_conversion.purchase",), "1d_click")
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
             mo = day[:7]
             cv = _cc(av); ca = _cc(row.get("actions"))
@@ -390,6 +430,14 @@ def pull_meta(win):
             ad["instoreNC"][day] += ca.get(MCC_ALLNC, 0.0)
             mc = MACC.setdefault(an, {}).setdefault(mo, {"sp": 0, "pv": 0, "ov": 0})
             mc["sp"] += float(row.get("spend") or 0); mc["pv"] += pixel; mc["ov"] += omni
+        try:
+            got, err = _meta_incremental(acct, c0, c1, tok)
+            if got:
+                MEAS["incr_pix"] += got[0]; MEAS["incr_off"] += got[1]; MEAS["incr_ok"] = True
+            elif err and not MEAS["incr_err"]:
+                MEAS["incr_err"] = err
+        except Exception as e:
+            if not MEAS["incr_err"]: MEAS["incr_err"] = str(e)[:180]
     log("meta days", sum(1 for v in ad["mspend"].values() if v),
         "| per-branch in-store days", sum(len(v) for v in MBR.values()),
         "| branches", len(MBR))
@@ -1300,7 +1348,7 @@ def annotations(fin):
 # ------------------------------------------------------------------ BUILD
 ATTR = {"order": ["default", "7dc", "1dc", "incr"],
         "labels": {"default": "Default · Meta 7d-click / 1d-view (LIVE)", "7dc": "7-day click (modeled)",
-                   "1dc": "1-day click (modeled)", "incr": "Incremental (modeled · not a lift test)"},
+                   "1dc": "1-day click (modeled)", "incr": "Incremental \u2014 resolved at build time"},
         "meta": {"default": 1.0, "7dc": 0.94, "1dc": 0.78, "incr": 0.6},
         "google": {"default": 1.0, "7dc": 1.0, "1dc": 0.85, "incr": 0.68},
         "tt": {"default": 1.0, "7dc": 0.96, "1dc": 0.8, "incr": 0.55}}
@@ -1314,7 +1362,11 @@ SRC = {"revenue": "Odoo sale.order (state sale/done), amount_total, all 4 online
        "broas": "(Google + Meta pixel + TikTok value) / spend. Attribution per toggle.",
        "mer": "Net Odoo revenue / total ad spend.", "cac": "Total ad spend / new customers.",
        "gpp": "Odoo margin / orders.", "cacgp": "CAC / GP-per-order.",
-       "instoreMeta": "Meta omni value minus pixel value = offline/in-store attributed.",
+       "instoreMeta": "Meta's own offline_conversion.purchase VALUE from the in-store CAPI feed "
+                      "(action_values). Not omni minus pixel \u2014 that subtraction also swept in "
+                      "on-Meta (Shops) and app purchases, which are not store sales.",
+       "instoreOnsite": "The residual: omni value minus pixel minus offline. On-Meta checkout "
+                        "and in-app purchases. Reported separately so it is not counted as store revenue.",
        "channels": "Odoo sale.order revenue by crm.team, daily.",
        "branch": "Odoo accounting: income lines on each branch's POS sales journals, daily. This is REAL retail revenue.",
        "ins": "Computed automatically from Odoo daily sales, refunds, margin and the ads feed for the selected range."}
@@ -1863,7 +1915,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.0 (ShopifyQL object-row fix + API-version discovery + decile attributes + idle-vs-stale)")
+    log("collector v8.1 (real Meta offline value + real Incremental attribution + ShopifyQL object-row fix)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -1872,7 +1924,7 @@ def build():
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
     prod = safe(pull_products) or []
-    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv"]}
+    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
@@ -1992,6 +2044,7 @@ def build():
           "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"), "gconv": arr(goog, "gconv"),
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
+          "instoreOnsite": arr(meta, "instoreOnsite"),
           "metaOfflinePur": arr(meta, "metaOfflinePur"), "mpur": arr(meta, "mpur"),
           "instoreNC": arr(meta, "instoreNC"),
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
@@ -2009,6 +2062,35 @@ def build():
         ATTR["labels"]["7dc"] = "7-day click (measured: %.0f%% of live)" % (ATTR["meta"]["7dc"] * 100)
         ATTR["labels"]["1dc"] = "1-day click (measured: %.0f%% of live)" % (ATTR["meta"]["1dc"] * 100)
         log("meta attribution measured", ATTR["meta"]["7dc"], ATTR["meta"]["1dc"])
+    # v8.1: the in-store leg gets its OWN measured ladder. Applying the website
+    # coefficients to store revenue was the second half of the same mistake.
+    ob = MEAS["off_base"]
+    if ob > 0:
+        ATTR["metaOff"] = {"default": 1.0,
+                           "7dc": round(min(1.2, MEAS["off_w7"] / ob), 3),
+                           "1dc": round(min(1.2, MEAS["off_w1"] / ob), 3),
+                           "incr": ATTR["meta"]["incr"]}
+    ib = MEAS["base"] + ob
+    ii = MEAS["incr_pix"] + MEAS["incr_off"]
+    if MEAS["incr_ok"] and ib > 0 and ii > 0:
+        ATTR["meta"]["incr"] = round(ii / ib, 3)
+        ATTR["labels"]["incr"] = "Incremental \u2014 Meta ACTUAL (%.0f%% of live)" % (ATTR["meta"]["incr"] * 100)
+        if ob > 0:
+            ATTR["metaOff"]["incr"] = round(MEAS["incr_off"] / ob, 3)
+        if MEAS["base"] > 0:
+            ATTR["meta"]["incr"] = round(MEAS["incr_pix"] / MEAS["base"], 3)
+        log("meta INCREMENTAL actual :: web", ATTR["meta"]["incr"],
+            ":: in-store", (ATTR.get("metaOff") or {}).get("incr"),
+            ":: raw incr", int(ii), "of live", int(ib))
+    else:
+        ATTR["labels"]["incr"] = ("Incremental \u2014 MODELLED, NOT MEASURED (Meta did not return "
+                                  "its incremental column: %s)" % (MEAS["incr_err"] or "no rows"))
+        log("meta INCREMENTAL unavailable ::", MEAS["incr_err"] or "no rows",
+            ":: dashboard will label the option as modelled")
+    if ob > 0:
+        log("meta offline attribution measured :: 7dc", ATTR["metaOff"]["7dc"],
+            ":: 1dc", ATTR["metaOff"]["1dc"], ":: incr", ATTR["metaOff"]["incr"],
+            ":: live offline value", int(ob))
     fwin = drange(datetime.date.fromisoformat(fin["start"]), END)
     sh = {"rev": [int(round(shc["srev"].get(d, 0) / 1000.0)) for d in fwin],
           "gp": [int(round(shc["sgp"].get(d, 0) / 1000.0)) for d in fwin],
@@ -2061,7 +2143,7 @@ def build():
     open(os.path.join(DOCS, "data.js"), "w").write(out)
     log("WROTE data.js", len(out), "bytes  synced", ts)
 
-OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental (modeled)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
+OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
 def _dataface():
     """What is actually sitting in data.js right now, so status.json can report it
