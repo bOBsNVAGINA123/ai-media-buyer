@@ -1493,6 +1493,70 @@ def pull_shop_lines():
                          "vend": [[v, n2] for v, n2 in vx[:20]]}
         log("xchan customers", len(inter), "of", len(agg), "online")
 
+_META_SRC = ("facebook", "instagram", "meta", "fb", "ig", "an", "msg")
+
+def _is_meta_visit(v):
+    if not v: return False
+    src = (v.get("source") or "").lower()
+    utm = ((v.get("utmParameters") or {}).get("source") or "").lower()
+    return any(k in src for k in ("facebook", "instagram", "meta")) or utm in _META_SRC
+
+def pull_meta_driven_cross():
+    """v8.7: orders Shopify itself attributes to Facebook/Instagram (first or last
+    visit), buyer emails -> Odoo partners -> their REAL POS purchases. Heavy-only."""
+    store = os.environ.get("SHOPIFY_STORE", "").strip()
+    tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
+    if not store or not tok:
+        log("meta-driven cross :: SKIPPED - shopify env missing"); return
+    host = store if ".myshopify.com" in store else store + ".myshopify.com"
+    since = (END - datetime.timedelta(days=180)).isoformat()
+    q = ('query($c:String){ orders(first:250, after:$c, query:"created_at:>=%s") '
+         '{ pageInfo{hasNextPage endCursor} nodes{ email '
+         'customerJourneySummary{ firstVisit{ source utmParameters{ source } } '
+         'lastVisit{ source utmParameters{ source } } } } } }' % since)
+    emails = set(); total = 0; cursor = None; pages = 0
+    while pages < 200:
+        d = http_json("https://%s/admin/api/2025-07/graphql.json" % host,
+                      {"query": q, "variables": {"c": cursor}}, {"X-Shopify-Access-Token": tok})
+        od = (((d or {}).get("data") or {}).get("orders") or {})
+        nodes = od.get("nodes")
+        if nodes is None:
+            log("meta-driven cross :: orders query failed ::", str((d or {}).get("errors") or d)[:180]); break
+        pages += 1; total += len(nodes)
+        for o in nodes:
+            cj = o.get("customerJourneySummary") or {}
+            if _is_meta_visit(cj.get("firstVisit")) or _is_meta_visit(cj.get("lastVisit")):
+                em = (o.get("email") or "").strip().lower()
+                if em and "@" in em: emails.add(em)
+        pi = od.get("pageInfo") or {}
+        if not pi.get("hasNextPage"): break
+        cursor = pi.get("endCursor")
+    log("meta-driven cross :: shopify orders scanned", total, "(180d, %d pages)" % pages,
+        ":: meta-attributed buyer emails", len(emails))
+    if not emails: return
+    if pages >= 200: log("meta-driven cross :: NOTE hit the 200-page cap; earliest orders in the window not scanned")
+    pids = set()
+    el = sorted(emails)
+    for i in range(0, len(el), 200):
+        try:
+            for r in (oexec("res.partner", "search_read", [[["email", "in", el[i:i + 200]]]],
+                            {"fields": ["id"], "limit": 1000}) or []):
+                pids.add(r["id"])
+        except Exception as e:
+            log("meta-driven cross :: partner lookup failed ::", str(e)[:120]); break
+    pa = XTRA.get("posagg") or {}
+    vcs = XTRA.get("vcs") or {}
+    hit = [p for p in pids if p in pa]
+    posrev = sum(pa[p][0] for p in hit); posgp = sum(pa[p][1] for p in hit)
+    hs = set(hit)
+    vend = sorted(((v, len(cust & hs)) for v, cust in vcs.items()), key=lambda kv: -kv[1])
+    vend = [[v, c] for v, c in vend if c >= 10][:20]
+    XTRA["mcross"] = {"onlineCust": len(emails), "matched": len(pids), "cust": len(hit),
+                      "posrev": round(posrev), "posgp": round(posgp), "vend": vend,
+                      "days": 180, "orders": total}
+    log("meta-driven cross :: matched partners", len(pids), ":: with store purchases", len(hit),
+        ":: their store revenue", round(posrev), ":: store GP", round(posgp))
+
 def pull_meta_ads(tok):
     """v8.3: per-ad DAILY series for the last 60 days -- spend, online value, REAL
     offline value, purchases, outbound clicks, in-store new customers (value+count)
@@ -1528,6 +1592,8 @@ def pull_meta_ads(tok):
             pages = 0
             while url and pages < 60:
                 d = http_json(url); pages += 1
+                if d.get("error"):
+                    log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", str(d.get("error"))[:160]); break
                 for r in (d.get("data") or []):
                     i = di.get(r.get("date_start"))
                     if i is None: continue
@@ -1538,7 +1604,7 @@ def pull_meta_ads(tok):
                                       "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                       "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                       "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                      "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv")}}
+                                      "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
                     av = r.get("action_values") or []; ac = r.get("actions") or []
                     D = a["d"]
                     D["sp"][i] += float(r.get("spend") or 0)
@@ -1548,6 +1614,7 @@ def pull_meta_ads(tok):
                     D["fv"][i] += _av(av, ("offline_conversion.purchase",))
                     D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                     D["op"][i] += _av(ac, ("offline_conversion.purchase",))
+                    D["vv"][i] += _av(ac, ("video_view",))
                     ccv = _cc(av); cca = _cc(ac)
                     for cid2 in allnc:
                         D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -1560,10 +1627,23 @@ def pull_meta_ads(tok):
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
                       "imp": int(sum(D["im"])), "clk": int(sum(D["oc"])),
-                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"]))})
+                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
         ads.sort(key=lambda a: -a["sp"]); ads = ads[:120]
+        lastday = max([max((i for i in range(60) if a["d"]["sp"][i] > 0), default=0) for a in ads] or [0])
+        if lastday < 55:
+            log("meta ads :: PARTIAL PULL -- newest spend day is index", lastday, "of 60 ::",
+                "Meta rate-limited the pagination. Using the last complete pull instead.")
+            p2 = os.path.join(DOCS, "mads_fallback.json")
+            if os.path.exists(p2):
+                try:
+                    fb = json.load(open(p2))
+                    fdays = max([max((i for i in range(len((a.get("d") or {}).get("sp") or [])) if a["d"]["sp"][i] > 0), default=0) for a in fb if a.get("d")] or [0])
+                    if fdays > lastday:
+                        log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
+                        return fb
+                except Exception: pass
         ids = [a["id"] for a in ads[:40] if a["id"]]
         for i in range(0, len(ids), 25):
             d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
@@ -1672,6 +1752,8 @@ def pull_obj_daily(tok, bev):
             pages = 0
             while url and pages < 40:
                 d = http_json(url); pages += 1
+                if d.get("error"):
+                    log("budget-object daily :: PAGE ERROR", acct, lvl, "::", str(d.get("error"))[:140]); break
                 for r in (d.get("data") or []):
                     oid = str(r.get(idf) or "")
                     if oid not in want: continue
@@ -2376,7 +2458,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.5 (metaCC attribution health + wider diagnostic log)")
+    log("collector v8.7 (hook-rate raw plays + Shopify-attributed Meta-driven store crossover)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2436,7 +2518,7 @@ def build():
                 log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
     except Exception as e:
         log("carry-forward skipped", str(e)[:120])
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not any(
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
@@ -2453,6 +2535,7 @@ def build():
         vend, prodv = prev.get("vend", {}), prev.get("prodv", {})
     if heavy:
         safe(pull_shop_lines)
+        safe(pull_meta_driven_cross)
     vinv = (safe(pull_vendor_inventory) if heavy else None) or prev.get("vinv", {})
     # v6.5 -- deciles / lag / unregistered revenue / vendor+product monthly, with carry-forward
     dec = XTRA.get("dec") or prev.get("dec", {})
@@ -2602,6 +2685,7 @@ def build():
               "mads": mads, "gads": gads, "tads": tads,
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
+              "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
