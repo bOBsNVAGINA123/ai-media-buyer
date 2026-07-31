@@ -225,15 +225,17 @@ def _av(actions, keys):
             try: return float(a.get("value") or 0)
             except Exception: return 0.0
     return 0.0
+ACCT_NAMES = {"act_336343742536460": "Ourkids EGP", "act_652528128810469": "Basic"}
+DEFAULT_ACCTS = list(ACCT_NAMES)
+
 def meta_accounts(tok):
     ids = os.environ.get("META_ACCOUNT_IDS", "").strip()
     if ids:
-        return [x if x.startswith("act_") else "act_" + x for x in ids.split(",") if x.strip()]
-    d = http_json(GRAPH + "/me/adaccounts?" + urllib.parse.urlencode(
-        {"fields": "name,account_status", "limit": 200, "access_token": tok}))
-    out = [a["id"] for a in (d.get("data") or [])
-           if "ourkid" in (a.get("name") or "").lower() and a.get("account_status") == 1]
-    return out or [os.environ.get("META_ACCOUNT_ID", "act_336343742536460")]
+        out = [x if x.startswith("act_") else "act_" + x for x in ids.split(",") if x.strip()]
+        log("meta accounts :: pinned by META_ACCOUNT_IDS ::", ", ".join(out))
+        return out
+    log("meta accounts :: default pin ::", ", ".join("%s (%s)" % (a, ACCT_NAMES[a]) for a in DEFAULT_ACCTS))
+    return list(DEFAULT_ACCTS)
 
 MACC = {}
 
@@ -260,6 +262,66 @@ MCC_NC = {                        # "In-store New Customer - <Branch>"
     "1400874301918902": "New Cairo",
     "1339358398390619": "Zayed"}
 MCC_ALLNC = "1043047855247769"    # "In-store New Customers - All Branches"
+
+CCSEEN = {}                       # every custom conversion id actually seen -> value
+CCNAME = {}                       # id -> live name, for the diagnostic log
+
+def _cc_discover(acct, tok):
+    """v8.2: resolve the in-store custom conversions LIVE for one ad account.
+
+    Returns (value_map, newcust_map, all_branch_ids). Anything Meta does not hand back is
+    left to the hardcoded v6.0 map, so a lookup failure degrades to the old behaviour
+    instead of blanking the branch table."""
+    val, nc, allnc = {}, {}, []
+    d = None
+    try:
+        d = http_json("%s/%s/customconversions?%s" % (GRAPH, acct, urllib.parse.urlencode(
+            {"fields": "id,name", "limit": 200, "access_token": tok})))
+    except Exception as e:
+        log("meta custom conversions ::", acct, ":: lookup raised ::", str(e)[:140])
+        return val, nc, allnc
+    rows = (d or {}).get("data")
+    if rows is None:
+        log("meta custom conversions ::", acct, ":: no list returned ::",
+            str(((d or {}).get("error") or {}).get("message") or d)[:160])
+        return val, nc, allnc
+    for r in rows:
+        cid = str(r.get("id") or ""); nm = (r.get("name") or "").strip()
+        CCNAME[cid] = nm
+        low = nm.lower()
+        if not cid or ("in-store" not in low and "in store" not in low): continue
+        if "all branch" in low or "all-branch" in low:
+            allnc.append(cid); continue
+        br = re.split(r"[-\u2013\u2014]", nm)[-1].strip()
+        if not br: continue
+        if "new customer" in low: nc[cid] = br
+        else: val[cid] = br
+    log("meta custom conversions ::", acct, ":: listed", len(rows),
+        ":: branch value", len(val), ":: branch new-customer", len(nc),
+        ":: all-branch", len(allnc))
+    if val: log("meta custom conversions ::", acct, ":: branches ::",
+                ", ".join(sorted(set(val.values()))))
+    return val, nc, allnc
+
+def _cc_harvest(day, av, acts, maps, ad):
+    """Fold one insights row's custom conversions into MBR / instoreNC."""
+    cv = _cc(av); ca = _cc(acts)
+    for cid, v in cv.items(): CCSEEN[cid] = CCSEEN.get(cid, 0.0) + v
+    for cid, v in ca.items(): CCSEEN.setdefault(cid, 0.0)
+    hit = 0
+    for cid, br in maps["val"].items():
+        v = cv.get(cid, 0.0); pu = ca.get(cid, 0.0)
+        if v or pu:
+            e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
+            e["v"] += v; e["p"] += pu; hit += 1
+    for cid, br in maps["nc"].items():
+        n = ca.get(cid, 0.0)
+        if n:
+            e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
+            e["nc"] += n; hit += 1
+    for cid in maps["allnc"]:
+        ad["instoreNC"][day] += ca.get(cid, 0.0)
+    return hit
 
 MBR = {}                          # branch -> "YYYY-MM" -> {v, p, nc}
 # v6.5: outputs that several pulls contribute to. vmon/pmon = vendor/product monthly [rev,gp];
@@ -385,8 +447,21 @@ def pull_meta(win):
             d0 = http_json("%s/me/adaccounts?fields=name,account_id&limit=100&access_token=%s" % (GRAPH, tok))
             for a in (d0.get("data") or []): anames["act_" + str(a.get("account_id"))] = a.get("name", "")
     except Exception: pass
-    for acct in meta_accounts(tok):
+    accts = meta_accounts(tok)
+    CCM = {}
+    for acct in accts:
+      # v8.2: per-account maps. Custom conversions are account-scoped, so the second
+      # account gets its OWN branch IDs instead of being scored against the first one's.
+      m = {"val": dict(MCC_VAL), "nc": dict(MCC_NC), "allnc": [MCC_ALLNC]}
+      if tok:
+          v2, n2, a2 = _cc_discover(acct, tok)
+          if v2: m["val"] = v2
+          if n2: m["nc"] = n2
+          if a2: m["allnc"] = a2
+      CCM[acct] = m
+    for acct in accts:
       an = anames.get(acct, acct)
+      maps = CCM[acct]
       for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
              "time_range": json.dumps({"since": c0, "until": c1}),
@@ -416,18 +491,7 @@ def pull_meta(win):
             MEAS["off_w1"] += _avw(av, ("offline_conversion.purchase",), "1d_click")
             ad["mpur"][day] += _av(row.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
             mo = day[:7]
-            cv = _cc(av); ca = _cc(row.get("actions"))
-            for cid, br in MCC_VAL.items():
-                v = cv.get(cid, 0.0); pu = ca.get(cid, 0.0)
-                if v or pu:
-                    e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
-                    e["v"] += v; e["p"] += pu
-            for cid, br in MCC_NC.items():
-                n = ca.get(cid, 0.0)
-                if n:
-                    e = MBR.setdefault(br, {}).setdefault(day, {"v": 0.0, "p": 0.0, "nc": 0.0})
-                    e["nc"] += n
-            ad["instoreNC"][day] += ca.get(MCC_ALLNC, 0.0)
+            _cc_harvest(day, av, row.get("actions"), maps, ad)
             mc = MACC.setdefault(an, {}).setdefault(mo, {"sp": 0, "pv": 0, "ov": 0})
             mc["sp"] += float(row.get("spend") or 0); mc["pv"] += pixel; mc["ov"] += omni
         try:
@@ -438,6 +502,32 @@ def pull_meta(win):
                 MEAS["incr_err"] = err
         except Exception as e:
             if not MEAS["incr_err"]: MEAS["incr_err"] = str(e)[:180]
+    if not MBR and tok:
+        lo = max(win[0], (datetime.date.fromisoformat(win[-1]) - datetime.timedelta(days=180)).isoformat())
+        log("meta custom conversions :: account level returned none :: retrying at campaign level",
+            lo, "->", win[-1])
+        for acct in accts:
+            maps = CCM[acct]
+            try:
+                p = {"level": "campaign", "time_increment": 1, "access_token": tok,
+                     "time_range": json.dumps({"since": lo, "until": win[-1]}),
+                     "fields": "action_values,actions", "limit": 500,
+                     "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"])}
+                d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+                for row in (d.get("data") or []):
+                    day = row.get("date_start")
+                    if day in ad["mspend"]:
+                        _cc_harvest(day, row.get("action_values") or [], row.get("actions"), maps, ad)
+            except Exception as e:
+                log("meta custom conversions :: campaign-level retry failed", acct, str(e)[:140])
+        log("meta custom conversions :: after campaign-level retry :: branches", len(MBR))
+    if CCSEEN:
+        top = sorted(CCSEEN.items(), key=lambda kv: -kv[1])[:14]
+        log("meta custom conversions SEEN ::",
+            " | ".join("%s=%s (%d)" % (CCNAME.get(c, c), c, round(v)) for c, v in top))
+    else:
+        log("meta custom conversions SEEN :: NONE -- Meta returned no "
+            "offsite_conversion.custom.* action at any level for", len(accts), "account(s)")
     log("meta days", sum(1 for v in ad["mspend"].values() if v),
         "| per-branch in-store days", sum(len(v) for v in MBR.values()),
         "| branches", len(MBR))
@@ -823,6 +913,23 @@ def pull_cohorts():
                 gap = (datetime.date.fromisoformat(dl[i]) - datetime.date.fromisoformat(dl[i - 1])).days
                 lagH[min(gap // 10, 14)] += 1
         XTRA.setdefault("lag", {})["shop"] = lagH
+        # v8.3 ONLINE journey profile (categories need order lines; POS journeys carry the mix)
+        d2o = []; hist = [0] * 13; opy = [0] * 6; toto = 0; yrs = 0.0; ltg2 = 0.0; ltv2 = 0.0
+        for pid, f in first.items():
+            ds = sorted({d for d, _a, _m in by_p[pid]})
+            if len(ds) >= 2:
+                g = (datetime.date.fromisoformat(ds[1]) - datetime.date.fromisoformat(ds[0])).days
+                d2o.append(g); hist[min(g // 30, 12)] += 1
+            span = max(30, (END - datetime.date.fromisoformat(f)).days) / 365.0
+            c = len(ds); toto += c; yrs += span; opy[min(max(c, 1), 6) - 1] += 1
+            ltv2 += sum(a2 for _d, a2, _m in by_p[pid]); ltg2 += sum(m2 for _d, _a, m2 in by_p[pid])
+        if first:
+            n = len(first)
+            XTRA.setdefault("jour", {}).setdefault("scopes", {})["ONLINE"] = {
+                "n": n, "rep": round(len(d2o) / n * 100, 1),
+                "med2": int(statistics.median(d2o)) if d2o else None,
+                "oyr": round(toto / yrs, 2) if yrs else 0, "ltgp": round(ltg2 / n), "ltv": round(ltv2 / n),
+                "h2": hist, "opy": opy, "cat": [], "ven": []}
         nr = {}
         seen = set()
         for pid, d, amt, mg in sorted(orders, key=lambda o: (o[1], o[0])):
@@ -991,7 +1098,7 @@ def pull_pos_customers():
     bnr = {}; bstat = {}; bun = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
-    VCS = {}; PFD = {}; PFV = {}; PATTR = {}
+    VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
     try:
         rows = []
         q = datetime.date(2024, 8, 1)
@@ -1035,7 +1142,9 @@ def pull_pos_customers():
                     if rv > 0:
                         _at = PATTR.setdefault(pid, {"cat": {}, "ven": {}})
                         _cg = _catname(_tv[1])
-                        if _cg: _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                        if _cg:
+                            _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                            JR.append((pid, d10, _cg, rv))
                         if _vn:
                             _vl = VNM.get(_vn) or _vn
                             _at["ven"][_vl] = _at["ven"].get(_vl, 0.0) + rv
@@ -1156,6 +1265,76 @@ def pull_pos_customers():
                 gap = (datetime.date.fromisoformat(dl[i]) - datetime.date.fromisoformat(dl[i - 1])).days
                 lagH[min(gap // 10, 14)] += 1
         XTRA.setdefault("lag", {})["pos"] = lagH
+        # ---- v8.3 customer journeys: what a first purchase turns into ----
+        d2 = {}
+        for pid, ds in pdates.items():
+            dl = sorted(ds)
+            if len(dl) >= 2:
+                d2[pid] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
+        lrev = {}
+        for pid, d, br, mg, oid, rv, qy in rows: lrev[pid] = lrev.get(pid, 0.0) + rv
+        def _jprof(pids):
+            n = len(pids)
+            if not n: return None
+            reps = [d2[p] for p in pids if p in d2]
+            hist = [0] * 13
+            for g in reps: hist[min(g // 30, 12)] += 1
+            opy = [0] * 6
+            yrs = 0.0; tot_o = 0
+            for p in pids:
+                span = max(30, (END - datetime.date.fromisoformat(first[p][0])).days) / 365.0
+                c = cnt.get(p, 0); tot_o += c; yrs += span
+                opy[min(max(c, 1), 6) - 1] += 1
+            return {"n": n, "rep": round(len(reps) / n * 100, 1),
+                    "med2": int(statistics.median(reps)) if reps else None,
+                    "oyr": round(tot_o / yrs, 2) if yrs else 0,
+                    "ltgp": round(sum(ltg.get(p, 0) for p in pids) / n),
+                    "ltv": round(sum(lrev.get(p, 0) for p in pids) / n),
+                    "h2": hist, "opy": opy}
+        def _jmix(pids, key, topn=8):
+            agg = {}
+            for p in pids:
+                for k2, v2 in PATTR.get(p, {}).get(key, {}).items(): agg[k2] = agg.get(k2, 0.0) + v2
+            return [[k2, round(v2)] for k2, v2 in sorted(agg.items(), key=lambda kv: -kv[1])[:topn]]
+        JOUR = {"scopes": {}, "cat": {}, "ven": {}}
+        for br2, pids in fb.items():
+            pr = _jprof(pids)
+            if pr: pr["cat"] = _jmix(pids, "cat"); pr["ven"] = _jmix(pids, "ven"); JOUR["scopes"][br2] = pr
+        allpids = list(first.keys())
+        pr = _jprof(allpids)
+        if pr: pr["cat"] = _jmix(allpids, "cat"); pr["ven"] = _jmix(allpids, "ven"); JOUR["scopes"]["ALL STORES"] = pr
+        # first-purchase category -> the rest of the journey
+        fcat = {}; nxt = {}
+        for pid, d, cg, rv in JR:
+            f0 = first.get(pid)
+            if not f0: continue
+            if d == f0[0]:
+                e = fcat.setdefault(pid, {}); e[cg] = e.get(cg, 0.0) + rv
+            else:
+                nx = nxt.setdefault(pid, {}); nx[cg] = nx.get(cg, 0.0) + rv
+        bycat = {}
+        for pid, cs in fcat.items(): bycat.setdefault(max(cs, key=cs.get), []).append(pid)
+        for cg, pids in bycat.items():
+            if len(pids) < 40: continue
+            pr = _jprof(pids)
+            if not pr: continue
+            nagg = {}
+            for p in pids:
+                for k2, v2 in nxt.get(p, {}).items(): nagg[k2] = nagg.get(k2, 0.0) + v2
+            pr["next"] = [[k2, round(v2)] for k2, v2 in sorted(nagg.items(), key=lambda kv: -kv[1])[:6]]
+            JOUR["cat"][cg] = pr
+        # first-purchase vendor -> journey (top 15 by acquired customers)
+        byven = {}
+        for pid, vs in PFV.items():
+            for v in vs: byven.setdefault(VNM.get(v) or v, []).append(pid)
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:15]:
+            if len(pids) < 40: continue
+            pr = _jprof(pids)
+            if pr: pr["cat"] = _jmix(pids, "cat", 6); JOUR["ven"][vn2] = pr
+        J0 = XTRA.setdefault("jour", {"scopes": {}, "cat": {}, "ven": {}})
+        J0.setdefault("scopes", {}).update(JOUR["scopes"]); J0["cat"] = JOUR["cat"]; J0["ven"] = JOUR["ven"]
+        log("journeys :: scopes", len(J0["scopes"]), ":: first-category segments", len(JOUR["cat"]),
+            ":: first-vendor segments", len(JOUR["ven"]))
         log("deciles", {sc: len(v) for sc, v in XTRA["dec"].items()}, "lag gaps", sum(lagH))
         bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
         log("pos customers", len(first), "branches", list(bstat.keys()),
@@ -1234,7 +1413,12 @@ def pull_shop_lines():
         log("xchan customers", len(inter), "of", len(agg), "online")
 
 def pull_meta_ads(tok):
-    """Top ads last 30d with website + omni value and viewable thumbnails."""
+    """v8.3: per-ad DAILY series for the last 60 days -- spend, online value, REAL
+    offline value, purchases, outbound clicks, in-store new customers (value+count)
+    -- tagged with account, adset and campaign. The Top Ads view filters by level,
+    account and ANY date range from these; the Budget tab judges changes from the
+    campaign/adset rollups. Totals keep the old field names; per-ad "offline" is now
+    offline_conversion.purchase, not omni minus pixel."""
     out = []
     if not tok:
         p2 = os.path.join(DOCS, "mads_fallback.json")
@@ -1243,48 +1427,77 @@ def pull_meta_ads(tok):
             except Exception: pass
         return out
     try:
-        c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
-        rows = []
+        c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=59)).isoformat()
+        XTRA["madsW"] = {"start": c0, "n": 60}
+        di = {}
+        for i in range(60): di[(datetime.date.fromisoformat(c0) + datetime.timedelta(days=i)).isoformat()] = i
+        A = {}
         for acct in meta_accounts(tok):
-            p = {"level": "ad", "access_token": tok, "time_range": json.dumps({"since": c0, "until": c1}),
-                 "fields": "ad_id,ad_name,spend,impressions,clicks,action_values,actions", "limit": 300}
-            d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
-            rows += (d.get("data") or [])
+            allnc = [MCC_ALLNC]
+            try:
+                _v2, _n2, _a2 = _cc_discover(acct, tok)
+                if _a2: allnc = _a2
+            except Exception: pass
+            p = {"level": "ad", "time_increment": 1, "access_token": tok,
+                 "time_range": json.dumps({"since": c0, "until": c1}),
+                 "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
+                           "spend,impressions,outbound_clicks,actions,action_values",
+                 "limit": 500}
+            url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+            pages = 0
+            while url and pages < 60:
+                d = http_json(url); pages += 1
+                for r in (d.get("data") or []):
+                    i = di.get(r.get("date_start"))
+                    if i is None: continue
+                    aid = r.get("ad_id")
+                    a = A.get(aid)
+                    if a is None:
+                        a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
+                                      "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
+                                      "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
+                                      "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
+                                      "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv")}}
+                    av = r.get("action_values") or []; ac = r.get("actions") or []
+                    D = a["d"]
+                    D["sp"][i] += float(r.get("spend") or 0)
+                    D["im"][i] += float(r.get("impressions") or 0)
+                    D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
+                    D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
+                    D["fv"][i] += _av(av, ("offline_conversion.purchase",))
+                    D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
+                    D["op"][i] += _av(ac, ("offline_conversion.purchase",))
+                    ccv = _cc(av); cca = _cc(ac)
+                    for cid2 in allnc:
+                        D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
+                url = (d.get("paging") or {}).get("next")
         ads = []
-        for r in rows:
-            sp = float(r.get("spend") or 0)
+        for a in A.values():
+            D = a["d"]; sp = sum(D["sp"])
             if sp < 1000: continue
-            av = r.get("action_values") or []
-            pv = _av(av, ("offsite_conversion.fb_pixel_purchase",))
-            ov = _av(av, ("omni_purchase",)) or pv
-            pur = _av(r.get("actions"), ("offsite_conversion.fb_pixel_purchase",))
-            opur = _av(r.get("actions"), ("offline_conversion.purchase",))
-            ads.append({"id": r.get("ad_id"), "n": (r.get("ad_name") or "")[:80], "sp": round(sp),
-                        "pv": round(pv), "ov": round(ov), "pur": int(pur), "opur": int(opur),
-                        "imp": int(float(r.get("impressions") or 0)),
-                        "clk": int(float(r.get("clicks") or 0)),
-                        "ofv": round(_av(av, ("offline_conversion.purchase",))),
-                        "pf": "meta"})
-        ads.sort(key=lambda a: -a["sp"]); ads = ads[:40]
-        ids = [a["id"] for a in ads if a["id"]]
+            a.update({"sp": round(sp), "pv": round(sum(D["pv"])), "ofv": round(sum(D["fv"])),
+                      "ov": round(sum(D["pv"]) + sum(D["fv"])),
+                      "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
+                      "imp": int(sum(D["im"])), "clk": int(sum(D["oc"])),
+                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"]))})
+            a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
+            ads.append(a)
+        ads.sort(key=lambda a: -a["sp"]); ads = ads[:120]
+        ids = [a["id"] for a in ads[:40] if a["id"]]
         for i in range(0, len(ids), 25):
-            d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status,adset{name},campaign{name}&access_token=%s" % (GRAPH, ",".join(ids[i:i+25]), tok))
+            d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
                 info = (d or {}).get(a["id"]) or {}
                 cr = info.get("creative") or {}
-                th = cr.get("thumbnail_url")
-                if th: a["th"] = th
-                iu = cr.get("image_url")
-                if iu: a["im"] = iu
-                pl = info.get("preview_shareable_link")
-                if pl: a["pl"] = pl
-                es = info.get("effective_status")
-                if es: a["st"] = str(es)[:32]
-                cn = ((info.get("campaign") or {}).get("name"))
-                if cn: a["cmp"] = str(cn)[:60]
-                an = ((info.get("adset") or {}).get("name"))
-                if an: a["as"] = str(an)[:60]
-        log("meta ads", len(ads))
+                if cr.get("thumbnail_url"): a["th"] = cr["thumbnail_url"]
+                if cr.get("image_url"): a["im2"] = cr["image_url"]
+                if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
+                if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
+        for a in ads:
+            if a.get("im2"): a["im"] = a.pop("im2")
+        log("meta ads v8.3 ::", len(ads), "ads with 60d daily series :: accounts",
+            len(set(a["acct"] for a in ads)), ":: offline value", sum(a["ofv"] for a in ads),
+            ":: in-store NC value", sum(a["ncv"] for a in ads))
         try: json.dump(ads, open(os.path.join(DOCS, "mads_fallback.json"), "w"))
         except Exception: pass
         return ads
@@ -1295,6 +1508,132 @@ def pull_meta_ads(tok):
             try: return json.load(open(p2))
             except Exception: pass
         return out
+
+def pull_budget_events(tok):
+    """v8.3: every budget change in the last 60 days from the account activity feed.
+    CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
+    old/new values are minor units (piastres) -> /100; raw kept when parsing is odd."""
+    if not tok: return []
+    out = []
+    c0 = (END - datetime.timedelta(days=59)).isoformat()
+    KEEP = ("update_campaign_budget", "update_ad_set_budget",
+            "update_campaign_daily_budget", "update_campaign_lifetime_budget")
+    for acct in meta_accounts(tok):
+        p = {"access_token": tok, "limit": 500, "since": c0,
+             "fields": "event_type,event_time,object_id,object_name,extra_data"}
+        url = "%s/%s/activities?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+        pages = 0
+        while url and pages < 10:
+            d = http_json(url); pages += 1
+            rows = d.get("data")
+            if rows is None:
+                log("budget events ::", acct, "::", str(d.get("error") or d)[:160]); break
+            for r in rows:
+                et = r.get("event_type") or ""
+                if et not in KEEP: continue
+                try: xd = json.loads(r.get("extra_data") or "{}")
+                except Exception: xd = {}
+                def _cents(v):
+                    try: return round(float(v) / 100.0, 2)
+                    except Exception: return None
+                ov2 = _cents(xd.get("old_value")); nv2 = _cents(xd.get("new_value"))
+                out.append({"t": str(r.get("event_time"))[:10],
+                            "lvl": "campaign" if "campaign" in et else "adset",
+                            "id": str(r.get("object_id") or ""), "nm": (r.get("object_name") or "")[:70],
+                            "old": ov2, "new": nv2, "acct": ACCT_NAMES.get(acct, acct),
+                            "raw": "" if (ov2 is not None and nv2 is not None) else str(xd)[:120]})
+            url = (d.get("paging") or {}).get("next")
+    out.sort(key=lambda e2: e2["t"], reverse=True)
+    log("budget events ::", len(out), "changes in 60d")
+    return out[:200]
+
+def pull_campaign_reach(tok):
+    """v8.3: daily deduplicated reach per campaign, 60d -- for judging budget changes."""
+    if not tok: return {}
+    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=59)).isoformat()
+    out = {}
+    for acct in meta_accounts(tok):
+        p = {"level": "campaign", "time_increment": 1, "access_token": tok,
+             "time_range": json.dumps({"since": c0, "until": c1}),
+             "fields": "campaign_id,reach", "limit": 500}
+        url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+        pages = 0
+        while url and pages < 20:
+            d = http_json(url); pages += 1
+            for r in (d.get("data") or []):
+                try: i = (datetime.date.fromisoformat(r["date_start"]) - datetime.date.fromisoformat(c0)).days
+                except Exception: continue
+                if 0 <= i < 60:
+                    out.setdefault(str(r.get("campaign_id")), [0] * 60)[i] += int(float(r.get("reach") or 0))
+            url = (d.get("paging") or {}).get("next")
+    log("campaign reach ::", len(out), "campaigns 60d daily")
+    return out
+
+def sync_offline_audience(tok):
+    """v8.3: keep a Meta Customer List of OFFLINE buyers fresh on every run, per the
+    owner's instruction. Emails/phones come from Odoo (read-only), are normalised and
+    SHA256-HASHED before anything leaves this job (Meta's own customer-file format).
+    Raw PII is never logged and never written to the repo. Idempotent: finds the
+    audience by name; creates it once; each 3h run tops up the last 4 days of buyers,
+    a fresh audience gets a 730-day backfill. Kill switch: OFFLINE_AUDIENCE=off."""
+    if not tok or os.environ.get("OFFLINE_AUDIENCE", "on").lower() == "off": return
+    import hashlib
+    acct = meta_accounts(tok)[0]
+    name = "Ourkids Offline Buyers (auto)"
+    aud = os.environ.get("META_OFFLINE_AUDIENCE_ID", "").strip(); created = False
+    if not aud:
+        d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
+            {"fields": "id,name", "limit": 500, "access_token": tok})))
+        for r in (d.get("data") or []):
+            if r.get("name") == name: aud = r["id"]; break
+    if not aud:
+        d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
+            {"name": name, "subtype": "CUSTOM", "customer_file_source": "USER_PROVIDED_ONLY",
+             "description": "Auto-updated with in-store buyers from Odoo POS by the dashboard collector",
+             "access_token": tok})), data={})
+        aud = d.get("id")
+        if not aud:
+            log("offline audience :: CREATE FAILED ::", str(d)[:200],
+                ":: likely the Custom Audience ToS -- accept it once in Ads Manager > Audiences, then this runs itself")
+            return
+        created = True
+        log("offline audience :: created", aud)
+    days = 730 if created else 4
+    cutoff = (END - datetime.timedelta(days=days)).isoformat()
+    ANON = anon_partner_ids()
+    pids = set(); off = 0
+    while off < 400000:
+        page = oexec("report.pos.order", "search_read",
+                     [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
+                     {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
+        if not page: break
+        for r in page:
+            pid = r["partner_id"][0]
+            if pid not in ANON: pids.add(pid)
+        off += len(page)
+        if len(page) < 10000: break
+    rowsn = []
+    pl = list(pids)
+    for i in range(0, len(pl), 2000):
+        for r in (oexec("res.partner", "read", [pl[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
+            em = (r.get("email") or "").strip().lower()
+            ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
+            if ph.startswith("00"): ph = ph[2:]
+            if ph.startswith("0"): ph = "20" + ph[1:]
+            elif ph and not ph.startswith("20") and len(ph) == 10: ph = "20" + ph
+            he = hashlib.sha256(em.encode()).hexdigest() if em and "@" in em else ""
+            hp = hashlib.sha256(ph.encode()).hexdigest() if len(ph) >= 11 else ""
+            if he or hp: rowsn.append([he, hp])
+    sent = 0
+    for i in range(0, len(rowsn), 5000):
+        d = http_json("%s/%s/users" % (GRAPH, aud),
+                      data={"payload": {"schema": ["EMAIL_SHA256", "PHONE_SHA256"],
+                                        "data": rowsn[i:i + 5000]}, "access_token": tok})
+        if d.get("error"):
+            log("offline audience :: push failed ::", str(d.get("error"))[:180]); break
+        sent += len(rowsn[i:i + 5000])
+    log("offline audience ::", aud, ":: window", days, "d :: customers", len(pids),
+        ":: hashed rows sent", sent, "(first full backfill)" if created else "")
 
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
@@ -1915,7 +2254,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.1 (real Meta offline value + real Incremental attribution + ShopifyQL object-row fix)")
+    log("collector v8.3 (per-ad 60d daily series + budget-change feed + customer journeys + offline audience sync)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2018,7 +2357,11 @@ def build():
         pv = {r["n"]: r.get("mon") for r in prev["prodv"]["rows"] if r.get("mon")}
         for pr in prodv["rows"]:
             if pr["n"] in pv: pr["mon"] = pv[pr["n"]]
-    mads = safe(pull_meta_ads, os.environ.get("META_ACCESS_TOKEN", "").strip()) or []
+    _mtok = os.environ.get("META_ACCESS_TOKEN", "").strip()
+    mads = safe(pull_meta_ads, _mtok) or []
+    bev = safe(pull_budget_events, _mtok) or []
+    cre = safe(pull_campaign_reach, _mtok) or {}
+    safe(sync_offline_audience, _mtok)
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
@@ -2122,6 +2465,9 @@ def build():
             "Not a sync failure; nothing was spent/tracked." % (k, freshmap[k]))
     log("freshness", freshmap)
     log("STALE sources: " + (",".join(stalelist) if stalelist else "none - all fresh to date"))
+    jour = XTRA.get("jour") or {}
+    if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
+        pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
               "bmeta": {b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
@@ -2131,6 +2477,7 @@ def build():
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
+              "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "idle": idlelist, "srcok": {k: bool(v) for k, v in SRCOK.items()}, "aw": [win[0], win[-1]]}
