@@ -21,7 +21,7 @@ export default function middleware(request) {
   return new Response('Authentication required', {
     status: 401,
     headers: {
-      'WWW-Authenticate': 'Basic realm="OurKids Live", charset="UTF-8"',
+      'WWW-Authenticate': 'Basic realm="OurKids", charset="UTF-8"',
       'Content-Type': 'text/plain'
     }
   });

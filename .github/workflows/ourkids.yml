@@ -164,3 +164,15 @@ jobs:
               print("")
               print("</details>")
           PY
+      # Keep the password-protected mirror in step with what we just built. The whole
+      # docs/ tree is deployed, so all three apps (Growth Operator, Strategic, OurKids)
+      # and their payloads stay in sync at https://ourkids-live.vercel.app
+      - name: Publish to the private mirror
+        if: always()
+        env:
+          VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          cd docs
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
