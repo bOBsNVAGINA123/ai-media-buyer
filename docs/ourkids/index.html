@@ -54,7 +54,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="wrap hide" id="app">
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
-<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline/Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t15" onclick="tab('cp')">Customer Portfolio</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t16" onclick="tab('cj')">Journeys</div><div class="tab" id="t17" onclick="tab('bg')">Budget Calls</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
+<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline/Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t15" onclick="tab('cp')">Customer Portfolio</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t16" onclick="tab('cj')">Journeys</div><div class="tab" id="t17" onclick="tab('bg')">Launches &amp; Budgets</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
 <div id="stale"></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
@@ -216,7 +216,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v8.4</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v8.5</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp'],['t16','cj'],['t17','bg']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -3145,56 +3145,117 @@ function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16')
   let h2='<div style="overflow-x:auto"><table class="bt" style="min-width:'+(extraTH?'880':'760')+'px"><tr><th style="text-align:left">'+label+'</th><th>Customers</th><th>Repeat %</th><th>Median days &rarr; 2nd</th><th>Orders / yr</th><th>Avg LTGP</th>'+(extraTH||'')+'</tr>';
   keys.forEach(c=>{const v=MAP[c];h2+='<tr><td style="text-align:left;font-weight:700">'+c+'</td><td>'+money(v.n)+'</td><td'+cR(v.rep)+'>'+v.rep+'%</td><td'+cM(v.med2)+'>'+(v.med2==null?'&mdash;':v.med2)+'</td><td'+cO(v.oyr)+'>'+v.oyr+'</td><td'+cL(v.ltgp)+'>'+money(v.ltgp)+'</td>'+(extraTD?extraTD(v):'')+'</tr>';});
   return h2+'</table></div>';};
- const tC=mkT(J.cat||{},'FIRST purchase category','<th style="text-align:left">What they buy NEXT</th>',v=>'<td style="text-align:left;font-size:11px">'+(v.next||[]).map(x=>x[0]).slice(0,4).join(' · ')+'</td>');
- if(tC)pnlCard(g,'odoo','Journey by FIRST-purchase category','Green rows = the first sales worth engineering toward: those customers repeat more, sooner, and are worth more. &ldquo;NEXT&rdquo; = what they buy on visits after the first day.',tC);
- const tV=mkT(J.ven||{},'FIRST purchase supplier','',null);
- if(tV)pnlCard(g,'odoo','Journey by FIRST-purchase supplier','Which supplier&rsquo;s product acquires customers who come back.',tV);}
+ const NXTD='<th style="text-align:left">What they buy NEXT</th>';const NXTF=v=>'<td style="text-align:left;font-size:11px">'+(v.next||[]).map(x=>x[0]).slice(0,4).join(' · ')+'</td>';
+ if(sc==='ONLINE'){
+  const tCo=mkT(J.catON||{},'FIRST purchase category (ONLINE)',NXTD,NXTF);
+  if(tCo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase category','Real Shopify order lines: what the first online purchase was, and what those customers repeat into.',tCo);
+  else pnlCard(g,'odoo','ONLINE journey by FIRST-purchase category','Arrives with the next heavy crawl (it is queued automatically).','');
+  const tVo=mkT(J.venON||{},'FIRST purchase supplier (ONLINE)','',null);
+  if(tVo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase supplier','Which supplier&rsquo;s product acquires the online customers that come back.',tVo);
+ }else{
+  const tC=mkT(J.cat||{},'FIRST purchase category (stores)',NXTD,NXTF);
+  if(tC)pnlCard(g,'odoo','Journey by FIRST-purchase category (stores)','Green rows = the first sales worth engineering toward: those customers repeat more, sooner, and are worth more. &ldquo;NEXT&rdquo; = what they buy on visits after the first day.',tC);
+  const tV=mkT(J.ven||{},'FIRST purchase supplier (stores)','',null);
+  if(tV)pnlCard(g,'odoo','Journey by FIRST-purchase supplier (stores)','Which supplier&rsquo;s product acquires customers who come back.',tV);
+ }}
 function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
- const EV=O.bev||[];const W=O.madsW;const CRE=O.cre||{};
- document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Every budget change on both ad accounts, last 60 days, straight from Meta&rsquo;s account activity feed &mdash; CBO changes at campaign level, ABO at ad-set level. Each change is judged on the object&rsquo;s own numbers, 7 days after vs 7 days before: spend/day, ROAS (online + REAL in-store value, raw Meta actuals), outbound CTR, CPP, reach/day and both revenue legs. Green cell = improved after the change, red = got worse. The date filter above narrows which changes are listed.';
- if(!EV.length){pnlCard(g,'meta','Budget changes &mdash; awaiting first v8.3 sync','No budget-change events pulled yet; the activity feed lands on the next collector run.','');return;}
- const HASD=(O.mads||[]).some(a=>a.d);
+ const EV=O.bev||[];const W=O.madsW;const CRE=O.cre||{};const SD=O.objD||{};
+ document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Two things live here. <b>BUDGET CALLS</b>: every budget change on both accounts (last 60d, from Meta&rsquo;s activity feed &mdash; CBO at campaign level, ABO at ad set level), each judged on the object&rsquo;s own day-by-day numbers around the change. <b>AD LAUNCHES</b>: every ad that started delivering in the last 3 weeks, with its ramp and an early verdict vs the account&rsquo;s own benchmark. Raw Meta actuals, default attribution, both value legs. The date filter above narrows the budget-change list.';
+ const HASD=Object.keys(SD).length>0||(O.mads||[]).some(a=>a.d);
  const w0=W?new Date(W.start+'T00:00:00Z'):null;
  const idx=d=>w0?Math.round((new Date(d+'T00:00:00Z')-w0)/864e5):-1;
  const roll={};
- if(HASD)(O.mads||[]).forEach(a=>{if(!a.d)return;[a.cid,a.asid].forEach(k=>{if(!k)return;
+ if(W)(O.mads||[]).forEach(a=>{if(!a.d)return;[a.cid,a.asid].forEach(k=>{if(!k)return;
   const r=roll[k]||(roll[k]={sp:new Array(W.n).fill(0),pv:new Array(W.n).fill(0),fv:new Array(W.n).fill(0),pu:new Array(W.n).fill(0),op:new Array(W.n).fill(0),oc:new Array(W.n).fill(0),im:new Array(W.n).fill(0)});
   ['sp','pv','fv','pu','op','oc','im'].forEach(k2=>{const v=a.d[k2]||[];for(let i=0;i<W.n;i++)r[k2][i]+=v[i]||0;});});});
  const sum=(arr,i0,i1)=>{let t=0;for(let i=Math.max(0,i0);i<=Math.min((W?W.n:0)-1,i1);i++)t+=arr[i]||0;return t;};
- const evs=EV.filter(e=>(!ST.s||e.t>=ST.s)&&(!ST.e||e.t<=ST.e)).slice(0,40);
- if(!evs.length){pnlCard(g,'meta','Budget changes','None of the '+EV.length+' changes in the 60-day feed fall inside your date filter. Widen it.','');return;}
+ // ---------------- BUDGET CALLS ----------------
+ if(!EV.length){pnlCard(g,'meta','Budget changes','No budget-change events pulled yet; the activity feed lands on the next collector run.','');}
+ else{
+ const evs=EV.filter(e=>(!ST.s||e.t>=ST.s)&&(!ST.e||e.t<=ST.e)).slice(0,30);
+ if(!evs.length){pnlCard(g,'meta','Budget changes','None of the '+EV.length+' changes in the 60-day feed fall inside your date filter. Widen it.','');}
+ else{
  const list=evs.map(e=>{
-  const r=roll[e.id];const i=idx(e.t);
+  const r=SD[e.id]||roll[e.id];const i=idx(e.t);
   const up=(e.new!=null&&e.old!=null)?e.new>e.old:null;
-  let head='<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:baseline"><b>'+e.t+'</b><span class="tg" style="background:'+(e.lvl==='campaign'?'#5a5bf022;color:#5a5bf0':'#12b0a422;color:#12b0a4')+'">'+(e.lvl==='campaign'?'CBO · campaign':'ABO · ad set')+'</span><b style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(e.nm||'')+'">'+(e.nm||e.id)+'</b><span style="color:#8a93a6;font-size:11px">'+(e.acct||'')+'</span>'+
-   ((e.old!=null&&e.new!=null)?'<span>E&pound; '+money(e.old)+' &rarr; <b>E&pound; '+money(e.new)+'</b><b style="color:'+(up?'#12a06e':'#e23a63')+'"> '+(up?'+':'')+((e.new-e.old)/(e.old||1)*100).toFixed(0)+'%</b></span>':'<span style="color:#8a93a6;font-size:11px">'+(e.raw||'values not parseable')+'</span>')+'</div>';
-  if(!r||i<0||!HASD)return head+'<div class="cs">No per-day series for this object yet &mdash; it may predate the 60-day ad window, spent under E&pound;1,000 in it, or the first v8.3 collector run hasn&rsquo;t landed.</div>';
+  let head='<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:baseline"><b>'+e.t+'</b><span class="tg" style="background:'+(e.lvl==='campaign'?'#5a5bf022;color:#5a5bf0':'#12b0a422;color:#12b0a4')+'">'+(e.lvl==='campaign'?'CBO · campaign':'ABO · ad set')+'</span><b style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(e.nm||'')+'">'+(e.nm||e.id)+'</b><span style="color:#8a93a6;font-size:11px">'+(e.acct||'')+'</span>'+
+   ((e.old!=null&&e.new!=null)?'<span><b>BUDGET '+(up?'UP':'DOWN')+'</b>: E&pound; '+money(e.old)+' &rarr; <b>E&pound; '+money(e.new)+'</b>/day <b style="color:'+(up?'#12a06e':'#e23a63')+'">'+(up?'+':'')+((e.new-e.old)/(e.old||1)*100).toFixed(0)+'%</b></span>':'<span style="color:#8a93a6;font-size:11px">budget changed &mdash; Meta did not expose the values for this event type</span>')+'</div>';
+  if(!r||i<0)return head+'<div class="cs">This object has no delivery data in the 60-day window at all &mdash; the budget was changed on something that was not spending (paused, or brand new). Nothing to judge, honestly.</div>';
   const m=(i0,i1)=>{const sp=sum(r.sp,i0,i1),pv=sum(r.pv,i0,i1),fv=sum(r.fv,i0,i1),pu=sum(r.pu,i0,i1),op=sum(r.op,i0,i1),oc=sum(r.oc,i0,i1),im=sum(r.im,i0,i1);
    const days=Math.min(W.n-1,i1)-Math.max(0,i0)+1;
    return{sp,pv,fv,roas:sp?(pv+fv)/sp:null,ctr:im?oc/im*100:null,cpp:(pu+op)?sp/(pu+op):null,spd:days>0?sp/days:0,days};};
   const b=m(i-7,i-1),a2=m(i,i+6);
+  if(b.sp===0&&a2.sp===0)return head+'<div class="cs">The object was not delivering in the two weeks around this change (E&pound;0 spend before and after &mdash; paused, or the budget was set ahead of a launch). No verdict; when it starts spending the next sync scores it.</div>';
+  // -------- day-by-day moving table, colored vs the before-week average --------
+  const bAvg={roas:b.roas,cpp:b.cpp,spd:b.spd,pvD:b.pv/Math.max(1,b.days),fvD:b.fv/Math.max(1,b.days)};
+  const k0=Math.max(0,i-7),k1=Math.min(W.n-1,i+7);
+  let dt='<div style="overflow-x:auto;margin-top:6px"><table class="bt" style="min-width:'+(120+(k1-k0+1)*64)+'px"><tr><th style="text-align:left">Day by day</th>';
+  for(let k=k0;k<=k1;k++)dt+='<th'+(k===i?' style="outline:2px solid #111"':'')+'>'+aD2(W,k).slice(5)+(k===i?'<div style="font-size:9px">CHANGE</div>':'')+'</th>';
+  dt+='</tr>';
+  const CELL=(v,base,dir,f)=>{if(v==null||!isFinite(v))return'<td>&mdash;</td>';let st='';
+   if(base!=null&&isFinite(base)&&base!==0&&dir!==0){const d2=(v-base)/Math.abs(base);const ok=dir>0?d2>=.05:d2<=-.05;const bad=dir>0?d2<=-.05:d2>=.05;
+    if(ok)st=' style="background:rgba(18,160,110,'+Math.min(.4,Math.abs(d2)*.4+.08).toFixed(2)+')"';else if(bad)st=' style="background:rgba(226,58,99,'+Math.min(.35,Math.abs(d2)*.35+.07).toFixed(2)+')"';}
+   return'<td'+st+'>'+f(v)+'</td>';};
+  const fm={cur:v=>money(v),x:v=>v.toFixed(1)+'x',n:v=>money(v)};
+  const drow=(nm,fn,base,dir,f)=>{let h='<tr><td style="text-align:left">'+nm+'</td>';for(let k=k0;k<=k1;k++){h+=CELL(fn(k),base,dir,f);}return h+'</tr>';};
+  dt+=drow('Spend',k=>r.sp[k]||0,null,0,fm.cur);
+  dt+=drow('ROAS (on+store)',k=>r.sp[k]?((r.pv[k]||0)+(r.fv[k]||0))/r.sp[k]:null,bAvg.roas,1,fm.x);
+  dt+=drow('CPP',k=>((r.pu[k]||0)+(r.op[k]||0))?(r.sp[k]||0)/((r.pu[k]||0)+(r.op[k]||0)):null,bAvg.cpp,-1,fm.cur);
+  dt+=drow('Online revenue',k=>r.pv[k]||0,bAvg.pvD,1,fm.cur);
+  dt+=drow('In-store revenue',k=>r.fv[k]||0,bAvg.fvD,1,fm.cur);
+  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Cells colored vs the 7-day BEFORE average: green = better than before the change (higher ROAS/revenue, lower CPP), red = worse. The outlined column is the change day.</div>';
+  // -------- 7d before/after summary --------
   const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['ROAS (online+store, raw)',b.roas,a2.roas,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],['CPP (all purchases)',b.cpp,a2.cpp,-1,'cur'],['Online revenue',b.pv,a2.pv,1,'cur'],['In-store revenue',b.fv,a2.fv,1,'cur']];
   if(e.lvl==='campaign'&&CRE[e.id]){rows.push(['Reach / day',sum(CRE[e.id],i-7,i-1)/7,sum(CRE[e.id],i,i+6)/Math.max(1,a2.days),1,'n']);}
   const fmt=(v,f)=>(v==null||!isFinite(v))?'&mdash;':(f==='cur'?'E£ '+money(v):f==='x'?v.toFixed(2)+'x':f==='pct2'?v.toFixed(2)+'%':money(v));
   let good=0,bad=0;
-  let t='<div style="overflow-x:auto;margin-top:6px"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">Metric</th><th>7d BEFORE</th><th>7d AFTER</th><th>&Delta;</th></tr>';
+  let t='<div style="overflow-x:auto;margin-top:8px"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">7d summary</th><th>BEFORE</th><th>AFTER</th><th>&Delta;</th></tr>';
   rows.forEach(R=>{const nm=R[0],vb=R[1],va=R[2],dir=R[3],f=R[4];let cell='',dtxt='&mdash;';
-   if(vb!=null&&va!=null&&isFinite(vb)&&isFinite(va)&&vb!==0){const d=(va-vb)/Math.abs(vb)*100;dtxt=(d>=0?'+':'')+d.toFixed(0)+'%';
-    if(dir!==0){const ok=dir>0?va>=vb:va<=vb;if(Math.abs(d)>=5){ok?good++:bad++;cell=ok?' style="background:rgba(18,160,110,.18)"':' style="background:rgba(226,58,99,.15)"';}}}
+   if(vb!=null&&va!=null&&isFinite(vb)&&isFinite(va)&&vb!==0){const d2=(va-vb)/Math.abs(vb)*100;dtxt=(d2>=0?'+':'')+d2.toFixed(0)+'%';
+    if(dir!==0){const ok=dir>0?va>=vb:va<=vb;if(Math.abs(d2)>=5){ok?good++:bad++;cell=ok?' style="background:rgba(18,160,110,.18)"':' style="background:rgba(226,58,99,.15)"';}}}
    t+='<tr><td style="text-align:left">'+nm+'</td><td>'+fmt(vb,f)+'</td><td'+cell+'>'+fmt(va,f)+'</td><td'+cell+'>'+dtxt+'</td></tr>';});
   t+='</table></div>';
-  let strip='<div style="display:flex;gap:2px;margin-top:6px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#8a93a6;margin-right:6px">daily ROAS ±10d</span>';
-  for(let k2=i-10;k2<=i+10;k2++){if(k2<0||k2>=W.n){strip+='<div style="width:12px;height:16px"></div>';continue;}
-   const sp=r.sp[k2]||0,v=sp?((r.pv[k2]||0)+(r.fv[k2]||0))/sp:null;
-   const col2=v==null?'#eef0f5':v>=6?'#12a06e':v>=4?'#7cc98f':v>=2.5?'#ffd166':v>=1?'#ff8b42':'#e23a63';
-   strip+='<div title="'+aD2(W,k2).slice(5)+' · '+(v==null?'no spend':v.toFixed(2)+'x')+'" style="width:12px;height:16px;border-radius:2px;background:'+col2+(k2===i?';outline:2px solid #111':'')+'"></div>';}
-  strip+='</div>';
-  const enough=i+3<W.n;
+  const enough=i+3<W.n&&a2.sp>0;
   const verdict=!enough?['TOO EARLY','#8a93a6']:(good>bad&&bad<=1?['GOOD CALL','#12a06e']:(bad>good?['BAD CALL','#e23a63']:['MIXED','#ff8b42']));
-  return head+'<div style="margin:6px 0"><span class="tg" style="background:'+verdict[1]+'22;color:'+verdict[1]+';font-size:11px;font-weight:800">'+verdict[0]+'</span>'+(enough?'':' <span style="font-size:10.5px;color:#8a93a6">fewer than 4 full days since the change &mdash; judgement withheld</span>')+'</div>'+t+strip;
+  let why='';
+  if(enough){
+   const dr=b.roas&&a2.roas?((a2.roas-b.roas)/b.roas*100):null;const dc=b.cpp&&a2.cpp?((a2.cpp-b.cpp)/b.cpp*100):null;
+   why=' <span style="font-size:11px;color:#51596b">'+(up===true?'You scaled '+((e.new-e.old)/(e.old||1)*100).toFixed(0)+'%':up===false?'You cut '+((e.old-e.new)/(e.old||1)*100).toFixed(0)+'%':'Budget moved')+(dr!=null?'; ROAS went '+(dr>=0?'+':'')+dr.toFixed(0)+'%':'')+(dc!=null?'; CPP went '+(dc>=0?'+':'')+dc.toFixed(0)+'%':'')+' in the week after.</span>';}
+  return head+'<div style="margin:6px 0"><span class="tg" style="background:'+verdict[1]+'22;color:'+verdict[1]+';font-size:11px;font-weight:800">'+verdict[0]+'</span>'+why+(enough?'':' <span style="font-size:10.5px;color:#8a93a6">'+(a2.sp===0?'no delivery since the change yet':'fewer than 4 full days since the change')+' &mdash; judgement withheld</span>')+'</div>'+dt+t;
  }).join('<hr style="border:0;border-top:1px solid #e8ebf2;margin:14px 0">');
- pnlCard(g,'meta','Budget changes &mdash; '+evs.length+' in view'+(EV.length>evs.length?' (of '+EV.length+' in the 60d feed)':''),'Raw Meta actuals at default attribution, both value legs, no scaling &mdash; a budget call is judged on what Meta itself recorded. GOOD CALL = the after-week beat the before-week on most graded metrics.',list);}
+ pnlCard(g,'meta','Budget changes &mdash; '+evs.length+' in view'+(EV.length>evs.length?' (of '+EV.length+' in the 60d feed)':''),'Each change: the day-by-day table around it (colored vs the before-week average), the 7-day summary, and the verdict. Raw Meta actuals, no scaling.',list);}}
+ // ---------------- AD LAUNCHES ----------------
+ (function(){
+  if(!W)return;
+  const ads=(O.mads||[]).filter(a=>a.d);
+  if(!ads.length){pnlCard(g,'meta','New ad launches','Per-day ad series arrive on the next collector run; the launch postmortems activate then.','');return;}
+  const today=W.n-1;
+  // account benchmark: blended ROAS across ALL ads, last 14 days
+  let bs=0,bv=0;ads.forEach(a=>{for(let k=today-13;k<=today;k++){bs+=a.d.sp[k]||0;bv+=(a.d.pv[k]||0)+(a.d.fv[k]||0);}});
+  const bench=bs?bv/bs:null;
+  const L=[];
+  ads.forEach(a=>{let f0=-1;for(let k=0;k<W.n;k++){if((a.d.sp[k]||0)>0){f0=k;break;}}
+   if(f0<1)return; // spending on day0 = launched before the window; unknown launch date
+   if(f0<W.n-21)return; // older than 3 weeks = not a new launch
+   let sp=0,pv=0,fv=0,pu=0,op=0,ncv=0;
+   for(let k=f0;k<=today;k++){sp+=a.d.sp[k]||0;pv+=a.d.pv[k]||0;fv+=a.d.fv[k]||0;pu+=a.d.pu[k]||0;op+=a.d.op[k]||0;ncv+=a.d.ncv[k]||0;}
+   if(sp<1000)return;
+   L.push({a,f0,days:today-f0+1,sp,pv,fv,pu,op,ncv,roas:sp?(pv+fv)/sp:0,cpp:(pu+op)?sp/(pu+op):null});});
+  if(!L.length){pnlCard(g,'meta','New ad launches &mdash; none in the last 3 weeks','No ad crossed E&pound;1,000 spend with a first delivery day inside the last 21 days.','');return;}
+  L.sort((x,y)=>y.sp-x.sp);
+  const strip=(a,f0)=>{let h='<div style="display:flex;gap:2px;align-items:center;flex-wrap:wrap">';
+   for(let k=f0;k<=today;k++){const sp=a.d.sp[k]||0,v=sp?((a.d.pv[k]||0)+(a.d.fv[k]||0))/sp:null;
+    const c2=v==null?'#eef0f5':v>=6?'#12a06e':v>=4?'#7cc98f':v>=2.5?'#ffd166':v>=1?'#ff8b42':'#e23a63';
+    h+='<div title="'+aD2(W,k).slice(5)+' · '+(v==null?'no spend':v.toFixed(2)+'x')+'" style="width:11px;height:15px;border-radius:2px;background:'+c2+'"></div>';}
+   return h+'</div>';};
+  const rows=L.slice(0,20).map(x=>{const a=x.a;
+   const vd=x.days<3?['TOO EARLY','#8a93a6']:(bench&&x.roas>=bench*1.15?['STRONG START','#12a06e']:(bench&&x.roas<=bench*0.6?['WEAK — KILL WATCH','#e23a63']:['NORMAL RAMP','#3a9bff']));
+   return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin-top:10px"><b>launched '+aD2(W,x.f0)+'</b><span class="tg" style="background:'+vd[1]+'22;color:'+vd[1]+';font-weight:800">'+vd[0]+'</span><b style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(a.n||'')+'">'+(a.n||'')+'</b><span style="color:#8a93a6;font-size:11px">'+(a.acct||'')+(a.cmp?' · '+a.cmp:'')+'</span></div>'
+    +'<div style="font-size:11.5px;margin:2px 0">'+x.days+' days live · spend <b>E&pound; '+money(x.sp)+'</b> · ROAS (on+store) <b>'+x.roas.toFixed(2)+'x</b>'+(bench?' vs account '+bench.toFixed(2)+'x':'')+' · CPP <b>'+(x.cpp?'E&pound; '+money(x.cpp):'&mdash;')+'</b> · online <b>E&pound; '+money(x.pv)+'</b> · in-store <b>E&pound; '+money(x.fv)+'</b>'+(x.ncv?' · NC store value <b>E&pound; '+money(x.ncv)+'</b>':'')+'</div>'
+    +strip(a,x.f0);}).join('');
+  pnlCard(g,'meta','New ad launches &mdash; first-days postmortem ('+L.length+' in the last 3 weeks)','Every ad whose FIRST delivery day is inside the last 21 days and that has spent E&pound;1,000+. Verdict = its since-launch ROAS vs the whole account&rsquo;s last-14d blended ROAS ('+(bench?bench.toFixed(2)+'x':'n/a')+'): STRONG START &ge;115% of it, KILL WATCH &le;60%. Strip = daily ROAS since launch.',rows);
+ })();}
 window.rCJ=rCJ;window.rBG=rBG;window.cjS=cjS;window.aoLv=aoLv;window.aoAc=aoAc;window.aD2=aD2;
 </script>
 </body></html>
