@@ -528,9 +528,14 @@ def pull_meta(win):
     else:
         log("meta custom conversions SEEN :: NONE -- Meta returned no "
             "offsite_conversion.custom.* action at any level for", len(accts), "account(s)")
-    log("meta days", sum(1 for v in ad["mspend"].values() if v),
-        "| per-branch in-store days", sum(len(v) for v in MBR.values()),
-        "| branches", len(MBR))
+    bnc_val = sum(sum(e.get("v", 0.0) for e in ms.values()) for ms in MBR.values())
+    bnc_cnt = sum(sum(e.get("nc", 0.0) for e in ms.values()) for ms in MBR.values())
+    allnc = sum(ad["instoreNC"].values())
+    XTRA["metaCC"] = {"listed": len(CCNAME), "seen": len(CCSEEN),
+                      "branchVal": round(bnc_val), "branchNC": round(bnc_cnt),
+                      "allNC": round(allnc), "branches": len(MBR),
+                      "offlineVal": round(sum(ad["instoreMeta"].values()))}
+    log("metaCC summary ::", json.dumps(XTRA["metaCC"]))
     return ad
 
 _SHOPV = []
@@ -2371,7 +2376,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.4 (budget-object daily series + nested budget parse + full online journeys + next-run heavy crawl)")
+    log("collector v8.5 (metaCC attribution health + wider diagnostic log)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2596,6 +2601,7 @@ def build():
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
+              "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
@@ -2678,7 +2684,7 @@ def main():
           "runner": os.environ.get("GITHUB_RUN_ID", "local"),
           "attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "-"),
           "todayCairo": today.isoformat(),
-          "data": face, "log": LOGBUF[-60:]}
+          "data": face, "log": LOGBUF[-140:]}
     try:
         open(os.path.join(DOCS, "status.json"), "w", encoding="utf-8").write(json.dumps(st, indent=1))
         log("WROTE status.json  ok=%s fresh=%s %ss" % (ok, fresh, st["seconds"]))
