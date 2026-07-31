@@ -1350,7 +1350,7 @@ def pull_shop_lines():
     discount), margin, units, and the discount actually given -- so AUR, UPT, DR%% and gross
     retail are real sums, not allocations. Also feeds vendor/product monthly for the online side."""
     TV = tmpl_vendor_map(); VNM = vendor_names()
-    agg = {}; oc = {}; oseen = set(); SATTR = {}
+    agg = {}; oc = {}; oseen = set(); SATTR = {}; ODATES = {}; JRO = []; JVL = []
     off = 0
     while off < 900000:
         page = oexec("sale.report", "search_read",
@@ -1372,7 +1372,9 @@ def pull_shop_lines():
             if rv > 0:
                 _at = SATTR.setdefault(pid, {"cat": {}, "ven": {}})
                 _cg = _catname(_tv[1])
-                if _cg: _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                if _cg:
+                    _at["cat"][_cg] = _at["cat"].get(_cg, 0.0) + rv
+                    JRO.append((pid, d, _cg, rv))
                 if _vn:
                     _vl = VNM.get(_vn) or _vn
                     _at["ven"][_vl] = _at["ven"].get(_vl, 0.0) + rv
@@ -1392,10 +1394,84 @@ def pull_shop_lines():
             ref = r.get("order_reference") or 0  # reference field -> 'sale.order,<id>' STRING
             if ref and (pid, ref) not in oseen:
                 oseen.add((pid, ref)); oc[pid] = oc.get(pid, 0) + 1
+            if ref: ODATES.setdefault(pid, set()).add(d)
+            if _vn and rv > 0: JVL.append((pid, d, VNM.get(_vn) or _vn))
         off += len(page)
         if len(page) < 10000: break
     XTRA.setdefault("dec", {})["Shopify"] = _decile(agg, oc, SATTR)
     log("shopify decile customers", len(agg), "orders", len(oseen))
+    # ---- v8.4 ONLINE journeys from the same line crawl (real line-level cat/vendor) ----
+    try:
+        first_o = {p: a2[4] for p, a2 in agg.items()}
+        d2o = {}
+        for p, ds in ODATES.items():
+            dl = sorted(ds)
+            if len(dl) >= 2:
+                d2o[p] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
+        def _jp(pids):
+            n = len(pids)
+            if not n: return None
+            reps = [d2o[p] for p in pids if p in d2o]
+            hist = [0] * 13
+            for g2 in reps: hist[min(g2 // 30, 12)] += 1
+            opy = [0] * 6; yrs = 0.0; tot_o = 0
+            for p in pids:
+                span = max(30, (END - datetime.date.fromisoformat(first_o[p])).days) / 365.0
+                c2 = oc.get(p, 0); tot_o += c2; yrs += span
+                opy[min(max(c2, 1), 6) - 1] += 1
+            return {"n": n, "rep": round(len(reps) / n * 100, 1),
+                    "med2": int(statistics.median(reps)) if reps else None,
+                    "oyr": round(tot_o / yrs, 2) if yrs else 0,
+                    "ltgp": round(sum(agg[p][1] for p in pids) / n),
+                    "ltv": round(sum(agg[p][0] for p in pids) / n),
+                    "h2": hist, "opy": opy}
+        def _jm(pids, key, topn=8):
+            ag2 = {}
+            for p in pids:
+                for k2, v2 in SATTR.get(p, {}).get(key, {}).items(): ag2[k2] = ag2.get(k2, 0.0) + v2
+            return [[k2, round(v2)] for k2, v2 in sorted(ag2.items(), key=lambda kv: -kv[1])[:topn]]
+        allp = list(agg.keys())
+        pr = _jp(allp)
+        if pr:
+            pr["cat"] = _jm(allp, "cat"); pr["ven"] = _jm(allp, "ven")
+            XTRA.setdefault("jour", {}).setdefault("scopes", {})["ONLINE"] = pr
+        fcat = {}; nxt = {}
+        for p, d, cg, rv in JRO:
+            f0 = first_o.get(p)
+            if not f0: continue
+            if d == f0:
+                e2 = fcat.setdefault(p, {}); e2[cg] = e2.get(cg, 0.0) + rv
+            else:
+                nx = nxt.setdefault(p, {}); nx[cg] = nx.get(cg, 0.0) + rv
+        bycat = {}
+        for p, cs in fcat.items(): bycat.setdefault(max(cs, key=cs.get), []).append(p)
+        catON = {}
+        for cg, pids in bycat.items():
+            if len(pids) < 40: continue
+            pr = _jp(pids)
+            if not pr: continue
+            nagg = {}
+            for p in pids:
+                for k2, v2 in nxt.get(p, {}).items(): nagg[k2] = nagg.get(k2, 0.0) + v2
+            pr["next"] = [[k2, round(v2)] for k2, v2 in sorted(nagg.items(), key=lambda kv: -kv[1])[:6]]
+            catON[cg] = pr
+        JVN0 = {}
+        for p, d, vl in JVL:
+            if d == first_o.get(p): JVN0.setdefault(p, set()).add(vl)
+        byven = {}
+        for p, vs in JVN0.items():
+            for v in vs: byven.setdefault(v, []).append(p)
+        venON = {}
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:15]:
+            if len(pids) < 40: continue
+            pr = _jp(pids)
+            if pr: venON[vn2] = pr
+        J0 = XTRA.setdefault("jour", {})
+        J0["catON"] = catON; J0["venON"] = venON
+        log("online journeys :: customers", len(allp), ":: first-category segments", len(catON),
+            ":: first-vendor segments", len(venON))
+    except Exception as e:
+        log("online journeys fail", str(e)[:150])
     # ---- v6.5 online->offline crossover: the same partner_id on both sides ----
     pa = XTRA.get("posagg") or {}
     if pa:
@@ -1533,10 +1609,15 @@ def pull_budget_events(tok):
                 if et not in KEEP: continue
                 try: xd = json.loads(r.get("extra_data") or "{}")
                 except Exception: xd = {}
-                def _cents(v):
+                def _cents(v, key):
+                    # live schema: extra_data.old_value = {"type":"payment_amount",
+                    # "currency":"EGP","old_value":660000,...} -- the number sits INSIDE,
+                    # under the same key name, in minor units.
+                    if isinstance(v, dict):
+                        v = v.get(key, v.get("value", v.get("amount")))
                     try: return round(float(v) / 100.0, 2)
                     except Exception: return None
-                ov2 = _cents(xd.get("old_value")); nv2 = _cents(xd.get("new_value"))
+                ov2 = _cents(xd.get("old_value"), "old_value"); nv2 = _cents(xd.get("new_value"), "new_value")
                 out.append({"t": str(r.get("event_time"))[:10],
                             "lvl": "campaign" if "campaign" in et else "adset",
                             "id": str(r.get("object_id") or ""), "nm": (r.get("object_name") or "")[:70],
@@ -1567,6 +1648,42 @@ def pull_campaign_reach(tok):
                     out.setdefault(str(r.get("campaign_id")), [0] * 60)[i] += int(float(r.get("reach") or 0))
             url = (d.get("paging") or {}).get("next")
     log("campaign reach ::", len(out), "campaigns 60d daily")
+    return out
+
+def pull_obj_daily(tok, bev):
+    """v8.4: daily series (60d) for EXACTLY the campaigns/ad sets that appear in the
+    budget-change feed, from their own account-level insights at that level."""
+    if not tok or not bev: return {}
+    want = {e["id"] for e in bev if e.get("id")}
+    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=59)).isoformat()
+    out = {}
+    for acct in meta_accounts(tok):
+        for lvl, idf in (("campaign", "campaign_id"), ("adset", "adset_id")):
+            p = {"level": lvl, "time_increment": 1, "access_token": tok,
+                 "time_range": json.dumps({"since": c0, "until": c1}),
+                 "fields": "%s,spend,impressions,outbound_clicks,actions,action_values" % idf,
+                 "limit": 500}
+            url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+            pages = 0
+            while url and pages < 40:
+                d = http_json(url); pages += 1
+                for r in (d.get("data") or []):
+                    oid = str(r.get(idf) or "")
+                    if oid not in want: continue
+                    try: i = (datetime.date.fromisoformat(r["date_start"]) - datetime.date.fromisoformat(c0)).days
+                    except Exception: continue
+                    if not (0 <= i < 60): continue
+                    o = out.setdefault(oid, {k: [0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im")})
+                    av = r.get("action_values") or []; ac = r.get("actions") or []
+                    o["sp"][i] += int(round(float(r.get("spend") or 0)))
+                    o["im"][i] += int(float(r.get("impressions") or 0))
+                    o["oc"][i] += int(_av(r.get("outbound_clicks"), ("outbound_click",)))
+                    o["pv"][i] += int(round(_av(av, ("offsite_conversion.fb_pixel_purchase",))))
+                    o["fv"][i] += int(round(_av(av, ("offline_conversion.purchase",))))
+                    o["pu"][i] += int(_av(ac, ("offsite_conversion.fb_pixel_purchase",)))
+                    o["op"][i] += int(_av(ac, ("offline_conversion.purchase",)))
+                url = (d.get("paging") or {}).get("next")
+    log("budget-object daily series ::", len(out), "of", len(want), "event objects have delivery data")
     return out
 
 def sync_offline_audience(tok):
@@ -2254,7 +2371,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.3 (per-ad 60d daily series + budget-change feed + customer journeys + offline audience sync)")
+    log("collector v8.4 (budget-object daily series + nested budget parse + full online journeys + next-run heavy crawl)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2314,7 +2431,7 @@ def build():
                 log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
     except Exception as e:
         log("carry-forward skipped", str(e)[:120])
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not any(
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
@@ -2360,6 +2477,7 @@ def build():
     _mtok = os.environ.get("META_ACCESS_TOKEN", "").strip()
     mads = safe(pull_meta_ads, _mtok) or []
     bev = safe(pull_budget_events, _mtok) or []
+    objd = safe(pull_obj_daily, _mtok, bev) or {}
     cre = safe(pull_campaign_reach, _mtok) or {}
     safe(sync_offline_audience, _mtok)
     gads = safe(pull_google_ads) or prev.get("gads", [])
@@ -2478,6 +2596,7 @@ def build():
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
+              "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "idle": idlelist, "srcok": {k: bool(v) for k, v in SRCOK.items()}, "aw": [win[0], win[-1]]}
