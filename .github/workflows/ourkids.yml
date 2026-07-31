@@ -121,20 +121,6 @@ jobs:
           echo "(see the status.json summary below) -- this is purely a git race."
           exit 1
 
-      # The repo is PRIVATE now, so GitHub Pages no longer serves this. The dashboard
-      # lives at https://ourkids-live.vercel.app behind HTTP Basic Auth (middleware.js
-      # in docs/ourkids). Publish every run so the gated copy stays as fresh as the
-      # data.js we just committed.
-      - name: Publish to the private Vercel mirror
-        if: always()
-        env:
-          VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          cd docs/ourkids
-          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
-
       # Prints the outcome on the run's summary page, so "is it healthy?" is answered
       # by looking, not by reading logs.
       - name: Report
