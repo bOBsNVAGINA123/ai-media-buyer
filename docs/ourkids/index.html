@@ -216,7 +216,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v9.1</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v9.2</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp'],['t16','cj'],['t17','bg'],['t18','co']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -667,7 +667,9 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
  const PS=O.pos||{};const names=Object.keys(PS).length?Object.keys(PS):((O.bl&&O.bl.b)?Object.keys(O.bl.b):[]);
  // noise floor scales with how many DAYS of the month are in the window
  const SIG=m=>A2[m]&&A2[m].ov>0&&A2[m].io>Math.max(2000*(DCNT[m]||30),A2[m].ov*0.02);
- const monsAll=Object.keys(A2).sort().filter(m=>m>=EP0&&m<=EP1);
+ let monsAll=Object.keys(A2).sort().filter(m=>m>=EP0&&m<=EP1);
+ if(!monsAll.length){const allm=Object.keys(A2).sort();if(allm.length){monsAll=[allm[allm.length-1]];
+  document.getElementById('bn6').innerHTML+=' <b style="color:#b8621b">Your date range contains no Meta-measured days &mdash; showing the latest measured month ('+monsAll[0]+') instead of a blank page.</b>';}}
  const mons=monsAll.filter(m=>SIG(m));
  const dropped=monsAll.filter(m=>!SIG(m));
  if(dropped.length)document.getElementById('bn6').innerHTML+=' <b style="color:#c0392b">Your window '+EP0+' &rarr; '+EP1+' covers '+monsAll.length+' month'+(monsAll.length===1?'':'s')+', and '+dropped.length+' of them ('+dropped.join(', ')+') are NOT in the table below: Meta reported no omni value, or in-store value under the noise floor, in those months. That is missing measurement, not missing sales &mdash; the filter is working.</b>';
@@ -1022,7 +1024,16 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
  const SF=opt.sf||F;   /* v6.2: short form for on-chart labels and axis ticks */
  const KEY=opt.key||title.replace(/[^A-Za-z]/g,'').slice(0,22);
  const st=SMO[KEY]||(SMO[KEY]={sort:'def',scale:'shared'});
- const _origL=(labels||[]).slice();const _mono=_origL.length>2&&_origL.every(x=>/^\d{2,4}-\d{2}/.test(x));
+ const _origL=(labels||[]).slice();const _mono=_origL.length>=2&&_origL.every(x=>/^\d{2,4}-\d{2}/.test(x));
+ // v9.2: an in-progress month with under a week of data poisons every panel (one day of
+ // August read as a full month -> fake 'swung into loss'). Excluded by DEFAULT; pick it
+ // explicitly in the Window TO selector if you want the partial month.
+ let _pnote='';
+ if(_mono&&!st.w1){const cm=(O.aw[1]||'').slice(0,7),cd=+((O.aw[1]||'').slice(8,10));
+  const li=_origL.length-1;
+  if(_origL[li]&&_origL[li].slice(-7).replace(/^-/,'')&&(_origL[li].endsWith(cm.slice(2))||_origL[li]===cm)&&cd<7&&_origL.length>1){
+   _pnote='<span class="tg" style="background:#ff8b4222;color:#b8621b">'+_origL[li]+' excluded &mdash; only '+cd+' day'+(cd>1?'s':'')+' of data (pick it in Window &rarr; to include)</span>';
+   labels=_origL.slice(0,li);series=series.map(x=>Object.assign({},x,{d:(x.d||[]).slice(0,li)}));}}
  if(_mono){let i0=0,i1=_origL.length-1;if(st.w0){const k=_origL.indexOf(st.w0);if(k>=0)i0=k;}if(st.w1){const k=_origL.indexOf(st.w1);if(k>=0)i1=k;}if(i1<i0){const z=i0;i0=i1;i1=z;}if(i0>0||i1<_origL.length-1){labels=_origL.slice(i0,i1+1);series=series.map(x=>Object.assign({},x,{d:(x.d||[]).slice(i0,i1+1)}));}}
  const all=series.filter(x=>x.d.some(v=>v!=null));
  if(!all.length)return;
@@ -1049,6 +1060,7 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
   +'<span>Sort <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'sort\',this.value)">'+SO.map(o2=>'<option value="'+o2[0]+'"'+(st.sort===o2[0]?' selected':'')+'>'+o2[1]+'</option>').join('')+'</select></span>'
   +'<span>Scale <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(\''+KEY+'\',\'scale\',this.value)"><option value="shared"'+(own?'':' selected')+'>Shared (compare sizes)</option><option value="own"'+(own?' selected':'')+'>Own (compare shapes)</option></select></span>'
   +(_mono?'<span>Window <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(&#39;'+KEY+'&#39;,&#39;w0&#39;,this.value)"><option value="">start</option>'+_origL.map(m=>'<option'+(st.w0===m?' selected':'')+'>'+m+'</option>').join('')+'</select> &rarr; <select style="width:auto;padding:3px 6px;font-size:11.5px" onchange="smSet(&#39;'+KEY+'&#39;,&#39;w1&#39;,this.value)"><option value="">end</option>'+_origL.map(m=>'<option'+(st.w1===m?' selected':'')+'>'+m+'</option>').join('')+'</select></span>':'')
+  +(_pnote?'<span>'+_pnote+'</span>':'')
   +(lav!=null?'<span style="color:#0F172A">Average branch, latest month: <b>'+F(lav)+'</b> &mdash; that is the grey dashed line, and it is the average of the '+pool.length+' BRANCHES only. Shopify and the network total are excluded from it.</span>':'')
   +'</div>';
  const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
@@ -3276,20 +3288,25 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   if(!r||i<0)return head+'<div class="cs">This object has no delivery data in the 60-day window at all &mdash; the budget was changed on something that was not spending (paused, or brand new). Nothing to judge, honestly.</div>';
   const M=(i0,i1)=>{const sp=sum(r.sp,i0,i1),pv=sum(r.pv,i0,i1)*fON,fv=sum(r.fv,i0,i1)*fOFF,pu=sum(r.pu,i0,i1),op=sum(r.op,i0,i1),oc=sum(r.oc,i0,i1),im=sum(r.im,i0,i1);
    const days=Math.min(W.n-1,i1)-Math.max(0,i0)+1;
-   const gp2=pv*gpOn+fv*gpSt;
-   return{sp,pv,fv,gp:gp2,ron:sp?pv/sp:null,rst:sp?fv/sp:null,roas:sp?(pv+fv)/sp:null,ctr:im?oc/im*100:null,cpp:(pu+op)?sp/(pu+op):null,spd:days>0?sp/days:0,gpd:days>0?gp2/days:0,days};};
+   const gp2=pv*gpOn+fv*gpSt;const pas=gp2-sp;
+   return{sp,pv,fv,gp:gp2,pas,ron:sp?pv/sp:null,rst:sp?fv/sp:null,roas:sp?(pv+fv)/sp:null,ctr:im?oc/im*100:null,cpp:(pu+op)?sp/(pu+op):null,spd:days>0?sp/days:0,gpd:days>0?gp2/days:0,pasd:days>0?pas/days:0,days};};
   const b=M(i-7,i-1),a2=M(i,i+6);
   if(b.sp===0&&a2.sp===0)return head+'<div class="cs">The object was not delivering in the two weeks around this change (E&pound;0 spend before and after &mdash; paused, or the budget was set ahead of a launch). No verdict; when it starts spending the next sync scores it.</div>';
   // ---- verdict FIRST: profit is the judge ----
   const enough=i+3<W.n&&a2.sp>0;
-  const dGPd=a2.gpd-b.gpd;const dROAS=(b.roas&&a2.roas)?(a2.roas-b.roas)/b.roas*100:null;const dCPP=(b.cpp&&a2.cpp)?(a2.cpp-b.cpp)/b.cpp*100:null;
+  // v9.2: the judge is PROFIT AFTER AD SPEND (GP minus spend). GP alone rises whenever
+  // spend rises — a 0.4x ROAS scale-up looked 'good'. Money left after paying Meta cannot
+  // be gamed by spending more.
+  const dPAS=a2.pasd-b.pasd;const dROAS=(b.roas&&a2.roas)?(a2.roas-b.roas)/b.roas*100:null;const dCPP=(b.cpp&&a2.cpp)?(a2.cpp-b.cpp)/b.cpp*100:null;
   const vd=!enough?['TOO EARLY','#8a93a6','Fewer than 4 full days (or no delivery) since the change — judgement withheld.']:
-   (dGPd>0&&(dROAS==null||dROAS>-10)?['GOOD CALL','#12a06e','Gross profit per day went UP E£ '+money(dGPd)+' after the change'+(dROAS!=null?' (ROAS '+(dROAS>=0?'+':'')+dROAS.toFixed(0)+'%)':'')+'.']:
-   (dGPd<0?['BAD CALL','#e23a63','Gross profit per day DROPPED E£ '+money(-dGPd)+' after the change'+(dCPP!=null?', CPP '+(dCPP>=0?'+':'')+dCPP.toFixed(0)+'%':'')+'.']:
-   ['MIXED','#ff8b42','GP/day roughly flat; efficiency moved both ways.']));
+   (b.spd<200?['FRESH OBJECT','#8a93a6','It was barely spending before the change (E£ '+money(b.spd)+'/day) — no honest baseline. Judge it in the launch library below.']:
+   (a2.pasd<0?['BAD CALL','#e23a63','It is LOSING E£ '+money(-a2.pasd)+'/day after ad spend since the change (was '+(b.pasd>=0?'making E£ '+money(b.pasd):'losing E£ '+money(-b.pasd))+'/day). An object that does not cover its own spend cannot be a good budget call.']:
+   (dPAS>0?['GOOD CALL','#12a06e','Profit after ad spend went UP E£ '+money(dPAS)+'/day'+(dROAS!=null?' (ROAS '+(dROAS>=0?'+':'')+dROAS.toFixed(0)+'%)':'')+'.']:
+   (dPAS<0?['BAD CALL','#e23a63','Profit after ad spend DROPPED E£ '+money(-dPAS)+'/day'+(dCPP!=null?', CPP '+(dCPP>=0?'+':'')+dCPP.toFixed(0)+'%':'')+'.']:
+   ['MIXED','#ff8b42','Profit after ad spend roughly flat; efficiency moved both ways.']))));
   const hero='<div style="margin:8px 0;padding:10px 14px;border-radius:10px;background:'+vd[1]+'14;border-left:4px solid '+vd[1]+'"><b style="color:'+vd[1]+';font-size:13px">'+vd[0]+'</b> <span style="font-size:12px;color:#333">'+vd[2]+'</span>'+
    '<div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:8px">'+[
-    ['GP / day',b.gpd,a2.gpd,'cur',1],['ROAS online',b.ron,a2.ron,'x',1],['ROAS store',b.rst,a2.rst,'x',1],['CPP',b.cpp,a2.cpp,'cur',-1]
+    ['PROFIT after ad spend / day',b.pasd,a2.pasd,'cur',1],['ROAS online',b.ron,a2.ron,'x',1],['ROAS store',b.rst,a2.rst,'x',1],['CPP',b.cpp,a2.cpp,'cur',-1]
    ].map(R=>{const vb=R[1],va=R[2],f=R[3],dir=R[4];const dOk=(vb!=null&&va!=null&&isFinite(vb)&&isFinite(va)&&vb!==0);const d2=dOk?(va-vb)/Math.abs(vb)*100:null;
     const col=d2==null?'#8a93a6':((dir>0?d2>=0:d2<=0)?'#12a06e':'#e23a63');
     const fmt=v=>(v==null||!isFinite(v))?'&mdash;':(f==='cur'?'E£ '+money(v):v.toFixed(2)+'x');
@@ -3311,11 +3328,11 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   dt+=drow('Spend',k=>r.sp[k]||0,null,0,fm.cur);
   dt+=drow('ROAS online',k=>r.sp[k]?(r.pv[k]||0)*fON/r.sp[k]:null,b.ron,1,fm.x);
   dt+=drow('ROAS store',k=>r.sp[k]?(r.fv[k]||0)*fOFF/r.sp[k]:null,b.rst,1,fm.x);
-  dt+=drow('Gross profit',k=>gpDay(k),b.gpd,1,fm.cur);
+  dt+=drow('Profit after spend',k=>gpDay(k)-(r.sp[k]||0),b.pasd,1,fm.cur);
   dt+=drow('CPP',k=>((r.pu[k]||0)+(r.op[k]||0))?(r.sp[k]||0)/((r.pu[k]||0)+(r.op[k]||0)):null,b.cpp,-1,fm.cur);
   dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins).</div>';
   // ---- 7d summary ----
-  const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['GP / day',b.gpd,a2.gpd,1,'cur'],['GP total (7d)',b.gp,a2.gp,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],['CPP (all purchases)',b.cpp,a2.cpp,-1,'cur'],['Online revenue',b.pv,a2.pv,1,'cur'],['In-store revenue',b.fv,a2.fv,1,'cur']];
+  const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['PROFIT after ad spend / day',b.pasd,a2.pasd,1,'cur'],['GP / day (before spend)',b.gpd,a2.gpd,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],['CPP (all purchases)',b.cpp,a2.cpp,-1,'cur'],['Online revenue',b.pv,a2.pv,1,'cur'],['In-store revenue',b.fv,a2.fv,1,'cur']];
   if(e.lvl==='campaign'&&CRE[e.id]){rows.push(['Reach / day',sum(CRE[e.id],i-7,i-1)/7,sum(CRE[e.id],i,i+6)/Math.max(1,a2.days),1,'n']);}
   const fmt=(v,f)=>(v==null||!isFinite(v))?'&mdash;':(f==='cur'?'E£ '+money(v):f==='x'?v.toFixed(2)+'x':f==='pct2'?v.toFixed(2)+'%':money(v));
   let t='<div style="overflow-x:auto;margin-top:8px"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">7d summary</th><th>BEFORE</th><th>AFTER</th><th>&Delta;</th></tr>';
@@ -3348,12 +3365,17 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    for(let k=f0;k<=today;k++){sp+=a.d.sp[k]||0;pv+=a.d.pv[k]||0;fv+=a.d.fv[k]||0;pu+=a.d.pu[k]||0;op+=a.d.op[k]||0;ncv+=a.d.ncv[k]||0;im+=a.d.im[k]||0;vv+=(a.d.vv||[])[k]||0;}
    if(sp<1000)return;
    pv*=fON;fv*=fOFF;ncv*=fOFF;
-   L.push({a,f0,days:today-f0+1,sp,pv,fv,pu,op,ncv,im,vv,roas:sp?(pv+fv)/sp:0,cpp:(pu+op)?sp/(pu+op):null,gp:pv*gpOn+fv*gpSt});});
+   const gp3=pv*gpOn+fv*gpSt;
+   L.push({a,f0,days:today-f0+1,sp,pv,fv,pu,op,ncv,im,vv,roas:sp?(pv+fv)/sp:0,cpp:(pu+op)?sp/(pu+op):null,gp:gp3,pas:gp3-sp});});
   if(!L.length){pnlCard(g,'meta','Ad launch library &mdash; none in the last 3 weeks','No ad crossed E&pound;1,000 spend with a first delivery day inside the last 21 days.','');return;}
   L.sort((x,y)=>y.sp-x.sp);
   const NCLIVE2=(O.metaCC?O.metaCC.allNC>0:false);
   const cards=L.slice(0,24).map(x=>{const a=x.a;
-   const vd=x.days<3?['TOO EARLY','#8a93a6']:(bench&&x.roas>=bench*1.15?['STRONG START','#12a06e']:(bench&&x.roas<=bench*0.6?['WEAK — KILL WATCH','#e23a63']:['NORMAL RAMP','#3a9bff']));
+   // v9.2 verdict = does it make money AFTER paying Meta, then how it compares to the account
+   const vd=x.days<3?['TOO EARLY','#8a93a6']:
+    (x.pas<0&&x.days>=5?['BLEEDING — KILL','#e23a63']:
+    (bench&&x.roas>=bench*1.15&&x.pas>0?['STRONG START','#12a06e']:
+    (bench&&x.roas<=bench*0.6?['WEAK — KILL WATCH','#e23a63']:['NORMAL RAMP','#3a9bff'])));
    const src=a.im||a.th;
    const img=src?'<img src="'+src+'" loading="lazy" style="image-rendering:auto"/>':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>';
    let strip='<div style="display:flex;gap:1px;margin-top:5px">';
@@ -3370,7 +3392,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     '<div class="ak" style="background:#f4f6ff"><span>ONLINE value · ROAS</span><b>E&pound; '+money(x.pv)+' · '+(x.sp?(x.pv/x.sp).toFixed(2):'0')+'x</b></div>'+
     '<div class="ak" style="background:#f2fbf7"><span>STORE value · ROAS</span><b>E&pound; '+money(x.fv)+' · '+(x.sp?(x.fv/x.sp).toFixed(2):'0')+'x</b></div>'+
     '<div class="ak"><span>TOTAL ROAS vs acct</span><b style="color:'+vd[1]+'">'+x.roas.toFixed(2)+'x'+(bench?' <span style="font-weight:600;color:#8a93a6">/ '+bench.toFixed(2)+'x</span>':'')+'</b></div>'+
-    '<div class="ak"><span>Gross profit</span><b>E&pound; '+money(x.gp)+'</b></div>'+
+    '<div class="ak" style="background:'+(x.pas>=0?'#eefaf4':'#fdeef2')+'"><span>PROFIT after ad spend</span><b style="color:'+(x.pas>=0?'#12a06e':'#e23a63')+'">'+(x.pas>=0?'':'&minus;')+'E&pound; '+money(Math.abs(x.pas))+'</b></div>'+
     '<div class="ak"><span>CPP</span><b>'+(x.cpp?'E&pound; '+money(x.cpp):'&mdash;')+'</b></div>'+
     (NCLIVE2?'<div class="ak"><span>NC store value</span><b>E&pound; '+money(x.ncv)+'</b></div>':'')+
     strip+'</div>';}).join('');
@@ -3469,10 +3491,11 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
  const hd='<div style="margin:0 0 10px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">'
   +'<span><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">SCOPE</span>'+sel('coA',A)+'</span>'
   +'<span><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">COMPARE WITH</span><select onchange="coSel(\'coB\',this.value)"><option value=""'+(Bk?'':' selected')+'>&mdash; off &mdash;</option>'+keys.sort().filter(k=>k!==A).map(k=>'<option value="'+k+'"'+(k===Bk?' selected':'')+'>'+k+'</option>').join('')+'</select></span>'
-  +'<span style="font-size:10.5px;color:#8a93a6">rows follow the month filter of the other tabs ('+ST.pm0+' &rarr; '+ST.pm1+')</span></div>';
+  +'<span><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">FROM</span><select onchange="coSel(\'coF0\',this.value)"><option value="">first</option>'+[...new Set([].concat(Object.keys(S[A]),Bk?Object.keys(S[Bk]):[]))].sort().map(m=>'<option'+(ST.coF0===m?' selected':'')+'>'+m+'</option>').join('')+'</select>'
+  +' <span style="font-size:10.5px;font-weight:800;color:#64748b">TO</span><select onchange="coSel(\'coF1\',this.value)"><option value="">latest</option>'+[...new Set([].concat(Object.keys(S[A]),Bk?Object.keys(S[Bk]):[]))].sort().map(m=>'<option'+(ST.coF1===m?' selected':'')+'>'+m+'</option>').join('')+'</select></span></div>';
  const pc=(sc,m,w)=>{const c=S[sc][m];return (c&&c.size&&_mt(m,w))?c['g'+w]/c.size:null;};
- const months=[...new Set([].concat(Object.keys(S[A]),Bk?Object.keys(S[Bk]):[]))].sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
- if(!months.length){pnlCard(g,'odoo','Cohorts','No cohort months inside the current month filter. Widen it.',hd);return;}
+ const months=[...new Set([].concat(Object.keys(S[A]),Bk?Object.keys(S[Bk]):[]))].sort().filter(m=>(!ST.coF0||m>=ST.coF0)&&(!ST.coF1||m<=ST.coF1));
+ if(!months.length){pnlCard(g,'odoo','Cohorts','No cohort months in that range. Widen it.',hd);return;}
  // summary: matured averages A vs B
  const avg=sc=>{const o={};wins.forEach(w=>{let gv=0,sz=0;Object.keys(S[sc]).forEach(m=>{if(_mt(m,w)&&S[sc][m].size){gv+=S[sc][m]['g'+w]||0;sz+=S[sc][m].size;}});o[w]=sz?gv/sz:null;o['n'+w]=sz;});return o;};
  const aA=avg(A),aB=Bk?avg(Bk):null;
