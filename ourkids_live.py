@@ -2048,6 +2048,24 @@ def _branch_transactions(days):
     log("branch transactions ::", len(orders), "orders in", days, "d ::", len(out), "with contact+amount")
     return out
 
+_DM = "https://datamanager.googleapis.com/v1"
+
+def _dm_scope_block(d):
+    """True when the Data Manager call failed because the refresh token lacks the
+    datamanager scope -> the one-time google_reauth.sh run is needed."""
+    t = str(d)
+    return ("ACCESS_TOKEN_SCOPE_INSUFFICIENT" in t or "insufficient authentication scopes" in t.lower()
+            or ("PERMISSION_DENIED" in t and "scope" in t.lower()))
+
+def _dm_dest(pid):
+    """Data Manager destination for this Google Ads account (+ MCC login when set)."""
+    cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    d = {"operatingAccount": {"product": "GOOGLE_ADS", "accountId": cid},
+         "productDestinationId": str(pid)}
+    lc = os.environ.get("GOOGLE_LOGIN_CID", "")
+    if lc: d["loginAccount"] = {"product": "GOOGLE_ADS", "accountId": lc}
+    return d
+
 def sync_gmb_branch_sales():
     """v9.2, per the owner's instruction: make store events FIRE TO THE RELEVANT BRANCH on
     Google. One UPLOAD_CLICKS conversion action per branch (find-by-name, idempotent --
@@ -2112,16 +2130,35 @@ def sync_gmb_branch_sales():
                           "orderId": "pos-%s" % oid, "userIdentifiers": ids[:5]})
             per[br] = per.get(br, 0) + 1
         if not convs: log("gmb branch sales :: nothing to upload"); return
-        sent = 0
-        for i in range(0, len(convs), 2000):
-            d = http_json(base + ":uploadClickConversions",
-                          {"conversions": convs[i:i + 2000], "partialFailure": True}, hd)
-            if d.get("error"):
-                log("gmb branch sales :: UPLOAD FAILED ::", str(d.get("error"))[:600]); break
-            pf = d.get("partialFailureError")
-            if pf: log("gmb branch sales :: partial failures (first) ::", str(pf)[:400])
-            sent += len(convs[i:i + 2000])
-        log("gmb branch sales :: window", win, "d :: conversions uploaded", sent, "of", len(convs), "::",
+        # v9.4: Google closed ConversionUploadService to new integrations (verified live:
+        # "New integrations ... should use the Data Manager API") -> events:ingest there.
+        byact = {}
+        for c in convs: byact.setdefault(c["conversionAction"].split("/")[-1], []).append(c)
+        sent = 0; blocked = False
+        for aid, lst in byact.items():
+            evs = [{"transactionId": c["orderId"],
+                    "eventTimestamp": c["conversionDateTime"].replace(" ", "T"),
+                    "conversionValue": c["conversionValue"], "currency": "EGP",
+                    "userData": {"userIdentifiers": [
+                        ({"emailAddress": u["hashedEmail"]} if "hashedEmail" in u
+                         else {"phoneNumber": u["hashedPhoneNumber"]}) for u in c["userIdentifiers"]]},
+                    "consent": {"adUserData": "CONSENT_GRANTED", "adPersonalization": "CONSENT_GRANTED"}}
+                   for c in lst]
+            for i in range(0, len(evs), 1500):
+                d = http_json(_DM + "/events:ingest",
+                              {"destinations": [_dm_dest(aid)], "encoding": "HEX",
+                               "events": evs[i:i + 1500]}, hd)
+                if d.get("error"):
+                    if _dm_scope_block(d):
+                        log("gmb branch sales :: RE-AUTH NEEDED -- the Google token lacks the Data "
+                            "Manager scope. Run: bash google_reauth.sh (one time), then bash wire_ourkids.sh.")
+                        blocked = True
+                    else:
+                        log("gmb branch sales :: DM UPLOAD FAILED ::", str(d.get("error"))[:600])
+                    break
+                sent += len(evs[i:i + 1500])
+            if blocked: break
+        log("gmb branch sales :: window", win, "d :: events sent via Data Manager", sent, "of", len(convs), "::",
             " ".join("%s=%d" % (b, c) for b, c in sorted(per.items())))
         # ---- gated: wire each GMB campaign to ITS branch's action (LIVE bidding change)
         if os.environ.get("GMB_GOALS", "off").lower() == "on":
@@ -2250,38 +2287,35 @@ def sync_google_audience():
                 log("google audience :: CREATE FAILED ::", str(d)[:220]); return
             created = True
             log("google audience :: created", rn)
-        d = http_json(base + "/offlineUserDataJobs:create",
-                      {"job": {"type": "CUSTOMER_MATCH_USER_LIST",
-                               "customerMatchUserListMetadata": {"userList": rn,
-                                   "consent": {"adUserData": "GRANTED", "adPersonalization": "GRANTED"}}}}, hd)
-        job = d.get("resourceName")
-        if not job:
-            if "NOT_ALLOWLISTED" in str(d):
-                log("google audience :: BLOCKED -- Google no longer accepts Customer Match uploads "
-                    "through the Ads API for this developer token; they moved it to the Data Manager "
-                    "API, which needs a ONE-TIME re-auth with a new scope. The user list exists and "
-                    "is kept; uploads parked until the re-auth.")
-            else:
-                log("google audience :: job create failed ::", str(d)[:800])
-            return
+        # v9.4: Ads API refuses Customer Match for this dev token (verified live) ->
+        # Data Manager audienceMembers:ingest against the same user list.
+        lid = rn.split("/")[-1]
         contacts = _offline_contacts(730 if created else 4)
-        ops = []
+        members = []
         for em, ph in contacts:
             ids = []
-            if em: ids.append({"hashedEmail": hashlib.sha256(em.encode()).hexdigest()})
-            if ph: ids.append({"hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
-            if ids: ops.append({"create": {"userIdentifiers": ids}})
-        if not ops: log("google audience :: nothing to send"); return
+            if em: ids.append({"emailAddress": hashlib.sha256(em.encode()).hexdigest()})
+            if ph: ids.append({"phoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
+            if ids: members.append({"userData": {"userIdentifiers": ids},
+                                    "consent": {"adUserData": "CONSENT_GRANTED",
+                                                "adPersonalization": "CONSENT_GRANTED"}})
+        if not members: log("google audience :: nothing to send"); return
         sent = 0
-        for i in range(0, len(ops), 5000):
-            d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
-                          {"operations": ops[i:i + 5000], "enablePartialFailure": True}, hd)
-            if d.get("error"): log("google audience :: addOperations failed ::", str(d.get("error"))[:180]); break
-            sent += len(ops[i:i + 5000])
-        d = http_json("https://googleads.googleapis.com/v21/%s:run" % job, {}, hd)
-        log("google audience ::", rn, ":: window", 730 if created else 4, "d :: hashed rows sent", sent,
-            ":: job run", "ok" if not d.get("error") else str(d.get("error"))[:120],
-            "(first full backfill)" if created else "")
+        for i in range(0, len(members), 5000):
+            d = http_json(_DM + "/audienceMembers:ingest",
+                          {"destinations": [_dm_dest(lid)], "encoding": "HEX",
+                           "termsOfService": {"customerMatchTermsOfServiceStatus": "ACCEPTED"},
+                           "audienceMembers": members[i:i + 5000]}, hd)
+            if d.get("error"):
+                if _dm_scope_block(d):
+                    log("google audience :: RE-AUTH NEEDED -- the Google token lacks the Data Manager "
+                        "scope. Run: bash google_reauth.sh (one time), then bash wire_ourkids.sh.")
+                else:
+                    log("google audience :: DM ingest failed ::", str(d.get("error"))[:600])
+                return
+            sent += len(members[i:i + 5000])
+        log("google audience ::", rn, ":: window", 730 if created else 4, "d :: hashed members sent via "
+            "Data Manager", sent, "(first full backfill)" if created else "")
     except Exception as e:
         log("google audience :: fail ::", str(e)[:180])
 
@@ -2953,7 +2987,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.3 (branch events as enhanced conversions -- Google refused STORE_SALES + Customer Match via this API, verified live)")
+    log("collector v9.4 (Data Manager API for branch store-sale events + Customer Match; cube scopes no longer wiped on light runs)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3184,7 +3218,10 @@ def build():
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
-              "cube": XTRA.get("cube") or prev.get("cube") or {},
+              "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
+                                        "ven": (_n.get("ven") or _p.get("ven") or {}),
+                                        "cat": (_n.get("cat") or _p.get("cat") or {})})(
+                          XTRA.get("cube") or {}, prev.get("cube") or {}),
               "gattr": gattr or prev.get("gattr") or {},
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
