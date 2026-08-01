@@ -1670,6 +1670,8 @@ def pull_google_attr():
             rows = []
             for b2 in (d if isinstance(d, list) else [d]): rows += b2.get("results", [])
             return rows
+        except urllib.error.HTTPError as e2:
+            log("google attr :: query fail ::", e2.code, e2.read().decode("utf-8", "ignore")[:400]); return []
         except Exception as e:
             log("google attr :: query fail ::", str(e)[:140]); return []
     W = "WHERE segments.date BETWEEN '%s' AND '%s'" % (c0, c1)
@@ -1710,6 +1712,7 @@ def pull_google_attr():
                "FROM conversion_action WHERE conversion_action.status = 'ENABLED'"):
         ca = r.get("conversionAction", {})
         out["actions"].append({"n": (ca.get("name") or "")[:60],
+                               "t": ca.get("type", ""),
                                "model": ((ca.get("attributionModelSettings") or {}).get("attributionModel") or ""),
                                "win": ca.get("clickThroughLookbackWindowDays"),
                                "pri": bool(ca.get("primaryForGoal"))})
@@ -1738,13 +1741,16 @@ def pull_google_attr():
     # v9.2: OFFLINE / store-side totals per conversion action (store visits, calls,
     # directions live only in all_conversions -- Google's own offline-attributed numbers)
     out["offline"] = []
-    for r in q("SELECT conversion_action.name, conversion_action.category, conversion_action.type, "
+    _tmap = {a4["n"]: a4.get("t", "") for a4 in out["actions"]}
+    for r in q("SELECT customer.id, segments.conversion_action_name, "
+               "segments.conversion_action_category, "
                "metrics.all_conversions, metrics.all_conversions_value, "
-               "metrics.conversions, metrics.conversions_value FROM conversion_action %s "
+               "metrics.conversions, metrics.conversions_value FROM customer %s "
                "AND metrics.all_conversions > 0" % W):
-        ca = r.get("conversionAction", {}); m = r.get("metrics", {})
-        out["offline"].append({"n": (ca.get("name") or "")[:60], "cat": ca.get("category", ""),
-                               "t": ca.get("type", ""),
+        m = r.get("metrics", {}); sg = r.get("segments", {})
+        nm2 = (sg.get("conversionActionName") or "")[:60]
+        out["offline"].append({"n": nm2, "cat": sg.get("conversionActionCategory", ""),
+                               "t": _tmap.get(nm2, ""),
                                "an": round(float(m.get("allConversions", 0)), 1),
                                "av": round(float(m.get("allConversionsValue", 0))),
                                "cn": round(float(m.get("conversions", 0)), 1),
@@ -2035,18 +2041,20 @@ def _branch_transactions(days):
         for r in (oexec("res.partner", "read", [pids[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
             CT[r["id"]] = _norm_contact(r)
     out = []
-    for pid, br, d, amt in orders.values():
+    for oid, (pid, br, d, amt) in orders.items():
         em, ph = CT.get(pid, ("", ""))
         dt = d[:19] if len(d) > 10 else d[:10] + " 12:00:00"
-        if (em or ph) and amt > 0: out.append((br, em, ph, amt, dt))
+        if (em or ph) and amt > 0: out.append((br, em, ph, amt, dt, oid))
     log("branch transactions ::", len(orders), "orders in", days, "d ::", len(out), "with contact+amount")
     return out
 
 def sync_gmb_branch_sales():
     """v9.2, per the owner's instruction: make store events FIRE TO THE RELEVANT BRANCH on
-    Google. One STORE_SALES conversion action per branch (find-by-name, idempotent), then
-    real Odoo POS transactions uploaded to each branch's OWN action via offlineUserDataJobs
-    (STORE_SALES_UPLOAD_FIRST_PARTY). Emails/phones SHA256-hashed to Google's spec before
+    Google. One UPLOAD_CLICKS conversion action per branch (find-by-name, idempotent --
+    Google's API refuses to create STORE_SALES-type actions, verified live), then real Odoo
+    POS receipts uploaded to each branch's OWN action as enhanced-conversions-for-leads
+    (uploadClickConversions with hashed identifiers, order-id deduped). Google matches the
+    email/phone to signed-in ad clicks. Emails/phones SHA256-hashed to Google's spec before
     anything leaves the job; amounts in EGP micros. 30d backfill the run the actions are
     created, 4d top-ups after. Kill switch: GMB_BRANCH_SALES=off.
     Gated extras (touch LIVE bidding, so OFF until the owner flips them):
@@ -2078,7 +2086,7 @@ def sync_gmb_branch_sales():
             nm = "OurKids Store Sale - %s (auto)" % br
             if have.get(nm): arn[br] = have[nm]; continue
             d = http_json(base + "/conversionActions:mutate",
-                          {"operations": [{"create": {"name": nm, "type": "STORE_SALES",
+                          {"operations": [{"create": {"name": nm, "type": "UPLOAD_CLICKS",
                             "category": "PURCHASE", "status": "ENABLED",
                             "valueSettings": {"defaultValue": 0.0, "alwaysUseDefaultValue": False}}}]}, hd)
             try:
@@ -2089,37 +2097,32 @@ def sync_gmb_branch_sales():
         if not arn: log("gmb branch sales :: no branch actions available, stopping"); return
         win = 30 if created else 4
         tx = _branch_transactions(win)
-        ops = []; per = {}
-        for br, em, ph, amt, dt in tx:
+        convs = []; per = {}
+        for br, em, ph, amt, dt, oid in tx:
             rn = arn.get(br)
             if not rn: continue
             ids = []
-            if em: ids.append({"hashedEmail": hashlib.sha256(em.encode()).hexdigest()})
-            if ph: ids.append({"hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
+            if em: ids.append({"userIdentifierSource": "FIRST_PARTY",
+                               "hashedEmail": hashlib.sha256(em.encode()).hexdigest()})
+            if ph: ids.append({"userIdentifierSource": "FIRST_PARTY",
+                               "hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
             if not ids: continue
-            ops.append({"create": {"userIdentifiers": ids,
-                        "transactionAttribute": {"conversionAction": rn, "currencyCode": "EGP",
-                            "transactionAmountMicros": str(int(amt * 1e6)),
-                            "transactionDateTime": dt + "+02:00",
-                            "storeAttribute": {"storeCode": br[:64]}}}})
+            convs.append({"conversionAction": rn, "conversionDateTime": dt + "+02:00",
+                          "conversionValue": round(amt, 2), "currencyCode": "EGP",
+                          "orderId": "pos-%s" % oid, "userIdentifiers": ids[:5]})
             per[br] = per.get(br, 0) + 1
-        if not ops: log("gmb branch sales :: nothing to upload"); return
-        d = http_json(base + "/offlineUserDataJobs:create",
-                      {"job": {"type": "STORE_SALES_UPLOAD_FIRST_PARTY",
-                               "storeSalesMetadata": {"loyaltyFraction": 1.0,
-                                                      "transactionUploadFraction": 1.0}}}, hd)
-        job = d.get("resourceName")
-        if not job: log("gmb branch sales :: JOB CREATE FAILED ::", str(d)[:800]); return
+        if not convs: log("gmb branch sales :: nothing to upload"); return
         sent = 0
-        for i in range(0, len(ops), 5000):
-            d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
-                          {"operations": ops[i:i + 5000], "enablePartialFailure": True}, hd)
-            if d.get("error"): log("gmb branch sales :: addOperations failed ::", str(d.get("error"))[:400]); break
-            sent += len(ops[i:i + 5000])
-        d = http_json("https://googleads.googleapis.com/v21/%s:run" % job, {}, hd)
-        log("gmb branch sales :: window", win, "d :: transactions sent", sent, "::",
-            " ".join("%s=%d" % (b, c) for b, c in sorted(per.items())),
-            ":: job run", "ok" if not d.get("error") else str(d.get("error"))[:200])
+        for i in range(0, len(convs), 2000):
+            d = http_json(base + ":uploadClickConversions",
+                          {"conversions": convs[i:i + 2000], "partialFailure": True}, hd)
+            if d.get("error"):
+                log("gmb branch sales :: UPLOAD FAILED ::", str(d.get("error"))[:600]); break
+            pf = d.get("partialFailureError")
+            if pf: log("gmb branch sales :: partial failures (first) ::", str(pf)[:400])
+            sent += len(convs[i:i + 2000])
+        log("gmb branch sales :: window", win, "d :: conversions uploaded", sent, "of", len(convs), "::",
+            " ".join("%s=%d" % (b, c) for b, c in sorted(per.items())))
         # ---- gated: wire each GMB campaign to ITS branch's action (LIVE bidding change)
         if os.environ.get("GMB_GOALS", "off").lower() == "on":
             goals = {}
@@ -2247,6 +2250,20 @@ def sync_google_audience():
                 log("google audience :: CREATE FAILED ::", str(d)[:220]); return
             created = True
             log("google audience :: created", rn)
+        d = http_json(base + "/offlineUserDataJobs:create",
+                      {"job": {"type": "CUSTOMER_MATCH_USER_LIST",
+                               "customerMatchUserListMetadata": {"userList": rn,
+                                   "consent": {"adUserData": "GRANTED", "adPersonalization": "GRANTED"}}}}, hd)
+        job = d.get("resourceName")
+        if not job:
+            if "NOT_ALLOWLISTED" in str(d):
+                log("google audience :: BLOCKED -- Google no longer accepts Customer Match uploads "
+                    "through the Ads API for this developer token; they moved it to the Data Manager "
+                    "API, which needs a ONE-TIME re-auth with a new scope. The user list exists and "
+                    "is kept; uploads parked until the re-auth.")
+            else:
+                log("google audience :: job create failed ::", str(d)[:800])
+            return
         contacts = _offline_contacts(730 if created else 4)
         ops = []
         for em, ph in contacts:
@@ -2255,12 +2272,6 @@ def sync_google_audience():
             if ph: ids.append({"hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
             if ids: ops.append({"create": {"userIdentifiers": ids}})
         if not ops: log("google audience :: nothing to send"); return
-        d = http_json(base + "/offlineUserDataJobs:create",
-                      {"job": {"type": "CUSTOMER_MATCH_USER_LIST",
-                               "customerMatchUserListMetadata": {"userList": rn,
-                                   "consent": {"adUserData": "GRANTED", "adPersonalization": "GRANTED"}}}}, hd)
-        job = d.get("resourceName")
-        if not job: log("google audience :: job create failed ::", str(d)[:800]); return
         sent = 0
         for i in range(0, len(ops), 5000):
             d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
@@ -2942,7 +2953,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.2 (per-branch Google store-sale events + campaign conversion-action breakdown + PMax assets)")
+    log("collector v9.3 (branch events as enhanced conversions -- Google refused STORE_SALES + Customer Match via this API, verified live)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
