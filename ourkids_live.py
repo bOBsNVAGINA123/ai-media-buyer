@@ -918,6 +918,38 @@ def pull_cohorts():
                 gap = (datetime.date.fromisoformat(dl[i]) - datetime.date.fromisoformat(dl[i - 1])).days
                 lagH[min(gap // 10, 14)] += 1
         XTRA.setdefault("lag", {})["shop"] = lagH
+        # v8.8 ONLINE cohort cube (each orders row IS one order)
+        try:
+            PMO2 = {}
+            for pid2, lst in by_p.items():
+                for d2, amt2, mg2 in lst:
+                    e2 = PMO2.setdefault(pid2, {}).setdefault(d2[:7], [0, 0.0, 0.0])
+                    e2[0] += 1; e2[1] += amt2; e2[2] += mg2
+            _mo = lambda a3, b3: (int(b3[:4]) - int(a3[:4])) * 12 + int(b3[5:7]) - int(a3[5:7])
+            CURM2 = END.isoformat()[:7]
+            C2 = {}
+            for pid2, f2 in first.items():
+                cm = f2[:7]
+                cc = C2.setdefault(cm, {"n": 0, "m": {}})
+                cc["n"] += 1
+                for mo2, e2 in PMO2.get(pid2, {}).items():
+                    k = _mo(cm, mo2)
+                    if k < 0 or k > 17: continue
+                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
+                    if (k > 0 and e2[0] >= 1) or (k == 0 and e2[0] >= 2): a3[0] += 1
+                    a3[1] += e2[1]; a3[2] += e2[2]
+            onl = {}
+            for cm, cc in C2.items():
+                mx = _mo(cm, CURM2)
+                if mx < 0: continue
+                onl[cm] = {"n": cc["n"], "m": [[cc["m"].get(k, [0, 0, 0])[0],
+                                                round(cc["m"].get(k, [0, 0, 0])[1]),
+                                                round(cc["m"].get(k, [0, 0, 0])[2])]
+                                               for k in range(0, min(17, mx) + 1)]}
+            XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})["scopes"]["ONLINE"] = onl
+            log("online cohort cube :: cohorts", len(onl))
+        except Exception as e:
+            log("online cube fail", str(e)[:120])
         # v8.3 ONLINE journey profile (categories need order lines; POS journeys carry the mix)
         d2o = []; hist = [0] * 13; opy = [0] * 6; toto = 0; yrs = 0.0; ltg2 = 0.0; ltv2 = 0.0
         for pid, f in first.items():
@@ -1340,6 +1372,51 @@ def pull_pos_customers():
         J0.setdefault("scopes", {}).update(JOUR["scopes"]); J0["cat"] = JOUR["cat"]; J0["ven"] = JOUR["ven"]
         log("journeys :: scopes", len(J0["scopes"]), ":: first-category segments", len(JOUR["cat"]),
             ":: first-vendor segments", len(JOUR["ven"]))
+        # ---- v8.8 cohort CUBE: per cohort-month, month-offset grid [active, revenue, gp]
+        # like Shopify's cohort explorer, but from the real Odoo history, per scope AND
+        # sliceable by FIRST-purchase vendor/category.
+        PMO = {}
+        for pid, d, br, mg, oid, rv, qy in rows:
+            e = PMO.setdefault(pid, {}).setdefault(d[:7], [set(), 0.0, 0.0])
+            if oid: e[0].add(oid)
+            e[1] += rv; e[2] += mg
+        def _moff(a2, b2): return (int(b2[:4]) - int(a2[:4])) * 12 + int(b2[5:7]) - int(a2[5:7])
+        CURM = END.isoformat()[:7]
+        def _cubeb(pids):
+            C = {}
+            for p in pids:
+                f = first.get(p)
+                if not f: continue
+                cm = f[0][:7]
+                cc = C.setdefault(cm, {"n": 0, "m": {}})
+                cc["n"] += 1
+                for mo, e in PMO.get(p, {}).items():
+                    k = _moff(cm, mo)
+                    if k < 0 or k > 17: continue
+                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
+                    nord = len(e[0])
+                    if (k > 0 and nord >= 1) or (k == 0 and nord >= 2): a3[0] += 1
+                    a3[1] += e[1]; a3[2] += e[2]
+            out = {}
+            for cm, cc in C.items():
+                mx = _moff(cm, CURM)
+                if mx < 0: continue
+                out[cm] = {"n": cc["n"], "m": [[cc["m"].get(k, [0, 0, 0])[0],
+                                                round(cc["m"].get(k, [0, 0, 0])[1]),
+                                                round(cc["m"].get(k, [0, 0, 0])[2])]
+                                               for k in range(0, min(17, mx) + 1)]}
+            return out
+        CUBE = {"scopes": {}, "ven": {}, "cat": {}}
+        for br2, pids in fb.items(): CUBE["scopes"][br2] = _cubeb(pids)
+        CUBE["scopes"]["ALL STORES"] = _cubeb(allpids)
+        for cg, pids in bycat.items():
+            if len(pids) >= 200: CUBE["cat"][cg] = _cubeb(pids)
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:12]:
+            if len(pids) >= 200: CUBE["ven"][vn2] = _cubeb(pids)
+        X0 = XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})
+        X0["scopes"].update(CUBE["scopes"]); X0["ven"] = CUBE["ven"]; X0["cat"] = CUBE["cat"]
+        log("cohort cube :: scopes", len(X0["scopes"]), ":: ven slices", len(CUBE["ven"]),
+            ":: cat slices", len(CUBE["cat"]))
         log("deciles", {sc: len(v) for sc, v in XTRA["dec"].items()}, "lag gaps", sum(lagH))
         bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
         log("pos customers", len(first), "branches", list(bstat.keys()),
@@ -1493,13 +1570,15 @@ def pull_shop_lines():
                          "vend": [[v, n2] for v, n2 in vx[:20]]}
         log("xchan customers", len(inter), "of", len(agg), "online")
 
-_META_SRC = ("facebook", "instagram", "meta", "fb", "ig", "an", "msg")
-
-def _is_meta_visit(v):
-    if not v: return False
+def _visit_platform(v):
+    """Classify a Shopify visit into a paid platform by its source / utm_source."""
+    if not v: return None
     src = (v.get("source") or "").lower()
     utm = ((v.get("utmParameters") or {}).get("source") or "").lower()
-    return any(k in src for k in ("facebook", "instagram", "meta")) or utm in _META_SRC
+    if any(k in src for k in ("facebook", "instagram", "meta")) or utm in ("facebook", "instagram", "meta", "fb", "ig", "an", "msg"): return "meta"
+    if "google" in src or utm in ("google", "googleads", "adwords", "gads") or "gclid" in src: return "google"
+    if "tiktok" in src or utm in ("tiktok", "tt", "ttclid"): return "tiktok"
+    return None
 
 def pull_meta_driven_cross():
     """v8.7: orders Shopify itself attributes to Facebook/Instagram (first or last
@@ -1507,55 +1586,136 @@ def pull_meta_driven_cross():
     store = os.environ.get("SHOPIFY_STORE", "").strip()
     tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
     if not store or not tok:
-        log("meta-driven cross :: SKIPPED - shopify env missing"); return
+        log("paid-driven cross :: SKIPPED - shopify env missing"); return
     host = store if ".myshopify.com" in store else store + ".myshopify.com"
     since = (END - datetime.timedelta(days=180)).isoformat()
     q = ('query($c:String){ orders(first:250, after:$c, query:"created_at:>=%s") '
          '{ pageInfo{hasNextPage endCursor} nodes{ email '
          'customerJourneySummary{ firstVisit{ source utmParameters{ source } } '
          'lastVisit{ source utmParameters{ source } } } } } }' % since)
-    emails = set(); total = 0; cursor = None; pages = 0
+    emails = {"meta": set(), "google": set(), "tiktok": set()}; total = 0; cursor = None; pages = 0
     while pages < 200:
         d = http_json("https://%s/admin/api/2025-07/graphql.json" % host,
                       {"query": q, "variables": {"c": cursor}}, {"X-Shopify-Access-Token": tok})
         od = (((d or {}).get("data") or {}).get("orders") or {})
         nodes = od.get("nodes")
         if nodes is None:
-            log("meta-driven cross :: orders query failed ::", str((d or {}).get("errors") or d)[:180]); break
+            log("paid-driven cross :: orders query failed ::", str((d or {}).get("errors") or d)[:180]); break
         pages += 1; total += len(nodes)
         for o in nodes:
             cj = o.get("customerJourneySummary") or {}
-            if _is_meta_visit(cj.get("firstVisit")) or _is_meta_visit(cj.get("lastVisit")):
-                em = (o.get("email") or "").strip().lower()
-                if em and "@" in em: emails.add(em)
+            em = (o.get("email") or "").strip().lower()
+            if not em or "@" not in em: continue
+            for pf in {_visit_platform(cj.get("firstVisit")), _visit_platform(cj.get("lastVisit"))}:
+                if pf: emails[pf].add(em)
         pi = od.get("pageInfo") or {}
         if not pi.get("hasNextPage"): break
         cursor = pi.get("endCursor")
-    log("meta-driven cross :: shopify orders scanned", total, "(180d, %d pages)" % pages,
-        ":: meta-attributed buyer emails", len(emails))
-    if not emails: return
-    if pages >= 200: log("meta-driven cross :: NOTE hit the 200-page cap; earliest orders in the window not scanned")
-    pids = set()
-    el = sorted(emails)
-    for i in range(0, len(el), 200):
-        try:
-            for r in (oexec("res.partner", "search_read", [[["email", "in", el[i:i + 200]]]],
-                            {"fields": ["id"], "limit": 1000}) or []):
-                pids.add(r["id"])
-        except Exception as e:
-            log("meta-driven cross :: partner lookup failed ::", str(e)[:120]); break
+    log("paid-driven cross :: shopify orders scanned", total, "(180d, %d pages)" % pages,
+        ":: attributed emails :: meta", len(emails["meta"]), "google", len(emails["google"]),
+        "tiktok", len(emails["tiktok"]))
+    if not any(emails.values()): return
+    if pages >= 200: log("paid-driven cross :: NOTE hit the 200-page cap; earliest orders in the window not scanned")
     pa = XTRA.get("posagg") or {}
     vcs = XTRA.get("vcs") or {}
-    hit = [p for p in pids if p in pa]
-    posrev = sum(pa[p][0] for p in hit); posgp = sum(pa[p][1] for p in hit)
-    hs = set(hit)
-    vend = sorted(((v, len(cust & hs)) for v, cust in vcs.items()), key=lambda kv: -kv[1])
-    vend = [[v, c] for v, c in vend if c >= 10][:20]
-    XTRA["mcross"] = {"onlineCust": len(emails), "matched": len(pids), "cust": len(hit),
-                      "posrev": round(posrev), "posgp": round(posgp), "vend": vend,
-                      "days": 180, "orders": total}
-    log("meta-driven cross :: matched partners", len(pids), ":: with store purchases", len(hit),
-        ":: their store revenue", round(posrev), ":: store GP", round(posgp))
+    # one email->partner lookup over the union, then split per platform
+    allmail = sorted(set().union(*emails.values()))
+    e2p = {}
+    for i in range(0, len(allmail), 200):
+        try:
+            for r in (oexec("res.partner", "search_read", [[["email", "in", allmail[i:i + 200]]]],
+                            {"fields": ["id", "email"]}) or []):
+                em2 = (r.get("email") or "").strip().lower()
+                if em2: e2p.setdefault(em2, set()).add(r["id"])
+        except Exception as e:
+            log("paid-driven cross :: partner lookup failed ::", str(e)[:120]); break
+    plats = {}
+    for pf, ems in emails.items():
+        pids = set()
+        for em2 in ems: pids |= e2p.get(em2, set())
+        hit = [p for p in pids if p in pa]
+        hs = set(hit)
+        vend = sorted(((v, len(cust & hs)) for v, cust in vcs.items()), key=lambda kv: -kv[1])
+        plats[pf] = {"onlineCust": len(ems), "matched": len(pids), "cust": len(hit),
+                     "posrev": round(sum(pa[p][0] for p in hit)),
+                     "posgp": round(sum(pa[p][1] for p in hit)),
+                     "vend": [[v, c] for v, c in vend if c >= 5][:15]}
+        log("paid-driven cross ::", pf, ":: matched", len(pids), ":: store buyers", len(hit),
+            ":: store revenue", plats[pf]["posrev"])
+    mc = dict(plats["meta"]); mc.update({"days": 180, "orders": total, "plats": plats})
+    XTRA["mcross"] = mc
+
+def pull_google_attr():
+    """v9.0: Google revenue attribution at campaign, asset-group (PMax) and ad level,
+    last 60d totals from the Google Ads API. Conversion value as Google reports it."""
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not (dev and cid): return {}
+    try:
+        at, hd = _gads_hdr()
+    except Exception as e:
+        log("google attr :: token fail", str(e)[:120]); return {}
+    if not at: return {}
+    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=59)).isoformat()
+    base = "https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid
+    def q(gql):
+        try:
+            req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=90) as r: d = json.loads(r.read())
+            rows = []
+            for b2 in (d if isinstance(d, list) else [d]): rows += b2.get("results", [])
+            return rows
+        except Exception as e:
+            log("google attr :: query fail ::", str(e)[:140]); return []
+    W = "WHERE segments.date BETWEEN '%s' AND '%s'" % (c0, c1)
+    M = "metrics.cost_micros, metrics.conversions_value, metrics.conversions, metrics.impressions, metrics.clicks"
+    out = {"win": [c0, c1], "campaigns": [], "assetGroups": [], "ads": []}
+    for r in q("SELECT campaign.id, campaign.name, campaign.advertising_channel_type, %s FROM campaign %s" % (M, W)):
+        c = r.get("campaign", {}); m = r.get("metrics", {})
+        sp = float(m.get("costMicros", 0)) / 1e6
+        if sp < 50: continue
+        out["campaigns"].append({"n": (c.get("name") or "")[:70], "t": c.get("advertisingChannelType", ""),
+                                 "sp": round(sp), "cv": round(float(m.get("conversionsValue", 0))),
+                                 "cn": round(float(m.get("conversions", 0)), 1),
+                                 "im": int(m.get("impressions", 0)), "ck": int(m.get("clicks", 0))})
+    for r in q("SELECT asset_group.id, asset_group.name, campaign.name, %s FROM asset_group %s" % (M, W)):
+        a2 = r.get("assetGroup", {}); m = r.get("metrics", {})
+        sp = float(m.get("costMicros", 0)) / 1e6
+        if sp < 50: continue
+        out["assetGroups"].append({"n": (a2.get("name") or "")[:70], "cmp": (r.get("campaign", {}).get("name") or "")[:50],
+                                   "sp": round(sp), "cv": round(float(m.get("conversionsValue", 0))),
+                                   "cn": round(float(m.get("conversions", 0)), 1),
+                                   "im": int(m.get("impressions", 0)), "ck": int(m.get("clicks", 0))})
+    for r in q("SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group.name, campaign.name, %s FROM ad_group_ad %s" % (M, W)):
+        ad2 = (r.get("adGroupAd", {}) or {}).get("ad", {}); m = r.get("metrics", {})
+        sp = float(m.get("costMicros", 0)) / 1e6
+        if sp < 50: continue
+        out["ads"].append({"id": str(ad2.get("id", "")), "t": ad2.get("type", ""),
+                           "ag": (r.get("adGroup", {}).get("name") or "")[:50],
+                           "cmp": (r.get("campaign", {}).get("name") or "")[:50],
+                           "sp": round(sp), "cv": round(float(m.get("conversionsValue", 0))),
+                           "cn": round(float(m.get("conversions", 0)), 1),
+                           "im": int(m.get("impressions", 0)), "ck": int(m.get("clicks", 0))})
+    # v9.1: the ACTUAL attribution model per conversion action -- queried, not assumed
+    out["actions"] = []
+    for r in q("SELECT conversion_action.name, conversion_action.type, "
+               "conversion_action.attribution_model_settings.attribution_model, "
+               "conversion_action.click_through_lookback_window_days, "
+               "conversion_action.primary_for_goal "
+               "FROM conversion_action WHERE conversion_action.status = 'ENABLED'"):
+        ca = r.get("conversionAction", {})
+        out["actions"].append({"n": (ca.get("name") or "")[:60],
+                               "model": ((ca.get("attributionModelSettings") or {}).get("attributionModel") or ""),
+                               "win": ca.get("clickThroughLookbackWindowDays"),
+                               "pri": bool(ca.get("primaryForGoal"))})
+    if out["actions"]:
+        log("google attribution models ::", " | ".join(
+            "%s=%s(%sd)%s" % (a2["n"], a2["model"], a2["win"], " PRIMARY" if a2["pri"] else "")
+            for a2 in out["actions"][:8]))
+    for k in ("campaigns", "assetGroups", "ads"): out[k].sort(key=lambda x: -x["sp"])
+    out["ads"] = out["ads"][:40]
+    log("google attr :: campaigns", len(out["campaigns"]), ":: asset groups", len(out["assetGroups"]),
+        ":: ads", len(out["ads"]))
+    return out
 
 def pull_meta_ads(tok):
     """v8.3: per-ad DAILY series for the last 60 days -- spend, online value, REAL
@@ -1773,6 +1933,118 @@ def pull_obj_daily(tok, bev):
     log("budget-object daily series ::", len(out), "of", len(want), "event objects have delivery data")
     return out
 
+def _offline_contacts(days):
+    """Recent POS buyers -> [(email_lower, phone_digits_egypt)] -- normalised RAW pairs.
+    Each platform hashes to its own spec (Meta: digits; Google: E.164 with +)."""
+    cutoff = (END - datetime.timedelta(days=days)).isoformat()
+    ANON = anon_partner_ids()
+    pids = set(); off = 0
+    while off < 400000:
+        page = oexec("report.pos.order", "search_read",
+                     [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
+                     {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
+        if not page: break
+        for r in page:
+            pid = r["partner_id"][0]
+            if pid not in ANON: pids.add(pid)
+        off += len(page)
+        if len(page) < 10000: break
+    out = []
+    pl = list(pids)
+    for i in range(0, len(pl), 2000):
+        for r in (oexec("res.partner", "read", [pl[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
+            em = (r.get("email") or "").strip().lower()
+            if "@" not in em: em = ""
+            ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
+            if ph.startswith("00"): ph = ph[2:]
+            if ph.startswith("0"): ph = "20" + ph[1:]
+            elif ph and not ph.startswith("20") and len(ph) == 10: ph = "20" + ph
+            if len(ph) < 11: ph = ""
+            if em or ph: out.append((em, ph))
+    # v8.9 dedup: many partner records share an email/phone (Odoo duplicate customers);
+    # send each identity ONCE per run.
+    out = sorted(set(out))
+    log("offline contacts ::", len(pids), "buyers in", days, "d ::", len(out), "unique identities")
+    return out
+
+def _gads_hdr():
+    """OAuth access token + headers for the Google Ads REST API (same creds as the pull)."""
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", "")
+    if not dev: return None, None
+    data = urllib.parse.urlencode({"client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+        "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+        "refresh_token": os.environ.get("GOOGLE_REFRESH_TOKEN", ""),
+        "grant_type": "refresh_token"}).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data,
+          headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        at = json.loads(r.read()).get("access_token")
+    hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
+    lc = os.environ.get("GOOGLE_LOGIN_CID", "")
+    if lc: hd["login-customer-id"] = lc
+    return at, hd
+
+def sync_google_audience():
+    """v8.8: same offline-buyer segment on GOOGLE -- a Customer Match user list kept
+    fresh every run (create once, 730d backfill, then 4d top-ups). Emails/phones are
+    SHA256-hashed to Google's spec (email lowercase; phone E.164 with +) before anything
+    leaves the job. NOTE this is Customer Match (audiences); true Store-Sales CONVERSION
+    uploads need Google to allowlist the account -- logged here the day that changes.
+    Kill switch: GOOGLE_OFFLINE_AUDIENCE=off."""
+    if os.environ.get("GOOGLE_OFFLINE_AUDIENCE", "on").lower() == "off": return
+    cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not cid: log("google audience :: skipped, no customer id"); return
+    import hashlib
+    try:
+        at, hd = _gads_hdr()
+        if not at: log("google audience :: skipped, no google creds"); return
+        name = "Ourkids Offline Buyers (auto)"
+        base = "https://googleads.googleapis.com/v21/customers/%s" % cid
+        d = http_json(base + "/googleAds:searchStream",
+                      {"query": "SELECT user_list.id, user_list.name, user_list.resource_name FROM user_list"}, hd)
+        rn = None
+        for b2 in (d if isinstance(d, list) else [d]):
+            for row in (b2.get("results") or []):
+                ul = row.get("userList") or {}
+                if ul.get("name") == name: rn = ul.get("resourceName")
+        created = False
+        if not rn:
+            d = http_json(base + "/userLists:mutate",
+                          {"operations": [{"create": {"name": name,
+                            "description": "Auto-updated with in-store buyers from Odoo POS by the dashboard collector",
+                            "membershipLifeSpan": 540,
+                            "crmBasedUserList": {"uploadKeyType": "CONTACT_INFO"}}}]}, hd)
+            try: rn = d["results"][0]["resourceName"]
+            except Exception:
+                log("google audience :: CREATE FAILED ::", str(d)[:220]); return
+            created = True
+            log("google audience :: created", rn)
+        contacts = _offline_contacts(730 if created else 4)
+        ops = []
+        for em, ph in contacts:
+            ids = []
+            if em: ids.append({"hashedEmail": hashlib.sha256(em.encode()).hexdigest()})
+            if ph: ids.append({"hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
+            if ids: ops.append({"create": {"userIdentifiers": ids}})
+        if not ops: log("google audience :: nothing to send"); return
+        d = http_json(base + "/offlineUserDataJobs:create",
+                      {"job": {"type": "CUSTOMER_MATCH_USER_LIST",
+                               "customerMatchUserListMetadata": {"userList": rn}}}, hd)
+        job = d.get("resourceName")
+        if not job: log("google audience :: job create failed ::", str(d)[:200]); return
+        sent = 0
+        for i in range(0, len(ops), 5000):
+            d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
+                          {"operations": ops[i:i + 5000], "enablePartialFailure": True}, hd)
+            if d.get("error"): log("google audience :: addOperations failed ::", str(d.get("error"))[:180]); break
+            sent += len(ops[i:i + 5000])
+        d = http_json("https://googleads.googleapis.com/v21/%s:run" % job, {}, hd)
+        log("google audience ::", rn, ":: window", 730 if created else 4, "d :: hashed rows sent", sent,
+            ":: job run", "ok" if not d.get("error") else str(d.get("error"))[:120],
+            "(first full backfill)" if created else "")
+    except Exception as e:
+        log("google audience :: fail ::", str(e)[:180])
+
 def sync_offline_audience(tok):
     """v8.3: keep a Meta Customer List of OFFLINE buyers fresh on every run, per the
     owner's instruction. Emails/phones come from Odoo (read-only), are normalised and
@@ -1802,32 +2074,15 @@ def sync_offline_audience(tok):
             return
         created = True
         log("offline audience :: created", aud)
-    days = 730 if created else 4
-    cutoff = (END - datetime.timedelta(days=days)).isoformat()
-    ANON = anon_partner_ids()
-    pids = set(); off = 0
-    while off < 400000:
-        page = oexec("report.pos.order", "search_read",
-                     [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
-                     {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
-        if not page: break
-        for r in page:
-            pid = r["partner_id"][0]
-            if pid not in ANON: pids.add(pid)
-        off += len(page)
-        if len(page) < 10000: break
+    contacts = _offline_contacts(730 if created else 4)
+    import hashlib
     rowsn = []
-    pl = list(pids)
-    for i in range(0, len(pl), 2000):
-        for r in (oexec("res.partner", "read", [pl[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
-            em = (r.get("email") or "").strip().lower()
-            ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
-            if ph.startswith("00"): ph = ph[2:]
-            if ph.startswith("0"): ph = "20" + ph[1:]
-            elif ph and not ph.startswith("20") and len(ph) == 10: ph = "20" + ph
-            he = hashlib.sha256(em.encode()).hexdigest() if em and "@" in em else ""
-            hp = hashlib.sha256(ph.encode()).hexdigest() if len(ph) >= 11 else ""
-            if he or hp: rowsn.append([he, hp])
+    for em, ph in contacts:
+        he = hashlib.sha256(em.encode()).hexdigest() if em else ""
+        hp = hashlib.sha256(ph.encode()).hexdigest() if ph else ""
+        if he or hp: rowsn.append([he, hp])
+    days = 730 if created else 4
+    pids = contacts
     sent = 0
     for i in range(0, len(rowsn), 5000):
         d = http_json("%s/%s/users" % (GRAPH, aud),
@@ -2458,7 +2713,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v8.7 (hook-rate raw plays + Shopify-attributed Meta-driven store crossover)")
+    log("collector v9.0 (per-platform store-buyer crossover + Google campaign/asset-group/ad attribution)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2518,7 +2773,7 @@ def build():
                 log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
     except Exception as e:
         log("carry-forward skipped", str(e)[:120])
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not any(
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
@@ -2568,6 +2823,8 @@ def build():
     objd = safe(pull_obj_daily, _mtok, bev) or {}
     cre = safe(pull_campaign_reach, _mtok) or {}
     safe(sync_offline_audience, _mtok)
+    safe(sync_google_audience)
+    gattr = safe(pull_google_attr) or {}
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
@@ -2686,6 +2943,8 @@ def build():
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
+              "cube": XTRA.get("cube") or prev.get("cube") or {},
+              "gattr": gattr or prev.get("gattr") or {},
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
