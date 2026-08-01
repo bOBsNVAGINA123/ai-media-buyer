@@ -10,7 +10,7 @@
 .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
 h1{font-size:21px;margin:0;font-weight:800;letter-spacing:-.3px}.sub{color:var(--mut);font-size:12px;margin-top:3px}
 .pill{background:#fff;border:1px solid #e2e6ef;border-radius:11px;padding:8px 12px;font-size:12px;font-weight:600;color:#41495c}.pill b{color:var(--indigo)}
-.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.tab{padding:6px 12px;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+.lbl9{font-size:10px;font-weight:800;color:#64748b;margin-right:5px}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.tab{padding:6px 12px;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}
 .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid #e6e9f1;border-radius:14px;padding:11px 14px;margin-bottom:12px}
 .bar label{font-size:10.5px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe3ec;border-radius:9px;padding:7px 9px;background:#f7f8fb;color:#2b3346}
@@ -216,7 +216,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v8.8</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v9.1</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp'],['t16','cj'],['t17','bg'],['t18','co']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
@@ -600,6 +600,20 @@ function rPlan(){if(TAB!=='pl')return;dCh();const g=document.getElementById('g3'
  ST.s=sv.s;ST.e=sv.e;}
 function shade(v,mn,mx,good){if(v==null||!isFinite(v)||mx===mn)return'';const t=(v-mn)/(mx-mn);const q=good>=0?t:1-t;const a=Math.abs(q-.5)*2*.30;return q>=.5?' style="background:rgba(18,160,110,'+a.toFixed(2)+')"':' style="background:rgba(226,58,99,'+(a*.85).toFixed(2)+')"';}
 function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5');g.innerHTML='';
+ // v9.1 Google revenue attribution: campaign / asset group / ad
+ setTimeout(()=>{const GA=O.gattr;if(!GA||!(GA.campaigns||[]).length)return;const g5=document.getElementById('g5');
+  const money=v=>Math.round(v).toLocaleString();
+  const tb=(rows,label,cols)=>{if(!rows.length)return '';
+   const xs=rows.map(r=>r.sp?r.cv/r.sp:0);const mn=Math.min.apply(null,xs),mx=Math.max.apply(null,xs);
+   let h='<div style="font-weight:800;font-size:12.5px;margin:10px 0 4px">'+label+'</div><div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr>'+cols.map(c=>'<th style="text-align:'+(c[2]?'left':'center')+'">'+c[0]+'</th>').join('')+'<th>Spend</th><th>Conv value</th><th>ROAS</th><th>Conv</th><th>CPA</th></tr>';
+   rows.forEach(r=>{const roas=r.sp?r.cv/r.sp:0;
+    h+='<tr>'+cols.map(c=>'<td style="text-align:'+(c[2]?'left':'center')+';'+(c[2]?'font-weight:700':'')+'">'+(r[c[1]]||'&mdash;')+'</td>').join('')+'<td>E&pound; '+money(r.sp)+'</td><td>E&pound; '+money(r.cv)+'</td><td'+shade(roas,mn,mx,1)+'><b>'+roas.toFixed(2)+'x</b></td><td>'+r.cn+'</td><td>'+(r.cn?'E&pound; '+money(r.sp/r.cn):'&mdash;')+'</td></tr>';});
+   return h+'</table></div>';};
+  let hh=tb(GA.campaigns,'By CAMPAIGN',[['Campaign','n',1],['Type','t',0]]);
+  hh+=tb(GA.assetGroups,'By ASSET GROUP (PMax)',[['Asset group','n',1],['Campaign','cmp',1]]);
+  hh+=tb(GA.ads,'By AD (top '+GA.ads.length+')',[['Ad ID','id',1],['Ad group','ag',1],['Campaign','cmp',1]]);
+  if((GA.actions||[]).length){hh+='<div style="font-weight:800;font-size:12.5px;margin:10px 0 4px">CONVERSION ACTIONS &mdash; the attribution model Google is ACTUALLY using</div><div style="overflow-x:auto"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">Conversion action</th><th>Model</th><th>Click window</th><th>Primary</th></tr>'+GA.actions.map(a2=>'<tr><td style="text-align:left;font-weight:700">'+a2.n+'</td><td>'+(a2.model||'&mdash;').replace('GOOGLE_SEARCH_ATTRIBUTION_','').replace('_',' ')+'</td><td>'+(a2.win?a2.win+'d':'&mdash;')+'</td><td>'+(a2.pri?'&#10003;':'')+'</td></tr>').join('')+'</table></div>';}
+  pnlCard(g5,'ins','Google revenue attribution &mdash; campaign / asset group / ad','Google&rsquo;s own conversion value, last 60d ('+GA.win[0]+' &rarr; '+GA.win[1]+'), straight from the Google Ads API. Heat on ROAS within each table.',hh);},50);
  setTimeout(()=>{if(TAB==='me')rLag(g);},0);
  document.getElementById('bn5').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. REAL OurKids cohorts from the Odoo customer crawl (Shopify channel, 64k+ customers): every customer\'s first order defines the cohort; LTGP accumulates their gross profit over 30/90/180/365 days; nCAC = that month\'s total ad spend &divide; new customers. All figures EGP.';
  pnlBar(document.getElementById('g5'));
@@ -700,6 +714,26 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
   h2+='<div style="font-weight:800;margin:8px 0 2px">New customers acquired per month <span class="cs" style="font-weight:600">&mdash; Aug&ndash;Nov 2024 are POS go-live warm-up months (existing customers registering for the first time), not real acquisition spikes</span></div>'+mk(c=>c.nc,v=>Math.round(v).toLocaleString());
   h2+='<div style="font-weight:800;margin:12px 0 2px">Returning-order share of transactions'+(RX?' (excl. returns/exchanges)':'')+'</div>'+mk(c=>{const rc2=RX&&c.rcx!=null?c.rcx:c.rc;return (c.nc+rc2)?rc2/(c.nc+rc2)*100:null;},v=>v.toFixed(0)+'%');
   pnlCard(g,'odoo','Branch customers &mdash; New vs Returning (POS, REAL)','From the registered-customer POS crawl: who each branch acquires and how often they come back. Walk-ins without a registered phone are not individually trackable.',h2);}
+ // ---- v8.9 double-claim guard: what every platform CLAIMS vs what actually sold.
+ // Platforms cannot dedupe against each other (no shared identities) -- so the honest
+ // layer is measuring the overlap: claims summed vs real revenue. >100%% = the same
+ // sales are being claimed twice; the ratio IS the double-count.
+ (function(){
+  let onA=0,mC=0,gC=0,tC=0,stC=0,ttS=0;
+  for(let i=0;i<O.ad.n;i++){const dd=aD(i);if((ST.s&&dd<ST.s)||(ST.e&&dd>ST.e))continue;
+   onA+=((O.ad.ncrev||[])[i]||0)+((O.ad.rcrev||[])[i]||0);
+   mC+=((O.ad.mecomrev||[])[i]||0)*af('meta');gC+=((O.ad.gecomrev||[])[i]||0)*af('google');
+   tC+=((O.ad.ttValue||[])[i]||0)*af('tt');stC+=((O.ad.instoreMeta||[])[i]||0)*afo();ttS+=((O.ad.ttOffValue||[])[i]||0)*af('tt');}
+  let stA=0;const PSx=O.pos||{};Object.values(PSx).forEach(bm=>Object.keys(bm).forEach(m=>{if(m>=EP0&&m<=EP1)stA+=bm[m][0]||0;}));
+  if(!(onA||stA))return;
+  const money=v=>Math.round(v).toLocaleString();
+  const onClaim=mC+gC+tC,onR=onA?onClaim/onA*100:null,stClaim=stC+ttS,stR=stA?stClaim/stA*100:null;
+  const cl=v=>v==null?'':(v>100?' style="background:rgba(226,58,99,.18);font-weight:800"':v>85?' style="background:rgba(255,139,66,.18)"':' style="background:rgba(18,160,110,.12)"');
+  let h='<div style="overflow-x:auto"><table class="bt" style="min-width:640px"><tr><th style="text-align:left">Leg</th><th>ACTUAL revenue</th><th>Meta claims</th><th>Google claims</th><th>TikTok claims</th><th>All platforms claim</th><th>Claim ratio</th></tr>';
+  h+='<tr><td style="text-align:left;font-weight:700">ONLINE</td><td><b>E&pound; '+money(onA)+'</b></td><td>E&pound; '+money(mC)+'</td><td>E&pound; '+money(gC)+'</td><td>E&pound; '+money(tC)+'</td><td>E&pound; '+money(onClaim)+'</td><td'+cl(onR)+'>'+(onR==null?'&mdash;':onR.toFixed(0)+'%')+'</td></tr>';
+  h+='<tr><td style="text-align:left;font-weight:700">IN-STORE</td><td><b>E&pound; '+money(stA)+'</b> <span style="font-size:10px;color:#8a93a6">(full months '+EP0+'&rarr;'+EP1+')</span></td><td>E&pound; '+money(stC)+'</td><td>&mdash;</td><td>E&pound; '+money(ttS)+'</td><td>E&pound; '+money(stClaim)+'</td><td'+cl(stR)+'>'+(stR==null?'&mdash;':stR.toFixed(0)+'%')+'</td></tr>';
+  h+='</table></div><div class="cs" style="margin-top:6px">Platforms cannot dedupe against each other &mdash; the same purchase CAN sit in two columns. This row quantifies it: a claim ratio over 100% (red) means double-counting is guaranteed; under ~85% (green) claims fit inside reality. Uses your current attribution setting per platform. When Google offline conversions go live, their claims join the IN-STORE row automatically.</div>';
+  pnlCard(g,'ins','Attribution double-claim guard &mdash; platform claims vs ACTUAL revenue','The dedup layer: since Meta/Google/TikTok each claim independently, this is where you see if the same sales are counted twice.',h);})();
  // ---- v8.7: %% of revenue from NEW customers, store vs online ----
  (function(){const BNR=O.bnr||{};
   let sn=0,sr=0;Object.values(BNR).forEach(b=>Object.keys(b).forEach(m=>{if(m>=EP0&&m<=EP1){sn+=b[m].nrev||0;sr+=b[m].rrev||0;}}));
@@ -718,6 +752,17 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
    if(!MC||!MC.onlineCust){pnlCard(g,'meta','Meta-DRIVEN online buyers &rarr; stores &mdash; arrives with the next heavy sync','Shopify order attribution (customerJourneySummary) filtered to Facebook/Instagram visits, matched to Odoo by email, intersected with the real POS crawl. Queued automatically.','');return;}
    const money=v=>Math.round(v).toLocaleString();
    const VN={};((O.vend&&O.vend.rows)||[]).forEach(r=>VN[r.v]=r.n);
+   if(MC.plats){
+    const PL=[['meta','Meta','#5a5bf0'],['google','Google','#12a06e'],['tiktok','TikTok','#1c2333']].filter(x=>MC.plats[x[0]]&&MC.plats[x[0]].onlineCust);
+    let hT='<div style="overflow-x:auto"><table class="bt" style="min-width:720px"><tr><th style="text-align:left">Chain (180d Shopify attribution &rarr; Odoo &rarr; POS)</th>'+PL.map(x=>'<th style="color:'+x[2]+'">'+x[1]+'</th>').join('')+'</tr>';
+    [['Online buyers the platform drove','onlineCust','n'],['Matched to an Odoo customer','matched','n'],['\u2026who ALSO bought in a branch','cust','n'],['Their STORE revenue (lifetime)','posrev','cur'],['Their STORE gross profit','posgp','cur']].forEach(R=>{
+     hT+='<tr><td style="text-align:left">'+R[0]+'</td>'+PL.map(x=>{const v=MC.plats[x[0]][R[1]];return '<td>'+(R[2]==='cur'?'E&pound; '+money(v):money(v))+'</td>';}).join('')+'</tr>';});
+    hT+='<tr><td style="text-align:left;font-weight:700">Store spend / driven customer</td>'+PL.map(x=>{const p2=MC.plats[x[0]];return '<td style="font-weight:800">'+(p2.cust?'E&pound; '+money(p2.posrev/p2.cust):'&mdash;')+'</td>';}).join('')+'</tr></table></div>';
+    PL.forEach(x=>{const p2=MC.plats[x[0]];if(!(p2.vend||[]).length)return;const mx=p2.vend[0][1];
+     hT+='<div style="font-weight:800;font-size:12px;margin:12px 0 4px;color:'+x[2]+'">What '+x[1].toUpperCase()+'-driven customers buy IN STORE</div>';
+     hT+=p2.vend.slice(0,10).map(v=>{const nm=VN[v[0]]||('code '+v[0]);return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0"><div style="width:180px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+nm+'">'+nm+'</div><div style="flex:1;background:#eef0f5;border-radius:5px;height:13px"><div style="width:'+(v[1]/mx*100).toFixed(1)+'%;background:'+x[2]+';height:13px;border-radius:5px"></div></div><div style="width:110px;font-size:11px;text-align:right">'+v[1].toLocaleString()+' cust</div></div>';}).join('');});
+    hT+='<div class="cs" style="margin-top:6px">Per platform: Shopify&rsquo;s own order attribution (first/last visit) &rarr; buyer email &rarr; Odoo customer &rarr; real POS receipts. A customer whose journey touched two platforms appears in both columns &mdash; that is attribution reality, not a bug (the double-claim guard above quantifies it).</div>';
+    pnlCard(g,'meta','What each platform&rsquo;s PAID audience buys in the stores','Meta vs Google vs TikTok: the online buyers each platform drove, and what those exact people spend and buy in your branches.',hT);return;}
    let h6='<div class="kpis">'+kH([
     ['Online buyers Shopify attributes to Meta ('+MC.days+'d)',MC.onlineCust,null,'n'],
     ['Matched to an Odoo customer (by email)',MC.matched,null,'n'],
@@ -3253,7 +3298,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   const k0=Math.max(0,i-7),k1=Math.min(W.n-1,i+7);
   const CD=' background:#fff3cd;border-left:2px solid #b8860b;border-right:2px solid #b8860b;';
   let dt='<div style="overflow-x:auto;margin-top:6px"><table class="bt" style="min-width:'+(130+(k1-k0+1)*66)+'px"><tr><th style="text-align:left">Day by day</th>';
-  for(let k=k0;k<=k1;k++)dt+='<th style="'+(k===i?CD+'font-weight:900':'')+'">'+aD2(W,k).slice(5)+(k===i?'<div style="font-size:9px;color:#b8860b">'+(up===false?'CUT':'RAISE')+' DAY</div>':'')+'</th>';
+  for(let k=k0;k<=k1;k++){const dd2=aD2(W,k);dt+='<th style="font-size:11px;font-weight:800;'+(k===i?CD+'font-weight:900':'')+'">'+dd2.slice(8,10)+'/'+dd2.slice(5,7)+(k===i?'<div style="font-size:9.5px;color:#b8860b">'+(up===false?'CUT':'RAISE')+' DAY</div>':'')+'</th>';}
   dt+='</tr>';
   const CELL=(v,base,dir,f,isCd)=>{if(v==null||!isFinite(v))return'<td style="'+(isCd?CD:'')+'">&mdash;</td>';let bg='';
    if(base!=null&&isFinite(base)&&base!==0&&dir!==0){const d2=(v-base)/Math.abs(base);
@@ -3340,7 +3385,77 @@ function _cohScopes(){ // every scope -> {month:{size,g30,g90,g180,g365}}
  if((O.coh||[]).length){const on={};O.coh.forEach(c=>{on[c.m]={size:c.size,g30:c.g30,g90:c.g90,g180:c.g180,g365:c.g365};});S['ONLINE']=on;}
  return S;}
 function coSel(k,v){ST[k]=v;rCO();}
-function rCO(){if(TAB!=='co')return;dCh();const g=document.getElementById('g18');g.innerHTML='';
+function rCO(){if(TAB!=='co')return;
+ if(!O.cube||!Object.keys((O.cube.scopes)||{}).length){dCh();const g=document.getElementById('g18');g.innerHTML='';
+  rCOfallback();document.getElementById('bn18').innerHTML+=' <b style="color:#b8860b">The full month-by-month grid (retention, total value, vendor/category slices, lift filter) computes on the next heavy sync &mdash; queued automatically.</b>';return;}
+ dCh();const g=document.getElementById('g18');g.innerHTML='';
+ const money=v=>Math.round(v).toLocaleString();
+ const CU=O.cube;const SC=CU.scopes||{};
+ document.getElementById('bn18').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Shopify-style cohort grid from the REAL Odoo history. Rows = the month a customer made their FIRST purchase; columns = months since. Pick the metric (retention, value per customer, TOTAL value), slice by first-purchase vendor or category, filter weak cohorts out, and compare any two scopes. Month 0 retention = bought AGAIN within their first month.';
+ // dimension: scope OR first-vendor/category slice (slices are network-wide)
+ const dims=[['s:','SCOPE']].concat(Object.keys(CU.ven||{}).length?[['v:','FIRST VENDOR']]:[],Object.keys(CU.cat||{}).length?[['c:','FIRST CATEGORY']]:[]);
+ const dGet=k=>k&&k[1]===':'?(k[0]==='v'?(CU.ven||{})[k.slice(2)]:k[0]==='c'?(CU.cat||{})[k.slice(2)]:SC[k.slice(2)]):null;
+ const dKey=(ST.coD&&dGet(ST.coD))?ST.coD:'s:'+(SC['ALL STORES']?'ALL STORES':Object.keys(SC)[0]);
+ const A=dGet(dKey);const aName=dKey.slice(2);
+ const BKey=(ST.coB2&&dGet(ST.coB2)&&ST.coB2!==dKey)?ST.coB2:'';
+ const B=BKey?dGet(BKey):null;const bName=BKey?BKey.slice(2):'';
+ const MET=ST.coMet||'ret';const VIEW=ST.coView||'m';
+ const LIFT=+(ST.coLift||0);
+ const R0=ST.coR0||'',R1=ST.coR1||'';
+ const allM=Object.keys(A).sort();
+ const opts=(pre,obj)=>Object.keys(obj).sort().map(k=>'<option value="'+pre+k+'"'+((pre+k)===dKey?' selected':'')+'>'+k+'</option>').join('');
+ const optsB=(pre,obj)=>Object.keys(obj).sort().filter(k=>(pre+k)!==dKey).map(k=>'<option value="'+pre+k+'"'+((pre+k)===BKey?' selected':'')+'>'+k+'</option>').join('');
+ const mets={ret:'Customer retention rate',rpc:'Revenue per customer',gpc:'LTGP per customer',tot:'TOTAL revenue (cohort)',tgp:'TOTAL LTGP (cohort)'};
+ const ctl='<div style="margin:0 0 10px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">'
+  +'<span><span class="lbl9">VIEW</span><select onchange="coSel(\'coD\',this.value)"><optgroup label="Scope">'+opts('s:',SC)+'</optgroup>'+(Object.keys(CU.ven||{}).length?'<optgroup label="First-purchase VENDOR (all stores)">'+opts('v:',CU.ven)+'</optgroup>':'')+(Object.keys(CU.cat||{}).length?'<optgroup label="First-purchase CATEGORY (all stores)">'+opts('c:',CU.cat)+'</optgroup>':'')+'</select></span>'
+  +'<span><span class="lbl9">COMPARE WITH</span><select onchange="coSel(\'coB2\',this.value)"><option value="">&mdash; off &mdash;</option><optgroup label="Scope">'+optsB('s:',SC)+'</optgroup>'+(Object.keys(CU.ven||{}).length?'<optgroup label="Vendor">'+optsB('v:',CU.ven)+'</optgroup>':'')+(Object.keys(CU.cat||{}).length?'<optgroup label="Category">'+optsB('c:',CU.cat)+'</optgroup>':'')+'</select></span>'
+  +'<span><span class="lbl9">METRIC</span><select onchange="coSel(\'coMet\',this.value)">'+Object.entries(mets).map(([k,l])=>'<option value="'+k+'"'+(k===MET?' selected':'')+'>'+l+'</option>').join('')+'</select></span>'
+  +'<span><span class="lbl9">CELLS</span><select onchange="coSel(\'coView\',this.value)"><option value="m"'+(VIEW==='m'?' selected':'')+'>Monthly</option><option value="c"'+(VIEW==='c'?' selected':'')+'>Cumulative</option></select></span>'
+  +'<span><span class="lbl9">COHORTS FROM</span><select onchange="coSel(\'coR0\',this.value)"><option value="">first</option>'+allM.map(m=>'<option value="'+m+'"'+(m===R0?' selected':'')+'>'+m+'</option>').join('')+'</select>'
+  +' <span class="lbl9">TO</span><select onchange="coSel(\'coR1\',this.value)"><option value="">latest</option>'+allM.map(m=>'<option value="'+m+'"'+(m===R1?' selected':'')+'>'+m+'</option>').join('')+'</select></span>'
+  +'<span><span class="lbl9">HIDE COHORTS WITH M1 RETENTION &lt;</span><input type="number" value="'+(LIFT||'')+'" min="0" max="100" step="0.5" style="width:64px" onchange="coSel(\'coLift\',this.value)"> %</span>'
+  +'</div>';
+ const months=allM.filter(m=>(!R0||m>=R0)&&(!R1||m<=R1));
+ const cell=(cc,k,cum)=>{ // -> value for metric at offset k
+  if(!cc||k>=cc.m.length)return null;
+  const pick=j=>cc.m[j]||[0,0,0];
+  let act=pick(k)[0],rev=0,gp=0;
+  if(cum){for(let j=0;j<=k;j++){rev+=pick(j)[1];gp+=pick(j)[2];}}else{rev=pick(k)[1];gp=pick(k)[2];}
+  if(MET==='ret')return cc.n?act/cc.n*100:null;
+  if(MET==='rpc')return cc.n?rev/cc.n:null;
+  if(MET==='gpc')return cc.n?gp/cc.n:null;
+  if(MET==='tot')return rev;
+  return gp;};
+ const fmt=v=>v==null?'':(MET==='ret'?v.toFixed(v>=10?1:2)+'%':'E£ '+money(v));
+ const rows2=months.map(m=>({m,A:A[m],B:B?B[m]:null})).filter(r=>r.A&&r.A.n);
+ const kept=rows2.filter(r=>{if(!LIFT)return true;const c=r.A;if(!c||c.m.length<2)return true;return (c.m[1][0]/c.n*100)>=LIFT;});
+ const dropped=rows2.length-kept.length;
+ const maxK=Math.max.apply(null,kept.map(r=>r.A.m.length).concat(B?kept.map(r=>r.B?r.B.m.length:0):[1]));
+ // heat range across the grid (blue mono like Shopify) or A-vs-B green/red
+ let lo=Infinity,hi=-Infinity;
+ kept.forEach(r=>{for(let k=0;k<r.A.m.length;k++){const v=cell(r.A,k,VIEW==='c');if(v!=null&&isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v);}}});
+ const heat=v=>{if(v==null||!isFinite(v)||hi===lo)return'';const t=(v-lo)/(hi-lo);return' style="background:rgba(90,91,240,'+(t*.55+.04).toFixed(2)+');color:'+(t>.6?'#fff':'#1c2333')+'"';};
+ const vsB=(va,vb)=>{if(va==null)return'';if(vb==null||!isFinite(vb)||vb===0)return'';const d=(va-vb)/Math.abs(vb);return d>=.03?' style="background:rgba(18,160,110,'+Math.min(.4,d*.5+.08).toFixed(2)+')"':(d<=-.03?' style="background:rgba(226,58,99,'+Math.min(.35,Math.abs(d)*.4+.07).toFixed(2)+')"':'');};
+ // TOTAL row (all kept cohorts blended)
+ const blend=src=>{const t={n:0,m:[]};kept.forEach(r=>{const c=src==='A'?r.A:r.B;if(!c)return;t.n+=c.n;for(let k=0;k<c.m.length;k++){const a2=t.m[k]=t.m[k]||[0,0,0];a2[0]+=c.m[k][0];a2[1]+=c.m[k][1];a2[2]+=c.m[k][2];}});return t;};
+ const TA=blend('A'),TB=B?blend('B'):null;
+ let h='<div style="overflow-x:auto"><table class="bt" style="min-width:'+(240+maxK*82)+'px"><tr><th style="text-align:left">Cohort</th><th>Customers</th><th>TOTAL '+(MET==='ret'?'@latest':'')+'</th>'+Array.from({length:maxK},(_,k)=>'<th>Month '+k+'</th>').join('')+'</tr>';
+ const rowH=(label,cc,ccB,bold)=>{if(!cc||!cc.n)return'';
+  const last=cc.m.length-1;
+  const tot=MET==='ret'?cell(cc,last,false):cell(cc,last,true);
+  let hh='<tr'+(bold?' style="background:#f6f7fb;font-weight:800"':'')+'><td style="text-align:left;font-weight:800">'+label+'</td><td>'+money(cc.n)+(ccB?' <span style="color:#8a93a6;font-size:10px">/ '+money(ccB.n)+'</span>':'')+'</td><td style="font-weight:800">'+fmt(tot)+'</td>';
+  for(let k=0;k<maxK;k++){
+   if(k>=cc.m.length){hh+='<td></td>';continue;}
+   const v=cell(cc,k,VIEW==='c');
+   const st=B?vsB(v,ccB?cell(ccB,k,VIEW==='c'):null):heat(v);
+   hh+='<td'+st+(ccB?' title="'+bName+': '+fmt(ccB?cell(ccB,k,VIEW==='c'):null)+'"':'')+'>'+fmt(v)+'</td>';}
+  return hh+'</tr>';};
+ h+=rowH('ALL COHORTS',TA,TB,1);
+ kept.forEach(r=>{h+=rowH(r.m,r.A,r.B);});
+ h+='</table></div>';
+ let note='<div style="font-size:10px;color:#8a93a6;margin-top:4px">'+(B?'Cells colored '+aName+' vs '+bName+' at the SAME cohort month + age (green = '+aName+' wins); hover a cell for '+bName+'&rsquo;s value. ':'Blue depth = value within this grid. ')+'TOTAL column = '+(MET==='ret'?'retention at the latest lived month':'lifetime-to-date, cumulative')+'. Month 0 retention = bought a 2nd time within the first month. Blank = the cohort has not lived that month yet.'+(dropped?' <b>'+dropped+' cohort'+(dropped>1?'s':'')+' hidden</b> by the M1-retention filter.':'')+'</div>';
+ pnlCard(g,'odoo','Cohort grid &mdash; '+aName+(B?' vs '+bName:'')+' &middot; '+mets[MET],(VIEW==='c'?'Cumulative':'Monthly')+' cells &middot; real Odoo order history, deterministic customer joins.',ctl+h+note);}
+function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
  const S=_cohScopes();const keys=Object.keys(S);
  document.getElementById('bn18').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Cohort analysis: each month&rsquo;s NEWLY ACQUIRED customers and the gross profit they generated within 30/90/180/365 days of their first purchase &mdash; per branch and ONLINE, from the real Odoo order history. A blank cell = the cohort has not lived that window yet (never asserted early). Comparison mode colors scope A green/red against scope B, window for window.';
