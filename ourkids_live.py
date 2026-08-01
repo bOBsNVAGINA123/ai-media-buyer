@@ -1367,8 +1367,8 @@ def pull_pos_customers():
         byven = {}
         for pid, vs in PFV.items():
             for v in vs: byven.setdefault(VNM.get(v) or v, []).append(pid)
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
-            if len(pids) < 25: continue
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:120]:
+            if len(pids) < 10: continue
             pr = _jprof(pids)
             if pr: pr["cat"] = _jmix(pids, "cat", 6); JOUR["ven"][vn2] = pr
         J0 = XTRA.setdefault("jour", {"scopes": {}, "cat": {}, "ven": {}})
@@ -1550,8 +1550,8 @@ def pull_shop_lines():
         for p, vs in JVN0.items():
             for v in vs: byven.setdefault(v, []).append(p)
         venON = {}
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
-            if len(pids) < 25: continue
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:120]:
+            if len(pids) < 10: continue
             pr = _jp(pids)
             if pr: venON[vn2] = pr
         J0 = XTRA.setdefault("jour", {})
@@ -1796,48 +1796,98 @@ def pull_meta_ads(tok):
         di = {}
         for i in range(60): di[(datetime.date.fromisoformat(c0) + datetime.timedelta(days=i)).isoformat()] = i
         A = {}
+        # v9.6: the single 60-day time_range died to rate limits after ~7 days of rows,
+        # which is why Creative Benchmarks read E£0 / 100% losers. Fetch in 10-day
+        # chunks NEWEST FIRST (so a mid-pull rate limit costs the oldest days, not the
+        # newest), track which days were fully covered, and backfill the rest from the
+        # previous committed payload (data.js), shifted to this window.
+        d0 = datetime.date.fromisoformat(c0)
+        chunks = []
+        e1 = END
+        while e1 >= d0:
+            s1 = max(d0, e1 - datetime.timedelta(days=9))
+            chunks.append((s1, e1)); e1 = s1 - datetime.timedelta(days=1)
+        covered = None
         for acct in meta_accounts(tok):
             allnc = [MCC_ALLNC]
             try:
                 _v2, _n2, _a2 = _cc_discover(acct, tok)
                 if _a2: allnc = _a2
             except Exception: pass
-            p = {"level": "ad", "time_increment": 1, "access_token": tok,
-                 "time_range": json.dumps({"since": c0, "until": c1}),
-                 "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                           "spend,impressions,outbound_clicks,actions,action_values",
-                 "limit": 500}
-            url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
-            pages = 0
-            while url and pages < 60:
-                d = http_json(url); pages += 1
-                if d.get("error"):
-                    log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", str(d.get("error"))[:160]); break
-                for r in (d.get("data") or []):
-                    i = di.get(r.get("date_start"))
-                    if i is None: continue
-                    aid = r.get("ad_id")
-                    a = A.get(aid)
-                    if a is None:
-                        a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
-                                      "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
-                                      "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
-                                      "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                      "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
-                    av = r.get("action_values") or []; ac = r.get("actions") or []
-                    D = a["d"]
-                    D["sp"][i] += float(r.get("spend") or 0)
-                    D["im"][i] += float(r.get("impressions") or 0)
-                    D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
-                    D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
-                    D["fv"][i] += _av(av, ("offline_conversion.purchase",))
-                    D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
-                    D["op"][i] += _av(ac, ("offline_conversion.purchase",))
-                    D["vv"][i] += _av(ac, ("video_view",))
-                    ccv = _cc(av); cca = _cc(ac)
-                    for cid2 in allnc:
-                        D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
-                url = (d.get("paging") or {}).get("next")
+            got = set()
+            for (s1, e2) in chunks:
+                p = {"level": "ad", "time_increment": 1, "access_token": tok,
+                     "time_range": json.dumps({"since": s1.isoformat(), "until": e2.isoformat()}),
+                     "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
+                               "spend,impressions,outbound_clicks,actions,action_values",
+                     "limit": 500}
+                url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+                pages = 0; okc = True
+                while url and pages < 30:
+                    d = http_json(url); pages += 1
+                    if d.get("error"):
+                        log("meta ads :: CHUNK ERROR", acct, s1.isoformat(), "::", str(d.get("error"))[:140]); okc = False; break
+                    for r in (d.get("data") or []):
+                        i = di.get(r.get("date_start"))
+                        if i is None: continue
+                        aid = r.get("ad_id")
+                        a = A.get(aid)
+                        if a is None:
+                            a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
+                                          "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
+                                          "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
+                                          "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
+                        av = r.get("action_values") or []; ac = r.get("actions") or []
+                        D = a["d"]
+                        D["sp"][i] += float(r.get("spend") or 0)
+                        D["im"][i] += float(r.get("impressions") or 0)
+                        D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
+                        D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
+                        D["fv"][i] += _av(av, ("offline_conversion.purchase",))
+                        D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
+                        D["op"][i] += _av(ac, ("offline_conversion.purchase",))
+                        D["vv"][i] += _av(ac, ("video_view",))
+                        ccv = _cc(av); cca = _cc(ac)
+                        for cid2 in allnc:
+                            D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
+                    url = (d.get("paging") or {}).get("next")
+                if okc:
+                    for k in range((e2 - s1).days + 1): got.add(di[(s1 + datetime.timedelta(days=k)).isoformat()])
+                else:
+                    break  # rate-limited: keep what we have; newest chunks are already in
+            covered = got if covered is None else (covered & got)
+        covered = covered or set()
+        log("meta ads :: fresh coverage", len(covered), "of 60 days")
+        # backfill uncovered days from the previous committed payload, index-shifted
+        if len(covered) < 60:
+            try:
+                pd0 = open(os.path.join(DOCS, "data.js")).read()
+                PO = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
+                pW = PO.get("madsW") or {}
+                off = (d0 - datetime.date.fromisoformat(pW["start"])).days if pW.get("start") else None
+                healed = 0
+                if off is not None:
+                    for pa in (PO.get("mads") or []):
+                        pdd = pa.get("d")
+                        if not pdd or not pdd.get("sp"): continue
+                        sh = {k: [(v[i + off] if 0 <= i + off < len(v) else 0) for i in range(60)]
+                              for k, v in pdd.items()}
+                        if not any(sh["sp"]): continue
+                        a = A.get(pa.get("id"))
+                        if a is None:
+                            a = A[pa["id"]] = {k: pa.get(k) for k in ("id", "n", "as", "asid", "cmp", "cid", "acct", "pf", "th", "im", "pl", "st") if pa.get(k) is not None}
+                            a["d"] = {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}
+                        D = a["d"]
+                        for k in D:
+                            v2 = sh.get(k)
+                            if not v2: continue
+                            for i in range(60):
+                                if i not in covered and not D[k][i]: D[k][i] = v2[i]
+                        healed += 1
+                    log("meta ads :: backfilled", healed, "ads from previous payload for", 60 - len(covered), "uncovered days")
+            except Exception as e:
+                log("meta ads :: backfill skipped", str(e)[:120])
         ads = []
         for a in A.values():
             D = a["d"]; sp = sum(D["sp"])
@@ -1852,17 +1902,7 @@ def pull_meta_ads(tok):
         ads.sort(key=lambda a: -a["sp"]); ads = ads[:120]
         lastday = max([max((i for i in range(60) if a["d"]["sp"][i] > 0), default=0) for a in ads] or [0])
         if lastday < 55:
-            log("meta ads :: PARTIAL PULL -- newest spend day is index", lastday, "of 60 ::",
-                "Meta rate-limited the pagination. Using the last complete pull instead.")
-            p2 = os.path.join(DOCS, "mads_fallback.json")
-            if os.path.exists(p2):
-                try:
-                    fb = json.load(open(p2))
-                    fdays = max([max((i for i in range(len((a.get("d") or {}).get("sp") or [])) if a["d"]["sp"][i] > 0), default=0) for a in fb if a.get("d")] or [0])
-                    if fdays > lastday:
-                        log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
-                        return fb
-                except Exception: pass
+            log("meta ads :: STILL PARTIAL after chunked pull + backfill -- newest spend day is index", lastday, "of 60")
         def _f0(a2):
             sp2 = a2["d"]["sp"]
             for k in range(len(sp2)):
