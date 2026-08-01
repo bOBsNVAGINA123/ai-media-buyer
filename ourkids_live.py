@@ -1364,8 +1364,8 @@ def pull_pos_customers():
         byven = {}
         for pid, vs in PFV.items():
             for v in vs: byven.setdefault(VNM.get(v) or v, []).append(pid)
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:15]:
-            if len(pids) < 40: continue
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
+            if len(pids) < 25: continue
             pr = _jprof(pids)
             if pr: pr["cat"] = _jmix(pids, "cat", 6); JOUR["ven"][vn2] = pr
         J0 = XTRA.setdefault("jour", {"scopes": {}, "cat": {}, "ven": {}})
@@ -1410,9 +1410,9 @@ def pull_pos_customers():
         for br2, pids in fb.items(): CUBE["scopes"][br2] = _cubeb(pids)
         CUBE["scopes"]["ALL STORES"] = _cubeb(allpids)
         for cg, pids in bycat.items():
-            if len(pids) >= 200: CUBE["cat"][cg] = _cubeb(pids)
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:12]:
-            if len(pids) >= 200: CUBE["ven"][vn2] = _cubeb(pids)
+            if len(pids) >= 100: CUBE["cat"][cg] = _cubeb(pids)
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:20]:
+            if len(pids) >= 100: CUBE["ven"][vn2] = _cubeb(pids)
         X0 = XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})
         X0["scopes"].update(CUBE["scopes"]); X0["ven"] = CUBE["ven"]; X0["cat"] = CUBE["cat"]
         log("cohort cube :: scopes", len(X0["scopes"]), ":: ven slices", len(CUBE["ven"]),
@@ -1544,8 +1544,8 @@ def pull_shop_lines():
         for p, vs in JVN0.items():
             for v in vs: byven.setdefault(v, []).append(p)
         venON = {}
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:15]:
-            if len(pids) < 40: continue
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
+            if len(pids) < 25: continue
             pr = _jp(pids)
             if pr: venON[vn2] = pr
         J0 = XTRA.setdefault("jour", {})
@@ -1804,7 +1804,13 @@ def pull_meta_ads(tok):
                         log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
                         return fb
                 except Exception: pass
-        ids = [a["id"] for a in ads[:40] if a["id"]]
+        def _f0(a2):
+            sp2 = a2["d"]["sp"]
+            for k in range(len(sp2)):
+                if sp2[k] > 0: return k
+            return -1
+        lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
+        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
         for i in range(0, len(ids), 25):
             d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
@@ -2713,7 +2719,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.0 (per-platform store-buyer crossover + Google campaign/asset-group/ad attribution)")
+    log("collector v9.1 (launch thumbnails + wider vendor coverage in journeys/cohort slices)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
