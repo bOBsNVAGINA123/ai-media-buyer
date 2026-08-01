@@ -103,7 +103,7 @@ jobs:
         run: |
           git config user.name "ourkids-dashboard"
           git config user.email "bot@users.noreply.github.com"
-          git add docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/index.html || true
+          git add docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/index.html docs/ourkids/mads_fallback.json || true
           git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || { echo "no changes to commit"; exit 0; }
           # v6.3: rebase BEFORE the first push, not only after a rejection. A manual
           # workflow_dispatch fired while a scheduled run is already in flight queues on
