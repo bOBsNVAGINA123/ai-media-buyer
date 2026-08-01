@@ -930,22 +930,25 @@ def pull_cohorts():
             C2 = {}
             for pid2, f2 in first.items():
                 cm = f2[:7]
-                cc = C2.setdefault(cm, {"n": 0, "m": {}})
+                cc = C2.setdefault(cm, {"n": 0, "r": 0, "m": {}})
                 cc["n"] += 1
+                ret2 = False
                 for mo2, e2 in PMO2.get(pid2, {}).items():
                     k = _mo(cm, mo2)
                     if k < 0 or k > 17: continue
                     a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
-                    if (k > 0 and e2[0] >= 1) or (k == 0 and e2[0] >= 2): a3[0] += 1
+                    if (k > 0 and e2[0] >= 1) or (k == 0 and e2[0] >= 2): a3[0] += 1; ret2 = True
                     a3[1] += e2[1]; a3[2] += e2[2]
+                if ret2: cc["r"] += 1
             onl = {}
             for cm, cc in C2.items():
                 mx = _mo(cm, CURM2)
                 if mx < 0: continue
-                onl[cm] = {"n": cc["n"], "m": [[cc["m"].get(k, [0, 0, 0])[0],
-                                                round(cc["m"].get(k, [0, 0, 0])[1]),
-                                                round(cc["m"].get(k, [0, 0, 0])[2])]
-                                               for k in range(0, min(17, mx) + 1)]}
+                onl[cm] = {"n": cc["n"], "r": cc["r"],
+                           "m": [[cc["m"].get(k, [0, 0, 0])[0],
+                                  round(cc["m"].get(k, [0, 0, 0])[1]),
+                                  round(cc["m"].get(k, [0, 0, 0])[2])]
+                                 for k in range(0, min(17, mx) + 1)]}
             XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})["scopes"]["ONLINE"] = onl
             log("online cohort cube :: cohorts", len(onl))
         except Exception as e:
@@ -1388,23 +1391,26 @@ def pull_pos_customers():
                 f = first.get(p)
                 if not f: continue
                 cm = f[0][:7]
-                cc = C.setdefault(cm, {"n": 0, "m": {}})
+                cc = C.setdefault(cm, {"n": 0, "r": 0, "m": {}})
                 cc["n"] += 1
+                ret = False
                 for mo, e in PMO.get(p, {}).items():
                     k = _moff(cm, mo)
                     if k < 0 or k > 17: continue
                     a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
                     nord = len(e[0])
-                    if (k > 0 and nord >= 1) or (k == 0 and nord >= 2): a3[0] += 1
+                    if (k > 0 and nord >= 1) or (k == 0 and nord >= 2): a3[0] += 1; ret = True
                     a3[1] += e[1]; a3[2] += e[2]
+                if ret: cc["r"] += 1
             out = {}
             for cm, cc in C.items():
                 mx = _moff(cm, CURM)
                 if mx < 0: continue
-                out[cm] = {"n": cc["n"], "m": [[cc["m"].get(k, [0, 0, 0])[0],
-                                                round(cc["m"].get(k, [0, 0, 0])[1]),
-                                                round(cc["m"].get(k, [0, 0, 0])[2])]
-                                               for k in range(0, min(17, mx) + 1)]}
+                out[cm] = {"n": cc["n"], "r": cc["r"],
+                           "m": [[cc["m"].get(k, [0, 0, 0])[0],
+                                  round(cc["m"].get(k, [0, 0, 0])[1]),
+                                  round(cc["m"].get(k, [0, 0, 0])[2])]
+                                 for k in range(0, min(17, mx) + 1)]}
             return out
         CUBE = {"scopes": {}, "ven": {}, "cat": {}}
         for br2, pids in fb.items(): CUBE["scopes"][br2] = _cubeb(pids)
@@ -1711,10 +1717,57 @@ def pull_google_attr():
         log("google attribution models ::", " | ".join(
             "%s=%s(%sd)%s" % (a2["n"], a2["model"], a2["win"], " PRIMARY" if a2["pri"] else "")
             for a2 in out["actions"][:8]))
+    # v9.2: per-campaign CONVERSION-ACTION breakdown -- proves WHICH events each campaign
+    # counts. metrics.conversions only counts actions used for bidding, all_conversions
+    # counts everything -- the gap per row exposes valueless actions steering spend.
+    out["cmpAct"] = []
+    for r in q("SELECT campaign.name, segments.conversion_action_name, "
+               "segments.conversion_action_category, metrics.conversions, metrics.conversions_value, "
+               "metrics.all_conversions, metrics.all_conversions_value FROM campaign %s "
+               "AND metrics.all_conversions > 0" % W):
+        c = r.get("campaign", {}); m = r.get("metrics", {}); sg = r.get("segments", {})
+        out["cmpAct"].append({"cmp": (c.get("name") or "")[:70],
+                              "a": (sg.get("conversionActionName") or "")[:60],
+                              "cat": sg.get("conversionActionCategory", ""),
+                              "cn": round(float(m.get("conversions", 0)), 1),
+                              "cv": round(float(m.get("conversionsValue", 0))),
+                              "an": round(float(m.get("allConversions", 0)), 1),
+                              "av": round(float(m.get("allConversionsValue", 0)))})
+    out["cmpAct"].sort(key=lambda x: -x["an"])
+    out["cmpAct"] = out["cmpAct"][:150]
+    # v9.2: OFFLINE / store-side totals per conversion action (store visits, calls,
+    # directions live only in all_conversions -- Google's own offline-attributed numbers)
+    out["offline"] = []
+    for r in q("SELECT conversion_action.name, conversion_action.category, conversion_action.type, "
+               "metrics.all_conversions, metrics.all_conversions_value, "
+               "metrics.conversions, metrics.conversions_value FROM conversion_action %s "
+               "AND metrics.all_conversions > 0" % W):
+        ca = r.get("conversionAction", {}); m = r.get("metrics", {})
+        out["offline"].append({"n": (ca.get("name") or "")[:60], "cat": ca.get("category", ""),
+                               "t": ca.get("type", ""),
+                               "an": round(float(m.get("allConversions", 0)), 1),
+                               "av": round(float(m.get("allConversionsValue", 0))),
+                               "cn": round(float(m.get("conversions", 0)), 1),
+                               "cv": round(float(m.get("conversionsValue", 0)))})
+    out["offline"].sort(key=lambda x: -x["an"])
+    # v9.2: the ASSETS inside each PMax asset group. Google exposes NO per-asset
+    # conversion metrics here -- only its own performance label -- so that is what we show.
+    out["assets"] = []
+    for r in q("SELECT campaign.name, asset_group.name, asset_group_asset.field_type, "
+               "asset_group_asset.performance_label, asset.type, asset.name, asset.text_asset.text "
+               "FROM asset_group_asset WHERE asset_group_asset.status = 'ENABLED'"):
+        a3 = r.get("asset", {}); ga = r.get("assetGroupAsset", {})
+        txt = ((a3.get("textAsset") or {}).get("text") or a3.get("name") or "")[:80]
+        out["assets"].append({"cmp": (r.get("campaign", {}).get("name") or "")[:50],
+                              "ag": (r.get("assetGroup", {}).get("name") or "")[:50],
+                              "f": ga.get("fieldType", ""), "t": a3.get("type", ""),
+                              "x": txt, "pl": ga.get("performanceLabel", "")})
+    out["assets"] = out["assets"][:400]
     for k in ("campaigns", "assetGroups", "ads"): out[k].sort(key=lambda x: -x["sp"])
     out["ads"] = out["ads"][:40]
     log("google attr :: campaigns", len(out["campaigns"]), ":: asset groups", len(out["assetGroups"]),
-        ":: ads", len(out["ads"]))
+        ":: ads", len(out["ads"]), ":: cmp-action rows", len(out["cmpAct"]),
+        ":: offline actions", len(out["offline"]), ":: assets", len(out["assets"]))
     return out
 
 def pull_meta_ads(tok):
@@ -1939,6 +1992,181 @@ def pull_obj_daily(tok, bev):
     log("budget-object daily series ::", len(out), "of", len(want), "event objects have delivery data")
     return out
 
+def _norm_contact(r):
+    """Odoo partner -> (email_lower, egypt_phone_digits '20...'). Empty string when unusable."""
+    em = (r.get("email") or "").strip().lower()
+    if "@" not in em: em = ""
+    ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
+    if ph.startswith("00"): ph = ph[2:]
+    if ph.startswith("0"): ph = "20" + ph[1:]
+    elif ph and not ph.startswith("20") and len(ph) == 10: ph = "20" + ph
+    if len(ph) < 11: ph = ""
+    return em, ph
+
+def _branch_transactions(days):
+    """Per-branch POS transactions with buyer contact, for the Google store-sales upload:
+    [(branch, email, phone, amount, 'YYYY-MM-DD HH:MM:SS')]. One row per ORDER (lines summed).
+    Anonymous walk-in partners are excluded before anything is read."""
+    cutoff = (END - datetime.timedelta(days=days)).isoformat()
+    ANON = anon_partner_ids()
+    orders = {}
+    off = 0
+    while off < 400000:
+        page = oexec("report.pos.order", "search_read",
+                     [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
+                     {"fields": ["partner_id", "config_id", "date", "price_total", "order_id"],
+                      "limit": 10000, "offset": off, "order": "id"})
+        if not page: break
+        for r in page:
+            pid = r["partner_id"][0]
+            if pid in ANON: continue
+            cfg = (r.get("config_id") or [0, ""])[1]
+            br = next((b for k, b in POS_CFG if k in cfg), None)
+            if not br: continue
+            oid = (r.get("order_id") or [0])[0]
+            if not oid: continue
+            o = orders.setdefault(oid, [pid, br, str(r.get("date") or cutoff), 0.0])
+            o[3] += float(r.get("price_total") or 0)
+        off += len(page)
+        if len(page) < 10000: break
+    pids = sorted({o[0] for o in orders.values()})
+    CT = {}
+    for i in range(0, len(pids), 2000):
+        for r in (oexec("res.partner", "read", [pids[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
+            CT[r["id"]] = _norm_contact(r)
+    out = []
+    for pid, br, d, amt in orders.values():
+        em, ph = CT.get(pid, ("", ""))
+        dt = d[:19] if len(d) > 10 else d[:10] + " 12:00:00"
+        if (em or ph) and amt > 0: out.append((br, em, ph, amt, dt))
+    log("branch transactions ::", len(orders), "orders in", days, "d ::", len(out), "with contact+amount")
+    return out
+
+def sync_gmb_branch_sales():
+    """v9.2, per the owner's instruction: make store events FIRE TO THE RELEVANT BRANCH on
+    Google. One STORE_SALES conversion action per branch (find-by-name, idempotent), then
+    real Odoo POS transactions uploaded to each branch's OWN action via offlineUserDataJobs
+    (STORE_SALES_UPLOAD_FIRST_PARTY). Emails/phones SHA256-hashed to Google's spec before
+    anything leaves the job; amounts in EGP micros. 30d backfill the run the actions are
+    created, 4d top-ups after. Kill switch: GMB_BRANCH_SALES=off.
+    Gated extras (touch LIVE bidding, so OFF until the owner flips them):
+      GMB_GOALS=on          -> each 'GMB <branch>' PMax campaign optimises ONLY its
+                               branch's store-sale action (custom goal per campaign)
+      GOOGLE_DEMOTE_CALLS=on -> 'Clicks to call' loses PRIMARY so valueless calls stop
+                               steering bidding account-wide"""
+    if os.environ.get("GMB_BRANCH_SALES", "on").lower() == "off": return
+    cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not cid: return
+    import hashlib
+    try:
+        at, hd = _gads_hdr()
+        if not at: log("gmb branch sales :: skipped, no google creds"); return
+        base = "https://googleads.googleapis.com/v21/customers/%s" % cid
+        def q(gql):
+            d = http_json(base + "/googleAds:searchStream", {"query": gql}, hd)
+            rows = []
+            for b2 in (d if isinstance(d, list) else [d]): rows += b2.get("results", [])
+            return rows
+        BR = ["Dokki", "Nasr City", "Smouha", "Mall of Arabia", "October", "New Cairo", "Zayed"]
+        have = {}
+        for r in q("SELECT conversion_action.resource_name, conversion_action.name "
+                   "FROM conversion_action WHERE conversion_action.status = 'ENABLED'"):
+            ca = r.get("conversionAction", {})
+            have[ca.get("name") or ""] = ca.get("resourceName")
+        arn = {}; created = 0
+        for br in BR:
+            nm = "OurKids Store Sale - %s (auto)" % br
+            if have.get(nm): arn[br] = have[nm]; continue
+            d = http_json(base + "/conversionActions:mutate",
+                          {"operations": [{"create": {"name": nm, "type": "STORE_SALES",
+                            "category": "PURCHASE", "status": "ENABLED",
+                            "valueSettings": {"defaultValue": 0.0, "alwaysUseDefaultValue": False}}}]}, hd)
+            try:
+                arn[br] = d["results"][0]["resourceName"]; created += 1
+                log("gmb branch sales :: created action", nm)
+            except Exception:
+                log("gmb branch sales :: ACTION CREATE FAILED", br, "::", str(d)[:600])
+        if not arn: log("gmb branch sales :: no branch actions available, stopping"); return
+        win = 30 if created else 4
+        tx = _branch_transactions(win)
+        ops = []; per = {}
+        for br, em, ph, amt, dt in tx:
+            rn = arn.get(br)
+            if not rn: continue
+            ids = []
+            if em: ids.append({"hashedEmail": hashlib.sha256(em.encode()).hexdigest()})
+            if ph: ids.append({"hashedPhoneNumber": hashlib.sha256(("+" + ph).encode()).hexdigest()})
+            if not ids: continue
+            ops.append({"create": {"userIdentifiers": ids,
+                        "transactionAttribute": {"conversionAction": rn, "currencyCode": "EGP",
+                            "transactionAmountMicros": str(int(amt * 1e6)),
+                            "transactionDateTime": dt + "+02:00",
+                            "storeAttribute": {"storeCode": br[:64]}}}})
+            per[br] = per.get(br, 0) + 1
+        if not ops: log("gmb branch sales :: nothing to upload"); return
+        d = http_json(base + "/offlineUserDataJobs:create",
+                      {"job": {"type": "STORE_SALES_UPLOAD_FIRST_PARTY",
+                               "storeSalesMetadata": {"loyaltyFraction": 1.0,
+                                                      "transactionUploadFraction": 1.0}}}, hd)
+        job = d.get("resourceName")
+        if not job: log("gmb branch sales :: JOB CREATE FAILED ::", str(d)[:800]); return
+        sent = 0
+        for i in range(0, len(ops), 5000):
+            d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
+                          {"operations": ops[i:i + 5000], "enablePartialFailure": True}, hd)
+            if d.get("error"): log("gmb branch sales :: addOperations failed ::", str(d.get("error"))[:400]); break
+            sent += len(ops[i:i + 5000])
+        d = http_json("https://googleads.googleapis.com/v21/%s:run" % job, {}, hd)
+        log("gmb branch sales :: window", win, "d :: transactions sent", sent, "::",
+            " ".join("%s=%d" % (b, c) for b, c in sorted(per.items())),
+            ":: job run", "ok" if not d.get("error") else str(d.get("error"))[:200])
+        # ---- gated: wire each GMB campaign to ITS branch's action (LIVE bidding change)
+        if os.environ.get("GMB_GOALS", "off").lower() == "on":
+            goals = {}
+            for r in q("SELECT custom_conversion_goal.resource_name, custom_conversion_goal.name "
+                       "FROM custom_conversion_goal"):
+                g2 = r.get("customConversionGoal", {})
+                goals[g2.get("name") or ""] = g2.get("resourceName")
+            for br in BR:
+                gn = "Store Sale %s (auto)" % br
+                if gn in goals or br not in arn: continue
+                d = http_json(base + "/customConversionGoals:mutate",
+                              {"operations": [{"create": {"name": gn, "conversionActions": [arn[br]],
+                                                          "status": "ENABLED"}}]}, hd)
+                try: goals[gn] = d["results"][0]["resourceName"]; log("gmb goals :: created", gn)
+                except Exception: log("gmb goals :: GOAL CREATE FAILED", br, "::", str(d)[:400])
+            ALIAS = {"hassan maamon": "Nasr City", "hassan maamoun": "Nasr City"}
+            for r in q("SELECT campaign.id, campaign.name FROM campaign "
+                       "WHERE campaign.name LIKE '%GMB%' AND campaign.status = 'ENABLED'"):
+                c = r.get("campaign", {}); nm2 = (c.get("name") or ""); low = nm2.lower()
+                br = next((b for b in BR if b.lower() in low),
+                          next((b for k2, b in ALIAS.items() if k2 in low), None))
+                g3 = goals.get("Store Sale %s (auto)" % (br or ""))
+                if not (br and g3):
+                    log("gmb goals :: no branch match for campaign", nm2[:50]); continue
+                d = http_json(base + "/conversionGoalCampaignConfigs:mutate",
+                              {"operations": [{"update": {
+                                  "resourceName": "customers/%s/conversionGoalCampaignConfigs/%s" % (cid, c.get("id")),
+                                  "goalConfigLevel": "CAMPAIGN", "customConversionGoal": g3},
+                                  "updateMask": "goalConfigLevel,customConversionGoal"}]}, hd)
+                log("gmb goals ::", nm2[:40], "->", br,
+                    "ok" if not d.get("error") else "FAILED :: " + str(d.get("error"))[:300])
+        # ---- gated: demote 'Clicks to call' from PRIMARY (stops E0-value calls bidding)
+        if os.environ.get("GOOGLE_DEMOTE_CALLS", "off").lower() == "on":
+            for r in q("SELECT conversion_action.resource_name, conversion_action.name, "
+                       "conversion_action.primary_for_goal FROM conversion_action "
+                       "WHERE conversion_action.status = 'ENABLED'"):
+                ca = r.get("conversionAction", {})
+                if "call" in (ca.get("name") or "").lower() and ca.get("primaryForGoal"):
+                    d = http_json(base + "/conversionActions:mutate",
+                                  {"operations": [{"update": {"resourceName": ca.get("resourceName"),
+                                                              "primaryForGoal": False},
+                                                   "updateMask": "primaryForGoal"}]}, hd)
+                    log("demote calls ::", ca.get("name"),
+                        "ok" if not d.get("error") else "FAILED :: " + str(d.get("error"))[:300])
+    except Exception as e:
+        log("gmb branch sales :: fail ::", str(e)[:200])
+
 def _offline_contacts(days):
     """Recent POS buyers -> [(email_lower, phone_digits_egypt)] -- normalised RAW pairs.
     Each platform hashes to its own spec (Meta: digits; Google: E.164 with +)."""
@@ -1959,13 +2187,7 @@ def _offline_contacts(days):
     pl = list(pids)
     for i in range(0, len(pl), 2000):
         for r in (oexec("res.partner", "read", [pl[i:i + 2000]], {"fields": ["email", "phone", "mobile"]}) or []):
-            em = (r.get("email") or "").strip().lower()
-            if "@" not in em: em = ""
-            ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
-            if ph.startswith("00"): ph = ph[2:]
-            if ph.startswith("0"): ph = "20" + ph[1:]
-            elif ph and not ph.startswith("20") and len(ph) == 10: ph = "20" + ph
-            if len(ph) < 11: ph = ""
+            em, ph = _norm_contact(r)
             if em or ph: out.append((em, ph))
     # v8.9 dedup: many partner records share an email/phone (Odoo duplicate customers);
     # send each identity ONCE per run.
@@ -2035,9 +2257,10 @@ def sync_google_audience():
         if not ops: log("google audience :: nothing to send"); return
         d = http_json(base + "/offlineUserDataJobs:create",
                       {"job": {"type": "CUSTOMER_MATCH_USER_LIST",
-                               "customerMatchUserListMetadata": {"userList": rn}}}, hd)
+                               "customerMatchUserListMetadata": {"userList": rn,
+                                   "consent": {"adUserData": "GRANTED", "adPersonalization": "GRANTED"}}}}, hd)
         job = d.get("resourceName")
-        if not job: log("google audience :: job create failed ::", str(d)[:200]); return
+        if not job: log("google audience :: job create failed ::", str(d)[:800]); return
         sent = 0
         for i in range(0, len(ops), 5000):
             d = http_json("https://googleads.googleapis.com/v21/%s:addOperations" % job,
@@ -2719,7 +2942,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.1 (launch thumbnails + wider vendor coverage in journeys/cohort slices)")
+    log("collector v9.2 (per-branch Google store-sale events + campaign conversion-action breakdown + PMax assets)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -2830,6 +3053,7 @@ def build():
     cre = safe(pull_campaign_reach, _mtok) or {}
     safe(sync_offline_audience, _mtok)
     safe(sync_google_audience)
+    safe(sync_gmb_branch_sales)
     gattr = safe(pull_google_attr) or {}
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
