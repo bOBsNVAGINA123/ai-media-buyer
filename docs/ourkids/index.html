@@ -47,14 +47,29 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 .modal{position:fixed;inset:0;background:rgba(20,26,46,.55);display:flex;align-items:center;justify-content:center;z-index:80}
 .mbox{background:#fff;border-radius:18px;padding:20px 22px;width:min(1100px,94vw);max-height:90vh;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.35)}
 .mx{float:right;cursor:pointer;font-size:18px;font-weight:800;color:#9aa3b5;padding:2px 8px;border-radius:8px}.mx:hover{background:#eef0fb;color:#5a5bf0}
-.hide{display:none!important}@media(max-width:900px){.grid{grid-template-columns:1fr}}
-.qm{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#5a5bf0;color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;cursor:pointer;margin-left:5px;vertical-align:middle;user-select:none;opacity:.55}.qm:hover{opacity:1}.prow{border:1px solid #e6e9f2;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}.plab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a93a6;margin-top:8px}.ptxt{font-size:13px;line-height:1.55;color:#334155}.pwarn{background:#fff6ed;border-left:3px solid #f08c2e;padding:8px 10px;border-radius:0 8px 8px 0;margin-top:8px}details.insx{margin-top:8px}details.insx>summary{cursor:pointer;font-size:10.5px;font-weight:800;color:#5a5bf0;letter-spacing:.05em;text-transform:uppercase;list-style:none;user-select:none}details.insx>summary::-webkit-details-marker{display:none}details.insx>summary::before{content:'\25B8  '}details.insx[open]>summary::before{content:'\25BE  '}details.pmore{margin-top:10px}details.pmore>summary{cursor:pointer;font-size:11px;font-weight:800;color:#5a5bf0}</style></head><body>
+.hide{display:none!important}@media(max-width:900px){.grid{grid-template-columns:1fr}.rtDbG{grid-template-columns:1fr!important}}
+.qm{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#5a5bf0;color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;cursor:pointer;margin-left:5px;vertical-align:middle;user-select:none;opacity:.55}.qm:hover{opacity:1}.prow{border:1px solid #e6e9f2;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}.plab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a93a6;margin-top:8px}.ptxt{font-size:13px;line-height:1.55;color:#334155}.pwarn{background:#fff6ed;border-left:3px solid #f08c2e;padding:8px 10px;border-radius:0 8px 8px 0;margin-top:8px}details.insx{margin-top:8px}details.insx>summary{cursor:pointer;font-size:10.5px;font-weight:800;color:#5a5bf0;letter-spacing:.05em;text-transform:uppercase;list-style:none;user-select:none}details.insx>summary::-webkit-details-marker{display:none}details.insx>summary::before{content:'\25B8  '}details.insx[open]>summary::before{content:'\25BE  '}details.pmore{margin-top:10px}details.pmore>summary{cursor:pointer;font-size:11px;font-weight:800;color:#5a5bf0}
+/* ===== rt: retention economics ===== */
+.rtp{display:flex;flex-direction:column;align-items:center;gap:5px;margin:14px 0 6px}
+.rtp .r{border-radius:9px;padding:7px 10px;font-size:11px;font-weight:800;text-align:center;color:#8a93a6;background:#f2f4f9;border:1px solid #e6e9f1;cursor:default;transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s}
+.rtp .r small{display:block;font-size:9.5px;font-weight:600;color:inherit;opacity:.75;margin-top:1px}
+.rtp .r.on{color:#fff;border-color:transparent;transform:scale(1.04);box-shadow:0 8px 20px rgba(20,30,60,.22)}
+.rtp .r.tg.on{background:linear-gradient(135deg,#e8bd4f,#b8860b)}.rtp .r.ts.on{background:linear-gradient(135deg,#aeb6c6,#7c869c)}
+.rtp .r.tb.on{background:linear-gradient(135deg,#c98d4f,#96612c)}.rtp .r.tt2.on{background:linear-gradient(135deg,#8b95a8,#5b6474)}
+.rtp .r.tr.on{background:linear-gradient(135deg,#c25642,#8f2f1f)}
+.rtGr{font-size:44px;font-weight:800;line-height:1;letter-spacing:-1px}
+.rtDebt{font-size:30px;font-weight:800;letter-spacing:-.5px}
+.rtLaw{background:#eef0fb;border:1px solid #e0e3f6;border-radius:11px;padding:9px 12px;font-size:11.5px;color:#4b4fd0;font-weight:600;line-height:1.5;margin-top:10px}
+#g20 input[type=range]{accent-color:var(--indigo);width:100%;padding:0;background:transparent;border:none}
+#g20 table.bt input{width:118px}
+.rtNote{font-size:10.5px;color:#8a93a6;line-height:1.5;margin-top:8px}
+</style></head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
 <input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
 <div class="wrap hide" id="app">
 <div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok</div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
-<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline/Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t15" onclick="tab('cp')">Customer Portfolio</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t16" onclick="tab('cj')">Journeys</div><div class="tab" id="t17" onclick="tab('bg')">Launches &amp; Budgets</div><div class="tab" id="t19" onclick="tab('mb')">Creative Benchmarks</div><div class="tab" id="t18" onclick="tab('co')">Cohorts</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
+<div class="tabs"><div class="tab on" id="t1" onclick="tab('on')">Shopify</div><div class="tab" id="t2" onclick="tab('off')">Offline/Branches</div><div class="tab" id="t3" onclick="tab('pl')">Plan</div><div class="tab" id="t4" onclick="tab('pn')">Shopify P&L</div><div class="tab" id="t7" onclick="tab('rp')">Retail P&L</div><div class="tab" id="t15" onclick="tab('cp')">Customer Portfolio</div><div class="tab" id="t5" onclick="tab('me')">Media Efficiency</div><div class="tab" id="t6" onclick="tab('ao')">Ads &rarr; Stores</div><div class="tab" id="t8" onclick="tab('vz')">Charts</div><div class="tab" id="t9" onclick="tab('iq')">Insights</div><div class="tab" id="t10" onclick="tab('mi')">Paid Insights</div><div class="tab" id="t13" onclick="tab('ai')"><span style="color:#f0a500">&#9733;</span> AI Insights</div><div class="tab" id="t12" onclick="tab('vl')">Vendors &amp; Products</div><div class="tab" id="t14" onclick="tab('cs')">Costs &amp; Payroll</div><div class="tab" id="t16" onclick="tab('cj')">Journeys</div><div class="tab" id="t17" onclick="tab('bg')">Launches &amp; Budgets</div><div class="tab" id="t19" onclick="tab('mb')">Creative Benchmarks</div><div class="tab" id="t18" onclick="tab('co')">Cohorts</div><div class="tab" id="t20" onclick="tab('rt')">Retention</div><div class="tab" id="t11" onclick="tab('rm')">README &nbsp;?</div></div>
 <div id="stale"></div>
 <div id="onC"><div class="bar"><label>Range</label><span id="pre"></span><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>Compare</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
@@ -71,7 +86,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -189,6 +204,118 @@ function insWrap(id){const el=document.getElementById(id);if(!el||!el.querySelec
  try{el.querySelectorAll('.ins').forEach(x=>{if(x.closest&&x.closest('details.insx'))return;
   const d=document.createElement('details');d.className='insx';const sm=document.createElement('summary');sm.innerHTML='Read insights';
   d.appendChild(sm);x.parentNode.insertBefore(d,x);d.appendChild(x);});}catch(e){}}
+/* ================= RETENTION ECONOMICS ("rt") =================
+   theartofecomm.org retention-calculator, wired to OurKids' own numbers.
+   RCM = Net Revenue - COGS - CAC.  OCAS = OpEx + next month's CAC + 3 months of stock.
+   Tier ladder + Retention Debt formulas match the original calculator exactly.
+   Inventory bought = Odoo purchase.order (state purchase/done, amount_untaxed by month),
+   pulled READ-ONLY 2026-08-02 via odoo_read.py. Static: the nightly sync does NOT refresh it. */
+const RT_INV={'2024-08':12386089,'2024-09':9485606,'2024-10':9476203,'2024-11':10440256,'2024-12':6358253,'2025-01':7710373,'2025-02':9080803,'2025-03':19689199,'2025-04':16299852,'2025-05':16964379,'2025-06':11688952,'2025-07':26818191,'2025-08':11653147,'2025-09':33071829,'2025-10':26003316,'2025-11':11767814,'2025-12':16168201,'2026-01':8565998,'2026-02':14209457,'2026-03':18082270,'2026-04':30425104,'2026-05':24591028,'2026-06':18352585,'2026-07':29704299};
+const RT_PULL='2026-08-02';
+const RT_TIERS=[
+ ['gold','A','Gold','tg','Net Revenue covers everything: COGS + CAC + OpEx + next month\u2019s CAC + 3 months of stock. Sovereign \u2014 you grow without raising money and take share while weaker brands stall. The job now is keeping the 30-day repurchase rate from slipping.'],
+ ['silver','B','Silver','ts','Net Revenue covers costs, acquisition AND next month\u2019s customers. This month\u2019s profit buys next month\u2019s customers \u2014 compounding. Push the 30-day repurchase rate to reach Gold before a CAC spike pulls you back.'],
+ ['bronze','C','Bronze','tb','Net Revenue covers costs and overhead \u2014 and nothing past them. Profitable on paper, but scaling still means debt or dilution. This is the trap: it feels safe while compounding never starts.'],
+ ['tin','D','Tin','tt2','Net Revenue covers costs and only 75\u201399% of overhead. Outside cash still pays for basics; one bad CAC month drops you into the red. Cutting costs buys time \u2014 it doesn\u2019t fix the repurchase rate.'],
+ ['rust','E','Rust','tr','Net Revenue doesn\u2019t even cover costs plus three quarters of overhead. Every order loses money and more ad spend intensifies it. Retention-based, and very fixable.']];
+let RT={sc:'BLENDED',m:null};let RT_AM=null;
+function rtM(){return Object.keys(O.nr||{}).sort();}
+function rtAddM(m,d){let y=+m.slice(0,4),mo=+m.slice(5,7)+d;while(mo<1){mo+=12;y--;}while(mo>12){mo-=12;y++;}return y+'-'+String(mo).padStart(2,'0');}
+function rtDefM(){const t=(O.today||'9999').slice(0,7);const M=rtM();for(let i=M.length-1;i>=0;i--)if(M[i]<t)return M[i];return M[M.length-1]||null;}
+function rtExpKey(m,sub){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.toLowerCase().indexOf(sub)>=0)t+=E[k];return t;}
+function rtExpTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)t+=E[k];return t;}
+function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
+function rtBase(m){
+ const nr=O.nr[m]||{};
+ const on={rev:(nr.nrev||0)+(nr.rrev||0),gp:(nr.ngp||0)+(nr.rgp||0),ord:(nr.nord||0)+(nr.rord||0),nc:nr.nord||0};
+ const bd={};const st={rev:0,gp:0,ord:0,nc:0,rent:0,sal:0};
+ Object.keys(O.pos||{}).forEach(b=>{const p=(O.pos[b]||{})[m],c=(O.bcost[b]||{})[m]||{},n=(O.bnr[b]||{})[m]||{};
+  const d={rev:p?p[0]:0,gp:p?p[1]:0,ord:p?p[2]:0,nc:n.nc||0,rent:c.rent||0,sal:c.sal||0};bd[b]=d;
+  st.rev+=d.rev;st.gp+=d.gp;st.ord+=d.ord;st.nc+=d.nc;st.rent+=d.rent;st.sal+=d.sal;});
+ if(!RT_AM)RT_AM=adMonthly();
+ const ads=(RT_AM[m]||{}).s||0;
+ const offAdv=rtExpKey(m,'offline advertising');
+ const shared=Math.max(0,rtExpTot(m)-offAdv-rtExpKey(m,'branches')-st.sal);
+ return {on:on,bd:bd,st:st,ads:ads,offAdv:offAdv,shared:shared,bl:on.rev+st.rev};
+}
+function rtScopeD(sc,m){
+ const B=rtBase(m);let d,dir=0,cac=0,srcC='',srcO='';
+ if(sc==='ONLINE'){d=B.on;cac=B.ads;srcC='Meta + Google + TikTok spend for '+m+(B.ads?' (ads sync)':' \u2014 no ad data this month (daily spend starts 2025-08)');srcO='no direct rent/payroll \u00B7 revenue share of HQ &amp; shared OpEx';}
+ else if(sc==='ALL STORES'){d=B.st;dir=B.st.rent+B.st.sal;cac=B.offAdv;srcC='\u201cOffline advertising &amp; gifts\u201d GL line for '+m;srcO='branch rent + payroll (analytic tags) + revenue share of HQ &amp; shared OpEx';}
+ else if(sc==='BLENDED'){d={rev:B.bl,gp:B.on.gp+B.st.gp,ord:B.on.ord+B.st.ord,nc:B.on.nc+B.st.nc};dir=B.st.rent+B.st.sal;cac=B.ads+B.offAdv;srcC='online ad spend + \u201cOffline advertising &amp; gifts\u201d';srcO='full company OpEx for '+m+' (every GL category except advertising)';}
+ else{const x=B.bd[sc]||{rev:0,gp:0,ord:0,nc:0,rent:0,sal:0};d=x;dir=x.rent+x.sal;cac=B.st.rev?B.offAdv*x.rev/B.st.rev:0;srcC='revenue share of \u201cOffline advertising &amp; gifts\u201d ('+(B.st.rev?Math.round(100*x.rev/B.st.rev):0)+'% of stores)';srcO=sc+' rent + payroll (analytic tags) + revenue share of HQ &amp; shared OpEx';}
+ const share=B.bl?d.rev/B.bl:0;
+ const opex=dir+B.shared*share;
+ const stock=rtStock(m)*share;
+ const rep=(O.bstat&&O.bstat[sc])?O.bstat[sc].repeatRateX:((O.vend&&O.vend.net)?O.vend.net.rep:null);
+ return {rev:d.rev,cogs:Math.max(0,d.rev-d.gp),cac:cac,opex:opex,stock:stock,nc:d.nc,aov:d.ord?d.rev/d.ord:0,share:share,srcC:srcC,srcO:srcO,repRef:rep};
+}
+function rtN(id){const el=document.getElementById(id);return el?(+String(el.value).replace(/,/g,'')||0):0;}
+const rtF=function(v){return 'E\u00A3 '+Math.round(v).toLocaleString('en-US');};
+function rtCalc(){
+ const netRev=rtN('rtRev'),cogs=rtN('rtCogs'),cac=rtN('rtCac'),opex=rtN('rtOpex'),stock=rtN('rtStock');
+ const nc=rtN('rtNc'),aov=rtN('rtAov'),rep=+document.getElementById('rtRep').value||0;
+ const rcm=netRev-cogs-cac, ocas=opex+cac+3*stock, gap=rcm-ocas;
+ if(!netRev&&!cogs&&!opex){document.getElementById('rtGr').innerHTML='\u2014';document.getElementById('rtGr').style.color='#9aa3b5';document.getElementById('rtGrN').innerHTML='no data';RT_TIERS.forEach(function(t){const el=document.getElementById('rtp_'+t[0]);if(el)el.classList.remove('on');});document.getElementById('rtRcm').innerHTML='\u2014';document.getElementById('rtRcm').style.color='var(--mut)';document.getElementById('rtOcas').innerHTML='\u2014';document.getElementById('rtGap').innerHTML='\u2014';document.getElementById('rtGap').style.color='var(--mut)';document.getElementById('rtTierTx').innerHTML='No revenue recorded for this scope and month \u2014 pick another month or scope.';document.getElementById('rtDebt').innerHTML='\u2014';document.getElementById('rtDebt').style.color='var(--mut)';document.getElementById('rtDebtX').innerHTML='';return;}
+ let key;
+ if(rcm<0.75*opex)key='rust';else if(rcm<opex)key='tin';else if(rcm<opex+cac)key='bronze';else if(rcm<ocas)key='silver';else key='gold';
+ const T=RT_TIERS.find(function(t){return t[0]===key;});
+ document.getElementById('rtGr').innerHTML=T[1];
+ document.getElementById('rtGrN').innerHTML=T[2]+' tier';
+ document.getElementById('rtGr').style.color={gold:'#b8860b',silver:'#7c869c',bronze:'#96612c',tin:'#5b6474',rust:'#8f2f1f'}[key];
+ RT_TIERS.forEach(function(t){const el=document.getElementById('rtp_'+t[0]);if(el)el.classList.toggle('on',t[0]===key);});
+ document.getElementById('rtRcm').innerHTML=rtF(rcm);document.getElementById('rtRcm').style.color=rcm>=0?'var(--grn)':'var(--red)';
+ document.getElementById('rtOcas').innerHTML=rtF(ocas);
+ document.getElementById('rtGap').innerHTML=(gap>=0?'+':'')+rtF(gap);
+ document.getElementById('rtGap').style.color=gap>=0?'var(--grn)':'var(--red)';
+ document.getElementById('rtTierTx').innerHTML='<b>'+T[1]+' \u00B7 '+T[2]+'.</b> '+T[4];
+ document.getElementById('rtRepV').innerHTML=rep+'%';
+ const lift=Math.max(0,(70-rep)/100), debt=lift*nc*12*aov;
+ const D=document.getElementById('rtDebt'),X=document.getElementById('rtDebtX');
+ if(rep>=70){D.innerHTML='At the benchmark';D.style.color='var(--grn)';
+  X.innerHTML='The 30-day repurchase rate is at or above the 70% mark where compounding takes over. The work now is protecting it and pushing LTV further.';}
+ else{D.innerHTML=rtF(debt)+' <span style="font-size:14px;font-weight:700;color:var(--mut)">/ year</span>';D.style.color='var(--red)';
+  X.innerHTML='Moving the 30-day repurchase rate from <b>'+rep+'%</b> to the <b>70%</b> benchmark recovers roughly <b>'+rtF(debt)+'</b> a year \u2014 counting only ONE extra order per recovered customer ('+Math.round(nc*12*lift).toLocaleString('en-US')+' customers \u00D7 '+rtF(aov)+' AOV). The real figure runs higher.';}
+}
+function rtSel(sc){RT.sc=sc;rRT();}
+function rtSelM(m){RT.m=m;rRT();}
+function rRT(){if(TAB!=='rt')return;dCh();
+ const g=document.getElementById('g20');
+ const M=rtM();if(!M.length){g.innerHTML='';document.getElementById('bn20').innerHTML='No monthly P&amp;L data in this sync.';return;}
+ if(!RT.m||M.indexOf(RT.m)<0)RT.m=rtDefM();
+ const m=RT.m,sc=RT.sc;
+ const partial=(O.today||'').slice(0,7)===m;
+ const D=rtScopeD(sc,m);
+ document.getElementById('bn20').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>RETENTION ECONOMICS</b> \u2014 theartofecomm\u2019s RCM/OCAS model on OurKids\u2019 real numbers. <b>RCM</b> = Net Revenue \u2212 COGS \u2212 CAC (what a month really leaves behind). <b>OCAS</b> = OpEx + next month\u2019s CAC + 3 months of stock (what a month must cover). Everything is prefilled from Odoo / Shopify / the ad accounts for the month &amp; scope you pick, and every field stays editable so you can war-game it. Inventory bought = real Odoo purchase orders (pulled read-only '+RT_PULL+').';
+ const scopes=['BLENDED','ONLINE','ALL STORES'].concat(Object.keys(O.pos||{}));
+ const chips=scopes.map(function(x){return '<span class="chip" style="'+(x===sc?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="rtSel(\''+x.replace(/'/g,"\\'")+'\')">'+x+'</span>';}).join(' ');
+ const mSel='<select onchange="rtSelM(this.value)">'+M.map(function(x){return '<option value="'+x+'"'+(x===m?' selected':'')+'>'+x+((O.today||'').slice(0,7)===x?' (partial)':'')+'</option>';}).join('')+'</select>';
+ const row=function(lbl,id,val,src){return '<tr><td>'+lbl+'</td><td><input id="'+id+'" value="'+Math.round(val).toLocaleString('en-US')+'" oninput="rtCalc()"></td><td style="font-size:10.5px;color:#8a93a6;max-width:340px;text-align:left;font-weight:500">'+src+'</td></tr>';};
+ g.innerHTML=
+ '<div class="card" data-a="odoo"><div class="chead"><div><div class="ct">Last month\u2019s P&amp;L \u2014 '+sc+'</div><div class="cs">Auto-filled from the real books, and editable. Month: '+mSel+(partial?' <b style="color:#b8860b">partial month \u2014 the verdict reads worse than reality</b>':'')+'</div></div></div>'
+ +'<div style="margin:8px 0 10px;padding-left:12px;display:flex;flex-wrap:wrap;gap:5px">'+chips+'</div>'
+ +'<table class="bt"><tr><th>Input</th><th>EGP</th><th style="text-align:left">Where it comes from</th></tr>'
+ +row('Net Revenue','rtRev',D.rev,sc==='ONLINE'?'Shopify net revenue (new + returning) for '+m:sc==='BLENDED'?'Shopify + every POS branch for '+m:'POS journal net revenue for '+m)
+ +row('COGS','rtCogs',D.cogs,'net revenue \u2212 gross profit, real Odoo margins')
+ +row('CAC / ad spend','rtCac',D.cac,D.srcC)
+ +row('Operating expenses','rtOpex',D.opex,D.srcO)
+ +row('Inventory / month','rtStock',D.stock,'Odoo purchase orders, 3-month trailing avg ending '+m+', \u00D7 '+Math.round(D.share*100)+'% revenue share \u00B7 OCAS counts 3\u00D7 this')
+ +'</table>'
+ +'<div class="rtLaw">The Law of Retention Economics: <b>if RCM \u2265 OCAS, compound, self-funded growth is inevitable.</b> Fall short, and the difference comes from debt, dilution, or founder stress.</div></div>'
+ +'<div class="card" data-a="blend"><div class="chead"><div><div class="ct">The verdict</div><div class="cs">Where '+sc.toLowerCase()+' sits on the RCM pyramid for '+m+'</div></div>'
+ +'<div class="kpis"><div class="kpi"><div class="l">RCM</div><div class="v" id="rtRcm">\u2014</div></div><div class="kpi"><div class="l">OCAS to clear</div><div class="v" id="rtOcas">\u2014</div></div><div class="kpi"><div class="l">Gap</div><div class="v" id="rtGap">\u2014</div></div></div></div>'
+ +'<div style="display:flex;align-items:center;gap:18px;padding-left:12px;margin-top:10px"><div style="text-align:center;min-width:86px"><div class="rtGr" id="rtGr">\u2014</div><div style="font-size:12px;font-weight:800;color:#51596b" id="rtGrN"></div></div><div style="flex:1">'
+ +'<div class="rtp">'+RT_TIERS.map(function(t,i){return '<div class="r '+t[3]+'" id="rtp_'+t[0]+'" style="width:'+(42+i*14)+'%">'+t[1]+' \u00B7 '+t[2]+'<small>'+['covers everything + 3 months of stock','covers costs + next month\u2019s CAC','covers costs + OpEx, nothing more','covers 75\u201399% of OpEx','under 75% of OpEx'][i]+'</small></div>';}).join('')+'</div></div></div>'
+ +'<div class="rtNote" id="rtTierTx" style="padding-left:12px"></div></div>'
+ +'<div class="card full" data-a="ins"><div class="chead"><div><div class="ct">Retention debt</div><div class="cs">What a leaky 30-day window costs per year \u2014 the one lever that moves a brand up the pyramid</div></div><div class="kpis"><div class="kpi"><div class="l">Left on the table</div><div class="rtDebt" id="rtDebt">\u2014</div></div></div></div>'
+ +'<div class="rtDbG" style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;padding-left:12px;margin-top:8px">'
+ +'<div><div class="lbl9">NEW CUSTOMERS / MONTH</div><input id="rtNc" value="'+Math.round(D.nc).toLocaleString('en-US')+'" oninput="rtCalc()" style="width:100%"><div class="rtNote">'+(sc==='ONLINE'?'first-order customers on Shopify in '+m:'first-visit customers in '+m+' (cohort size)')+'</div></div>'
+ +'<div><div class="lbl9">AOV</div><input id="rtAov" value="'+Math.round(D.aov).toLocaleString('en-US')+'" oninput="rtCalc()" style="width:100%"><div class="rtNote">net revenue \u00F7 orders for '+m+'</div></div>'
+ +'<div><div class="lbl9">30-DAY REPURCHASE RATE <span id="rtRepV" style="color:var(--indigo)">20%</span></div><input type="range" id="rtRep" min="0" max="100" step="1" value="20" oninput="rtCalc()"><div class="rtNote">% of first-time buyers who order again within 30 days. OurKids doesn\u2019t measure this yet \u2014 drag to your estimate.'+(D.repRef!=null?' For reference, the <b>lifetime</b> repeat rate for '+sc.toLowerCase()+' is <b>'+D.repRef+'%</b> (a 30-day number is always well below it).':'')+' Benchmark: <b>below 60% is a problem, 70%+ compounds</b>.</div></div>'
+ +'</div><div class="rtNote" id="rtDebtX" style="padding-left:12px;margin-top:10px"></div></div>';
+ rtCalc();
+}
+
 function boot(){O=window.O;FF=window.F;isoDates();SORTON();
  if(typeof MutationObserver!=='undefined')try{['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g12','g13','g14','g15'].forEach(id=>{const el=document.getElementById(id);if(!el)return;new MutationObserver(()=>insWrap(id)).observe(el,{childList:true,subtree:true});});}catch(e){}LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
  LSF=cairoFull(O.lastSync);
@@ -218,7 +345,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();
  cards();rOn();
  document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v9.5</b>';}
 function pre(p){const last=O.aw[1];if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
-function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp'],['t16','cj'],['t17','bg'],['t18','co'],['t19','mb']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],['t4','pn'],['t7','rp'],['t5','me'],['t6','ao'],['t8','vz'],['t9','iq'],['t10','mi'],['t11','rm'],['t12','vl'],['t13','ai'],['t14','cs'],['t15','cp'],['t16','cj'],['t17','bg'],['t18','co'],['t19','mb'],['t20','rt']].forEach(x=>document.getElementById(x[0]).classList.toggle('on',t===x[1]));document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -1039,7 +1166,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
