@@ -63,6 +63,8 @@ jobs:
           GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
           TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+          # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
+          BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
         run: python ourkids_live.py
 
       # The collector exits 0 even on failure (it writes the reason into status.json),
@@ -89,6 +91,8 @@ jobs:
           GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
           TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+          # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
+          BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
         run: |
           echo "first attempt failed; sleeping 60s and trying once more"
           sleep 60
