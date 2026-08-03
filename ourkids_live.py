@@ -2071,6 +2071,9 @@ def _norm_contact(r):
     """Odoo partner -> (email_lower, egypt_phone_digits '20...'). Empty string when unusable."""
     em = (r.get("email") or "").strip().lower()
     if "@" not in em: em = ""
+    # never upload our own staff/company addresses as if they were customers -- several
+    # internal accounts (accounting@, it@, m.emad@ ...) appear as the partner on real orders
+    if em.endswith("@ourkids-eg.com"): em = ""
     ph = re.sub(r"\D", "", str(r.get("mobile") or r.get("phone") or ""))
     if ph.startswith("00"): ph = ph[2:]
     if ph.startswith("0"): ph = "20" + ph[1:]
@@ -2305,8 +2308,15 @@ def _offline_contacts(days, online=False):
     if online:
         off = 0
         while off < CAP:
+            # Marketplace teams (Noon 10, Jumia 11, Amazon 12, Homzmart 21) are excluded on
+            # purpose: on those orders the "customer" is the marketplace company itself, not
+            # the shopper -- e.g. "Noon E Commerce S.A.E" carries it@ourkids-eg.com and sits
+            # on thousands of orders. Uploading that would put our own staff address into a
+            # buyer audience that 31 live ad sets now EXCLUDE. Shopify (13) is the real
+            # online channel and is kept.
             page = oexec("sale.order", "search_read",
                          [[["state", "in", ["sale", "done"]], ["partner_id", "!=", False],
+                           ["team_id", "not in", [10, 11, 12, 21]],
                            ["date_order", ">=", cutoff + " 00:00:00"]]],
                          {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
             if not page: break
