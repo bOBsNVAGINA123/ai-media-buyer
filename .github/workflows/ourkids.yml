@@ -171,12 +171,30 @@ jobs:
       # Keep the password-protected mirror in step with what we just built. The whole
       # docs/ tree is deployed, so all three apps (Growth Operator, Strategic, OurKids)
       # and their payloads stay in sync at https://ourkids-live.vercel.app
+      # v9.8: continue-on-error. The mirror is a CONVENIENCE COPY -- the real dashboard is
+      # the Pages site, already committed by the step above. Before this, an expired Vercel
+      # token painted the whole run red, which read as "the sync did not happen" when the
+      # data was in fact built, committed and live. A mirror problem is now reported as a
+      # mirror problem and nothing else.
       - name: Publish to the private mirror
         if: always()
+        continue-on-error: true
         env:
           VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           cd docs
-          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning title=Vercel mirror skipped::VERCEL_TOKEN is empty. Pages dashboard is unaffected."
+            exit 0
+          fi
+          if npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/v.log; then
+            echo "mirror published"
+          else
+            if grep -q "not valid" /tmp/v.log; then
+              echo "::warning title=Vercel mirror token expired::VERCEL_TOKEN is rejected. This is almost always a CLI SESSION token, which Vercel expires. Create a long-lived one at https://vercel.com/account/settings/tokens and set it with: gh secret set VERCEL_TOKEN -R bOBsNVAGINA123/ai-media-buyer. The Pages dashboard and the committed data are UNAFFECTED."
+            else
+              echo "::warning title=Vercel mirror failed::See the log above. The Pages dashboard and the committed data are UNAFFECTED."
+            fi
+          fi
