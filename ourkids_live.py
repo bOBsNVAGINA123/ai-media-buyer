@@ -2260,6 +2260,18 @@ def _offline_contacts(days, online=False):
     log("buyer contacts ::", len(pids), "buyers in", days, "d ::", len(out), "unique identities")
     return out
 
+# v9.7: the buyer list is no longer in-store only, so the name changed. Both platforms
+# find their list BY NAME, so we match the old name too -- otherwise the first run after
+# a rename cannot find the list and silently builds a duplicate from scratch.
+BUYERS_LIST_NAME = "Ourkids All Buyers (auto)"
+BUYERS_LIST_ALIASES = (BUYERS_LIST_NAME, "Ourkids Offline Buyers (auto)")
+BUYERS_LIST_DESC = "Auto-updated by the dashboard collector: everyone who ever bought, online or in-store (Odoo)"
+
+def _buyer_window(created):
+    """Days of history to scan. Normal runs top up the last few days; a fresh list gets
+    the full backfill; BUYERS_BACKFILL_DAYS forces a one-off wider re-scan."""
+    return int(os.environ.get("BUYERS_BACKFILL_DAYS") or 0) or (730 if created else 4)
+
 def _gads_hdr():
     """OAuth access token + headers for the Google Ads REST API (same creds as the pull)."""
     dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", "")
@@ -2291,7 +2303,7 @@ def sync_google_audience():
     try:
         at, hd = _gads_hdr()
         if not at: log("google audience :: skipped, no google creds"); return
-        name = "Ourkids Offline Buyers (auto)"
+        name = BUYERS_LIST_NAME
         base = "https://googleads.googleapis.com/v21/customers/%s" % cid
         d = http_json(base + "/googleAds:searchStream",
                       {"query": "SELECT user_list.id, user_list.name, user_list.resource_name FROM user_list"}, hd)
@@ -2299,12 +2311,12 @@ def sync_google_audience():
         for b2 in (d if isinstance(d, list) else [d]):
             for row in (b2.get("results") or []):
                 ul = row.get("userList") or {}
-                if ul.get("name") == name: rn = ul.get("resourceName")
+                if ul.get("name") in BUYERS_LIST_ALIASES: rn = ul.get("resourceName")
         created = False
         if not rn:
             d = http_json(base + "/userLists:mutate",
                           {"operations": [{"create": {"name": name,
-                            "description": "Auto-updated with in-store buyers from Odoo POS by the dashboard collector",
+                            "description": BUYERS_LIST_DESC,
                             "membershipLifeSpan": 540,
                             "crmBasedUserList": {"uploadKeyType": "CONTACT_INFO"}}}]}, hd)
             try: rn = d["results"][0]["resourceName"]
@@ -2331,7 +2343,7 @@ def sync_google_audience():
                     log("google audience :: list size", sz, "of ~59k offline buyers :: forcing the full 730d backfill")
             except Exception as e2:
                 log("google audience :: size check failed ::", str(e2)[:120])
-        contacts = _offline_contacts(730 if created else 4)
+        contacts = _offline_contacts(_buyer_window(created), online=True)
         members = []
         for em, ph in contacts:
             ids = []
@@ -2370,17 +2382,17 @@ def sync_offline_audience(tok):
     if not tok or os.environ.get("OFFLINE_AUDIENCE", "on").lower() == "off": return
     import hashlib
     acct = meta_accounts(tok)[0]
-    name = "Ourkids Offline Buyers (auto)"
+    name = BUYERS_LIST_NAME
     aud = os.environ.get("META_OFFLINE_AUDIENCE_ID", "").strip(); created = False
     if not aud:
         d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
             {"fields": "id,name", "limit": 500, "access_token": tok})))
         for r in (d.get("data") or []):
-            if r.get("name") == name: aud = r["id"]; break
+            if r.get("name") in BUYERS_LIST_ALIASES: aud = r["id"]; break
     if not aud:
         d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
             {"name": name, "subtype": "CUSTOM", "customer_file_source": "USER_PROVIDED_ONLY",
-             "description": "Auto-updated with in-store buyers from Odoo POS by the dashboard collector",
+             "description": BUYERS_LIST_DESC,
              "access_token": tok})), data={})
         aud = d.get("id")
         if not aud:
@@ -2394,7 +2406,7 @@ def sync_offline_audience(tok):
     # few days on every run keeps "ever" true without re-sending history. Set
     # BUYERS_BACKFILL_DAYS (repo variable) for a one-off re-scan of a wider window --
     # needed once after widening what counts as a buyer.
-    days = int(os.environ.get("BUYERS_BACKFILL_DAYS") or 0) or (730 if created else 4)
+    days = _buyer_window(created)
     contacts = _offline_contacts(days, online=True)
     import hashlib
     rowsn = []
