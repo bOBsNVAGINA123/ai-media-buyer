@@ -2209,13 +2209,19 @@ def sync_gmb_branch_sales():
     except Exception as e:
         log("gmb branch sales :: fail ::", str(e)[:200])
 
-def _offline_contacts(days):
-    """Recent POS buyers -> [(email_lower, phone_digits_egypt)] -- normalised RAW pairs.
-    Each platform hashes to its own spec (Meta: digits; Google: E.164 with +)."""
+def _offline_contacts(days, online=False):
+    """Recent buyers -> [(email_lower, phone_digits_egypt)] -- normalised RAW pairs.
+    Each platform hashes to its own spec (Meta: digits; Google: E.164 with +).
+    online=True also folds in web/marketplace buyers from sale.order, so the list is
+    "bought anywhere" rather than in-store only."""
     cutoff = (END - datetime.timedelta(days=days)).isoformat()
     ANON = anon_partner_ids()
     pids = set(); off = 0
-    while off < 400000:
+    # v9.7: the old 400k row cap silently truncated any full-history backfill -- Odoo
+    # holds ~1.8M POS orders. Daily runs only ever scan 4 days, so the ceiling only
+    # matters on a backfill, where truncating is exactly what we must not do.
+    CAP = 3000000
+    while off < CAP:
         page = oexec("report.pos.order", "search_read",
                      [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
                      {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
@@ -2225,6 +2231,23 @@ def _offline_contacts(days):
             if pid not in ANON: pids.add(pid)
         off += len(page)
         if len(page) < 10000: break
+    if off >= CAP: log("buyer contacts :: WARNING POS scan hit the", CAP, "row cap -- list is incomplete")
+    npos = len(pids)
+    if online:
+        off = 0
+        while off < CAP:
+            page = oexec("sale.order", "search_read",
+                         [[["state", "in", ["sale", "done"]], ["partner_id", "!=", False],
+                           ["date_order", ">=", cutoff + " 00:00:00"]]],
+                         {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
+            if not page: break
+            for r in page:
+                pid = r["partner_id"][0]
+                if pid not in ANON: pids.add(pid)
+            off += len(page)
+            if len(page) < 10000: break
+        if off >= CAP: log("buyer contacts :: WARNING sale.order scan hit the", CAP, "row cap")
+        log("online buyers ::", len(pids) - npos, "added on top of", npos, "in-store")
     out = []
     pl = list(pids)
     for i in range(0, len(pl), 2000):
@@ -2234,7 +2257,7 @@ def _offline_contacts(days):
     # v8.9 dedup: many partner records share an email/phone (Odoo duplicate customers);
     # send each identity ONCE per run.
     out = sorted(set(out))
-    log("offline contacts ::", len(pids), "buyers in", days, "d ::", len(out), "unique identities")
+    log("buyer contacts ::", len(pids), "buyers in", days, "d ::", len(out), "unique identities")
     return out
 
 def _gads_hdr():
@@ -2366,14 +2389,19 @@ def sync_offline_audience(tok):
             return
         created = True
         log("offline audience :: created", aud)
-    contacts = _offline_contacts(730 if created else 4)
+    # v9.7: the list is "bought anywhere, ever" -- in-store POS *and* online/marketplace
+    # orders. Meta customer lists are additive and never expire, so topping up the last
+    # few days on every run keeps "ever" true without re-sending history. Set
+    # BUYERS_BACKFILL_DAYS (repo variable) for a one-off re-scan of a wider window --
+    # needed once after widening what counts as a buyer.
+    days = int(os.environ.get("BUYERS_BACKFILL_DAYS") or 0) or (730 if created else 4)
+    contacts = _offline_contacts(days, online=True)
     import hashlib
     rowsn = []
     for em, ph in contacts:
         he = hashlib.sha256(em.encode()).hexdigest() if em else ""
         hp = hashlib.sha256(ph.encode()).hexdigest() if ph else ""
         if he or hp: rowsn.append([he, hp])
-    days = 730 if created else 4
     pids = contacts
     sent = 0
     for i in range(0, len(rowsn), 5000):
@@ -3005,7 +3033,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.4.1 (audience backfill by real list size; store events declare IN_STORE source; full DM error bodies)")
+    log("collector v9.7 (Meta buyer list = online + in-store, ever; POS row cap raised so backfills stop truncating)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
