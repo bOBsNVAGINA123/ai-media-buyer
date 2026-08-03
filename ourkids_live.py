@@ -2336,6 +2336,16 @@ BUYERS_LIST_NAME = "Ourkids All Buyers (auto)"
 BUYERS_LIST_ALIASES = (BUYERS_LIST_NAME, "Ourkids Offline Buyers (auto)")
 BUYERS_LIST_DESC = "Auto-updated by the dashboard collector: everyone who ever bought, online or in-store (Odoo)"
 
+# In-store buyers only. NOTE the name says "from ads", but Meta cannot export who saw an
+# ad -- there is no ad-exposure audience source, and an offline purchase cannot be written
+# as a pixel rule. So this list is every branch buyer; the "saw an ad" half has to be added
+# at ad-set level by narrowing this list with an engagement audience.
+BRANCH_LIST_NAME = "offline buyers from ads"
+BRANCH_LIST_ALIASES = (BRANCH_LIST_NAME,)
+BRANCH_LIST_DESC = ("Auto-updated by the dashboard collector: Odoo branch (POS) buyers only. "
+                    "Meta cannot export ad viewers, so narrow this with an engagement "
+                    "audience at ad-set level to approximate 'saw an ad, bought in store'.")
+
 def _buyer_window(created):
     """Days of history to scan. Normal runs top up the last few days; a fresh list gets
     the full backfill; BUYERS_BACKFILL_DAYS forces a one-off wider re-scan."""
@@ -2441,59 +2451,61 @@ def sync_google_audience():
     except Exception as e:
         log("google audience :: fail ::", str(e)[:180])
 
-def sync_offline_audience(tok):
-    """v8.3: keep a Meta Customer List of OFFLINE buyers fresh on every run, per the
-    owner's instruction. Emails/phones come from Odoo (read-only), are normalised and
-    SHA256-HASHED before anything leaves this job (Meta's own customer-file format).
-    Raw PII is never logged and never written to the repo. Idempotent: finds the
-    audience by name; creates it once; each 3h run tops up the last 4 days of buyers,
-    a fresh audience gets a 730-day backfill. Kill switch: OFFLINE_AUDIENCE=off."""
-    if not tok or os.environ.get("OFFLINE_AUDIENCE", "on").lower() == "off": return
+def _sync_meta_list(tok, acct, name, aliases, desc, online, tag):
+    """Keep ONE Meta Customer List fresh. Emails/phones come from Odoo (read-only), are
+    normalised and SHA256-HASHED before anything leaves this job. Raw PII is never logged
+    and never written to the repo. Idempotent: finds the list by name (old names too, so a
+    rename never spawns a duplicate); creates it once; each 3h run tops up the last few
+    days, a fresh list gets the full backfill."""
     import hashlib
-    acct = meta_accounts(tok)[0]
-    name = BUYERS_LIST_NAME
-    aud = os.environ.get("META_OFFLINE_AUDIENCE_ID", "").strip(); created = False
-    if not aud:
-        d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
-            {"fields": "id,name", "limit": 500, "access_token": tok})))
-        for r in (d.get("data") or []):
-            if r.get("name") in BUYERS_LIST_ALIASES: aud = r["id"]; break
+    aud = None; created = False
+    d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
+        {"fields": "id,name", "limit": 500, "access_token": tok})))
+    for r in (d.get("data") or []):
+        if r.get("name") in aliases: aud = r["id"]; break
     if not aud:
         d = http_json("%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(
             {"name": name, "subtype": "CUSTOM", "customer_file_source": "USER_PROVIDED_ONLY",
-             "description": BUYERS_LIST_DESC,
-             "access_token": tok})), data={})
+             "description": desc, "access_token": tok})), data={})
         aud = d.get("id")
         if not aud:
-            log("offline audience :: CREATE FAILED ::", str(d)[:200],
+            log(tag, ":: CREATE FAILED ::", str(d)[:200],
                 ":: likely the Custom Audience ToS -- accept it once in Ads Manager > Audiences, then this runs itself")
             return
         created = True
-        log("offline audience :: created", aud)
-    # v9.7: the list is "bought anywhere, ever" -- in-store POS *and* online/marketplace
-    # orders. Meta customer lists are additive and never expire, so topping up the last
-    # few days on every run keeps "ever" true without re-sending history. Set
-    # BUYERS_BACKFILL_DAYS (repo variable) for a one-off re-scan of a wider window --
-    # needed once after widening what counts as a buyer.
+        log(tag, ":: created", aud)
     days = _buyer_window(created)
-    contacts = _offline_contacts(days, online=True)
-    import hashlib
+    contacts = _offline_contacts(days, online=online)
     rowsn = []
     for em, ph in contacts:
         he = hashlib.sha256(em.encode()).hexdigest() if em else ""
         hp = hashlib.sha256(ph.encode()).hexdigest() if ph else ""
         if he or hp: rowsn.append([he, hp])
-    pids = contacts
     sent = 0
     for i in range(0, len(rowsn), 5000):
         d = http_json("%s/%s/users" % (GRAPH, aud),
                       data={"payload": {"schema": ["EMAIL_SHA256", "PHONE_SHA256"],
                                         "data": rowsn[i:i + 5000]}, "access_token": tok})
         if d.get("error"):
-            log("offline audience :: push failed ::", str(d.get("error"))[:180]); break
+            log(tag, ":: push failed ::", str(d.get("error"))[:180]); break
         sent += len(rowsn[i:i + 5000])
-    log("offline audience ::", aud, ":: window", days, "d :: customers", len(pids),
+    log(tag, "::", aud, ":: window", days, "d :: customers", len(contacts),
         ":: hashed rows sent", sent, "(first full backfill)" if created else "")
+
+def sync_offline_audience(tok):
+    """Meta customer lists, refreshed every run. Two of them:
+      * BUYERS_LIST_NAME  -- bought anywhere, ever (online + in-store)
+      * BRANCH_LIST_NAME  -- in-store/POS buyers only
+    Meta cannot export who SAW an ad, and offline purchases cannot be expressed as a pixel
+    rule, so "saw an ad and bought in a branch" cannot exist as a single audience. Narrow
+    the branch list with an engagement audience at ad-set level to approximate it.
+    Kill switch: OFFLINE_AUDIENCE=off."""
+    if not tok or os.environ.get("OFFLINE_AUDIENCE", "on").lower() == "off": return
+    acct = meta_accounts(tok)[0]
+    _sync_meta_list(tok, acct, BUYERS_LIST_NAME, BUYERS_LIST_ALIASES, BUYERS_LIST_DESC,
+                    True, "all-buyers audience")
+    _sync_meta_list(tok, acct, BRANCH_LIST_NAME, BRANCH_LIST_ALIASES, BRANCH_LIST_DESC,
+                    False, "branch-buyers audience")
 
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
