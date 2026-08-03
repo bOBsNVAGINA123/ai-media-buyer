@@ -1378,11 +1378,17 @@ def pull_pos_customers():
         # ---- v8.8 cohort CUBE: per cohort-month, month-offset grid [active, revenue, gp]
         # like Shopify's cohort explorer, but from the real Odoo history, per scope AND
         # sliceable by FIRST-purchase vendor/category.
+        # v9.8: each month now carries TWO trios -- all orders, and the same figures with
+        # returns/exchanges dropped (net margin <= 0, the rule the other tabs already use).
+        # The Cohorts tab's "Exclude returns" switch reads the second trio.
         PMO = {}
         for pid, d, br, mg, oid, rv, qy in rows:
-            e = PMO.setdefault(pid, {}).setdefault(d[:7], [set(), 0.0, 0.0])
+            e = PMO.setdefault(pid, {}).setdefault(d[:7], [set(), 0.0, 0.0, set(), 0.0, 0.0])
             if oid: e[0].add(oid)
             e[1] += rv; e[2] += mg
+            if mg > 0:
+                if oid: e[3].add(oid)
+                e[4] += rv; e[5] += mg
         def _moff(a2, b2): return (int(b2[:4]) - int(a2[:4])) * 12 + int(b2[5:7]) - int(a2[5:7])
         CURM = END.isoformat()[:7]
         def _cubeb(pids):
@@ -1391,25 +1397,28 @@ def pull_pos_customers():
                 f = first.get(p)
                 if not f: continue
                 cm = f[0][:7]
-                cc = C.setdefault(cm, {"n": 0, "r": 0, "m": {}})
+                cc = C.setdefault(cm, {"n": 0, "r": 0, "rx": 0, "m": {}})
                 cc["n"] += 1
-                ret = False
+                ret = False; retX = False
                 for mo, e in PMO.get(p, {}).items():
                     k = _moff(cm, mo)
                     if k < 0 or k > 17: continue
-                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
-                    nord = len(e[0])
+                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0, 0, 0.0, 0.0])
+                    nord = len(e[0]); nordX = len(e[3])
                     if (k > 0 and nord >= 1) or (k == 0 and nord >= 2): a3[0] += 1; ret = True
                     a3[1] += e[1]; a3[2] += e[2]
+                    if (k > 0 and nordX >= 1) or (k == 0 and nordX >= 2): a3[3] += 1; retX = True
+                    a3[4] += e[4]; a3[5] += e[5]
                 if ret: cc["r"] += 1
+                if retX: cc["rx"] += 1
             out = {}
+            Z = [0, 0.0, 0.0, 0, 0.0, 0.0]
             for cm, cc in C.items():
                 mx = _moff(cm, CURM)
                 if mx < 0: continue
-                out[cm] = {"n": cc["n"], "r": cc["r"],
-                           "m": [[cc["m"].get(k, [0, 0, 0])[0],
-                                  round(cc["m"].get(k, [0, 0, 0])[1]),
-                                  round(cc["m"].get(k, [0, 0, 0])[2])]
+                out[cm] = {"n": cc["n"], "r": cc["r"], "rx": cc["rx"],
+                           "m": [[cc["m"].get(k, Z)[0], round(cc["m"].get(k, Z)[1]), round(cc["m"].get(k, Z)[2]),
+                                  cc["m"].get(k, Z)[3], round(cc["m"].get(k, Z)[4]), round(cc["m"].get(k, Z)[5])]
                                  for k in range(0, min(17, mx) + 1)]}
             return out
         CUBE = {"scopes": {}, "ven": {}, "cat": {}}
@@ -1849,7 +1858,19 @@ def pull_meta_ads(tok):
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
-        ads.sort(key=lambda a: -a["sp"]); ads = ads[:120]
+        # v9.8: this used to be a single global top-120. The big account's ads filled every
+        # slot (its smallest still outspent everything on Basic), so the Basic account
+        # vanished from Top Ads / Creative Benchmarks entirely and looked "not synced".
+        # Cap PER ACCOUNT so a small account always gets its own shelf.
+        ads.sort(key=lambda a: -a["sp"])
+        _per = {}
+        _keep = []
+        for a in ads:
+            k = a.get("acct") or "?"
+            _per[k] = _per.get(k, 0) + 1
+            if _per[k] <= 120: _keep.append(a)
+        ads = _keep
+        log("meta ads :: kept per account", {k: v for k, v in _per.items()})
         lastday = max([max((i for i in range(60) if a["d"]["sp"][i] > 0), default=0) for a in ads] or [0])
         if lastday < 55:
             log("meta ads :: PARTIAL PULL -- newest spend day is index", lastday, "of 60 ::",
@@ -3105,7 +3126,18 @@ def build():
                 log("shopify carry-forward", healed, "days (fetch gap healed from last good payload)")
     except Exception as e:
         log("carry-forward skipped", str(e)[:120])
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not (((prev.get("cube") or {}).get("scopes") or {}).get("ALL STORES")) or not any(
+    # v9.8: also force a heavy crawl when the stored cube is still the OLD 3-number shape,
+    # so the returns-excluded trio (and the Cohorts "Exclude returns" switch that depends on
+    # it) appears on the next run instead of silently waiting for the 03:00 UTC window.
+    def _cube_old(pv):
+        try:
+            for sc in ((pv.get("cube") or {}).get("scopes") or {}).values():
+                for c in (sc or {}).values():
+                    m = (c or {}).get("m") or []
+                    if m and m[0]: return len(m[0]) < 6
+        except Exception: pass
+        return False
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not (((prev.get("cube") or {}).get("scopes") or {}).get("ALL STORES")) or _cube_old(prev) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
