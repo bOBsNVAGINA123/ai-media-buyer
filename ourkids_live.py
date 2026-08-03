@@ -2288,44 +2288,37 @@ def _offline_contacts(days, online=False):
     "bought anywhere" rather than in-store only."""
     cutoff = (END - datetime.timedelta(days=days)).isoformat()
     ANON = anon_partner_ids()
-    pids = set(); off = 0
-    # v9.7: the old 400k row cap silently truncated any full-history backfill -- Odoo
-    # holds ~1.8M POS orders. Daily runs only ever scan 4 days, so the ceiling only
-    # matters on a backfill, where truncating is exactly what we must not do.
-    CAP = 3000000
-    while off < CAP:
-        page = oexec("report.pos.order", "search_read",
-                     [[["partner_id", "!=", False], ["date", ">=", cutoff]]],
-                     {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
-        if not page: break
-        for r in page:
-            pid = r["partner_id"][0]
-            if pid not in ANON: pids.add(pid)
-        off += len(page)
-        if len(page) < 10000: break
-    if off >= CAP: log("buyer contacts :: WARNING POS scan hit the", CAP, "row cap -- list is incomplete")
-    npos = len(pids)
-    if online:
-        off = 0
-        while off < CAP:
-            # Marketplace teams (Noon 10, Jumia 11, Amazon 12, Homzmart 21) are excluded on
-            # purpose: on those orders the "customer" is the marketplace company itself, not
-            # the shopper -- e.g. "Noon E Commerce S.A.E" carries it@ourkids-eg.com and sits
-            # on thousands of orders. Uploading that would put our own staff address into a
-            # buyer audience that 31 live ad sets now EXCLUDE. Shopify (13) is the real
-            # online channel and is kept.
-            page = oexec("sale.order", "search_read",
-                         [[["state", "in", ["sale", "done"]], ["partner_id", "!=", False],
-                           ["team_id", "not in", [10, 11, 12, 21]],
-                           ["date_order", ">=", cutoff + " 00:00:00"]]],
-                         {"fields": ["partner_id"], "limit": 10000, "offset": off, "order": "id"})
+    def distinct_partners(model, domain):
+        """v9.8.2: ask Odoo for DISTINCT partners (read_group), not every order row.
+        A full-history backfill is ~1.9M POS orders but only ~200k customers. Paging the
+        raw rows took ~190 round-trips and blew the 50-minute job timeout, so the backfill
+        never landed; grouping collapses it to ~12 pages. No row cap, so nothing truncates."""
+        seen, off, PAGE = set(), 0, 20000
+        while True:
+            page = oexec(model, "read_group", [domain, ["partner_id"], ["partner_id"]],
+                         {"lazy": False, "limit": PAGE, "offset": off})
             if not page: break
             for r in page:
-                pid = r["partner_id"][0]
-                if pid not in ANON: pids.add(pid)
+                pid = (r.get("partner_id") or [None])[0]
+                if pid and pid not in ANON: seen.add(pid)
             off += len(page)
-            if len(page) < 10000: break
-        if off >= CAP: log("buyer contacts :: WARNING sale.order scan hit the", CAP, "row cap")
+            if len(page) < PAGE: break
+        return seen
+
+    pids = distinct_partners("report.pos.order",
+                             [["partner_id", "!=", False], ["date", ">=", cutoff]])
+    npos = len(pids)
+    if online:
+        # Marketplace teams (Noon 10, Jumia 11, Amazon 12, Homzmart 21) are excluded on
+        # purpose: on those orders the "customer" is the marketplace company itself, not
+        # the shopper -- e.g. "Noon E Commerce S.A.E" carries it@ourkids-eg.com and sits
+        # on thousands of orders. Uploading that would put our own staff address into a
+        # buyer audience that 31 live ad sets now EXCLUDE. Shopify (13) is the real
+        # online channel and is kept.
+        pids |= distinct_partners("sale.order",
+                                  [["state", "in", ["sale", "done"]], ["partner_id", "!=", False],
+                                   ["team_id", "not in", [10, 11, 12, 21]],
+                                   ["date_order", ">=", cutoff + " 00:00:00"]])
         log("online buyers ::", len(pids) - npos, "added on top of", npos, "in-store")
     out = []
     pl = list(pids)
