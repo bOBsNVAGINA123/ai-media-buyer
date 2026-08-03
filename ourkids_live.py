@@ -2340,11 +2340,9 @@ BUYERS_LIST_DESC = "Auto-updated by the dashboard collector: everyone who ever b
 # ad -- there is no ad-exposure audience source, and an offline purchase cannot be written
 # as a pixel rule. So this list is every branch buyer; the "saw an ad" half has to be added
 # at ad-set level by narrowing this list with an engagement audience.
-BRANCH_LIST_NAME = "offline buyers from ads"
-BRANCH_LIST_ALIASES = (BRANCH_LIST_NAME,)
-BRANCH_LIST_DESC = ("Auto-updated by the dashboard collector: Odoo branch (POS) buyers only. "
-                    "Meta cannot export ad viewers, so narrow this with an engagement "
-                    "audience at ad-set level to approximate 'saw an ad, bought in store'.")
+# "offline buyers from ads" (120249215962380621) is NOT built here. It is a Meta rule
+# audience over dataset 770014046405609 -- Purchase + action_source=physical_store -- which
+# Meta refreshes itself from the offline CAPI events. Nothing to upload from Odoo.
 
 def _buyer_window(created):
     """Days of history to scan. Normal runs top up the last few days; a fresh list gets
@@ -2493,19 +2491,19 @@ def _sync_meta_list(tok, acct, name, aliases, desc, online, tag):
         ":: hashed rows sent", sent, "(first full backfill)" if created else "")
 
 def sync_offline_audience(tok):
-    """Meta customer lists, refreshed every run. Two of them:
-      * BUYERS_LIST_NAME  -- bought anywhere, ever (online + in-store)
-      * BRANCH_LIST_NAME  -- in-store/POS buyers only
-    Meta cannot export who SAW an ad, and offline purchases cannot be expressed as a pixel
-    rule, so "saw an ad and bought in a branch" cannot exist as a single audience. Narrow
-    the branch list with an engagement audience at ad-set level to approximate it.
-    Kill switch: OFFLINE_AUDIENCE=off."""
+    """Keep the Meta customer list of everyone who ever bought (online + in-store) fresh.
+    In-store buyers ALSO reach Meta directly as offline CAPI Purchase events, which is what
+    the "offline buyers from ads" rule audience is built on -- this list adds the history
+    and the unmatched people the dataset never saw. Kill switch: OFFLINE_AUDIENCE=off."""
     if not tok or os.environ.get("OFFLINE_AUDIENCE", "on").lower() == "off": return
     acct = meta_accounts(tok)[0]
     _sync_meta_list(tok, acct, BUYERS_LIST_NAME, BUYERS_LIST_ALIASES, BUYERS_LIST_DESC,
                     True, "all-buyers audience")
-    _sync_meta_list(tok, acct, BRANCH_LIST_NAME, BRANCH_LIST_ALIASES, BRANCH_LIST_DESC,
-                    False, "branch-buyers audience")
+    # v9.8: NO second Odoo-fed branch list. Meta already holds the in-store buyers -- the
+    # CAPI job sends them hashed into the dataset -- so "offline buyers from ads" is a
+    # rule audience over that dataset (Purchase + action_source=physical_store), which
+    # Meta refreshes itself. Re-uploading the same people from Odoo would be duplicate
+    # work, and the name would collide with that audience on lookup.
 
 def merge_fallback(win, shop, goog, tik, meta):
     """If a live source returned nothing for a day, use the committed fallback pull."""
