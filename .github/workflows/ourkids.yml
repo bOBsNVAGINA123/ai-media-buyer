@@ -105,27 +105,50 @@ jobs:
       # ok=false, the exception, and the last 60 log lines, and data.js carries a
       # syncError + lastAttempt stamp. That turns the repo itself into the run log,
       # readable with one fetch, without opening the Actions tab.
+      # v9.9.1 -- REWRITTEN. The old rebase loop had a fatal flaw: when `git pull --rebase`
+      # hit a conflict on one of these generated files it stopped MID-REBASE, which leaves
+      # the repo on a detached HEAD. Every later `git push` then died with "You are not
+      # currently on a branch", and the loop never ran `rebase --abort`, so all five
+      # attempts were guaranteed to fail. One conflict = the build is silently thrown away.
+      # That is what froze data.js at 14:58 UTC on 3 Aug while builds kept succeeding.
+      #
+      # These files are BUILD OUTPUTS, so merging them is meaningless -- the freshest build
+      # always wins. So: never rebase. Save the outputs, hard-reset onto origin/main, put
+      # the outputs back, commit, push. A conflict is now impossible by construction.
+      #
+      # index.html is deliberately NOT committed here: the collector never generates it,
+      # and including it meant this bot competed with real dashboard edits over the same
+      # file -- which is where the conflicts came from in the first place.
       - name: Commit fresh data
         if: always()
         run: |
+          set -u
           git config user.name "ourkids-dashboard"
           git config user.email "bot@users.noreply.github.com"
-          git add docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/index.html docs/ourkids/mads_fallback.json || true
-          git commit -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')" || { echo "no changes to commit"; exit 0; }
-          # v6.3: rebase BEFORE the first push, not only after a rejection. A manual
-          # workflow_dispatch fired while a scheduled run is already in flight queues on
-          # the concurrency group, then both runs push the same two files -- the second
-          # one loses the race, burns all its retries, and reports the whole job as
-          # "Process completed with exit code 1" even though its data was perfectly good.
-          for i in 1 2 3 4 5; do
+          OUT="docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/mads_fallback.json"
+          TMP=$(mktemp -d)
+          KEPT=""
+          for f in $OUT; do
+            if [ -f "$f" ]; then mkdir -p "$TMP/$(dirname "$f")"; cp "$f" "$TMP/$f"; KEPT="$KEPT $f"; fi
+          done
+          if [ -z "$KEPT" ]; then echo "::warning::the build produced no output files"; exit 0; fi
+          for i in 1 2 3 4 5 6; do
+            git rebase --abort 2>/dev/null || true
+            git merge --abort 2>/dev/null || true
             git fetch origin main --quiet || true
-            git pull --rebase --autostash origin main || echo "rebase attempt $i had nothing to replay"
-            if git push; then echo "pushed on attempt $i"; exit 0; fi
-            echo "push attempt $i was rejected -- another run pushed first; re-syncing"
+            # -f is required: the freshly built outputs are sitting dirty in the work tree
+            # and a plain checkout refuses to clobber them. They are already saved in $TMP
+            # and get copied back on the next line, so discarding them here is safe.
+            git checkout -f -B main origin/main --quiet || { echo "checkout failed, retrying"; sleep $((i*5)); continue; }
+            for f in $KEPT; do cp "$TMP/$f" "$f"; done
+            git add $KEPT || true
+            if git diff --cached --quiet; then echo "no change vs origin/main -- nothing to commit"; exit 0; fi
+            git commit -q -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')"
+            if git push origin HEAD:main --quiet; then echo "pushed on attempt $i"; exit 0; fi
+            echo "attempt $i: someone pushed first, re-syncing onto the new head"
             sleep $((i * 5))
           done
-          echo "COMMIT STEP FAILED: five pushes rejected in a row. The data itself is fine"
-          echo "(see the status.json summary below) -- this is purely a git race."
+          echo "::error title=Dashboard data not committed::Six attempts to push the freshly built data.js all lost the race. The build itself was fine -- see the status.json summary below."
           exit 1
 
       # Prints the outcome on the run's summary page, so "is it healthy?" is answered
