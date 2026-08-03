@@ -663,6 +663,54 @@ def pull_shopify(win):
         "| cust-split days", sum(1 for v in out["retcust"].values() if v))
     return out
 
+CVR_DAYS = 14      # rolling window, matches the "CVR routing" report the team exports by hand
+CVR_LIMIT = 2500   # landing pages kept, ordered by sessions desc
+
+def pull_cvr_routing():
+    """The "CVR routing" Shopify report, pulled instead of exported by hand.
+
+    Same grain as the manual CSV (landing page path x type) but ShopifyQL hands back
+    RAW COUNTS, not the rounded rates the CSV carries -- so orders are exact rather than
+    sessions x conversion_rate, and nothing is lost to the CSV's weighted averaging.
+    COMPARE TO previous_period gives the prior-window columns the routing verdicts use
+    for trend. Rows are capped at CVR_LIMIT; the cap and the sessions it drops are
+    reported so the dashboard can say so out loud instead of implying full coverage."""
+    ql = ("FROM sessions SHOW sessions, sessions_with_cart_additions, "
+          "sessions_that_reached_checkout, sessions_that_completed_checkout "
+          "GROUP BY landing_page_path, landing_page_type "
+          "SINCE -%dd UNTIL today COMPARE TO previous_period "
+          "ORDER BY sessions DESC LIMIT %d" % (CVR_DAYS, CVR_LIMIT))
+    rows = shopify_ql(ql, "cvrroute")
+    if not rows:
+        log("cvr routing :: no rows -- keeping whatever data.js already had")
+        return
+    TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
+          "Search", "Cart", "Checkout", "Other"]
+    tix = {t: i for i, t in enumerate(TY)}
+    out, tot = [], 0.0
+    for r in rows:
+        p = (r.get("landing_page_path") or "").strip()
+        if not p:
+            continue
+        t = (r.get("landing_page_type") or "Other").strip() or "Other"
+        f = lambda k: float(r.get(k) or 0)
+        s = f("sessions")
+        tot += s
+        out.append([p, tix.get(t, len(TY) - 1), int(s), int(f("sessions_with_cart_additions")),
+                    int(f("sessions_that_reached_checkout")), int(f("sessions_that_completed_checkout")),
+                    int(f("comparison_sessions__previous_period")),
+                    int(f("comparison_sessions_that_completed_checkout__previous_period"))])
+    # total sessions across ALL landing pages, so the tab can state the coverage honestly
+    allsess = 0.0
+    tr = shopify_ql("FROM sessions SHOW sessions SINCE -%dd UNTIL today" % CVR_DAYS, "cvrtotal")
+    for r in (tr or []):
+        allsess += float(r.get("sessions") or 0)
+    XTRA["cvr"] = {"days": CVR_DAYS, "types": TY, "rows": out, "kept": len(out),
+                   "capped": len(out) >= CVR_LIMIT, "keptSess": int(tot),
+                   "allSess": int(allsess or tot), "pulled": END.isoformat()}
+    log("cvr routing pages", len(out), "sessions", int(tot),
+        "of", int(allsess or tot), "capped" if len(out) >= CVR_LIMIT else "full")
+
 GTOK = [None]
 # v7.8: did the API actually answer? Lets us tell "the feed is broken" apart from
 # "the account simply spent nothing" -- two very different problems that both look
@@ -3081,6 +3129,7 @@ def build():
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
     safe(pull_meta_reach, win, os.environ.get("META_ACCESS_TOKEN", "").strip())
+    safe(pull_cvr_routing)
     _ch = safe(pull_cohorts) or {"coh": [], "nr": {}}
     coh, nrm = _ch.get("coh", []), _ch.get("nr", {})
     # v7.6: overwrite new/returning orders AND revenue with customer-level Odoo actuals.
@@ -3306,6 +3355,7 @@ def build():
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
               "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
+              "cvr": XTRA.get("cvr") or prev.get("cvr") or {},
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
