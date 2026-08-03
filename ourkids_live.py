@@ -24,6 +24,11 @@ END = today
 FULLEND = today - datetime.timedelta(days=1)
 AD_START = END - datetime.timedelta(days=364)
 BL_START = END - datetime.timedelta(days=119)          # branches: 120d so compare works
+# v9.8.2: wall-clock guard. The GitHub job is capped at 75 minutes; the audience/CRM
+# uploads only get to start if the read phase finished inside this budget, so a long
+# backfill can never eat the run and leave the dashboard without a data.js.
+RUN_T0 = time.time()
+SYNC_BUDGET_MIN = int(os.environ.get("SYNC_BUDGET_MIN") or 40)
 def drange(a, b):
     out, d = [], a
     while d <= b:
@@ -3248,9 +3253,13 @@ def build():
     bev = safe(pull_budget_events, _mtok) or []
     objd = safe(pull_obj_daily, _mtok, bev) or {}
     cre = safe(pull_campaign_reach, _mtok) or {}
-    safe(sync_offline_audience, _mtok)
-    safe(sync_google_audience)
-    safe(sync_gmb_branch_sales)
+    # v9.8.2: the three audience/CRM syncs used to run HERE, before data.js was written.
+    # They are pure side-effect uploads (hashed customer lists to Google/Meta, in-store
+    # events to the Data Manager) -- nothing they return reaches the payload. But they
+    # push tens of thousands of contacts, and on a full backfill they can run for tens of
+    # minutes, which held the whole dashboard hostage: the job hit its 50-minute timeout
+    # inside an upload, so data.js was never written and the commit step never ran.
+    # They now run AFTER the payload is on disk, under a wall-clock budget.
     gattr = safe(pull_google_attr) or {}
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
@@ -3388,6 +3397,22 @@ def build():
     out += "window.F=" + json.dumps(off, separators=(",", ":"), ensure_ascii=True) + ";"
     open(os.path.join(DOCS, "data.js"), "w").write(out)
     log("WROTE data.js", len(out), "bytes  synced", ts)
+
+    # ---- side-effect uploads, AFTER the payload is safely on disk ----------------
+    # Budget: whatever is left of SYNC_BUDGET_MIN since process start. If the read phase
+    # already ate it, skip and say so -- a skipped audience push costs one cycle, a
+    # timed-out job costs the whole dashboard.
+    _left = SYNC_BUDGET_MIN * 60 - (time.time() - RUN_T0)
+    if _left <= 0:
+        log("audience syncs SKIPPED :: the read phase used the whole %d-minute budget "
+            "(%.1f min elapsed). data.js is written; uploads resume next run."
+            % (SYNC_BUDGET_MIN, (time.time() - RUN_T0) / 60))
+    else:
+        log("audience syncs :: %.1f min of budget left" % (_left / 60))
+        safe(sync_offline_audience, os.environ.get("META_ACCESS_TOKEN", "").strip())
+        safe(sync_google_audience)
+        safe(sync_gmb_branch_sales)
+        log("audience syncs done :: total run %.1f min" % ((time.time() - RUN_T0) / 60))
 
 OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
