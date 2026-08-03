@@ -1366,24 +1366,51 @@ def pull_pos_customers():
                 d2[pid] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
         lrev = {}
         for pid, d, br, mg, oid, rv, qy in rows: lrev[pid] = lrev.get(pid, 0.0) + rv
-        def _jprof(pids):
+        # ---- v9.9 returns/exchanges-excluded twins -------------------------------
+        # An order whose NET margin is <= 0 is a return or an exchange, not a sale. The
+        # Journeys tab's "Exclude returns" switch reads these. The first-purchase anchor
+        # stays the same so a customer never changes cohort; only what counts as COMING
+        # BACK, and the money, are filtered.
+        goodOrd = {k for k, v in ordNet.items() if v > 0}
+        cntX = {}; ltgX = {}; lrevX = {}; pdatesX = {}
+        for pid, d, br, mg, oid, rv, qy in rows:
+            if not oid or (pid, oid) not in goodOrd: continue
+            pdatesX.setdefault(pid, set()).add(d)
+            ltgX[pid] = ltgX.get(pid, 0.0) + mg
+            lrevX[pid] = lrevX.get(pid, 0.0) + rv
+        _seenX = set()
+        for pid, d, br, mg, oid, rv, qy in rows:
+            if oid and (pid, oid) in goodOrd and (pid, oid) not in _seenX:
+                _seenX.add((pid, oid)); cntX[pid] = cntX.get(pid, 0) + 1
+        d2X = {}
+        for pid, ds in pdatesX.items():
+            dl = sorted(ds)
+            if len(dl) >= 2:
+                d2X[pid] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
+        def _jcore(pids, D2, CNT, LTG, LREV):
             n = len(pids)
             if not n: return None
-            reps = [d2[p] for p in pids if p in d2]
+            reps = [D2[p] for p in pids if p in D2]
             hist = [0] * 13
             for g in reps: hist[min(g // 30, 12)] += 1
             opy = [0] * 6
             yrs = 0.0; tot_o = 0
             for p in pids:
                 span = max(30, (END - datetime.date.fromisoformat(first[p][0])).days) / 365.0
-                c = cnt.get(p, 0); tot_o += c; yrs += span
+                c = CNT.get(p, 0); tot_o += c; yrs += span
                 opy[min(max(c, 1), 6) - 1] += 1
             return {"n": n, "rep": round(len(reps) / n * 100, 1),
                     "med2": int(statistics.median(reps)) if reps else None,
                     "oyr": round(tot_o / yrs, 2) if yrs else 0,
-                    "ltgp": round(sum(ltg.get(p, 0) for p in pids) / n),
-                    "ltv": round(sum(lrev.get(p, 0) for p in pids) / n),
+                    "ltgp": round(sum(LTG.get(p, 0) for p in pids) / n),
+                    "ltv": round(sum(LREV.get(p, 0) for p in pids) / n),
                     "h2": hist, "opy": opy}
+        def _jprof(pids):
+            base = _jcore(pids, d2, cnt, ltg, lrev)
+            if base is None: return None
+            ex = _jcore(pids, d2X, cntX, ltgX, lrevX)
+            if ex: base["x"] = ex
+            return base
         def _jmix(pids, key, topn=8):
             agg = {}
             for p in pids:
@@ -1500,7 +1527,7 @@ def pull_shop_lines():
     discount), margin, units, and the discount actually given -- so AUR, UPT, DR%% and gross
     retail are real sums, not allocations. Also feeds vendor/product monthly for the online side."""
     TV = tmpl_vendor_map(); VNM = vendor_names()
-    agg = {}; oc = {}; oseen = set(); SATTR = {}; ODATES = {}; JRO = []; JVL = []
+    agg = {}; oc = {}; oseen = set(); SATTR = {}; ODATES = {}; JRO = []; JVL = []; ORD = {}
     off = 0
     while off < 900000:
         page = oexec("sale.report", "search_read",
@@ -1545,6 +1572,14 @@ def pull_shop_lines():
             if ref and (pid, ref) not in oseen:
                 oseen.add((pid, ref)); oc[pid] = oc.get(pid, 0) + 1
             if ref: ODATES.setdefault(pid, set()).add(d)
+            # v9.9: per-ORDER rev/margin/date, so the online journeys can drop returns and
+            # exchanges (net margin <= 0) the same way the store journeys do. Keyed by order,
+            # not by line, so this stays small next to the ~900k-line crawl.
+            if ref:
+                _o = ORD.get((pid, ref))
+                if _o is None: _o = ORD[(pid, ref)] = [0.0, 0.0, d]
+                _o[0] += rv; _o[1] += mg
+                if d < _o[2]: _o[2] = d
             if _vn and rv > 0: JVL.append((pid, d, VNM.get(_vn) or _vn))
         off += len(page)
         if len(page) < 10000: break
@@ -1558,7 +1593,43 @@ def pull_shop_lines():
             dl = sorted(ds)
             if len(dl) >= 2:
                 d2o[p] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
+        # v9.9 returns-excluded twins for the ONLINE journeys (see the store equivalent).
+        ocX = {}; ODATESX = {}; revX = {}; gpX = {}
+        for (p2, _rf), _o in ORD.items():
+            if _o[1] <= 0: continue          # net margin <= 0 -> return / exchange
+            ocX[p2] = ocX.get(p2, 0) + 1
+            ODATESX.setdefault(p2, set()).add(_o[2])
+            revX[p2] = revX.get(p2, 0.0) + _o[0]
+            gpX[p2] = gpX.get(p2, 0.0) + _o[1]
+        d2oX = {}
+        for p2, ds in ODATESX.items():
+            dl = sorted(ds)
+            if len(dl) >= 2:
+                d2oX[p2] = (datetime.date.fromisoformat(dl[1]) - datetime.date.fromisoformat(dl[0])).days
+        def _jpX(pids):
+            n = len(pids)
+            if not n: return None
+            reps = [d2oX[p] for p in pids if p in d2oX]
+            hist = [0] * 13
+            for g2 in reps: hist[min(g2 // 30, 12)] += 1
+            opy = [0] * 6; yrs = 0.0; tot_o = 0
+            for p in pids:
+                span = max(30, (END - datetime.date.fromisoformat(first_o[p])).days) / 365.0
+                c2 = ocX.get(p, 0); tot_o += c2; yrs += span
+                opy[min(max(c2, 1), 6) - 1] += 1
+            return {"n": n, "rep": round(len(reps) / n * 100, 1),
+                    "med2": int(statistics.median(reps)) if reps else None,
+                    "oyr": round(tot_o / yrs, 2) if yrs else 0,
+                    "ltgp": round(sum(gpX.get(p, 0.0) for p in pids) / n),
+                    "ltv": round(sum(revX.get(p, 0.0) for p in pids) / n),
+                    "h2": hist, "opy": opy}
         def _jp(pids):
+            base = _jp0(pids)
+            if base is None: return None
+            ex = _jpX(pids)
+            if ex: base["x"] = ex
+            return base
+        def _jp0(pids):
             n = len(pids)
             if not n: return None
             reps = [d2o[p] for p in pids if p in d2o]
