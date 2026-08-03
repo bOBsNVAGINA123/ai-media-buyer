@@ -36,7 +36,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # v9.8.2: 50 was not enough once the audience backfills landed -- runs were killed
+    # mid-upload, before data.js was ever written. The collector now writes the payload
+    # first and budgets the uploads (SYNC_BUDGET_MIN), so this ceiling is a backstop.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
