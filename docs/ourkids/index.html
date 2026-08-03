@@ -483,7 +483,7 @@ function ltAdvice(rows,h,D1){
  return s;}
 /* ================= TRAFFIC ROUTING ("tr") =================
    The "CVR routing" Shopify report as a live tab instead of a hand-dropped CSV.
-   Fed by O.cvrRoute (ShopifyQL: sessions x landing page path/type, + previous period).
+   Fed by O.cvrRoute / O.cvr (ShopifyQL: sessions x landing page path/type, + previous period).
    ShopifyQL returns RAW COUNTS, so orders are exact rather than sessions x rounded rate.
    Verdict thresholds are the routing engine's, unchanged. */
 const TR_DOM='https://shop-ourkids.com';
@@ -524,7 +524,7 @@ function trScore(arr){const dest=arr.filter(u=>TR_DEST.indexOf(u.type)>=0);
  arr.forEach(u=>{const v=trVerdict(u,tm,site);u.verdict=v[0];u.reason=v[1];});
  return {dest:dest,siteCVR:site,totSess:ts,totOrd:to};}
 function trModel(){if(TR_M)return TR_M;
- const C=O.cvrRoute||{},TY=C.types||[],R=C.rows||[];
+ const C=O.cvrRoute||O.cvr||{},TY=C.types||[],R=C.rows||[];
  if(!R.length)return null;
  const pages=R.map(r=>trFin({path:r[0],type:TY[r[1]]||'Other',name:trName(r[0]),canon:trCanon(r[0],TY[r[1]]||'Other'),
   sessions:r[2],atcW:r[3],chkW:r[4],orders:r[5],pSessions:r[6],pOrders:r[7]}));
