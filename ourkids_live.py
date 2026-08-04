@@ -973,34 +973,43 @@ def pull_cohorts():
         XTRA.setdefault("lag", {})["shop"] = lagH
         # v8.8 ONLINE cohort cube (each orders row IS one order)
         try:
+            # v9.9.3: the ONLINE cube is built here, NOT by _cubeb, which is why the
+            # Cohorts "Exclude returns" switch worked on every store scope but was greyed
+            # out on ONLINE. Same 6-number cell shape now: [act,rev,gp, actX,revX,gpX]
+            # where the X trio drops orders with net margin <= 0.
             PMO2 = {}
             for pid2, lst in by_p.items():
                 for d2, amt2, mg2 in lst:
-                    e2 = PMO2.setdefault(pid2, {}).setdefault(d2[:7], [0, 0.0, 0.0])
+                    e2 = PMO2.setdefault(pid2, {}).setdefault(d2[:7], [0, 0.0, 0.0, 0, 0.0, 0.0])
                     e2[0] += 1; e2[1] += amt2; e2[2] += mg2
+                    if mg2 > 0:
+                        e2[3] += 1; e2[4] += amt2; e2[5] += mg2
             _mo = lambda a3, b3: (int(b3[:4]) - int(a3[:4])) * 12 + int(b3[5:7]) - int(a3[5:7])
             CURM2 = END.isoformat()[:7]
             C2 = {}
             for pid2, f2 in first.items():
                 cm = f2[:7]
-                cc = C2.setdefault(cm, {"n": 0, "r": 0, "m": {}})
+                cc = C2.setdefault(cm, {"n": 0, "r": 0, "rx": 0, "m": {}})
                 cc["n"] += 1
-                ret2 = False
+                ret2 = False; ret2X = False
                 for mo2, e2 in PMO2.get(pid2, {}).items():
                     k = _mo(cm, mo2)
                     if k < 0 or k > 17: continue
-                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0])
+                    a3 = cc["m"].setdefault(k, [0, 0.0, 0.0, 0, 0.0, 0.0])
                     if (k > 0 and e2[0] >= 1) or (k == 0 and e2[0] >= 2): a3[0] += 1; ret2 = True
                     a3[1] += e2[1]; a3[2] += e2[2]
+                    if (k > 0 and e2[3] >= 1) or (k == 0 and e2[3] >= 2): a3[3] += 1; ret2X = True
+                    a3[4] += e2[4]; a3[5] += e2[5]
                 if ret2: cc["r"] += 1
+                if ret2X: cc["rx"] += 1
             onl = {}
+            Z2 = [0, 0.0, 0.0, 0, 0.0, 0.0]
             for cm, cc in C2.items():
                 mx = _mo(cm, CURM2)
                 if mx < 0: continue
-                onl[cm] = {"n": cc["n"], "r": cc["r"],
-                           "m": [[cc["m"].get(k, [0, 0, 0])[0],
-                                  round(cc["m"].get(k, [0, 0, 0])[1]),
-                                  round(cc["m"].get(k, [0, 0, 0])[2])]
+                onl[cm] = {"n": cc["n"], "r": cc["r"], "rx": cc["rx"],
+                           "m": [[cc["m"].get(k, Z2)[0], round(cc["m"].get(k, Z2)[1]), round(cc["m"].get(k, Z2)[2]),
+                                  cc["m"].get(k, Z2)[3], round(cc["m"].get(k, Z2)[4]), round(cc["m"].get(k, Z2)[5])]
                                  for k in range(0, min(17, mx) + 1)]}
             XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})["scopes"]["ONLINE"] = onl
             log("online cohort cube :: cohorts", len(onl))
@@ -1929,65 +1938,78 @@ def pull_meta_ads(tok):
         di = {}
         for i in range(60): di[(datetime.date.fromisoformat(c0) + datetime.timedelta(days=i)).isoformat()] = i
         A = {}
+        # v9.9.3 (restored): fetch in 10-day chunks NEWEST FIRST. A single 60-day request
+        # is what Meta rate-limits, and when it died mid-pull the newest days -- the ones
+        # every verdict on this dashboard depends on -- were the ones missing, which is how
+        # Creative Benchmarks ended up reading E£0 spend and "100% losers". Newest-first
+        # means a truncated pull costs the OLDEST days instead.
+        _d0 = datetime.date.fromisoformat(c0)
+        _chunks = []
+        _e1 = END
+        while _e1 >= _d0:
+            _s1 = max(_d0, _e1 - datetime.timedelta(days=9))
+            _chunks.append((_s1.isoformat(), _e1.isoformat()))
+            _e1 = _s1 - datetime.timedelta(days=1)
         for acct in meta_accounts(tok):
             allnc = [MCC_ALLNC]
             try:
                 _v2, _n2, _a2 = _cc_discover(acct, tok)
                 if _a2: allnc = _a2
             except Exception: pass
-            p = {"level": "ad", "time_increment": 1, "access_token": tok,
-                 "time_range": json.dumps({"since": c0, "until": c1}),
-                 "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                           "spend,impressions,outbound_clicks,actions,action_values",
-                 "limit": 500}
-            url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
-            pages = 0
-            # v9.9.2: Meta answers "Service temporarily unavailable" on the FIRST page often
-            # enough that the smaller account kept vanishing from this payload entirely --
-            # which read as "Basic is not synced". A transient error is now retried a few
-            # times with backoff before the account is abandoned.
-            tries = 0
-            while url and pages < 60:
-                d = http_json(url); pages += 1
-                if d.get("error"):
-                    _e = str(d.get("error"))
-                    # match on the MESSAGE only. Matching on '"code":1' also matched
-                    # '"code":190' (expired token) and would burn retries on something
-                    # no amount of waiting can fix.
-                    _el = _e.lower()
-                    _transient = ("temporarily unavailable" in _el or "rate limit" in _el
-                                  or "reduce the amount of data" in _el or "please retry" in _el
-                                  or "try again later" in _el)
-                    if _transient and tries < 3:
-                        tries += 1; pages -= 1
-                        log("meta ads :: transient error on", acct, "-- retry", tries, "of 3 ::", _e[:110])
-                        time.sleep(10 * tries); continue
-                    log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", _e[:160]); break
-                for r in (d.get("data") or []):
-                    i = di.get(r.get("date_start"))
-                    if i is None: continue
-                    aid = r.get("ad_id")
-                    a = A.get(aid)
-                    if a is None:
-                        a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
-                                      "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
-                                      "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
-                                      "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                      "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
-                    av = r.get("action_values") or []; ac = r.get("actions") or []
-                    D = a["d"]
-                    D["sp"][i] += float(r.get("spend") or 0)
-                    D["im"][i] += float(r.get("impressions") or 0)
-                    D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
-                    D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
-                    D["fv"][i] += _av(av, ("offline_conversion.purchase",))
-                    D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
-                    D["op"][i] += _av(ac, ("offline_conversion.purchase",))
-                    D["vv"][i] += _av(ac, ("video_view",))
-                    ccv = _cc(av); cca = _cc(ac)
-                    for cid2 in allnc:
-                        D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
-                url = (d.get("paging") or {}).get("next")
+            for _cs, _ce in _chunks:
+             p = {"level": "ad", "time_increment": 1, "access_token": tok,
+                  "time_range": json.dumps({"since": _cs, "until": _ce}),
+                  "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
+                            "spend,impressions,outbound_clicks,actions,action_values",
+                  "limit": 500}
+             url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+             pages = 0
+             # v9.9.2: Meta answers "Service temporarily unavailable" on the FIRST page often
+             # enough that the smaller account kept vanishing from this payload entirely --
+             # which read as "Basic is not synced". A transient error is now retried a few
+             # times with backoff before the account is abandoned.
+             tries = 0
+             while url and pages < 60:
+                 d = http_json(url); pages += 1
+                 if d.get("error"):
+                     _e = str(d.get("error"))
+                     # match on the MESSAGE only. Matching on '"code":1' also matched
+                     # '"code":190' (expired token) and would burn retries on something
+                     # no amount of waiting can fix.
+                     _el = _e.lower()
+                     _transient = ("temporarily unavailable" in _el or "rate limit" in _el
+                                   or "reduce the amount of data" in _el or "please retry" in _el
+                                   or "try again later" in _el)
+                     if _transient and tries < 3:
+                         tries += 1; pages -= 1
+                         log("meta ads :: transient error on", acct, "-- retry", tries, "of 3 ::", _e[:110])
+                         time.sleep(10 * tries); continue
+                     log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", _e[:160]); break
+                 for r in (d.get("data") or []):
+                     i = di.get(r.get("date_start"))
+                     if i is None: continue
+                     aid = r.get("ad_id")
+                     a = A.get(aid)
+                     if a is None:
+                         a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
+                                       "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
+                                       "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
+                                       "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
+                                       "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
+                     av = r.get("action_values") or []; ac = r.get("actions") or []
+                     D = a["d"]
+                     D["sp"][i] += float(r.get("spend") or 0)
+                     D["im"][i] += float(r.get("impressions") or 0)
+                     D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
+                     D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
+                     D["fv"][i] += _av(av, ("offline_conversion.purchase",))
+                     D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
+                     D["op"][i] += _av(ac, ("offline_conversion.purchase",))
+                     D["vv"][i] += _av(ac, ("video_view",))
+                     ccv = _cc(av); cca = _cc(ac)
+                     for cid2 in allnc:
+                         D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
+                 url = (d.get("paging") or {}).get("next")
         ads = []
         for a in A.values():
             D = a["d"]; sp = sum(D["sp"])
