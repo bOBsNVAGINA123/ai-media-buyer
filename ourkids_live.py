@@ -1950,66 +1950,87 @@ def pull_meta_ads(tok):
             _s1 = max(_d0, _e1 - datetime.timedelta(days=9))
             _chunks.append((_s1.isoformat(), _e1.isoformat()))
             _e1 = _s1 - datetime.timedelta(days=1)
-        for acct in meta_accounts(tok):
-            allnc = [MCC_ALLNC]
+        _accts = list(meta_accounts(tok))
+        _ALLNC = {}
+        for acct in _accts:
+            _ALLNC[acct] = [MCC_ALLNC]
             try:
                 _v2, _n2, _a2 = _cc_discover(acct, tok)
-                if _a2: allnc = _a2
+                if _a2: _ALLNC[acct] = _a2
             except Exception: pass
-            for _cs, _ce in _chunks:
-             p = {"level": "ad", "time_increment": 1, "access_token": tok,
-                  "time_range": json.dumps({"since": _cs, "until": _ce}),
-                  "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                            "spend,impressions,outbound_clicks,actions,action_values",
-                  "limit": 500}
-             url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
-             pages = 0
-             # v9.9.2: Meta answers "Service temporarily unavailable" on the FIRST page often
-             # enough that the smaller account kept vanishing from this payload entirely --
-             # which read as "Basic is not synced". A transient error is now retried a few
-             # times with backoff before the account is abandoned.
-             tries = 0
-             while url and pages < 60:
-                 d = http_json(url); pages += 1
-                 if d.get("error"):
-                     _e = str(d.get("error"))
-                     # match on the MESSAGE only. Matching on '"code":1' also matched
-                     # '"code":190' (expired token) and would burn retries on something
-                     # no amount of waiting can fix.
-                     _el = _e.lower()
-                     _transient = ("temporarily unavailable" in _el or "rate limit" in _el
-                                   or "reduce the amount of data" in _el or "please retry" in _el
-                                   or "try again later" in _el)
-                     if _transient and tries < 3:
-                         tries += 1; pages -= 1
-                         log("meta ads :: transient error on", acct, "-- retry", tries, "of 3 ::", _e[:110])
-                         time.sleep(10 * tries); continue
-                     log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", _e[:160]); break
-                 for r in (d.get("data") or []):
-                     i = di.get(r.get("date_start"))
-                     if i is None: continue
-                     aid = r.get("ad_id")
-                     a = A.get(aid)
-                     if a is None:
-                         a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
-                                       "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
-                                       "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
-                                       "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                       "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
-                     av = r.get("action_values") or []; ac = r.get("actions") or []
-                     D = a["d"]
-                     D["sp"][i] += float(r.get("spend") or 0)
-                     D["im"][i] += float(r.get("impressions") or 0)
-                     D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
-                     D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
-                     D["fv"][i] += _av(av, ("offline_conversion.purchase",))
-                     D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
-                     D["op"][i] += _av(ac, ("offline_conversion.purchase",))
-                     D["vv"][i] += _av(ac, ("video_view",))
-                     ccv = _cc(av); cca = _cc(ac)
-                     for cid2 in allnc:
-                         D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
-                 url = (d.get("paging") or {}).get("next")
+        # v9.9.4: chunks OUTER, accounts INNER. Meta's "Application request limit" is
+        # app-wide, not per-account. With accounts on the outside, the big account spent
+        # the whole quota and the small one ("Basic") got a limit error on its very first
+        # page every run -- so it never appeared in this payload at all. The NEWEST chunk
+        # is now fetched for EVERY account before any older chunk, so hitting the quota
+        # wall costs old days rather than an entire account.
+        _dead = set()
+        for _cs, _ce in _chunks:
+            for acct in _accts:
+                if acct in _dead: continue
+                allnc = _ALLNC.get(acct) or [MCC_ALLNC]
+                p = {"level": "ad", "time_increment": 1, "access_token": tok,
+                     "time_range": json.dumps({"since": _cs, "until": _ce}),
+                     "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
+                               "spend,impressions,outbound_clicks,actions,action_values",
+                     "limit": 500}
+                url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+                pages = 0
+                # v9.9.2: Meta answers "Service temporarily unavailable" on the FIRST page often
+                # enough that the smaller account kept vanishing from this payload entirely --
+                # which read as "Basic is not synced". A transient error is now retried a few
+                # times with backoff before the account is abandoned.
+                tries = 0
+                while url and pages < 60:
+                    d = http_json(url); pages += 1
+                    if d.get("error"):
+                        _e = str(d.get("error"))
+                        # match on the MESSAGE only. Matching on '"code":1' also matched
+                        # '"code":190' (expired token) and would burn retries on something
+                        # no amount of waiting can fix.
+                        _el = _e.lower()
+                        # The errors that actually bite are "Application request limit reached" and
+                        # "User request limit reached" -- NEITHER contains the words "rate limit",
+                        # which is why the first version of this matcher never fired and the Basic
+                        # account kept vanishing from the payload.
+                        _transient = ("temporarily unavailable" in _el or "rate limit" in _el
+                                      or "request limit" in _el or "reduce the amount of data" in _el
+                                      or "please retry" in _el or "try again later" in _el)
+                        _quota = ("request limit" in _el or "rate limit" in _el)
+                        if _transient and tries < 3:
+                            tries += 1; pages -= 1
+                            _w = (45 * tries) if _quota else (10 * tries)
+                            log("meta ads ::", "QUOTA" if _quota else "transient", "on", acct,
+                                "-- retry", tries, "of 3 after", _w, "s ::", _e[:90])
+                            time.sleep(_w); continue
+                        # app-wide quota: stop requesting this account's OLDER chunks, keep what landed
+                        if _quota: _dead.add(acct)
+                        log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", _e[:160]); break
+                    for r in (d.get("data") or []):
+                        i = di.get(r.get("date_start"))
+                        if i is None: continue
+                        aid = r.get("ad_id")
+                        a = A.get(aid)
+                        if a is None:
+                            a = A[aid] = {"id": aid, "n": (r.get("ad_name") or "")[:80],
+                                          "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
+                                          "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
+                                          "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
+                        av = r.get("action_values") or []; ac = r.get("actions") or []
+                        D = a["d"]
+                        D["sp"][i] += float(r.get("spend") or 0)
+                        D["im"][i] += float(r.get("impressions") or 0)
+                        D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
+                        D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
+                        D["fv"][i] += _av(av, ("offline_conversion.purchase",))
+                        D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
+                        D["op"][i] += _av(ac, ("offline_conversion.purchase",))
+                        D["vv"][i] += _av(ac, ("video_view",))
+                        ccv = _cc(av); cca = _cc(ac)
+                        for cid2 in allnc:
+                            D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
+                    url = (d.get("paging") or {}).get("next")
         ads = []
         for a in A.values():
             D = a["d"]; sp = sum(D["sp"])
