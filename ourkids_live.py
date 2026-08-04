@@ -1942,10 +1942,27 @@ def pull_meta_ads(tok):
                  "limit": 500}
             url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
             pages = 0
+            # v9.9.2: Meta answers "Service temporarily unavailable" on the FIRST page often
+            # enough that the smaller account kept vanishing from this payload entirely --
+            # which read as "Basic is not synced". A transient error is now retried a few
+            # times with backoff before the account is abandoned.
+            tries = 0
             while url and pages < 60:
                 d = http_json(url); pages += 1
                 if d.get("error"):
-                    log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", str(d.get("error"))[:160]); break
+                    _e = str(d.get("error"))
+                    # match on the MESSAGE only. Matching on '"code":1' also matched
+                    # '"code":190' (expired token) and would burn retries on something
+                    # no amount of waiting can fix.
+                    _el = _e.lower()
+                    _transient = ("temporarily unavailable" in _el or "rate limit" in _el
+                                  or "reduce the amount of data" in _el or "please retry" in _el
+                                  or "try again later" in _el)
+                    if _transient and tries < 3:
+                        tries += 1; pages -= 1
+                        log("meta ads :: transient error on", acct, "-- retry", tries, "of 3 ::", _e[:110])
+                        time.sleep(10 * tries); continue
+                    log("meta ads :: PAGE ERROR on", acct, "page", pages, "::", _e[:160]); break
                 for r in (d.get("data") or []):
                     i = di.get(r.get("date_start"))
                     if i is None: continue
