@@ -194,15 +194,25 @@ jobs:
               print("")
               print("</details>")
           PY
-      # Keep the password-protected mirror in step with what we just built. The whole
-      # docs/ tree is deployed, so all three apps (Growth Operator, Strategic, OurKids)
-      # and their payloads stay in sync at https://ourkids-live.vercel.app
-      # v9.8: continue-on-error. The mirror is a CONVENIENCE COPY -- the real dashboard is
-      # the Pages site, already committed by the step above. Before this, an expired Vercel
-      # token painted the whole run red, which read as "the sync did not happen" when the
-      # data was in fact built, committed and live. A mirror problem is now reported as a
-      # mirror problem and nothing else.
-      - name: Publish to the private mirror
+      # v9.11 (5 Aug 2026): the CLI deploy that used to live here is GONE, and on purpose.
+      #
+      # The mirror (ourkids-analytics -> ourkids-analytics-3bdelshafi.vercel.app, the URL
+      # the team actually opens) is now connected to this repo directly in Vercel, with
+      # Root Directory = docs. Every commit the step above makes therefore publishes
+      # itself. No token, nothing to expire.
+      #
+      # Why it was removed rather than fixed: this step deployed with a VERCEL_TOKEN that
+      # Vercel kept expiring -- it died three times in four days, and each time the run
+      # still reported SUCCESS (continue-on-error), so the mirror silently froze while
+      # Pages stayed fresh. That is what "the numbers are two days old" looked like from
+      # the outside on 3-5 Aug. It would also break now regardless: it ran `cd docs`, and
+      # with Root Directory set to docs, Vercel would look for docs/docs.
+      #
+      # The token deploy below is kept as a SECOND, independent publisher -- if the Git
+      # connection is ever lost or Vercel skips the build, this still pushes the same
+      # bytes. It now runs from the REPO ROOT, not docs/: Root Directory is applied by
+      # Vercel on top of whatever is uploaded, so `cd docs` would resolve to docs/docs.
+      - name: Publish to the private mirror (fallback -- Git integration is the primary)
         if: always()
         continue-on-error: true
         env:
@@ -210,17 +220,16 @@ jobs:
           VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          cd docs
           if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::warning title=Vercel mirror skipped::VERCEL_TOKEN is empty. Pages dashboard is unaffected."
+            echo "::warning title=Vercel fallback skipped::VERCEL_TOKEN is empty. The Git integration publishes the mirror; Pages is unaffected."
             exit 0
           fi
           if npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/v.log; then
-            echo "mirror published"
+            echo "mirror published (fallback path)"
           else
             if grep -q "not valid" /tmp/v.log; then
-              echo "::warning title=Vercel mirror token expired::VERCEL_TOKEN is rejected. This is almost always a CLI SESSION token, which Vercel expires. Create a long-lived one at https://vercel.com/account/settings/tokens and set it with: gh secret set VERCEL_TOKEN -R bOBsNVAGINA123/ai-media-buyer. The Pages dashboard and the committed data are UNAFFECTED."
+              echo "::warning title=Vercel fallback token expired::VERCEL_TOKEN is rejected. Mint a NO-EXPIRATION token at https://vercel.com/account/settings/tokens (scope: ourkids-analytics) and set it with: gh secret set VERCEL_TOKEN -R bOBsNVAGINA123/ai-media-buyer. The mirror is still published by the Git integration, and Pages is UNAFFECTED."
             else
-              echo "::warning title=Vercel mirror failed::See the log above. The Pages dashboard and the committed data are UNAFFECTED."
+              echo "::warning title=Vercel fallback failed::See the log above. The Git integration still publishes the mirror; Pages is UNAFFECTED."
             fi
           fi
