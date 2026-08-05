@@ -224,7 +224,14 @@ jobs:
             echo "::warning title=Vercel fallback skipped::VERCEL_TOKEN is empty. The Git integration publishes the mirror; Pages is unaffected."
             exit 0
           fi
-          if npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/v.log; then
+          # NOT `... | tee`: a pipeline reports the exit status of the LAST command, so the
+          # old step printed "mirror published" even when the deploy had just failed. That
+          # is how a broken mirror looked healthy in the logs for two days (5 Aug 2026).
+          set +e
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" > /tmp/v.log 2>&1
+          rc=$?
+          cat /tmp/v.log
+          if [ $rc -eq 0 ]; then
             echo "mirror published (fallback path)"
           else
             if grep -q "not valid" /tmp/v.log; then
