@@ -668,30 +668,24 @@ def pull_shopify(win):
         "| cust-split days", sum(1 for v in out["retcust"].values() if v))
     return out
 
-CVR_DAYS = 14      # rolling window, matches the "CVR routing" report the team exports by hand
-CVR_LIMIT = 2500   # landing pages kept, ordered by sessions desc
+CVR_DAYS = 14      # default window, matches the "CVR routing" report the team exports by hand
+CVR_WINDOWS = (7, 14, 30)   # every window the tab can be switched to, each pulled at its own grain
+CVR_LIMIT = 2500   # landing pages kept per window, ordered by sessions desc
+CVR_TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
+          "Search", "Cart", "Checkout", "Other"]
 
-def pull_cvr_routing():
-    """The "CVR routing" Shopify report, pulled instead of exported by hand.
-
-    Same grain as the manual CSV (landing page path x type) but ShopifyQL hands back
-    RAW COUNTS, not the rounded rates the CSV carries -- so orders are exact rather than
-    sessions x conversion_rate, and nothing is lost to the CSV's weighted averaging.
-    COMPARE TO previous_period gives the prior-window columns the routing verdicts use
-    for trend. Rows are capped at CVR_LIMIT; the cap and the sessions it drops are
-    reported so the dashboard can say so out loud instead of implying full coverage."""
+def _cvr_window(days):
+    """One window of the routing table: landing page x type, raw counts, plus the
+    same window shifted back one period for the trend."""
     ql = ("FROM sessions SHOW sessions, sessions_with_cart_additions, "
           "sessions_that_reached_checkout, sessions_that_completed_checkout "
           "GROUP BY landing_page_path, landing_page_type "
           "SINCE -%dd UNTIL today COMPARE TO previous_period "
-          "ORDER BY sessions DESC LIMIT %d" % (CVR_DAYS, CVR_LIMIT))
-    rows = shopify_ql(ql, "cvrroute")
+          "ORDER BY sessions DESC LIMIT %d" % (days, CVR_LIMIT))
+    rows = shopify_ql(ql, "cvrroute%dd" % days)
     if not rows:
-        log("cvr routing :: no rows -- keeping whatever data.js already had")
-        return
-    TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
-          "Search", "Cart", "Checkout", "Other"]
-    tix = {t: i for i, t in enumerate(TY)}
+        return None
+    tix = {t: i for i, t in enumerate(CVR_TY)}
     out, tot = [], 0.0
     for r in rows:
         p = (r.get("landing_page_path") or "").strip()
@@ -701,20 +695,72 @@ def pull_cvr_routing():
         f = lambda k: float(r.get(k) or 0)
         s = f("sessions")
         tot += s
-        out.append([p, tix.get(t, len(TY) - 1), int(s), int(f("sessions_with_cart_additions")),
+        out.append([p, tix.get(t, len(CVR_TY) - 1), int(s), int(f("sessions_with_cart_additions")),
                     int(f("sessions_that_reached_checkout")), int(f("sessions_that_completed_checkout")),
                     int(f("comparison_sessions__previous_period")),
                     int(f("comparison_sessions_that_completed_checkout__previous_period"))])
     # total sessions across ALL landing pages, so the tab can state the coverage honestly
     allsess = 0.0
-    tr = shopify_ql("FROM sessions SHOW sessions SINCE -%dd UNTIL today" % CVR_DAYS, "cvrtotal")
-    for r in (tr or []):
+    for r in (shopify_ql("FROM sessions SHOW sessions SINCE -%dd UNTIL today" % days,
+                         "cvrtotal%dd" % days) or []):
         allsess += float(r.get("sessions") or 0)
-    XTRA["cvr"] = {"days": CVR_DAYS, "types": TY, "rows": out, "kept": len(out),
-                   "capped": len(out) >= CVR_LIMIT, "keptSess": int(tot),
-                   "allSess": int(allsess or tot), "pulled": END.isoformat()}
-    log("cvr routing pages", len(out), "sessions", int(tot),
+    log("cvr routing", str(days) + "d pages", len(out), "sessions", int(tot),
         "of", int(allsess or tot), "capped" if len(out) >= CVR_LIMIT else "full")
+    return {"days": days, "rows": out, "kept": len(out), "capped": len(out) >= CVR_LIMIT,
+            "keptSess": int(tot), "allSess": int(allsess or tot)}
+
+def _cvr_series(days=30):
+    """Daily sessions/ATC/checkout/orders per landing page TYPE, so the tab can draw the
+    trend instead of showing a single frozen number. TIMESERIES day + GROUP BY
+    landing_page_type is ~11 rows a day -- cheap enough to always carry."""
+    rows = shopify_ql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
+                      "sessions_that_reached_checkout, sessions_that_completed_checkout "
+                      "TIMESERIES day GROUP BY landing_page_type "
+                      "SINCE -%dd UNTIL today" % days, "cvrts")
+    if not rows:
+        return None
+    tix = {t: i for i, t in enumerate(CVR_TY)}
+    dset = sorted({str(r.get("day") or "")[:10] for r in rows if r.get("day")})
+    dix = {d: i for i, d in enumerate(dset)}
+    out = []
+    for r in rows:
+        d = str(r.get("day") or "")[:10]
+        if d not in dix:
+            continue
+        t = (r.get("landing_page_type") or "Other").strip() or "Other"
+        f = lambda k: int(float(r.get(k) or 0))
+        out.append([dix[d], tix.get(t, len(CVR_TY) - 1), f("sessions"),
+                    f("sessions_with_cart_additions"), f("sessions_that_reached_checkout"),
+                    f("sessions_that_completed_checkout")])
+    log("cvr series days", len(dset), "rows", len(out))
+    return {"days": dset, "rows": out}
+
+def pull_cvr_routing():
+    """The "CVR routing" Shopify report, pulled instead of exported by hand.
+
+    Same grain as the manual CSV (landing page path x type) but ShopifyQL hands back
+    RAW COUNTS, not the rounded rates the CSV carries -- so orders are exact rather than
+    sessions x conversion_rate, and nothing is lost to the CSV's weighted averaging.
+    COMPARE TO previous_period gives the prior-window columns the routing verdicts use
+    for trend. Rows are capped at CVR_LIMIT; the cap and the sessions it drops are
+    reported so the dashboard can say so out loud instead of implying full coverage.
+
+    v9.10: pulled at 7/14/30d instead of only 14d so the tab has a real time filter,
+    plus a daily by-type series so it can draw a trend. The 14d window stays mirrored on
+    the top-level keys -- an older index.html reads those and keeps working."""
+    wins = {}
+    for d in CVR_WINDOWS:
+        w = _cvr_window(d)
+        if w:
+            wins[str(d)] = w
+    base = wins.get(str(CVR_DAYS)) or (list(wins.values())[0] if wins else None)
+    if not base:
+        log("cvr routing :: no rows -- keeping whatever data.js already had")
+        return
+    P = dict(base)
+    P.update({"types": CVR_TY, "wins": wins, "windows": sorted(int(k) for k in wins),
+              "ts": _cvr_series(), "pulled": END.isoformat()})
+    XTRA["cvr"] = P
 
 GTOK = [None]
 # v7.8: did the API actually answer? Lets us tell "the feed is broken" apart from
