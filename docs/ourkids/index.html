@@ -489,8 +489,8 @@ function ltAdvice(rows,h,D1){
 const TR_DOM='https://shop-ourkids.com';
 const TR_DEST=['Homepage','Product','Collection','Custom Page','Blog Article','Other'];
 const TR_VC={SCALE:'#1a8a3c',FEED:'#4a8fd6',FIX:'#c43d2f',INVESTIGATE:'#d68a1e',HOLD:'#999',IGNORE:'#cfcfcf'};
-let TRS={view:'ROUTING',grouped:true,f:'',vf:'ALL',sort:{col:'sessions',dir:-1},open:{}};
-let TR_M=null;
+let TRS={view:'ROUTING',grouped:true,f:'',vf:'ALL',win:14,rsort:'sessions',sort:{col:'sessions',dir:-1},open:{}};
+let TR_M={};
 const TR_LOC=/^\/[a-z]{2}(-[a-z]{2})?\//i;
 function trDec(s){try{return decodeURIComponent(s);}catch(e){return s;}}
 function trStrip(p){return p.replace(TR_LOC,'/');}
@@ -504,7 +504,13 @@ function trCanon(path,type){const p=trStrip(path);
 function trFin(u){u.cvr=u.sessions>0?u.orders/u.sessions:0;
  u.atc=u.sessions>0?u.atcW/u.sessions:0;u.checkout=u.sessions>0?u.chkW/u.sessions:0;
  u.pCvr=u.pSessions>0?u.pOrders/u.pSessions:0;u.dCvr=u.cvr-u.pCvr;
+ // sessions trend vs the same window before it -- new pages have no prior period, so they
+ // read as null (shown as "new") rather than a fake +100%
+ u.dSess=u.sessions-u.pSessions;u.dSessP=u.pSessions>0?(u.sessions-u.pSessions)/u.pSessions:null;
  u.atc2chk=u.atc>0?u.checkout/u.atc:0;u.chk2buy=u.checkout>0?u.cvr/u.checkout:0;return u;}
+function trArrow(v,fmt){if(v==null)return '<span style="color:#9aa3b5">new</span>';
+ if(Math.abs(v)<1e-9)return '<span style="color:#9aa3b5">— flat</span>';
+ const up=v>0;return '<span style="color:'+(up?'var(--grn)':'var(--red)')+';font-weight:700">'+(up?'▲':'▼')+' '+fmt(Math.abs(v))+'</span>';}
 function trPct(x){return (x*100).toFixed(2)+'%';}
 function trN(x){return Math.round(x).toLocaleString('en-US');}
 function trVerdict(u,tm,site){const s=u.sessions,cvr=u.cvr,atc=u.atc;
@@ -523,10 +529,15 @@ function trScore(arr){const dest=arr.filter(u=>TR_DEST.indexOf(u.type)>=0);
   tm[t]=sub.length?sub.reduce((s,u)=>s+u.cvr,0)/sub.length:site;});
  arr.forEach(u=>{const v=trVerdict(u,tm,site);u.verdict=v[0];u.reason=v[1];});
  return {dest:dest,siteCVR:site,totSess:ts,totOrd:to};}
-function trModel(){if(TR_M)return TR_M;
+function trRaw(){return O.cvrRoute||O.cvr||{};}
+function trWins(){const C=trRaw();return C.windows&&C.windows.length?C.windows:[C.days||14];}
+function trModel(){const W=TRS.win;if(TR_M[W])return TR_M[W];
  // v9.9.2: the payload key was renamed to cvrRoute in this file but the collector still
  // writes `cvr`, so this tab read undefined and rendered empty on every sync. Accept both.
- const C=O.cvrRoute||O.cvr||{},TY=C.types||[],R=C.rows||[];
+ // v9.10: the collector now ships one table per window under .wins -- fall back to the
+ // top-level table when reading an older data.js so the tab never blanks mid-deploy.
+ const C0=trRaw(),W0=(C0.wins||{})[String(W)];
+ const C=W0?Object.assign({},C0,W0):C0,TY=C0.types||[],R=C.rows||[];
  if(!R.length)return null;
  const pages=R.map(r=>trFin({path:r[0],type:TY[r[1]]||'Other',name:trName(r[0]),canon:trCanon(r[0],TY[r[1]]||'Other'),
   sessions:r[2],atcW:r[3],chkW:r[4],orders:r[5],pSessions:r[6],pOrders:r[7]}));
@@ -540,11 +551,13 @@ function trModel(){if(TR_M)return TR_M;
   const best=G.variants.slice().sort((a,b)=>b.sessions-a.sessions)[0];
   G.path=(clean||best).path;G.name=trName(G.path);G.variants.sort((a,b)=>b.sessions-a.sessions);
   return trFin(G);});
- TR_M={pages:pages,groups:groups,p:trScore(pages),g:trScore(groups),C:C};
- return TR_M;}
+ TR_M[W]={pages:pages,groups:groups,p:trScore(pages),g:trScore(groups),C:C};
+ return TR_M[W];}
 function trU(){const M=trModel();return TRS.grouped?M.groups:M.pages;}
 function trS(){const M=trModel();return TRS.grouped?M.g:M.p;}
 function trSel(v){TRS.view=v;rTR();}
+function trWin(d){TRS.win=d;rTR();}
+function trRS(k){TRS.rsort=k;rTR();}
 function trGrp(){TRS.grouped=!TRS.grouped;rTR();}
 function trSet(k,v){TRS[k]=v;rTR();}
 function trSort(c){TRS.sort={col:c,dir:TRS.sort.col===c?-TRS.sort.dir:-1};rTR();}
@@ -559,12 +572,32 @@ function trCard(p,idx){const nv=p.variants?p.variants.length:1,vid='tc'+idx;
  +'<div style="font-size:12px;color:#555;margin-top:3px">'+p.reason+'</div>'
  +'<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">'
  +[['Sessions',trN(p.sessions)],['Conversion',trPct(p.cvr)],['Add to cart',trPct(p.atc)],
-   ['Reached checkout',trPct(p.checkout)],['Orders',trN(p.orders)],['Type',p.type]]
+   ['Reached checkout',trPct(p.checkout)],['Orders',trN(p.orders)],
+   ['Traffic vs prev '+TRS.win+'d',trArrow(p.dSessP,v=>(v*100).toFixed(0)+'%')],
+   ['CVR vs prev '+TRS.win+'d',trArrow(p.pSessions>0?p.dCvr:null,v=>trPct(v))],
+   ['Type',p.type]]
    .map(x=>'<div style="font-size:11px;color:#777">'+x[0]+'<b style="font-family:ui-monospace,monospace;font-size:13px;color:var(--ink);display:block;font-weight:700">'+x[1]+'</b></div>').join('')
  +'</div>';
  if(TRS.grouped&&nv>1&&TRS.open[vid]){h+='<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:8px;font-size:11px">'
   +p.variants.map(v=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:#666"><a href="'+trUrl(v)+'" target="_blank" rel="noopener" style="color:var(--ink);word-break:break-all">'+v.path+'</a><span>'+trN(v.sessions)+' sess · '+trPct(v.cvr)+' CVR</span></div>').join('')+'</div>';}
  return h+'</div></div>';}
+/* v9.10: the daily by-type series (O.cvr.ts) the collector now carries. Two charts --
+   sessions and conversion cannot share a y axis, and vzCard formats both axes the same. */
+function trCharts(g){const T=trRaw().ts;
+ if(!T||!T.days||!T.days.length){g.insertAdjacentHTML('beforeend','<div class="card full"><div class="rtNote">No daily series in this sync yet — it lands on the next collector run, and the trend charts appear with it.</div></div>');return;}
+ const TY=trRaw().types||[],L=T.days.slice(-TRS.win),off=T.days.length-L.length;
+ const SHOW=['Product','Collection','Homepage','Search'],CC={Product:C.indigo,Collection:C.blue,Homepage:C.grn,Search:C.orange};
+ const sess={},ord={},tot=L.map(()=>0),tord=L.map(()=>0);
+ SHOW.forEach(t=>{sess[t]=L.map(()=>0);ord[t]=L.map(()=>0);});
+ T.rows.forEach(r=>{const i=r[0]-off;if(i<0||i>=L.length)return;
+  const t=TY[r[1]]||'Other';tot[i]+=r[2];tord[i]+=r[5];
+  if(sess[t]){sess[t][i]+=r[2];ord[t][i]+=r[5];}});
+ const lbl=L.map(d=>d.slice(5));
+ vzCard(g,'Sessions by landing page type','Where the traffic actually lands, day by day over the last '+TRS.win+' days. Total '+trN(tot.reduce((a,b)=>a+b,0))+' sessions.',
+  lbl,SHOW.map(t=>({l:t,d:sess[t],c:CC[t],w:2,pr:0})).concat([{l:'All sessions',d:tot,c:C.grey,w:1.4,pr:0,dash:1}]),fI,{});
+ vzCard(g,'Conversion rate by landing page type','Orders divided by sessions, per day. This is the up-or-down the routing verdicts are built on — a page type sliding here drags the whole site with it.',
+  lbl,SHOW.map(t=>({l:t,d:sess[t].map((s,i)=>s>0?100*ord[t][i]/s:null),c:CC[t],w:2,pr:0}))
+   .concat([{l:'Site',d:tot.map((s,i)=>s>0?100*tord[i]/s:null),c:'#2b3242',w:2.4,pr:0}]),fP,{});}
 function trKpi(l,v,n2){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(n2?'<div style="font-size:11px;color:#8a93a6;margin-top:2px">'+n2+'</div>':'')+'</div>';}
 function trTable(type,label){const all=trU().filter(p=>p.type===type);
  const f=(TRS.f||'').toLowerCase();
@@ -583,18 +616,18 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
  +'<select onchange="trSet(\'vf\',this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px">'
  +['ALL','SCALE','FEED','HOLD','FIX','INVESTIGATE','IGNORE'].map(v=>'<option'+(TRS.vf===v?' selected':'')+'>'+v+'</option>').join('')+'</select>'
  +'<span style="font-size:11px;color:#8a93a6">'+rows.length+' shown · click a header to sort</span></div>';
- const cols=[['name','Page'],['sessions','Sessions'],['cvr','CVR'],['atc','Add to cart'],['checkout','Checkout'],
+ const cols=[['name','Page'],['sessions','Sessions'],['dSessP','Traffic vs prev'],['cvr','CVR'],['atc','Add to cart'],['checkout','Checkout'],
   ['atc2chk','ATC→checkout'],['chk2buy','Checkout→buy'],['orders','Orders'],['dCvr','CVR vs prev'],['verdict','Verdict']];
- h+='<table class="bt"><tr>'+cols.map(c=>'<th onclick="trSort(\''+c[0]+'\')" style="cursor:pointer">'+c[1]+'</th>').join('')+'</tr>';
+ h+='<table class="bt"><tr>'+cols.map(c=>'<th onclick="trSort(\''+c[0]+'\')" style="cursor:pointer" title="Click to sort">'+c[1]+(o.col===c[0]?'<span style="color:var(--indigo)"> '+(o.dir<0?'▼':'▲')+'</span>':'')+'</th>').join('')+'</tr>';
  rows.slice(0,400).forEach((p,i)=>{const nv=p.variants?p.variants.length:1,vid=type+'r'+i;
   h+='<tr><td style="text-align:left"><a href="'+trUrl(p)+'" target="_blank" rel="noopener" style="color:var(--ink)">'+p.name+'</a>'
    +(TRS.grouped&&nv>1?' <span class="chip" style="font-size:10px;padding:0 5px" onclick="trTog(\''+vid+'\')">'+nv+' URLs</span>':'')+'</td>'
-   +'<td>'+trN(p.sessions)+'</td><td>'+trPct(p.cvr)+'</td><td>'+trPct(p.atc)+'</td><td>'+trPct(p.checkout)+'</td>'
+   +'<td>'+trN(p.sessions)+'</td><td>'+trArrow(p.dSessP,v=>(v*100).toFixed(0)+'%')+'</td><td>'+trPct(p.cvr)+'</td><td>'+trPct(p.atc)+'</td><td>'+trPct(p.checkout)+'</td>'
    +'<td>'+(p.atc>0?trPct(p.atc2chk):'—')+'</td><td>'+(p.checkout>0?trPct(p.chk2buy):'—')+'</td>'
    +'<td>'+trN(p.orders)+'</td>'
    +'<td style="color:'+(Math.abs(p.dCvr)<0.0001?'#9aa3b5':p.dCvr>0?'var(--grn)':'var(--red)')+';font-weight:700">'+(Math.abs(p.dCvr)<0.0001?'flat':(p.dCvr>0?'+':'')+(p.dCvr*100).toFixed(2))+'</td>'
    +'<td>'+trBadge(p.verdict)+'</td></tr>';
-  if(TRS.grouped&&nv>1&&TRS.open[vid]){h+='<tr><td colspan="10" style="background:#faf9f7;text-align:left;font-size:11px;padding:6px 12px">'
+  if(TRS.grouped&&nv>1&&TRS.open[vid]){h+='<tr><td colspan="11" style="background:#faf9f7;text-align:left;font-size:11px;padding:6px 12px">'
    +p.variants.map(v=>'<div style="display:flex;justify-content:space-between;padding:2px 0"><a href="'+trUrl(v)+'" target="_blank" rel="noopener" style="color:var(--ink);word-break:break-all">'+v.path+'</a><span>'+trN(v.sessions)+' sess · '+trPct(v.cvr)+' · '+trN(v.orders)+' orders</span></div>').join('')+'</td></tr>';}});
  h+='</table>';
  if(rows.length>400)h+='<div class="rtNote">Showing the top 400 of '+rows.length+' — narrow it with the search box.</div>';
@@ -611,12 +644,20 @@ function rTR(){if(TAB!=='tr')return;dCh();
  const views=['ROUTING','PRODUCTS','COLLECTIONS','BI'];
  let h='<div class="card full" data-a="blend"><div style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 12px 10px;align-items:center">'
   +views.map(v=>'<span class="chip" style="'+(v===TRS.view?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="trSel(\''+v+'\')">'+v.charAt(0)+v.slice(1).toLowerCase()+'</span>').join(' ')
+  +'<span style="width:12px"></span><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">WINDOW</span>'
+  +trWins().map(d=>'<span class="chip" style="'+(d===TRS.win?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="trWin('+d+')">'+d+'d</span>').join(' ')
   +'<span style="flex:1"></span><span class="chip" style="'+(TRS.grouped?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="trGrp()">'+(TRS.grouped?'✓ ':'')+'Group product variants</span></div>';
  if(TRS.view==='ROUTING'){
-  const scale=U.filter(p=>p.verdict==='SCALE').sort((a,b)=>b.cvr-a.cvr);
-  const feed=U.filter(p=>p.verdict==='FEED').sort((a,b)=>b.cvr-a.cvr);
-  const fix=U.filter(p=>p.verdict==='FIX').sort((a,b)=>b.sessions-a.sessions);
-  const inv=U.filter(p=>p.verdict==='INVESTIGATE').sort((a,b)=>b.sessions-a.sessions);
+  // v9.10: every section obeys one sort control instead of a hardcoded order per section
+  const RK={sessions:['Biggest traffic',p=>p.sessions],cvr:['Best conversion',p=>p.cvr],
+   orders:['Most orders',p=>p.orders],dCvr:['Biggest CVR move',p=>p.dCvr],
+   dSess:['Biggest traffic move',p=>p.dSess]};
+  const key=RK[TRS.rsort]?TRS.rsort:'sessions',kf=RK[key][1];
+  const srt=a=>a.slice().sort((x,y)=>(kf(y)||0)-(kf(x)||0));
+  const scale=srt(U.filter(p=>p.verdict==='SCALE'));
+  const feed=srt(U.filter(p=>p.verdict==='FEED'));
+  const fix=srt(U.filter(p=>p.verdict==='FIX'));
+  const inv=srt(U.filter(p=>p.verdict==='INVESTIGATE'));
   const wasted=fix.reduce((s,p)=>s+p.sessions,0)+inv.reduce((s,p)=>s+p.sessions,0);
   const wp=SC.totSess>0?wasted/SC.totSess*100:0;
   h+='<div class="kpis" style="padding:0 12px">'
@@ -624,14 +665,20 @@ function rTR(){if(TAB!=='tr')return;dCh();
    +trKpi('Send traffic here',trN(scale.length+feed.length),'converting above the site')
    +trKpi('Fix before sending',trN(inv.length),'cart or checkout breaking')
    +trKpi('Wasted traffic',trN(wasted),wp.toFixed(0)+'% of sessions hit dead pages')+'</div>'
-   +'<div class="rtNote" style="padding-left:12px">The site converts at <b>'+trPct(SC.siteCVR)+'</b>. <b>'+wp.toFixed(0)+'%</b> of traffic ('+trN(wasted)+' sessions) lands on pages that convert near zero. Fix the amber ones first — the buyer intent is already there. Then move spend onto the green and off the red.'+(TRS.grouped?' Products are grouped, so locale and collection URLs for the same product count together.':'')+'</div></div>';
-  const sec=(t,c,d,arr,pre)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+'</div></div></div>'
+   +'<div class="rtNote" style="padding-left:12px">The site converts at <b>'+trPct(SC.siteCVR)+'</b>. <b>'+wp.toFixed(0)+'%</b> of traffic ('+trN(wasted)+' sessions) lands on pages that convert near zero. Fix the amber ones first — the buyer intent is already there. Then move spend onto the green and off the red.'+(TRS.grouped?' Products are grouped, so locale and collection URLs for the same product count together.':'')+'</div>'
+   +'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:0 12px 10px"><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">SORT EVERY LIST BY</span>'
+   +Object.keys(RK).map(k=>'<span class="chip" style="'+(k===key?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="trRS(\''+k+'\')">'+RK[k][0]+'</span>').join(' ')+'</div></div>';
+  g.innerHTML=h;
+  trCharts(g);
+  const sec=(t,c,d,arr,pre)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+' Sorted by '+RK[key][0].toLowerCase()+'.</div></div></div>'
    +(arr.length?arr.slice(0,40).map((p,i)=>trCard(p,pre+i)).join(''):'<div class="rtNote">Nothing flagged.</div>')
    +(arr.length>40?'<div class="rtNote">Showing the top 40 of '+arr.length+'.</div>':'')+'</div>';
-  h+=sec('Direct traffic here','#1a8a3c','These convert above the site average and have proven they can take traffic. Point ads, email and links at these.',scale,'sc');
-  if(feed.length)h+=sec('Promising — feed more traffic','#4a8fd6','Convert well but on thin volume. Send more to confirm before scaling hard.',feed,'fe');
-  h+=sec('Fix before sending traffic','#d68a1e','People add to cart here but do not buy. The page works — the break is downstream at cart, checkout, shipping or price.',inv,'in');
-  h+=sec('Stop or reduce traffic','#c43d2f','These pull real traffic and convert near zero. Rebuild the page or stop pointing traffic at it.',fix,'fx');
+  let rest=sec('Direct traffic here','#1a8a3c','These convert above the site average and have proven they can take traffic. Point ads, email and links at these.',scale,'sc');
+  if(feed.length)rest+=sec('Promising — feed more traffic','#4a8fd6','Convert well but on thin volume. Send more to confirm before scaling hard.',feed,'fe');
+  rest+=sec('Fix before sending traffic','#d68a1e','People add to cart here but do not buy. The page works — the break is downstream at cart, checkout, shipping or price.',inv,'in');
+  rest+=sec('Stop or reduce traffic','#c43d2f','These pull real traffic and convert near zero. Rebuild the page or stop pointing traffic at it.',fix,'fx');
+  g.insertAdjacentHTML('beforeend',rest);
+  return;
  } else if(TRS.view==='PRODUCTS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Products</div><div class="cs">Every product landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Product','Product')+'</div>';
  } else if(TRS.view==='COLLECTIONS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Collections</div><div class="cs">Every collection landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Collection','Collection')+'</div>';
  } else {h+='</div>'+trBI(U,SC);}
