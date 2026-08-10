@@ -299,6 +299,11 @@ def _cc_discover(acct, tok):
             allnc.append(cid); continue
         br = re.split(r"[-\u2013\u2014]", nm)[-1].strip()
         if not br: continue
+        # v9.7.2: Meta spells it "Mall OF Arabia", Odoo spells it "Mall of Arabia". The branch
+        # cards key on the Odoo name, so an unnormalised name reads "not measured" for that
+        # branch alone while the other six read REAL. Snap to the canonical POS spelling.
+        _canon = {b.lower(): b for _, b in POS_CFG}
+        br = _canon.get(br.lower(), br)
         if "new customer" in low: nc[cid] = br
         else: val[cid] = br
     log("meta custom conversions ::", acct, ":: listed", len(rows),
