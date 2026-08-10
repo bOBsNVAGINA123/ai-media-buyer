@@ -4460,20 +4460,31 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   if(R[1]<R[0])return;
   const S=(k)=>{let t=0;for(let i=R[0];i<=R[1];i++)t+=((A[k]||[])[i])||0;return t;};
   const fTT=af('tt');
-  const sp=S('tspend'),on=S('ttValue')*fTT,off=S('ttOffValue')*fTT,pu=S('tpur'),opu=S('ttOffPur');
-  const gp3=on*gpOn+off*gpSt,pas=gp3-sp;
+  const spApi=S('tspend'),on=S('ttValue')*fTT,off=S('ttOffValue')*fTT,pu=S('tpur'),opu=S('ttOffPur');
+  // v9.7.3: Shopify's own referrer tagging -- LIVE, last-click, needs no TikTok app
+  const shRev=S('ttShopRev'),shOrd=S('ttShopOrd'),HASSH=(A.ttShopRev||[]).some(v=>v>0);
+  // spend cannot come from Shopify; without the API you type it (persisted in the URL state)
+  const spMan=+(ST.ttSpend||0);
+  const sp=spMan>0?spMan:spApi;
+  const gp3=(HASSH?shRev:on)*gpOn+off*gpSt,pas=gp3-sp;
   const last=(()=>{const a=A.tspend||[];for(let i=a.length-1;i>=0;i--)if(a[i])return aD2(AW,i);return null;})();
   const OFF=((O.fresh||{}).tiktok==='off');
-  const dead=OFF?'<div class="pwarn" style="margin:0 0 10px"><b>The TikTok feed is switched off in the collector, so these numbers are frozen.</b> The GitHub Action runs with <code>TIKTOK_TOKEN</code> and <code>TIKTOK_ADVERTISER_ID</code> empty and logs &ldquo;tiktok skipped&rdquo; on every run &mdash; last day with any TikTok spend was <b>'+(last||'unknown')+'</b>. Everything below is the last good pull, not today. Set those two repo secrets and it starts moving again on the next sync; nothing else needs changing.</div>':'';
+  const dead=OFF?'<div class="pwarn" style="margin:0 0 10px"><b>TikTok&rsquo;s own API is unreachable, so anything sourced from TikTok is frozen.</b> The Marketing API needs an approved developer app, and the developer <b>profile</b> on this account is <b>Rejected</b> &mdash; &ldquo;Create App&rdquo; is disabled, so there is no App ID and no token to give the collector. Last day TikTok reported any spend was <b>'+(last||'unknown')+'</b>. '+(HASSH?'<b>The ONLINE revenue below does not come from TikTok at all</b> &mdash; it is Shopify&rsquo;s own referrer tagging, so it is live and it keeps working whatever TikTok decides.':'')+'</div>':'';
   const K=(l,v,s2)=>'<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(s2?'<div class="d ft">'+s2+'</div>':'')+'</div>';
   const h2=dead+'<div class="kpis">'
-   +K('TikTok spend','E£ '+money(sp),R?aD2(AW,R[0])+' → '+aD2(AW,R[1]):'')
-   +K('ONLINE revenue','E£ '+money(on),(sp?(on/sp).toFixed(2)+'x ROAS':'—')+' · '+money(pu)+' purchases')
+   +K('TikTok spend',sp?'E£ '+money(sp):'<span style="font-size:15px;color:#8a93a6">TYPE IT IN</span>',
+      (spMan>0?'<b>your figure</b> &mdash; ':(spApi>0?'frozen API figure &mdash; ':''))
+      +'<input value="'+(spMan||'')+'" placeholder="spend for this range" oninput="ST.ttSpend=this.value;clearTimeout(window._tts);window._tts=setTimeout(rBG,600)" style="width:120px;font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px">'
+      +'<div>'+(R?aD2(AW,R[0])+' → '+aD2(AW,R[1]):'')+' &mdash; copy it off Ads Manager, everything below recomputes</div>')
+   +K('ONLINE revenue &mdash; SHOPIFY','E£ '+money(HASSH?shRev:on),
+      HASSH?('<b>live, last-click</b> · '+money(shOrd)+' orders · '+(sp?(shRev/sp).toFixed(2)+'x ROAS':'ROAS needs spend')
+            +(on>0?'<div>TikTok itself claimed E£ '+money(on)+' for its last working window &mdash; '+(shRev>0?(on/shRev).toFixed(1)+'&times; this':'no Shopify orders to compare')+', because it counts view-through and a 7-day window that Shopify does not.</div>':''))
+      :((sp?(on/sp).toFixed(2)+'x ROAS':'—')+' · '+money(pu)+' purchases · TikTok-reported, frozen'))
    +K('IN-STORE revenue',off>0?'E£ '+money(off):'<span style="font-size:15px;color:#8a93a6">NOT MEASURED</span>',off>0?(sp?(off/sp).toFixed(2)+'x ROAS':'')+' · '+money(opu)+' offline conversions':'TikTok returns 0 offline shopping events — the in-store event feed to TikTok is not delivering')
    +K('PROFIT after ad spend','<span style="color:'+(pas>=0?'#12a06e':'#e23a63')+'">'+(pas<0?'−':'')+'E£ '+money(Math.abs(pas))+'</span>','GP at your real margins minus spend')
    +'</div>';
   const ttSel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION &middot; TIKTOK</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===((ST.att&&ST.att.tt)||ST.at)?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok leg &times;'+fTT.toFixed(2)+'</span></div>';
-  pnlCard(g,'meta','TikTok &mdash; online and in-store revenue','TikTok has its OWN attribution ladder (O.attr.tt), so it gets its own selector rather than inheriting Meta&rsquo;s. Same real Odoo margins as the Meta cards above. Per-ad TikTok data is empty in this sync, so this is the account-level read.',ttSel+h2);
+  pnlCard(g,'meta','TikTok &mdash; online and in-store revenue','TikTok has its OWN attribution ladder (O.attr.tt), so it gets its own selector rather than inheriting Meta&rsquo;s. Same real Odoo margins as the Meta cards above. Online revenue is measured from <b>Shopify&rsquo;s referrer tagging</b>, not from TikTok &mdash; it needs no TikTok app and cannot be switched off by their review queue. In-store still needs TikTok&rsquo;s API and is honestly marked when it is missing.',ttSel+h2);
  })();}
 function _cohScopes(){ // every scope -> {month:{size,g30,g90,g180,g365}}
  const S={};
