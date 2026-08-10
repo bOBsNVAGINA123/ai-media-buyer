@@ -895,6 +895,8 @@ def pull_tiktok(win):
             for day, m in days.items():
                 if day not in out["tspend"]: continue
                 out["tspend"][day] = float(m.get("sp") or 0)
+                out["ttOffValue"][day] = float(m.get("offv") or 0)
+                out["ttOffPur"][day] = float(m.get("offp") or 0)
                 out["ttValue"][day] = float(m.get("val") or 0)
                 out["tpur"][day] = float(m.get("pur") or 0)
                 out["timp"][day] = float(m.get("imp") or 0)
@@ -995,7 +997,18 @@ def pull_tiktok_ads():
     """TikTok campaigns, last 30d, with operation status."""
     out = []
     tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
-    if not (tok and adv): log("tiktok campaigns skipped"); return out
+    if not (tok and adv):
+        # v9.7.5: same MCP bridge fallback as pull_tiktok -- the scheduled agent ships a
+        # ready-made tads array (campaign-level 30d, online value + offline events).
+        try:
+            d = http_json("https://raw.githubusercontent.com/bOBsNVAGINA123/ai-media-buyer/main/docs/ourkids/tiktok_live.json")
+            rows = (d or {}).get("tads") or []
+            if rows:
+                log("tiktok campaigns via MCP bridge ::", len(rows))
+                return rows[:40]
+        except Exception as e:
+            log("tiktok campaigns bridge failed", str(e)[:120])
+        log("tiktok campaigns skipped"); return out
     c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_CAMPAIGN",
          "dimensions": json.dumps(["campaign_id"]),
@@ -2885,7 +2898,13 @@ ATTR = {"order": ["default", "7dc", "1dc", "incr"],
                    "1dc": "1-day click (modeled)", "incr": "Incremental \u2014 resolved at build time"},
         "meta": {"default": 1.0, "7dc": 0.94, "1dc": 0.78, "incr": 0.6},
         "google": {"default": 1.0, "7dc": 1.0, "1dc": 0.85, "incr": 0.68},
-        "tt": {"default": 1.0, "7dc": 0.96, "1dc": 0.8, "incr": 0.55}}
+        # v9.7.5: TikTok ladder is now MEASURED, not modeled -- read off TikTok's own
+        # Attribution Analytics (Performance comparison, Purchase, Jul 13-Aug 10 2026):
+        # total claim 241 purchases under the account setting (7d click + 1d view);
+        # 7d-click-only ~81 -> 0.336; 1d-click-only ~50 -> 0.207. TikTok has NO
+        # incremental product, so "incr" = the Shopify last-click floor (~30/241 = 0.124)
+        # -- the only TikTok number that survives a holdout.
+        "tt": {"default": 1.0, "7dc": 0.336, "1dc": 0.207, "incr": 0.124}}
 SRC = {"revenue": "Odoo sale.order (state sale/done), amount_total, all 4 online channels, by date_order. GROSS.",
        "refund": "Odoo account.move out_refund, posted, by invoice_date. Returns/credit notes.",
        "netrev": "Gross Odoo revenue minus posted credit notes.",
