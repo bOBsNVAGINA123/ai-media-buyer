@@ -4516,6 +4516,8 @@ function rTK(){if(TAB!=='tk')return;dCh();
   +K('PROFIT after ad spend',(pas<0?'−':'')+'E£ '+money(Math.abs(pas)),'GP at real margins ('+(gpOn*100).toFixed(1)+'% on / '+(gpSt*100).toFixed(1)+'% store) minus spend',pas>=0?'#12a06e':'#e23a63')
   +K('CTR',imp?(clk/imp*100).toFixed(2)+'%':'—',money(imp)+' impressions')
   +'</div>';
+ /* ---- resync trigger + live progress (v9.7.7) ---- */
+ h='<div id="tkSync" style="margin:0 0 10px">'+tkSyncUI()+'</div>'+h;
  pnlCard(g,'meta','TikTok — the whole picture','Every leg at the attribution window you pick. Online + in-store are TikTok-attributed and scale with the selector; Shopify last-click never moves — that is the point of it.',attSel+h);
  /* ---- daily chart ---- */
  (function(){const lbl=[],dsp=[],dval=[],doff=[],dsh=[];
@@ -4555,6 +4557,59 @@ function rTK(){if(TAB!=='tk')return;dCh();
   pnlCard(g,'meta','Every spending ad — last 30 days ('+T.length+')','Online and in-store split per ad, scaled by the attribution selector. Red rows spend and sell NOTHING on either leg. E£ '+money(spendTot)+' total spend · E£ '+money(offTot)+' in-store value at this window. Click headers to sort.',t);}
  else pnlCard(g,'meta','Per-ad table','Arrives with the next bridge refresh (the daily 8:30 agent ships ad-level rows).','');
 }
+
+/* ---- TikTok tab: resync trigger + progress (v9.7.7) ----
+   Fires workflow_dispatch on ourkids.yml straight from the browser. Needs a
+   fine-grained GitHub token (Actions: read/write on ai-media-buyer) pasted ONCE --
+   it lives in localStorage on this device only, never in the repo. Status polling
+   is unauthenticated (public repo). Progress = elapsed vs the typical ~13 min run,
+   completion confirmed by lastSync actually changing in data.js. */
+let TKS={st:'idle',run:null,t0:0,timer:null,msg:''};
+const TK_REPO='bOBsNVAGINA123/ai-media-buyer',TK_WF='ourkids.yml',TK_TYP=13*60;
+function tkTok(){return localStorage.getItem('ghDispatchTok')||'';}
+function tkSyncUI(){
+ const btn='<button class="btn g" onclick="tkResync()" '+(TKS.st==='running'||TKS.st==='starting'?'disabled style="opacity:.5"':'')+'>&#8635; Resync now</button>';
+ let body='';
+ if(TKS.st==='idle')body='<span style="font-size:11px;color:#8a93a6;margin-left:10px">runs the whole collector (all sources, ~13 min) and republishes the dashboard'+(tkTok()?'':' &middot; first click asks for a GitHub token, stored on this device only')+'</span>';
+ else if(TKS.st==='starting')body='<span style="font-size:11.5px;color:#b8860b;margin-left:10px;font-weight:700">dispatching&hellip;</span>';
+ else if(TKS.st==='running'){
+  const el=Math.max(0,Math.round((Date.now()-TKS.t0)/1000)),pc=Math.min(95,Math.round(el/TK_TYP*100));
+  body='<div style="display:inline-block;vertical-align:middle;margin-left:12px;min-width:300px"><div style="display:flex;justify-content:space-between;font-size:10.5px;color:#64748b;font-weight:700"><span>'+(TKS.msg||'running')+'</span><span>'+Math.floor(el/60)+':'+String(el%60).padStart(2,'0')+' / ~13:00</span></div><div style="background:#e6e9f2;border-radius:5px;height:10px;margin-top:3px"><div style="width:'+pc+'%;background:#5a5bf0;height:10px;border-radius:5px;transition:width 1s linear"></div></div></div>'
+   +(TKS.run?'<a href="https://github.com/'+TK_REPO+'/actions/runs/'+TKS.run+'" target="_blank" rel="noopener" style="font-size:10.5px;color:#3a9bff;margin-left:10px">watch on GitHub &rarr;</a>':'');}
+ else if(TKS.st==='done')body='<span style="font-size:12px;color:#12a06e;font-weight:800;margin-left:10px">&#10003; Fresh data published '+(TKS.msg||'')+' &mdash; <a style="cursor:pointer;color:#3a9bff" onclick="location.reload()">reload the page</a></span>';
+ else if(TKS.st==='fail')body='<span style="font-size:12px;color:#e23a63;font-weight:700;margin-left:10px">'+(TKS.msg||'failed')+'</span> <a style="cursor:pointer;color:#3a9bff;font-size:11px" onclick="TKS={st:\'idle\'};tkPaint()">reset</a>';
+ return btn+body;}
+function tkPaint(){const el=document.getElementById('tkSync');if(el)el.innerHTML=tkSyncUI();}
+async function tkResync(){
+ let tok=tkTok();
+ if(!tok){tok=prompt('Paste a GitHub fine-grained token with Actions: Read & write on '+TK_REPO+'\n(github.com -> Settings -> Developer settings -> Fine-grained tokens).\nStored in THIS browser only.');
+  if(!tok)return;localStorage.setItem('ghDispatchTok',tok.trim());tok=tok.trim();}
+ TKS={st:'starting',run:null,t0:Date.now(),timer:null,msg:''};tkPaint();
+ try{
+  const r=await fetch('https://api.github.com/repos/'+TK_REPO+'/actions/workflows/'+TK_WF+'/dispatches',
+   {method:'POST',headers:{'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'},body:JSON.stringify({ref:'main'})});
+  if(r.status===401||r.status===403){localStorage.removeItem('ghDispatchTok');TKS={st:'fail',msg:'token rejected ('+r.status+') — cleared, click again to paste a new one'};tkPaint();return;}
+  if(r.status!==204){TKS={st:'fail',msg:'dispatch failed: HTTP '+r.status};tkPaint();return;}
+ }catch(e){TKS={st:'fail',msg:'network error: '+e.message};tkPaint();return;}
+ TKS.st='running';TKS.msg='queued';TKS.baseSync=(window.O&&O.lastSync)||'';tkPaint();
+ TKS.timer=setInterval(tkPoll,15000);setTimeout(tkPoll,4000);}
+async function tkPoll(){
+ if(TKS.st!=='running'){clearInterval(TKS.timer);return;}
+ tkPaint();
+ try{
+  const d=await (await fetch('https://api.github.com/repos/'+TK_REPO+'/actions/workflows/'+TK_WF+'/runs?per_page=1&event=workflow_dispatch')).json();
+  const run=(d.workflow_runs||[])[0];
+  if(run&&new Date(run.created_at).getTime()>TKS.t0-120000){
+   TKS.run=run.id;TKS.msg=run.status==='queued'?'queued on GitHub':run.status==='in_progress'?'collector running':run.status;
+   if(run.status==='completed'){
+    if(run.conclusion!=='success'){clearInterval(TKS.timer);TKS={st:'fail',msg:'run finished: '+run.conclusion};tkPaint();return;}
+    TKS.msg='run done — waiting for the new data.js to publish';
+    const r2=await fetch('https://raw.githubusercontent.com/'+TK_REPO+'/main/docs/ourkids/data.js?ts='+Date.now(),{headers:{'Range':'bytes=0-300'}});
+    const head=await r2.text();const m=head.match(/"lastSync":"([^"]+)"/);
+    if(m&&m[1]!==TKS.baseSync){clearInterval(TKS.timer);TKS={st:'done',msg:m[1]};tkPaint();return;}
+   }}
+ }catch(e){/* transient poll error -- keep going */}
+ tkPaint();}
 function _cohScopes(){ // every scope -> {month:{size,g30,g90,g180,g365}}
  const S={};
  Object.entries(O.bcoh||{}).forEach(([b,ms])=>{S[b]=ms;});
