@@ -399,15 +399,40 @@ def _decile(agg, ocnt, attrs=None):
     return out
 
 
+def _lp_path(u):
+    """Ad destination URL -> the same landing-page path Shopify reports in the CVR routing
+    table: path only, locale prefix stripped, no query string (utm noise would never match)."""
+    try:
+        p = urllib.parse.urlsplit(u).path or "/"
+    except Exception:
+        return ""
+    p = re.sub(r"^/[a-z]{2}(-[a-z]{2})?/", "/", p, flags=re.I)
+    return (p.rstrip("/") or "/")[:180]
+
+CCPFX = {}                        # every prefix a custom conversion arrived under, for the log
+
 def _cc(lst):
-    """Pull every offsite_conversion.custom.<id> entry out of an actions or
-    action_values array and return {custom_conversion_id: float}."""
+    """Pull every custom-conversion entry out of an actions / action_values array and
+    return {custom_conversion_id: float}.
+
+    v9.7.2 -- THE BUG THAT BLANKED THE BRANCH CARDS. This used to match only
+    "offsite_conversion.custom.<id>". The in-store rules are built over the OFFLINE
+    (in-store CAPI) events, so Meta returns them as "offline_conversion.custom.<id>"
+    (and omni/onsite variants for mixed rules). Every branch therefore read zero while
+    Meta was reporting the value perfectly happily. Match ANY *.custom.<id>, and SUM
+    across prefixes -- a rule spanning web + store legitimately returns one row each."""
     out = {}
     for a in lst or []:
         t = a.get("action_type") or ""
-        if t.startswith("offsite_conversion.custom."):
-            try: out[t.rsplit(".", 1)[-1]] = float(a.get("value") or 0)
-            except Exception: pass
+        i = t.find(".custom.")
+        if i < 0:
+            continue
+        cid = t[i + 8:]
+        if not cid.isdigit():
+            continue
+        CCPFX[t[:i]] = CCPFX.get(t[:i], 0) + 1
+        try: out[cid] = out.get(cid, 0.0) + float(a.get("value") or 0)
+        except Exception: pass
     return out
 
 def _meta_incremental(acct, c0, c1, tok):
@@ -532,7 +557,9 @@ def pull_meta(win):
             " | ".join("%s=%s (%d)" % (CCNAME.get(c, c), c, round(v)) for c, v in top))
     else:
         log("meta custom conversions SEEN :: NONE -- Meta returned no "
-            "offsite_conversion.custom.* action at any level for", len(accts), "account(s)")
+            "*.custom.<id> action at any level for", len(accts), "account(s)")
+    log("meta custom conversions :: action-type prefixes seen ::",
+        ", ".join("%s.custom.* x%d" % (k, v) for k, v in sorted(CCPFX.items())) or "NONE")
     bnc_val = sum(sum(e.get("v", 0.0) for e in ms.values()) for ms in MBR.values())
     bnc_cnt = sum(sum(e.get("nc", 0.0) for e in ms.values()) for ms in MBR.values())
     allnc = sum(ad["instoreNC"].values())
@@ -674,15 +701,21 @@ CVR_LIMIT = 2500   # landing pages kept per window, ordered by sessions desc
 CVR_TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
           "Search", "Cart", "Checkout", "Other"]
 
-def _cvr_window(days):
+def _cvr_window(days, country=None):
     """One window of the routing table: landing page x type, raw counts, plus the
-    same window shifted back one period for the trend."""
+    same window shifted back one period for the trend.
+
+    v9.7.2: `country` pulls the same table filtered to one session country. Egypt is 92%
+    of sessions and ~99.5% of orders, so the unfiltered table quietly punishes any page
+    that catches foreign bot/browse traffic -- a US session that will never buy still
+    counts in the denominator behind a FIX verdict."""
+    where = (" WHERE session_country = '%s'" % country.replace("'", "")) if country else ""
     ql = ("FROM sessions SHOW sessions, sessions_with_cart_additions, "
           "sessions_that_reached_checkout, sessions_that_completed_checkout "
-          "GROUP BY landing_page_path, landing_page_type "
-          "SINCE -%dd UNTIL today COMPARE TO previous_period "
+          "GROUP BY landing_page_path, landing_page_type" + where +
+          " SINCE -%dd UNTIL today COMPARE TO previous_period "
           "ORDER BY sessions DESC LIMIT %d" % (days, CVR_LIMIT))
-    rows = shopify_ql(ql, "cvrroute%dd" % days)
+    rows = shopify_ql(ql, "cvrroute%dd%s" % (days, country or ""))
     if not rows:
         return None
     tix = {t: i for i, t in enumerate(CVR_TY)}
@@ -701,13 +734,14 @@ def _cvr_window(days):
                     int(f("comparison_sessions_that_completed_checkout__previous_period"))])
     # total sessions across ALL landing pages, so the tab can state the coverage honestly
     allsess = 0.0
-    for r in (shopify_ql("FROM sessions SHOW sessions SINCE -%dd UNTIL today" % days,
-                         "cvrtotal%dd" % days) or []):
+    for r in (shopify_ql("FROM sessions SHOW sessions" + where + " SINCE -%dd UNTIL today" % days,
+                         "cvrtotal%dd%s" % (days, country or "")) or []):
         allsess += float(r.get("sessions") or 0)
-    log("cvr routing", str(days) + "d pages", len(out), "sessions", int(tot),
-        "of", int(allsess or tot), "capped" if len(out) >= CVR_LIMIT else "full")
-    return {"days": days, "rows": out, "kept": len(out), "capped": len(out) >= CVR_LIMIT,
-            "keptSess": int(tot), "allSess": int(allsess or tot)}
+    log("cvr routing", str(days) + "d", country or "all countries", "pages", len(out),
+        "sessions", int(tot), "of", int(allsess or tot),
+        "capped" if len(out) >= CVR_LIMIT else "full")
+    return {"days": days, "country": country or "", "rows": out, "kept": len(out),
+            "capped": len(out) >= CVR_LIMIT, "keptSess": int(tot), "allSess": int(allsess or tot)}
 
 def _cvr_series(days=30):
     """Daily sessions/ATC/checkout/orders per landing page TYPE, so the tab can draw the
@@ -753,12 +787,18 @@ def pull_cvr_routing():
         w = _cvr_window(d)
         if w:
             wins[str(d)] = w
+        # v9.7.2: Egypt-only twin of every window, keyed "<days>eg". The tab defaults to it.
+        we = _cvr_window(d, "Egypt")
+        if we:
+            wins[str(d) + "eg"] = we
     base = wins.get(str(CVR_DAYS)) or (list(wins.values())[0] if wins else None)
     if not base:
         log("cvr routing :: no rows -- keeping whatever data.js already had")
         return
     P = dict(base)
-    P.update({"types": CVR_TY, "wins": wins, "windows": sorted(int(k) for k in wins),
+    P.update({"types": CVR_TY, "wins": wins,
+              "windows": sorted(int(k) for k in wins if k.isdigit()),
+              "countries": ["", "Egypt"],
               "ts": _cvr_series(), "pulled": END.isoformat()})
     XTRA["cvr"] = P
 
@@ -1156,19 +1196,41 @@ def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
     try:
+        # v9.7.2: product_qty rides along on the SAME read_group (no extra query) and gives
+        # UPT = units / transactions per branch-month. index 3 is appended, so anything
+        # already reading [rev, gp, orders] keeps working untouched.
         g = oexec("report.pos.order", "read_group",
-                  [[["date", ">=", "2024-08-01"]], ["price_total", "margin", "order_id:count_distinct"], ["config_id", "date:month"]], {"lazy": False})
+                  [[["date", ">=", "2024-08-01"]], ["price_total", "margin", "product_qty", "order_id:count_distinct"], ["config_id", "date:month"]], {"lazy": False})
         for r in g:
             cfg = (r.get("config_id") or [0, ""])[1]
             br = next((b for k, b in POS_CFG if k in cfg), None)
             if not br: continue
             try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
             except Exception: continue
-            c = out.setdefault(br, {}).setdefault(mon, [0, 0, 0])
+            c = out.setdefault(br, {}).setdefault(mon, [0, 0, 0, 0])
+            while len(c) < 4: c.append(0)
             c[0] += round(r["price_total"]); c[1] += round(r["margin"]); c[2] += int(r.get("order_id") or r["__count"])
+            c[3] += round(float(r.get("product_qty") or 0))
         log("pos branches", len(out), "months", len(next(iter(out.values()), {})))
     except Exception as e:
         log("pos branches fail", str(e)[:150])
+    return out
+
+def pull_online_units():
+    """Units sold per month on the Shopify team, so the portfolio table can show UPT
+    online next to the branches. One read_group; order counts already live in O.nr."""
+    out = {}
+    try:
+        for r in oexec("sale.report", "read_group",
+                       [[["team_id.name", "=", "Shopify"], ["date", ">=", "2024-08-01"],
+                         ["state", "not in", ["draft", "sent", "cancel"]]],
+                        ["product_uom_qty"], ["date:month"]], {"lazy": False}):
+            try: mon = datetime.datetime.strptime(str(r["date:month"]), "%B %Y").strftime("%Y-%m")
+            except Exception: continue
+            out[mon] = out.get(mon, 0) + round(float(r.get("product_uom_qty") or 0))
+        log("online units months", len(out))
+    except Exception as e:
+        log("online units fail", str(e)[:150])
     return out
 
 RENT_DX = {}
@@ -2130,6 +2192,25 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
+        # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
+        # as broken; without this you still have to hunt Ads Manager for who is pointing at
+        # it. Plain object read (no insights), so it is cheap enough for every spending ad.
+        _lids = [a["id"] for a in ads if a.get("id") and (a.get("sp") or 0) > 0][:400]
+        for i in range(0, len(_lids), 50):
+            try:
+                d = http_json("%s/?ids=%s&fields=creative{object_story_spec{link_data{link},video_data{call_to_action{value{link}}}},asset_feed_spec{link_urls{website_url}},effective_object_story_id}&access_token=%s"
+                              % (GRAPH, ",".join(_lids[i:i + 50]), tok))
+            except Exception as e:
+                log("meta ads :: landing-page lookup failed", str(e)[:120]); break
+            for a in ads:
+                cr = ((d or {}).get(a["id"]) or {}).get("creative") or {}
+                oss = cr.get("object_story_spec") or {}
+                u = ((oss.get("link_data") or {}).get("link")
+                     or (((oss.get("video_data") or {}).get("call_to_action") or {}).get("value") or {}).get("link")
+                     or next((x.get("website_url") for x in ((cr.get("asset_feed_spec") or {}).get("link_urls") or [])
+                              if x.get("website_url")), None))
+                if u: a["lp"] = _lp_path(str(u))
+        log("meta ads :: landing pages resolved", sum(1 for a in ads if a.get("lp")), "of", len(_lids))
         for a in ads:
             if a.get("im2"): a["im"] = a.pop("im2")
         log("meta ads v8.3 ::", len(ads), "ads with 60d daily series :: accounts",
@@ -2600,9 +2681,15 @@ def sync_google_audience():
                 for b3 in (d2 if isinstance(d2, list) else [d2]):
                     for row2 in (b3.get("results") or []):
                         sz = int((row2.get("userList") or {}).get("sizeForDisplay") or 0)
-                if sz < 5000:
+                if sz < 5000 and (os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3):
                     created = True
-                    log("google audience :: list size", sz, "of ~59k offline buyers :: forcing the full 730d backfill")
+                    log("google audience :: list size", sz, ":: near-empty in the nightly window -> full backfill")
+                elif sz < 5000:
+                    # v9.7.1: Google's size_for_display lags DAYS behind ingestion -- re-sending
+                    # the full 245k-identity backfill on every daytime sync burned ~20 min/run
+                    # for nothing. Full backfill only in the nightly run; 4d top-ups continue.
+                    log("google audience :: list size reads", sz,
+                        "(Google's count lags days behind) :: skipping daytime re-backfill, 4d top-up only")
             except Exception as e2:
                 log("google audience :: size check failed ::", str(e2)[:120])
         contacts = _offline_contacts(_buyer_window(created), online=True)
@@ -3309,7 +3396,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7 (Meta buyer list = online + in-store, ever; POS row cap raised so backfills stop truncating)")
+    log("collector v9.7.2 (branch custom conversions arrive as offline_conversion.custom.* -- matched now; ad landing pages; Egypt-only CVR routing; POS units for UPT)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3340,6 +3427,7 @@ def build():
         shop["ncrev"][_d] = round(_c["nrev"]); shop["rcrev"][_d] = round(_c["rrev"])
     if _nrdOK: log("new/returning from Odoo customer actuals, days", _nrdOK)
     pos = safe(pull_pos_branches) or {}
+    onu = safe(pull_online_units) or {}
     prev = {}
     try:
         pd0 = open(os.path.join(DOCS, "data.js")).read()
@@ -3545,11 +3633,14 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
-              "bmeta": {b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
-                            "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
-                            "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
-                        for b, ms in MBR.items()},
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
+              # the branch table with {} -- one bad pull and every branch read "not measured".
+              # Keep the last good one, same fallback every other key already has.
+              "bmeta": ({b: {"v": [round(ms.get(d, {}).get("v", 0.0)) for d in win],
+                             "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
+                             "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
+                         for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
