@@ -884,7 +884,29 @@ def pull_tiktok(win):
            "ttOffValue": {d: 0.0 for d in win}, "ttOffPur": {d: 0.0 for d in win},
            "timp": {d: 0.0 for d in win}, "tclk": {d: 0.0 for d in win}}
     tok = os.environ.get("TIKTOK_TOKEN", "").strip(); adv = os.environ.get("TIKTOK_ADVERTISER_ID", "").strip()
-    if not (tok and adv): log("tiktok skipped"); return out
+    if not (tok and adv):
+        # v9.7.4: no Marketing API token (dev profile rejected) -- read the bridge file a
+        # scheduled Claude agent publishes daily from the TikTok MCP connector. Same repo,
+        # so the raw URL is always current by the time this Action runs.
+        try:
+            d = http_json("https://raw.githubusercontent.com/bOBsNVAGINA123/ai-media-buyer/main/docs/ourkids/tiktok_live.json")
+            days = (d or {}).get("days") or {}
+            n = 0
+            for day, m in days.items():
+                if day not in out["tspend"]: continue
+                out["tspend"][day] = float(m.get("sp") or 0)
+                out["ttValue"][day] = float(m.get("val") or 0)
+                out["tpur"][day] = float(m.get("pur") or 0)
+                out["timp"][day] = float(m.get("imp") or 0)
+                out["tclk"][day] = float(m.get("clk") or 0)
+                n += 1
+            if n:
+                SRCOK["tiktok"] = str((d or {}).get("pulled") or "")[:10]
+                log("tiktok via MCP bridge :: days", n, "pulled", (d or {}).get("pulled"))
+                return out
+        except Exception as e:
+            log("tiktok bridge file failed", str(e)[:120])
+        log("tiktok skipped"); return out
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_ADVERTISER",
          "dimensions": json.dumps(["stat_time_day"]),
          "metrics": json.dumps(["spend", "complete_payment", "offline_shopping_events",
@@ -3641,7 +3663,7 @@ def build():
     def _lastnz(m):
         ds = [d for d, v in (m or {}).items() if v]
         return max(ds) if ds else None
-    _ttok = bool(os.environ.get("TIKTOK_TOKEN", "").strip())
+    _ttok = bool(os.environ.get("TIKTOK_TOKEN", "").strip()) or bool(SRCOK.get("tiktok"))
     freshmap = {"odoo": END.isoformat(), "shopify": _lastnz(shop.get("sessions")),
                 "meta": _lastnz(meta.get("mspend")), "google": _lastnz(goog.get("gspend")),
                 "tiktok": (_lastnz(tik.get("tspend")) if _ttok else "off")}
