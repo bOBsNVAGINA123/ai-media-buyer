@@ -392,6 +392,68 @@ function ltCurve(cur,cac){
    +'<text x="'+p[0]+'" y="'+(HH-pb+18)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#51596b">'+RT_LTH[p[3]]+'d</text>'
    +'<text x="'+p[0]+'" y="'+(HH-pb+33)+'" text-anchor="middle" font-size="11" font-weight="800" fill="'+ltCol(r)+'">'+(r!=null?r.toFixed(2)+'\u00D7':'\u2014')+'</text>';});
  return '<svg viewBox="0 0 '+W+' '+HH+'" style="width:100%;height:auto;overflow:visible">'+g+'</svg>';}
+/* ================= PORTFOLIO COMPARE (v9.7.2) =================
+   Same customers, side by side, on the numbers that actually describe a portfolio:
+   what one costs (CAC), what one returns (LTGP), how often they come back (APF), how
+   big the basket is (AOV) and how many units are in it (UPT). Branch AOV/UPT come from
+   report.pos.order (price_total / product_qty / distinct orders); ONLINE from the Odoo
+   Shopify team. Everything is the last 3 COMPLETE months so a part-month cannot skew it. */
+function ltMonths(n){const M=rtM(),t=(O.today||'9999').slice(0,7);
+ return M.filter(m=>m<t).slice(-(n||3));}
+function ltBasket(sc){const ms=ltMonths(3);let rev=0,ord=0,un=0,hasU=false;
+ const addB=b=>ms.forEach(m=>{const p=(O.pos[b]||{})[m];if(!p)return;
+  rev+=p[0]||0;ord+=p[2]||0;if(p.length>3){un+=p[3]||0;hasU=true;}});
+ const addOn=()=>ms.forEach(m=>{const n2=(O.nr||{})[m];if(!n2)return;
+  rev+=(n2.nrev||0)+(n2.rrev||0);ord+=(n2.nord||0)+(n2.rord||0);
+  const u=(O.onu||{})[m];if(u!=null){un+=u;hasU=true;}});
+ if(sc==='ONLINE')addOn();
+ else if(sc==='ALL STORES')Object.keys(O.pos||{}).forEach(addB);
+ else if(sc==='BLENDED'){Object.keys(O.pos||{}).forEach(addB);addOn();}
+ else addB(sc);
+ return {aov:ord?rev/ord:null,upt:(hasU&&ord)?un/ord:null,rev:rev/(ms.length||1),ord:ord/(ms.length||1),ms:ms};}
+function ltBehav(sc){const J=(O.jour||{}).scopes||{},s=J[sc];
+ if(s)return {apf:s.oyr,rep:s.rep,n:s.n,ltv:s.ltv};
+ // BLENDED has no journey profile of its own -- weight the two it is made of by headcount
+ if(sc==='BLENDED'&&J['ONLINE']&&J['ALL STORES']){const a=J['ONLINE'],b=J['ALL STORES'],t=(a.n||0)+(b.n||0);
+  const w=(x,y)=>t?((x||0)*(a.n||0)+(y||0)*(b.n||0))/t:null;
+  return {apf:+w(a.oyr,b.oyr).toFixed(2),rep:+w(a.rep,b.rep).toFixed(1),n:t,ltv:w(a.ltv,b.ltv)};}
+ const b=(O.bstat||{})[sc];
+ return b?{apf:null,rep:b.repeatRateX!=null?b.repeatRateX:b.repeatRate,n:b.cust,ltv:null}:{apf:null,rep:null,n:null,ltv:null};}
+function ltPick(sc){const S=LTS.pick||(LTS.pick={});S[sc]=!S[sc];rLT();}
+function ltMode(m){LTS.mode=m;rLT();}
+function ltPortfolio(h){
+ const all=LT_SCOPES();
+ if(!LTS.pick){LTS.pick={};all.forEach(s=>LTS.pick[s]=true);}
+ const on=all.filter(s=>LTS.pick[s]);
+ const hi=ltIdx(h),mode=LTS.mode||'ratio';
+ const rows=(on.length?on:all).map(function(sc){
+  const L=RT_LT[sc];if(!L)return null;
+  const C=ltCac(sc),v=L.cur[hi],B=ltBasket(sc),H=ltBehav(sc);
+  return {sc:sc,ltgp:v,cac:C.cac,r:(v!=null&&C.cac)?v/C.cac:null,pay:ltPay(L.cur,C.cac),
+          aov:B.aov,upt:B.upt,rev:B.rev,apf:H.apf,rep:H.rep,n:H.n,d1:L.d1rev};}).filter(Boolean);
+ const kf=mode==='ratio'?(r=>r.r||0):mode==='ltgp'?(r=>r.ltgp||0):mode==='aov'?(r=>r.aov||0):(r=>r.apf||0);
+ rows.sort(function(a,b){return kf(b)-kf(a);});
+ const mx=Math.max.apply(null,rows.map(kf).concat([0.0001]));
+ const modes=[['ratio','LTGP : CAC'],['ltgp','LTGP @'+h+'d'],['aov','AOV'],['apf','Purchase frequency']];
+ const chips=all.map(function(s){return '<span class="chip" style="'+(LTS.pick[s]?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'opacity:.6')+'" onclick="ltPick(\''+s.replace(/'/g,"\\'")+'\')">'+(LTS.pick[s]?'\u2713 ':'')+s+'</span>';}).join(' ');
+ const mchips=modes.map(function(m){return '<span class="chip" style="'+(mode===m[0]?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ltMode(\''+m[0]+'\')">'+m[1]+'</span>';}).join(' ');
+ const num=function(v,d){return v==null?'\u2014':v.toFixed(d==null?2:d);};
+ const B0=ltBasket('BLENDED');
+ return h!=null?('<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Compare customer portfolios \u2014 branch vs branch vs Shopify</div><div class="cs">Tick the scopes you want side by side, then rank them by whichever number you are actually deciding on. AOV and UPT are the last 3 complete months ('+(B0.ms||[]).join(', ')+') from the real till and order lines; APF and repeat rate are lifetime order history.</div></div></div>'
+ +'<div style="padding:2px 12px 6px;display:flex;flex-wrap:wrap;gap:5px">'+chips+'</div>'
+ +'<div style="padding:0 12px 8px;display:flex;flex-wrap:wrap;gap:5px;align-items:center"><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">RANK BY</span>'+mchips+'</div>'
+ +'<table class="bt"><tr><th>Portfolio</th><th>Customers</th><th>CAC</th><th>LTGP @'+h+'d</th><th>LTGP : CAC</th><th style="text-align:left">&nbsp;</th><th>Payback</th><th>AOV</th><th>UPT</th><th>APF / yr</th><th>Repeat %</th><th>Revenue / mo</th></tr>'
+ +rows.map(function(r){
+   return '<tr><td style="font-weight:800">'+r.sc+'</td>'
+   +'<td>'+(r.n!=null?Math.round(r.n).toLocaleString('en-US'):'\u2014')+'</td>'
+   +'<td>'+(r.cac?rtF(r.cac):'\u2014')+'</td><td>'+(r.ltgp!=null?rtF(r.ltgp):'\u2014')+'</td>'
+   +'<td style="font-weight:800;color:'+ltCol(r.r)+'">'+(r.r!=null?r.r.toFixed(2)+'\u00D7':'\u2014')+'</td>'
+   +'<td style="text-align:left;min-width:110px"><div style="background:'+(mode==='ratio'?ltCol(r.r):'var(--indigo)')+';height:8px;border-radius:4px;width:'+Math.round(100*kf(r)/mx)+'%;opacity:.85"></div></td>'
+   +'<td>'+(r.pay!=null?'day '+r.pay:'<span style="color:var(--red);font-weight:800">never</span>')+'</td>'
+   +'<td>'+(r.aov!=null?rtF(r.aov):'\u2014')+'</td><td>'+num(r.upt)+'</td>'
+   +'<td>'+num(r.apf)+'</td><td>'+(r.rep!=null?r.rep+'%':'\u2014')+'</td>'
+   +'<td>'+(r.rev?rtF(r.rev):'\u2014')+'</td></tr>';}).join('')
+ +'</table><div class="rtNote"><b>AOV</b> = revenue \u00F7 transactions. <b>UPT</b> = units \u00F7 transactions (from <code>product_qty</code> on the POS report and the Shopify order lines \u2014 a dash means that scope has not been re-crawled since UPT was added). <b>APF</b> = orders per customer per year from their own order history, so it is a real repeat rate, not revenue \u00F7 customers. A portfolio with a high AOV and a low APF is a one-off shop; the opposite is a habit \u2014 and only the second one compounds against CAC.</div></div>'):'';}
 function rLT(){if(TAB!=='lt')return;dCh();
  const g=document.getElementById('g21');
  const M=rtM();if(!M.length||typeof RT_LT==='undefined'){g.innerHTML='';document.getElementById('bn21').innerHTML='No monthly data in this sync.';return;}
@@ -432,6 +494,8 @@ function rLT(){if(TAB!=='lt')return;dCh();
    +'<td style="font-weight:800;color:'+(short==null?'var(--mut)':short>=1?'var(--grn)':'var(--red)')+'">'+(r.be!=null?Math.round(r.be).toLocaleString('en-US')+(short!=null?' ('+short.toFixed(2)+'\u00D7)':''):'\u2014')+'</td>'
    +'<td>'+(r.d1!=null?r.d1+'%':'\u2014')+'</td></tr>';}).join('')
  +'</table><div class="rtNote">Ratio uses each scope\u2019s own live CAC. <b>Break-even cust</b> is how many new customers a month that scope must acquire for its '+h+'-day gross profit to cover its own OpEx and ad spend \u2014 the bracket is actual \u00F7 required, so under 1.00\u00D7 is a structural hole that media cannot fill.</div></div>';
+ /* ---- 2b. portfolio compare ---- */
+ html+=ltPortfolio(h);
  /* ---- 3. by cohort month ---- */
  if(L&&L.byM){
   const ms=Object.keys(L.byM).sort().reverse();
@@ -493,7 +557,7 @@ function ltAdvice(rows,h,D1){
 const TR_DOM='https://shop-ourkids.com';
 const TR_DEST=['Homepage','Product','Collection','Custom Page','Blog Article','Other'];
 const TR_VC={SCALE:'#1a8a3c',FEED:'#4a8fd6',FIX:'#c43d2f',INVESTIGATE:'#d68a1e',HOLD:'#999',IGNORE:'#cfcfcf'};
-let TRS={view:'ROUTING',grouped:true,f:'',vf:'ALL',win:14,rsort:'sessions',sort:{col:'sessions',dir:-1},open:{}};
+let TRS={view:'ROUTING',grouped:true,f:'',vf:'ALL',win:14,ctry:'Egypt',minS:0,rsort:'sessions',sort:{col:'sessions',dir:-1},open:{}};
 let TR_M={};
 const TR_LOC=/^\/[a-z]{2}(-[a-z]{2})?\//i;
 function trDec(s){try{return decodeURIComponent(s);}catch(e){return s;}}
@@ -535,12 +599,20 @@ function trScore(arr){const dest=arr.filter(u=>TR_DEST.indexOf(u.type)>=0);
  return {dest:dest,siteCVR:site,totSess:ts,totOrd:to};}
 function trRaw(){return O.cvrRoute||O.cvr||{};}
 function trWins(){const C=trRaw();return C.windows&&C.windows.length?C.windows:[C.days||14];}
-function trModel(){const W=TRS.win;if(TR_M[W])return TR_M[W];
+/* v9.7.2: the collector ships an Egypt-only twin of every window under "<days>eg".
+   Egypt is 92% of sessions and ~99.5% of orders, so the unfiltered table hands a FIX
+   verdict to any page that happens to catch foreign browse traffic. Default is Egypt;
+   the key falls back to the all-countries table when an older data.js has no twin. */
+function trKey(){const C=trRaw().wins||{};const k=TRS.win+(TRS.ctry==='Egypt'?'eg':'');
+ return C[String(k)]?String(k):String(TRS.win);}
+function trHasCtry(){return !!((trRaw().wins||{})[TRS.win+'eg']);}
+function trCtry(c){TRS.ctry=c;rTR();}
+function trModel(){const W=trKey();if(TR_M[W])return TR_M[W];
  // v9.9.2: the payload key was renamed to cvrRoute in this file but the collector still
  // writes `cvr`, so this tab read undefined and rendered empty on every sync. Accept both.
  // v9.10: the collector now ships one table per window under .wins -- fall back to the
  // top-level table when reading an older data.js so the tab never blanks mid-deploy.
- const C0=trRaw(),W0=(C0.wins||{})[String(W)];
+ const C0=trRaw(),W0=(C0.wins||{})[W];
  const C=W0?Object.assign({},C0,W0):C0,TY=C0.types||[],R=C.rows||[];
  if(!R.length)return null;
  const pages=R.map(r=>trFin({path:r[0],type:TY[r[1]]||'Other',name:trName(r[0]),canon:trCanon(r[0],TY[r[1]]||'Other'),
@@ -557,6 +629,27 @@ function trModel(){const W=TRS.win;if(TR_M[W])return TR_M[W];
   return trFin(G);});
  TR_M[W]={pages:pages,groups:groups,p:trScore(pages),g:trScore(groups),C:C};
  return TR_M[W];}
+/* ---- which ads point at this landing page (O.mads[].lp, set by the collector) ---- */
+function trAdMap(){if(TR_ADM)return TR_ADM;TR_ADM={};
+ (O.mads||[]).forEach(a=>{if(!a.lp)return;const k=trCanonLP(a.lp);(TR_ADM[k]=TR_ADM[k]||[]).push(a);});
+ Object.values(TR_ADM).forEach(v=>v.sort((x,y)=>(y.sp||0)-(x.sp||0)));return TR_ADM;}
+function trCanonLP(p){const s=trStrip(String(p||'').split('?')[0]).toLowerCase().replace(/\/+$/,'')||'/';
+ const m=s.match(/\/(products|collections)\/([^\/]+)/);return m?m[1]+'|'+trDec(m[2]):s;}
+function trAdsFor(p){const M=trAdMap();const seen={},out=[];
+ (p.variants||[p]).forEach(v=>{(M[trCanonLP(v.path)]||[]).forEach(a=>{if(!seen[a.id]){seen[a.id]=1;out.push(a);}});});
+ return out;}
+function trAdBlock(p){const ads=trAdsFor(p);
+ if(!ads.length)return (O.mads||[]).some(a=>a.lp)?'<div style="margin-top:8px;font-size:11px;color:#8a93a6">No Meta ad in the 60d window points at this URL — the traffic is arriving from somewhere else (organic, email, a collection link, or an ad whose destination was since changed).</div>':'';
+ const sp=ads.reduce((s,a)=>s+(a.sp||0),0);
+ return '<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:7px">'
+ +'<div style="font-size:11px;font-weight:800;color:#c43d2f;margin-bottom:3px">'+ads.length+' Meta ad'+(ads.length>1?'s':'')+' send'+(ads.length>1?'':'s')+' traffic here &middot; E&pound; '+Math.round(sp).toLocaleString('en-US')+' spent (60d)</div>'
+ +ads.slice(0,8).map(a=>'<div style="display:flex;gap:8px;align-items:center;padding:2px 0;font-size:11px">'
+   +(a.th||a.im?'<img src="'+(a.th||a.im)+'" loading="lazy" style="width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid #e5e9f2">':'')
+   +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+String(a.n||'').replace(/"/g,'&quot;')+'">'+(a.n||a.id)+'</span>'
+   +'<span style="font-family:ui-monospace,monospace;white-space:nowrap">E&pound; '+Math.round(a.sp||0).toLocaleString('en-US')+'</span>'
+   +'<span style="white-space:nowrap">'+amLink('ad',a.id,a.acct,'edit')+'</span></div>').join('')
+ +(ads.length>8?'<div style="font-size:10px;color:#8a93a6">+'+(ads.length-8)+' more</div>':'')+'</div>';}
+let TR_ADM=null;
 function trU(){const M=trModel();return TRS.grouped?M.groups:M.pages;}
 function trS(){const M=trModel();return TRS.grouped?M.g:M.p;}
 function trSel(v){TRS.view=v;rTR();}
@@ -568,7 +661,7 @@ function trSort(c){TRS.sort={col:c,dir:TRS.sort.col===c?-TRS.sort.dir:-1};rTR();
 function trTog(id){TRS.open[id]=!TRS.open[id];rTR();}
 function trUrl(p){return TR_DOM+p.path;}
 function trBadge(v){return '<span class="badge" style="background:'+TR_VC[v]+'22;color:'+TR_VC[v]+';font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;white-space:nowrap">'+v+'</span>';}
-function trCard(p,idx){const nv=p.variants?p.variants.length:1,vid='tc'+idx;
+function trCard(p,idx,showAds){const nv=p.variants?p.variants.length:1,vid='tc'+idx;
  let h='<div style="background:#fff;border:1px solid var(--bd);border-left:5px solid '+TR_VC[p.verdict]+';border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start">'
  +trBadge(p.verdict)+'<div style="flex:1;min-width:0">'
  +'<div style="font-size:13px;font-weight:700;word-break:break-word"><a href="'+trUrl(p)+'" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:none;border-bottom:1px solid #ccc">'+p.name+'</a>'
@@ -584,6 +677,7 @@ function trCard(p,idx){const nv=p.variants?p.variants.length:1,vid='tc'+idx;
  +'</div>';
  if(TRS.grouped&&nv>1&&TRS.open[vid]){h+='<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:8px;font-size:11px">'
   +p.variants.map(v=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:#666"><a href="'+trUrl(v)+'" target="_blank" rel="noopener" style="color:var(--ink);word-break:break-all">'+v.path+'</a><span>'+trN(v.sessions)+' sess · '+trPct(v.cvr)+' CVR</span></div>').join('')+'</div>';}
+ if(showAds)h+=trAdBlock(p);
  return h+'</div></div>';}
 /* v9.10: the daily by-type series (O.cvr.ts) the collector now carries. Two charts --
    sessions and conversion cannot share a y axis, and vzCard formats both axes the same. */
@@ -602,11 +696,28 @@ function trCharts(g){const T=trRaw().ts;
  vzCard(g,'Conversion rate by landing page type','Orders divided by sessions, per day. This is the up-or-down the routing verdicts are built on — a page type sliding here drags the whole site with it.',
   lbl,SHOW.map(t=>({l:t,d:sess[t].map((s,i)=>s>0?100*ord[t][i]/s:null),c:CC[t],w:2,pr:0}))
    .concat([{l:'Site',d:tot.map((s,i)=>s>0?100*tord[i]/s:null),c:'#2b3242',w:2.4,pr:0}]),fP,{});}
+/* v9.7.2: ONE control bar, rendered into every section (routing lists, products,
+   collections) instead of only the top of the routing view. Search + verdict + a real
+   minimum-sessions floor, because "under 100 sessions" is the filter actually wanted. */
+const TR_MINS=[0,10,25,50,100,250,500,1000];
+function trFilter(rows){const f=(TRS.f||'').toLowerCase();
+ return rows.filter(p=>(p.sessions||0)>=TRS.minS
+  &&(TRS.vf==='ALL'||p.verdict===TRS.vf)
+  &&(!f||p.name.toLowerCase().indexOf(f)>=0||p.path.toLowerCase().indexOf(f)>=0));}
+function trBar(tag,n){
+ const RK={sessions:'Biggest traffic',cvr:'Best conversion',orders:'Most orders',dCvr:'Biggest CVR move',dSess:'Biggest traffic move'};
+ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 12px 10px">'
+ +'<input placeholder="Search…" value="'+(TRS.f||'').replace(/"/g,'&quot;')+'" oninput="TRS.f=this.value;rTR()" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:200px">'
+ +'<select onchange="trSet(\'vf\',this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px" title="Verdict">'
+ +['ALL','SCALE','FEED','HOLD','FIX','INVESTIGATE','IGNORE'].map(v=>'<option'+(TRS.vf===v?' selected':'')+'>'+v+'</option>').join('')+'</select>'
+ +'<select onchange="trSet(\'minS\',+this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px" title="Hide pages under this many sessions">'
+ +TR_MINS.map(v=>'<option value="'+v+'"'+(TRS.minS===v?' selected':'')+'>'+(v?'≥ '+v+' sessions':'any sessions')+'</option>').join('')+'</select>'
+ +'<span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px;margin-left:4px">SORT</span>'
+ +Object.keys(RK).map(k=>'<span class="chip" style="font-size:10.5px;'+(k===TRS.rsort?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="trRS(\''+k+'\')">'+RK[k]+'</span>').join(' ')
+ +(n!=null?'<span style="font-size:11px;color:#8a93a6;margin-left:4px">'+trN(n)+' '+(tag||'rows')+' shown</span>':'')+'</div>';}
 function trKpi(l,v,n2){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(n2?'<div style="font-size:11px;color:#8a93a6;margin-top:2px">'+n2+'</div>':'')+'</div>';}
 function trTable(type,label){const all=trU().filter(p=>p.type===type);
- const f=(TRS.f||'').toLowerCase();
- let rows=all.filter(p=>p.name.toLowerCase().indexOf(f)>=0||p.path.toLowerCase().indexOf(f)>=0);
- if(TRS.vf!=='ALL')rows=rows.filter(p=>p.verdict===TRS.vf);
+ let rows=trFilter(all);
  const tot=all.reduce((s,p)=>s+p.sessions,0),ord=all.reduce((s,p)=>s+p.orders,0);
  const o=TRS.sort;
  rows=rows.slice().sort((a,b)=>{const av=a[o.col],bv=b[o.col];
@@ -615,11 +726,7 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
   +trKpi(label+(TRS.grouped?'s':' pages'),trN(all.length),all.filter(p=>p.orders>0).length+' converted at least once')
   +trKpi('Sessions',trN(tot),'')+trKpi('Orders',trN(ord),'')
   +trKpi('Blended CVR',tot?trPct(ord/tot):'0%','')+'</div>'
- +'<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">'
- +'<input placeholder="Search '+label.toLowerCase()+'…" value="'+(TRS.f||'').replace(/"/g,'&quot;')+'" oninput="TRS.f=this.value;rTR()" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:240px">'
- +'<select onchange="trSet(\'vf\',this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px">'
- +['ALL','SCALE','FEED','HOLD','FIX','INVESTIGATE','IGNORE'].map(v=>'<option'+(TRS.vf===v?' selected':'')+'>'+v+'</option>').join('')+'</select>'
- +'<span style="font-size:11px;color:#8a93a6">'+rows.length+' shown · click a header to sort</span></div>';
+ +trBar(label.toLowerCase()+'s',rows.length);
  const cols=[['name','Page'],['sessions','Sessions'],['dSessP','Traffic vs prev'],['cvr','CVR'],['atc','Add to cart'],['checkout','Checkout'],
   ['atc2chk','ATC→checkout'],['chk2buy','Checkout→buy'],['orders','Orders'],['dCvr','CVR vs prev'],['verdict','Verdict']];
  h+='<table class="bt"><tr>'+cols.map(c=>'<th onclick="trSort(\''+c[0]+'\')" style="cursor:pointer" title="Click to sort">'+c[1]+(o.col===c[0]?'<span style="color:var(--indigo)"> '+(o.dir<0?'▼':'▲')+'</span>':'')+'</th>').join('')+'</tr>';
@@ -643,13 +750,16 @@ function rTR(){if(TAB!=='tr')return;dCh();
   g.innerHTML='';return;}
  const C=M.C,SC=trS(),U=trU();
  const cov=C.allSess?100*C.keptSess/C.allSess:100;
- document.getElementById('bn22').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>TRAFFIC ROUTING</b> — the Shopify “CVR routing” report, pulled live instead of exported by hand. Every landing page over the last <b>'+(C.days||14)+' days</b> judged on what it does with the traffic it gets, so you can move spend onto what converts and off what does not. Counts are raw ShopifyQL, so orders are exact.'
+ document.getElementById('bn22').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>TRAFFIC ROUTING</b> — the Shopify “CVR routing” report, pulled live instead of exported by hand. Every landing page over the last <b>'+(C.days||14)+' days</b> judged on what it does with the traffic it gets, so you can move spend onto what converts and off what does not. Counts are raw ShopifyQL, so orders are exact. '
+  +(trHasCtry()?(TRS.ctry==='Egypt'?'<b>Egypt sessions only</b> — foreign traffic is 8% of sessions and near 0% of orders, and counting it makes real pages look broken. Switch with the COUNTRY chips.':'<b>All countries</b> — includes ~8% foreign traffic that almost never orders, so CVR reads low. Switch back to Egypt only for the honest verdicts.'):'')
   +(C.capped?' <b style="color:#b8860b">Top '+trN(C.kept)+' landing pages by sessions ('+cov.toFixed(1)+'% of all traffic) — the thin tail below is not shown.</b>':' Covering all '+trN(C.kept)+' landing pages.');
  const views=['ROUTING','PRODUCTS','COLLECTIONS','BI'];
  let h='<div class="card full" data-a="blend"><div style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 12px 10px;align-items:center">'
   +views.map(v=>'<span class="chip" style="'+(v===TRS.view?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="trSel(\''+v+'\')">'+v.charAt(0)+v.slice(1).toLowerCase()+'</span>').join(' ')
   +'<span style="width:12px"></span><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">WINDOW</span>'
   +trWins().map(d=>'<span class="chip" style="'+(d===TRS.win?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="trWin('+d+')">'+d+'d</span>').join(' ')
+  +(trHasCtry()?'<span style="width:10px"></span><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">COUNTRY</span>'
+    +[['Egypt','Egypt only'],['','All countries']].map(c=>'<span class="chip" style="'+(c[0]===TRS.ctry?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="trCtry(\''+c[0]+'\')">'+c[1]+'</span>').join(' '):'')
   +'<span style="flex:1"></span><span class="chip" style="'+(TRS.grouped?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="trGrp()">'+(TRS.grouped?'✓ ':'')+'Group product variants</span></div>';
  if(TRS.view==='ROUTING'){
   // v9.10: every section obeys one sort control instead of a hardcoded order per section
@@ -657,12 +767,18 @@ function rTR(){if(TAB!=='tr')return;dCh();
    orders:['Most orders',p=>p.orders],dCvr:['Biggest CVR move',p=>p.dCvr],
    dSess:['Biggest traffic move',p=>p.dSess]};
   const key=RK[TRS.rsort]?TRS.rsort:'sessions',kf=RK[key][1];
+  // the section lists obey the same search / min-sessions floor as the tables; the verdict
+  // dropdown does not apply here (each section IS a verdict) so it is neutralised
+  const _vf=TRS.vf;TRS.vf='ALL';
+  const UF=trFilter(U);TRS.vf=_vf;
   const srt=a=>a.slice().sort((x,y)=>(kf(y)||0)-(kf(x)||0));
-  const scale=srt(U.filter(p=>p.verdict==='SCALE'));
-  const feed=srt(U.filter(p=>p.verdict==='FEED'));
-  const fix=srt(U.filter(p=>p.verdict==='FIX'));
-  const inv=srt(U.filter(p=>p.verdict==='INVESTIGATE'));
-  const wasted=fix.reduce((s,p)=>s+p.sessions,0)+inv.reduce((s,p)=>s+p.sessions,0);
+  const scale=srt(UF.filter(p=>p.verdict==='SCALE'));
+  const feed=srt(UF.filter(p=>p.verdict==='FEED'));
+  const fix=srt(UF.filter(p=>p.verdict==='FIX'));
+  const inv=srt(UF.filter(p=>p.verdict==='INVESTIGATE'));
+  // KPI counts the whole site, not the filtered view -- a min-sessions floor must not make
+  // the wasted-traffic headline shrink
+  const wasted=U.filter(p=>p.verdict==='FIX'||p.verdict==='INVESTIGATE').reduce((s,p)=>s+p.sessions,0);
   const wp=SC.totSess>0?wasted/SC.totSess*100:0;
   h+='<div class="kpis" style="padding:0 12px">'
    +trKpi('Site conversion',trPct(SC.siteCVR),trN(SC.totSess)+' sessions · '+trN(SC.totOrd)+' orders')
@@ -670,17 +786,17 @@ function rTR(){if(TAB!=='tr')return;dCh();
    +trKpi('Fix before sending',trN(inv.length),'cart or checkout breaking')
    +trKpi('Wasted traffic',trN(wasted),wp.toFixed(0)+'% of sessions hit dead pages')+'</div>'
    +'<div class="rtNote" style="padding-left:12px">The site converts at <b>'+trPct(SC.siteCVR)+'</b>. <b>'+wp.toFixed(0)+'%</b> of traffic ('+trN(wasted)+' sessions) lands on pages that convert near zero. Fix the amber ones first — the buyer intent is already there. Then move spend onto the green and off the red.'+(TRS.grouped?' Products are grouped, so locale and collection URLs for the same product count together.':'')+'</div>'
-   +'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:0 12px 10px"><span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">SORT EVERY LIST BY</span>'
-   +Object.keys(RK).map(k=>'<span class="chip" style="'+(k===key?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="trRS(\''+k+'\')">'+RK[k][0]+'</span>').join(' ')+'</div></div>';
+   +trBar('pages',null)+'</div>';
   g.innerHTML=h;
   trCharts(g);
-  const sec=(t,c,d,arr,pre)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+' Sorted by '+RK[key][0].toLowerCase()+'.</div></div></div>'
-   +(arr.length?arr.slice(0,40).map((p,i)=>trCard(p,pre+i)).join(''):'<div class="rtNote">Nothing flagged.</div>')
+  const sec=(t,c,d,arr,pre,showAds)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+' Sorted by '+RK[key][0].toLowerCase()+'.'+(TRS.minS?' Pages under '+TRS.minS+' sessions hidden.':'')+'</div></div></div>'
+   +trBar('pages',arr.length)
+   +(arr.length?arr.slice(0,40).map((p,i)=>trCard(p,pre+i,showAds)).join(''):'<div class="rtNote">Nothing flagged'+(TRS.minS||TRS.f?' at this filter.':'.')+'</div>')
    +(arr.length>40?'<div class="rtNote">Showing the top 40 of '+arr.length+'.</div>':'')+'</div>';
-  let rest=sec('Direct traffic here','#1a8a3c','These convert above the site average and have proven they can take traffic. Point ads, email and links at these.',scale,'sc');
-  if(feed.length)rest+=sec('Promising — feed more traffic','#4a8fd6','Convert well but on thin volume. Send more to confirm before scaling hard.',feed,'fe');
-  rest+=sec('Fix before sending traffic','#d68a1e','People add to cart here but do not buy. The page works — the break is downstream at cart, checkout, shipping or price.',inv,'in');
-  rest+=sec('Stop or reduce traffic','#c43d2f','These pull real traffic and convert near zero. Rebuild the page or stop pointing traffic at it.',fix,'fx');
+  let rest=sec('Direct traffic here','#1a8a3c','These convert above the site average and have proven they can take traffic. Point ads, email and links at these.',scale,'sc',1);
+  if(feed.length)rest+=sec('Promising — feed more traffic','#4a8fd6','Convert well but on thin volume. Send more to confirm before scaling hard.',feed,'fe',1);
+  rest+=sec('Fix before sending traffic','#d68a1e','People add to cart here but do not buy. The page works — the break is downstream at cart, checkout, shipping or price. Each card lists the Meta ads pointing at it, so you can pause the spend while you fix it.',inv,'in',1);
+  rest+=sec('Stop or reduce traffic','#c43d2f','These pull real traffic and convert near zero. Rebuild the page or stop pointing traffic at it.',fix,'fx',1);
   g.insertAdjacentHTML('beforeend',rest);
   return;
  } else if(TRS.view==='PRODUCTS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Products</div><div class="cs">Every product landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Product','Product')+'</div>';
@@ -3971,6 +4087,22 @@ window.unlock=unlock;window.pnlCtl=pnlCtl;window.rMedia=rMedia;window.rAds=rAds;
 /* v8.3 — Customer Journeys + Budget Calls. Data: O.jour (Odoo order history),
    O.bev (Meta activity feed), O.mads[].d (per-ad 60d daily), O.cre (campaign reach). */
 function aD2(W,i){const d=new Date(W.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);}
+/* v9.7.2: weekday of a day index, and the Egyptian weekend. Thursday is included because
+   that is where the retail week actually turns here -- the user asked for Thu/Fri/Sat. */
+const BG_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function aDow(iso){return new Date(iso+'T00:00:00Z').getUTCDay();}
+function aWknd(iso){const d=aDow(iso);return d===4||d===5||d===6;}
+const BG_WKBG='background:#f1f4ff;';
+/* segmented view + per-section filters, so this tab stops being one infinite scroll */
+function bgSet(k,v){ST['bg_'+k]=v;rBG();}
+function bgG(k,d){const v=ST['bg_'+k];return v===undefined?d:v;}
+function bgChips(){const V=bgG('view','BUDGETS');
+ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 12px 8px">'
+ +[['BUDGETS','Budget changes'],['LAUNCHES','Ad launches'],['BOTH','Both']].map(x=>'<span class="chip" style="'+(V===x[0]?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="bgSet(\'view\',\''+x[0]+'\')">'+x[1]+'</span>').join(' ')+'</div>';}
+function bgSel(k,d,opts,lbl){const v=bgG(k,d);
+ return '<label style="font-size:11px;color:#64748b;font-weight:800;display:inline-flex;align-items:center;gap:5px">'+lbl
+ +'<select onchange="bgSet(\''+k+'\',this.value)" style="font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-weight:500">'
+ +opts.map(o=>'<option value="'+o[0]+'"'+(String(v)===String(o[0])?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></label>';}
 function cjS(v){ST.cjS=v;rCJ();}
 function aoLv(v){ST.aoLvl=v;rAds();}
 function aoAc(v){ST.aoAcct=v;rAds();}
@@ -4057,6 +4189,10 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   'This window re-scales both legs by ladders Meta measured on your own conversions: online &times;'+fON.toFixed(2)+', store &times;'+fOFF.toFixed(2)+'.');
  const attSel='<div style="margin:0 0 4px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION</span><select onchange="attrSet(\'meta\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===AK?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">online leg &times;'+fON.toFixed(2)+' &middot; store leg &times;'+fOFF.toFixed(2)+' (each measured on its own conversions)</span></div>'+
   '<div class="cs" style="margin:0 0 10px;max-width:900px">'+attExpl+'</div>';
+ // v9.7.2: the tab is segmented — budget changes and ad launches are two different jobs
+ // and nobody should scroll one to reach the other
+ const BGV=bgG('view','BUDGETS');
+ pnlCard(g,'meta','What are you looking at','Pick one. Each section carries its own filters.',bgChips());
  const HASD=Object.keys(SD).length>0||(O.mads||[]).some(a=>a.d);
  const w0=W?new Date(W.start+'T00:00:00Z'):null;
  const idx=d=>w0?Math.round((new Date(d+'T00:00:00Z')-w0)/864e5):-1;
@@ -4066,9 +4202,27 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   ['sp','pv','fv','pu','op','oc','im'].forEach(k2=>{const v=a.d[k2]||[];for(let i=0;i<W.n;i++)r[k2][i]+=v[i]||0;});});});
  const sum=(arr,i0,i1)=>{let t=0;for(let i=Math.max(0,i0);i<=Math.min((W?W.n:0)-1,i1);i++)t+=arr[i]||0;return t;};
  // ---------------- BUDGET CALLS ----------------
- if(!EV.length){pnlCard(g,'meta','Budget changes','No budget-change events pulled yet; the activity feed lands on the next collector run.','');}
+ if(BGV==='LAUNCHES'){/* budget section hidden */}
+ else if(!EV.length){pnlCard(g,'meta','Budget changes','No budget-change events pulled yet; the activity feed lands on the next collector run.','');}
  else{
+ // v9.7.2: filters. `evsAll` stays the unfiltered book for the portfolio card (that
+ // number has to answer "did ALL my decisions make money"); `evsF` is what gets listed.
  const evsAll=EV.filter(e=>(!ST.s||e.t>=ST.s)&&(!ST.e||e.t<=ST.e));
+ const bgQ=String(bgG('q','')).toLowerCase(),bgAc=bgG('acct','ALL'),bgLv=bgG('lvl','ALL'),bgDir=bgG('dir','ALL'),bgMin=+bgG('min',0);
+ const bgSpend=e=>{const r=SD[e.id]||roll[e.id];const i=idx(e.t);return (r&&i>=0)?sum(r.sp,i,i+6):0;};
+ const bgKeep=e=>(bgAc==='ALL'||e.acct===bgAc)
+   &&(bgLv==='ALL'||e.lvl===bgLv)
+   &&(bgDir==='ALL'||(e.old!=null&&e.new!=null&&(bgDir==='UP'?e.new>e.old:e.new<e.old)))
+   &&(!bgQ||String(e.nm||e.id).toLowerCase().indexOf(bgQ)>=0)
+   &&(!bgMin||bgSpend(e)>=bgMin);
+ const accts=[...new Set(EV.map(e=>e.acct).filter(Boolean))];
+ const bgBar='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 12px 10px">'
+  +'<input placeholder="Search campaign / ad set…" value="'+String(bgG('q','')).replace(/"/g,'&quot;')+'" oninput="bgSet(\'q\',this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:230px">'
+  +bgSel('acct','ALL',[['ALL','All accounts']].concat(accts.map(a=>[a,a])),'ACCOUNT')
+  +bgSel('lvl','ALL',[['ALL','All levels'],['campaign','CBO · campaign'],['adset','ABO · ad set']],'LEVEL')
+  +bgSel('dir','ALL',[['ALL','Raises + cuts'],['UP','Raises only'],['DOWN','Cuts only']],'DIRECTION')
+  +bgSel('min','0',[['0','Any spend'],['5000','≥ E£5k after'],['20000','≥ E£20k after'],['50000','≥ E£50k after']],'7d SPEND AFTER')
+  +'</div>';
  // ---------------- PORTFOLIO VIEW (v9.9) ----------------
  // Every budget move in the window treated as ONE investment decision: what you added,
  // what you took away, and what the money did afterwards. Each change is scored on its
@@ -4114,8 +4268,9 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   h+='<div style="font-size:10px;color:#8a93a6;margin-top:8px">'+judged.length+' of '+evsAll.length+' changes scored'+(skipped.length?'; '+skipped.length+' skipped (no delivery around the change, or fewer than 4 days since it)':'')+'. Each change is its own object&rsquo;s 7 days before vs 7 days after, at the attribution setting above; the totals are those deltas summed. Overlapping moves on the same object are flagged in the breakdown below. This is a portfolio read: it answers &ldquo;did my budget decisions as a whole make money&rdquo;, not &ldquo;what did campaign X do&rdquo;.</div>';
   pnlCard(g,'meta','Budget decisions as a portfolio &mdash; '+(ST.s||'')+' &rarr; '+(ST.e||''),'Everything you moved in this window, and what the money did afterwards.',attSel+h);
  })();
- const evs=ST.bgAll?evsAll:evsAll.slice(0,30);
- if(!evs.length){pnlCard(g,'meta','Budget changes','None of the '+EV.length+' changes in the 60-day feed fall inside your date filter. Widen it.','');}
+ const evsF=evsAll.filter(bgKeep);
+ const evs=ST.bgAll?evsF:evsF.slice(0,30);
+ if(!evs.length){pnlCard(g,'meta','Budget changes','None of the '+EV.length+' changes in the 60-day feed match your date filter and the filters above. Widen them.',bgBar);}
  else{
  const list=evs.map(e=>{
   const r=SD[e.id]||roll[e.id];const i=idx(e.t);
@@ -4152,12 +4307,20 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   // spend rises — a 0.4x ROAS scale-up looked 'good'. Money left after paying Meta cannot
   // be gamed by spending more.
   const dPAS=a2.pasd-b.pasd;const dROAS=(b.roas&&a2.roas)?(a2.roas-b.roas)/b.roas*100:null;const dCPP=(b.cpp&&a2.cpp)?(a2.cpp-b.cpp)/b.cpp*100:null;
+  // v9.7.2: THE BUDGET IS NOT THE DECISION — THE DELIVERY IS. A "+100% budget" that Meta
+  // never spent is not a good call or a bad one, it is a non-event, and grading it either
+  // way teaches the wrong lesson. Compare what you authorised with what actually landed.
+  const dBudP=(e.old!=null&&e.new!=null&&e.old)?(e.new-e.old)/e.old*100:null;
+  const dSpdP=b.spd>0?(a2.spd-b.spd)/b.spd*100:null;
+  // "the money never moved": you asked for a ≥15% change and delivery moved under a third of it
+  const noop=enough&&dBudP!=null&&dSpdP!=null&&Math.abs(dBudP)>=15&&Math.abs(dSpdP)<Math.abs(dBudP)*0.33;
   const vd=!enough?['TOO EARLY','#8a93a6','Fewer than 4 full days (or no delivery) since the change — judgement withheld.']:
+   (noop?['NO DELIVERY CHANGE','#b8860b','You moved the budget '+(dBudP>=0?'+':'')+dBudP.toFixed(0)+'% and realized spend moved '+(dSpdP>=0?'+':'')+dSpdP.toFixed(0)+'% (E£ '+money(b.spd)+' → E£ '+money(a2.spd)+'/day). The money never actually moved, so whatever happened to profit after it is NOT this decision — see the note below for what is really capping delivery.']:
    (b.spd<200?['FRESH OBJECT','#8a93a6','It was barely spending before the change (E£ '+money(b.spd)+'/day) — no honest baseline. Judge it in the launch library below.']:
    (a2.pasd<0?['BAD CALL','#e23a63','It is LOSING E£ '+money(-a2.pasd)+'/day after ad spend since the change (was '+(b.pasd>=0?'making E£ '+money(b.pasd):'losing E£ '+money(-b.pasd))+'/day). An object that does not cover its own spend cannot be a good budget call.']:
    (dPAS>0?['GOOD CALL','#12a06e','Profit after ad spend went UP E£ '+money(dPAS)+'/day'+(dROAS!=null?' (ROAS '+(dROAS>=0?'+':'')+dROAS.toFixed(0)+'%)':'')+'.']:
    (dPAS<0?['BAD CALL','#e23a63','Profit after ad spend DROPPED E£ '+money(-dPAS)+'/day'+(dCPP!=null?', CPP '+(dCPP>=0?'+':'')+dCPP.toFixed(0)+'%':'')+'.']:
-   ['MIXED','#ff8b42','Profit after ad spend roughly flat; efficiency moved both ways.']))));
+   ['MIXED','#ff8b42','Profit after ad spend roughly flat; efficiency moved both ways.'])))));
   // v9.6: a raise that never bought delivery is a non-event, not a good/bad call.
   let capNote='';
   if(up===true&&enough&&b.spd>0&&a2.spd<b.spd*1.05){
@@ -4166,9 +4329,10 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    capNote='<div class="pwarn" style="margin-top:6px"><b>The cut never actually reduced delivery.</b> Budget went DOWN but realized spend/day held at E&pound; '+money(a2.spd)+' (was E&pound; '+money(b.spd)+') &mdash; the old budget was never binding, so this change is close to a no-op.</div>';}
   const hero='<div style="margin:8px 0;padding:10px 14px;border-radius:10px;background:'+vd[1]+'14;border-left:4px solid '+vd[1]+'"><b style="color:'+vd[1]+';font-size:13px">'+vd[0]+'</b> <span style="font-size:12px;color:#333">'+vd[2]+'</span>'+
    '<div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:8px">'+[
+    ['BUDGET you set / day',e.old,e.new,'cur',0],['SPEND Meta delivered / day',b.spd,a2.spd,'cur',0],
     ['PROFIT after ad spend / day',b.pasd,a2.pasd,'cur',1],['ROAS online',b.ron,a2.ron,'x',1],['ROAS store',b.rst,a2.rst,'x',1],['CPP (website)',b.cpp,a2.cpp,'cur',-1],['Cost / in-store conv.',b.cpo,a2.cpo,'cur',-1]
    ].map(R=>{const vb=R[1],va=R[2],f=R[3],dir=R[4];const dOk=(vb!=null&&va!=null&&isFinite(vb)&&isFinite(va)&&vb!==0);const d2=dOk?(va-vb)/Math.abs(vb)*100:null;
-    const col=d2==null?'#8a93a6':((dir>0?d2>=0:d2<=0)?'#12a06e':'#e23a63');
+    const col=(d2==null||dir===0)?'#8a93a6':((dir>0?d2>=0:d2<=0)?'#12a06e':'#e23a63');
     const fmt=v=>(v==null||!isFinite(v))?'&mdash;':(f==='cur'?'E£ '+money(v):v.toFixed(2)+'x');
     return '<div><div style="font-size:10px;font-weight:800;color:#64748b">'+R[0]+'</div><div style="font-size:15px;font-weight:800">'+fmt(vb)+' &rarr; <span style="color:'+col+'">'+fmt(va)+'</span></div><div style="font-size:10.5px;color:'+col+';font-weight:700">'+(d2==null?'':(d2>=0?'+':'')+d2.toFixed(0)+'% after')+'</div></div>';}).join('')+'</div></div>';
   // ---- day-by-day: change day fully highlighted ----
@@ -4176,16 +4340,19 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   const chg={};sib.forEach(v=>{const j=idx(v.t);if(j>=k0&&j<=k1&&j!==i)chg[j]=v;});
   const CD=' background:#fff3cd;border-left:2px solid #b8860b;border-right:2px solid #b8860b;';
   let dt='<div style="overflow-x:auto;margin-top:6px"><table class="bt" style="min-width:'+(130+(k1-k0+1)*66)+'px"><tr><th style="text-align:left">Day by day</th>';
-  for(let k=k0;k<=k1;k++){const dd2=aD2(W,k);const cv2=chg[k];dt+='<th style="font-size:11px;font-weight:800;'+(k===i?CD+'font-weight:900':'')+'">'+dd2.slice(8,10)+'/'+dd2.slice(5,7)+(k===i?'<div style="font-size:9.5px;color:#b8860b">'+(up===false?'CUT':'RAISE')+' DAY</div>':(cv2?'<div style="font-size:9.5px;color:#b8860b" title="'+(cv2.old!=null&&cv2.new!=null?('E£ '+money(cv2.old)+' → E£ '+money(cv2.new)+'/day'):'budget changed')+'">'+((cv2.old!=null&&cv2.new!=null)?(cv2.new>cv2.old?'&#9650;+':'&#9660;')+Math.round((cv2.new-cv2.old)/(cv2.old||1)*100)+'%':'&#9670; chg')+'</div>':''))+'</th>';}
+  for(let k=k0;k<=k1;k++){const dd2=aD2(W,k);const cv2=chg[k];const wk=aWknd(dd2);
+   dt+='<th style="font-size:11px;font-weight:800;'+(wk?BG_WKBG:'')+(k===i?CD+'font-weight:900':'')+'">'+dd2.slice(8,10)+'/'+dd2.slice(5,7)
+    +'<div style="font-size:9.5px;font-weight:800;color:'+(wk?'#3f5bd6':'#8a93a6')+'">'+BG_DOW[aDow(dd2)]+(wk?' ·wknd':'')+'</div>'
+    +(k===i?'<div style="font-size:9.5px;color:#b8860b">'+(up===false?'CUT':'RAISE')+' DAY</div>':(cv2?'<div style="font-size:9.5px;color:#b8860b" title="'+(cv2.old!=null&&cv2.new!=null?('E£ '+money(cv2.old)+' → E£ '+money(cv2.new)+'/day'):'budget changed')+'">'+((cv2.old!=null&&cv2.new!=null)?(cv2.new>cv2.old?'&#9650;+':'&#9660;')+Math.round((cv2.new-cv2.old)/(cv2.old||1)*100)+'%':'&#9670; chg')+'</div>':''))+'</th>';}
   dt+='</tr>';
-  const CELL=(v,base,dir,f,isCd)=>{if(v==null||!isFinite(v))return'<td style="'+(isCd?CD:'')+'">&mdash;</td>';let bg='';
+  const CELL=(v,base,dir,f,isCd,wk)=>{if(v==null||!isFinite(v))return'<td style="'+(wk?BG_WKBG:'')+(isCd?CD:'')+'">&mdash;</td>';let bg=wk?BG_WKBG:'';
    if(base!=null&&isFinite(base)&&base!==0&&dir!==0){const d2=(v-base)/Math.abs(base);
     if((dir>0?d2>=.05:d2<=-.05))bg='background:rgba(18,160,110,'+Math.min(.4,Math.abs(d2)*.4+.08).toFixed(2)+');';
     else if((dir>0?d2<=-.05:d2>=.05))bg='background:rgba(226,58,99,'+Math.min(.35,Math.abs(d2)*.35+.07).toFixed(2)+');';}
    return'<td style="'+bg+(isCd?CD:'')+'">'+f(v)+'</td>';};
   const fm={cur:v=>money(v),x:v=>v.toFixed(1)+'x'};
   const gpDay=k=>((r.pv[k]||0)*fON*gpOn+(r.fv[k]||0)*fOFF*gpSt);
-  const drow=(nm,fn,base,dir,f)=>{let h='<tr><td style="text-align:left">'+nm+'</td>';for(let k=k0;k<=k1;k++){h+=CELL(fn(k),base,dir,f,k===i);}return h+'</tr>';};
+  const drow=(nm,fn,base,dir,f)=>{let h='<tr><td style="text-align:left">'+nm+'</td>';for(let k=k0;k<=k1;k++){h+=CELL(fn(k),base,dir,f,k===i,aWknd(aD2(W,k)));}return h+'</tr>';};
   dt+=drow('Spend',k=>r.sp[k]||0,null,0,fm.cur);
   dt+=drow('ROAS online',k=>r.sp[k]?(r.pv[k]||0)*fON/r.sp[k]:null,b.ron,1,fm.x);
   dt+=drow('ROAS store',k=>r.sp[k]?(r.fv[k]||0)*fOFF/r.sp[k]:null,b.rst,1,fm.x);
@@ -4194,7 +4361,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   dt+=drow('Website purchases',k=>r.pu[k]||0,null,0,v=>money(v));
   dt+=drow('Cost / in-store conv.',k=>(r.op[k]||0)?(r.sp[k]||0)/(r.op[k]||0):null,b.cpo,-1,fm.cur);
   dt+=drow('In-store conversions',k=>r.op[k]||0,null,0,v=>money(v));
-  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins).</div>';
+  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day; blue columns are Thu/Fri/Sat &mdash; the weekend, where demand moves for reasons that have nothing to do with your budget. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins).</div>';
   // ---- 7d summary ----
   const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['PROFIT after ad spend / day',b.pasd,a2.pasd,1,'cur'],['GP / day (before spend)',b.gpd,a2.gpd,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],
    ['CPP (website)',b.cpp,a2.cpp,-1,'cur'],['Website purchases',b.pu,a2.pu,1,'n'],
@@ -4217,11 +4384,11 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   strip+='</div>';
   return head+hero+capNote+dt+t+strip;
  }).join('<hr style="border:0;border-top:1px solid #e8ebf2;margin:16px 0">');
- const more=evsAll.length>evs.length?'<div style="margin-top:12px;text-align:center"><a onclick="ST.bgAll=1;rBG()" style="cursor:pointer;color:#3a9bff;font-weight:800;font-size:13px">Show ALL '+evsAll.length+' budget changes in this date range &darr;</a></div>':(ST.bgAll&&evsAll.length>30?'<div style="margin-top:12px;text-align:center"><a onclick="ST.bgAll=0;rBG()" style="cursor:pointer;color:#8a93a6;font-weight:700;font-size:12px">Collapse to the latest 30 &uarr;</a></div>':'');
- pnlCard(g,'meta','Budget changes &mdash; '+evs.length+' in view'+(EV.length>evs.length?' (of '+EV.length+' in the 60d feed'+(evsAll.length>evs.length?'; '+evsAll.length+' match your date filter':'')+')':''),'Verdict first (judged on gross profit per day), then the day-by-day around the change (gold column = the day you moved the budget; &#9650;/&#9660; markers = OTHER budget moves on the same object), then the 7-day summary.',attSel+list+more);}}
+ const more=evsF.length>evs.length?'<div style="margin-top:12px;text-align:center"><a onclick="ST.bgAll=1;rBG()" style="cursor:pointer;color:#3a9bff;font-weight:800;font-size:13px">Show ALL '+evsF.length+' budget changes matching these filters &darr;</a></div>':(ST.bgAll&&evsF.length>30?'<div style="margin-top:12px;text-align:center"><a onclick="ST.bgAll=0;rBG()" style="cursor:pointer;color:#8a93a6;font-weight:700;font-size:12px">Collapse to the latest 30 &uarr;</a></div>':'');
+ pnlCard(g,'meta','Budget changes &mdash; '+evs.length+' in view'+(EV.length>evs.length?' (of '+EV.length+' in the 60d feed'+(evsF.length>evs.length?'; '+evsF.length+' match your filters':'')+')':''),'Verdict judges the change on what Meta ACTUALLY SPENT afterwards, not on the budget you typed &mdash; a raise that bought no delivery is marked NO DELIVERY CHANGE, not a good call. Then the day-by-day around the change (gold column = the day you moved it; weekend columns Thu&ndash;Sat tinted blue), then the 7-day summary.',attSel+bgBar+list+more);}}
  // ---------------- AD LAUNCH LIBRARY ----------------
  (function(){
-  if(!W)return;
+  if(!W||BGV==='BUDGETS')return;
   const ads=(O.mads||[]).filter(a=>a.d);
   if(!ads.length){pnlCard(g,'meta','Ad launch library','Per-day ad series arrive on the next collector run; the launch library activates then.','');return;}
   const today=W.n-1;
@@ -4237,9 +4404,22 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    const gp3=pv*gpOn+fv*gpSt;
    L.push({a,f0,days:today-f0+1,sp,pv,fv,pu,op,ncv,im,vv,roas:sp?(pv+fv)/sp:0,cpp:pu?sp/pu:null,cpo:op?sp/op:null,gp:gp3,pas:gp3-sp});});
   if(!L.length){pnlCard(g,'meta','Ad launch library &mdash; none in the last 3 weeks','No ad crossed E&pound;1,000 spend with a first delivery day inside the last 21 days.','');return;}
-  L.sort((x,y)=>y.sp-x.sp);
+  // v9.7.2: the launch library gets its own filters + sort, same reason as everywhere else
+  const lq=String(bgG('lq','')).toLowerCase(),lac=bgG('lacct','ALL'),lvd=bgG('lvd','ALL'),lsrt=bgG('lsort','sp');
+  const lbench=(x)=>x.days<3?'TOO EARLY':(x.pas<0&&x.days>=5?'BLEEDING':(bench&&x.roas>=bench*1.15&&x.pas>0?'STRONG':(bench&&x.roas<=bench*0.6?'WEAK':'NORMAL')));
+  const laccts=[...new Set(L.map(x=>x.a.acct).filter(Boolean))];
+  const LF=L.filter(x=>(lac==='ALL'||x.a.acct===lac)&&(lvd==='ALL'||lbench(x)===lvd)
+    &&(!lq||String(x.a.n||'').toLowerCase().indexOf(lq)>=0||String(x.a.cmp||'').toLowerCase().indexOf(lq)>=0));
+  const LK={sp:x=>x.sp,pas:x=>x.pas,roas:x=>x.roas,f0:x=>x.f0};
+  LF.sort((x,y)=>(LK[lsrt]||LK.sp)(y)-(LK[lsrt]||LK.sp)(x));
+  const lbar='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 0 10px">'
+   +'<input placeholder="Search ad / campaign…" value="'+String(bgG('lq','')).replace(/"/g,'&quot;')+'" oninput="bgSet(\'lq\',this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:230px">'
+   +bgSel('lacct','ALL',[['ALL','All accounts']].concat(laccts.map(a=>[a,a])),'ACCOUNT')
+   +bgSel('lvd','ALL',[['ALL','All verdicts'],['STRONG','Strong start'],['NORMAL','Normal ramp'],['WEAK','Weak — kill watch'],['BLEEDING','Bleeding — kill'],['TOO EARLY','Too early']],'VERDICT')
+   +bgSel('lsort','sp',[['sp','Most spent'],['pas','Most profit after spend'],['roas','Best ROAS'],['f0','Newest']],'SORT')
+   +'<span style="font-size:11px;color:#8a93a6">'+LF.length+' of '+L.length+' shown</span></div>';
   const NCLIVE2=(O.metaCC?O.metaCC.allNC>0:false);
-  const cards=L.slice(0,24).map(x=>{const a=x.a;
+  const cards=LF.slice(0,24).map(x=>{const a=x.a;
    // v9.2 verdict = does it make money AFTER paying Meta, then how it compares to the account
    const vd=x.days<3?['TOO EARLY','#8a93a6']:
     (x.pas<0&&x.days>=5?['BLEEDING — KILL','#e23a63']:
@@ -4267,7 +4447,33 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     (NCLIVE2?'<div class="ak"><span>NC store value</span><b>E&pound; '+money(x.ncv)+'</b></div>':'')+
     '<div class="ak" style="border:0"><span>'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener" style="color:#3a9bff;font-size:11px">preview &rarr;</a>':'')+'</span><b>'+amLink('ad',a.id,a.acct,'edit')+'</b></div>'+
     strip+'</div>';}).join('');
-  pnlCard(g,'meta','Ad launch library &mdash; '+L.length+' launches in the last 3 weeks','Every ad whose FIRST delivery day is inside the last 21 days, E&pound;1,000+ spent. Online and store legs separated, each on its own measured attribution ladder ('+String((O.attr&&O.attr.labels&&O.attr.labels[AK])||AK).replace(/<[^>]*>/g,'')+'). Verdict = since-launch TOTAL ROAS vs the account&rsquo;s last-14d blend: STRONG START &ge;115%, KILL WATCH &le;60%. Strip = daily ROAS since launch.','<div class="adg">'+cards+'</div>');
+  pnlCard(g,'meta','Ad launch library &mdash; '+L.length+' launches in the last 3 weeks','Every ad whose FIRST delivery day is inside the last 21 days, E&pound;1,000+ spent. Online and store legs separated, each on its own measured attribution ladder ('+String((O.attr&&O.attr.labels&&O.attr.labels[AK])||AK).replace(/<[^>]*>/g,'')+'). Verdict = since-launch TOTAL ROAS vs the account&rsquo;s last-14d blend: STRONG START &ge;115%, KILL WATCH &le;60%. Strip = daily ROAS since launch.',attSel+lbar+'<div class="adg">'+cards+'</div>');
+ })();
+ // ---------------- TIKTOK: online + in-store, same treatment as Meta ----------------
+ (function(){
+  const A=O.ad;if(!A||!A.n)return;
+  // O.ad has its OWN start date and its own indexing -- rng() indexes the global DD array.
+  // Mixing them silently reads off the end of the series (E£0 and dates a year out).
+  const AW={start:A.start,n:A.n};
+  const aIx=iso=>Math.round((new Date(iso+'T00:00:00Z')-new Date(A.start+'T00:00:00Z'))/864e5);
+  const R=[Math.max(0,ST.s?aIx(ST.s):A.n-30),Math.min(A.n-1,ST.e?aIx(ST.e):A.n-1)];
+  if(R[1]<R[0])return;
+  const S=(k)=>{let t=0;for(let i=R[0];i<=R[1];i++)t+=((A[k]||[])[i])||0;return t;};
+  const fTT=af('tt');
+  const sp=S('tspend'),on=S('ttValue')*fTT,off=S('ttOffValue')*fTT,pu=S('tpur'),opu=S('ttOffPur');
+  const gp3=on*gpOn+off*gpSt,pas=gp3-sp;
+  const last=(()=>{const a=A.tspend||[];for(let i=a.length-1;i>=0;i--)if(a[i])return aD2(AW,i);return null;})();
+  const OFF=((O.fresh||{}).tiktok==='off');
+  const dead=OFF?'<div class="pwarn" style="margin:0 0 10px"><b>The TikTok feed is switched off in the collector, so these numbers are frozen.</b> The GitHub Action runs with <code>TIKTOK_TOKEN</code> and <code>TIKTOK_ADVERTISER_ID</code> empty and logs &ldquo;tiktok skipped&rdquo; on every run &mdash; last day with any TikTok spend was <b>'+(last||'unknown')+'</b>. Everything below is the last good pull, not today. Set those two repo secrets and it starts moving again on the next sync; nothing else needs changing.</div>':'';
+  const K=(l,v,s2)=>'<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(s2?'<div class="d ft">'+s2+'</div>':'')+'</div>';
+  const h2=dead+'<div class="kpis">'
+   +K('TikTok spend','E£ '+money(sp),R?aD2(AW,R[0])+' → '+aD2(AW,R[1]):'')
+   +K('ONLINE revenue','E£ '+money(on),(sp?(on/sp).toFixed(2)+'x ROAS':'—')+' · '+money(pu)+' purchases')
+   +K('IN-STORE revenue',off>0?'E£ '+money(off):'<span style="font-size:15px;color:#8a93a6">NOT MEASURED</span>',off>0?(sp?(off/sp).toFixed(2)+'x ROAS':'')+' · '+money(opu)+' offline conversions':'TikTok returns 0 offline shopping events — the in-store event feed to TikTok is not delivering')
+   +K('PROFIT after ad spend','<span style="color:'+(pas>=0?'#12a06e':'#e23a63')+'">'+(pas<0?'−':'')+'E£ '+money(Math.abs(pas))+'</span>','GP at your real margins minus spend')
+   +'</div>';
+  const ttSel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION &middot; TIKTOK</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===((ST.att&&ST.att.tt)||ST.at)?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok leg &times;'+fTT.toFixed(2)+'</span></div>';
+  pnlCard(g,'meta','TikTok &mdash; online and in-store revenue','TikTok has its OWN attribution ladder (O.attr.tt), so it gets its own selector rather than inheriting Meta&rsquo;s. Same real Odoo margins as the Meta cards above. Per-ad TikTok data is empty in this sync, so this is the account-level read.',ttSel+h2);
  })();}
 function _cohScopes(){ // every scope -> {month:{size,g30,g90,g180,g365}}
  const S={};
