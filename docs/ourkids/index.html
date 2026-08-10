@@ -4500,19 +4500,21 @@ function rTK(){if(TAB!=='tk')return;dCh();
  const R=[Math.max(0,ST.s?aIx(ST.s):A.n-30),Math.min(A.n-1,ST.e?aIx(ST.e):A.n-1)];
  if(R[1]<R[0]){g.innerHTML='';document.getElementById('bn24').innerHTML='Date range is outside the ad window.';return;}
  const S=k=>{let t=0;for(let i=R[0];i<=R[1];i++)t+=((A[k]||[])[i])||0;return t;};
- const fTT=af('tt'),AK=(ST.att&&ST.att.tt)||ST.at,AL=(O.attr&&O.attr.labels)||{};
+ const fTT=af('tt'),AK=(ST.att&&ST.att.tt)||ST.at;
+ const TKL={'default':'TikTok claim — 7d click + 1d view (LIVE)','7dc':'7-day click only (measured: 34% of claim)','1dc':'1-day click only (measured: 21% of claim)','incr':'Last-click floor (measured: 12% — Shopify-verified)'};
  const {gpOn,gpSt}=_gpPct();
- const sp=S('tspend'),val=S('ttValue')*fTT,pur=S('tpur'),offv=S('ttOffValue')*fTT,offp=S('ttOffPur'),
+ const sp=S('tspend'),val=S('ttValue')*fTT,pur=S('tpur')*fTT,offv=S('ttOffValue')*fTT,offp=S('ttOffPur')*fTT,
        shRev=S('ttShopRev'),shOrd=S('ttShopOrd'),imp=S('timp'),clk=S('tclk');
- const gp3=val*gpOn+offv*gpSt,pas=gp3-sp;
+ const gp3=val*gpOn+offv*gpSt,pas=gp3-sp,tot=val+offv;
  document.getElementById('bn24').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>TIKTOK</b> &mdash; spend and claimed value arrive DAILY through the MCP bridge (no Marketing API token needed; a scheduled agent republishes <code>tiktok_live.json</code> every morning). Shopify last-click is measured on your own store and is the floor no attribution debate can move. In-store = your POS purchases matched by TikTok against ad exposure (offline event sets, auto-tracked on all 7 branch sets). <b>The attribution selector uses factors MEASURED on this account</b> (Attribution Analytics, Aug 2026: 241 claimed = 76 click + 165 view; 7d-click-only 34%, 1d-click 21%, last-click floor 12%).';
- const attSel='<div style="margin:0 0 6px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===AK?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok legs &times;'+fTT.toFixed(3)+' &mdash; measured, not modeled</span></div>';
+ const attSel='<div style="margin:0 0 6px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===AK?' selected':'')+'>'+(TKL[k]||k)+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok legs &times;'+fTT.toFixed(3)+' &mdash; measured, not modeled</span></div>';
  const K=(l,v,s2,c)=>'<div class="kpi"><div class="l">'+l+'</div><div class="v"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+(s2?'<div class="d ft">'+s2+'</div>':'')+'</div>';
  let h='<div class="kpis">'
   +K('Spend','E£ '+money(sp),aD2(AW,R[0])+' → '+aD2(AW,R[1]))
-  +K('ONLINE value (claimed)','E£ '+money(val),(sp?(val/sp).toFixed(2)+'x ROAS':'—')+' · '+money(pur)+' purchases at this window')
+  +K('ONLINE value','E£ '+money(val),(sp?(val/sp).toFixed(2)+'x ROAS':'—')+' · ~'+money(pur)+' purchases at this window')
   +K('Shopify LAST-CLICK','E£ '+money(shRev),money(shOrd)+' orders · '+(sp?(shRev/sp).toFixed(2)+'x':'—')+' · the floor')
-  +K('IN-STORE value',offp>0?'E£ '+money(offv):'<span style="font-size:15px;color:#8a93a6">none matched yet</span>',offp>0?money(offp)+' conversions · '+(sp?(offv/sp).toFixed(2)+'x':''):'events flow nightly; matches lag 1–3d')
+  +K('IN-STORE value',offp>0?'E£ '+money(offv):'<span style="font-size:15px;color:#8a93a6">none matched yet</span>',offp>0?'~'+money(offp)+' conversions · '+(sp?(offv/sp).toFixed(2)+'x':''):'events flow nightly; matches lag 1–3d')
+  +K('TOTAL value — online + in-store','E£ '+money(tot),(sp?(tot/sp).toFixed(2)+'x total ROAS':'—')+' · ~'+money(pur+offp)+' total conversions')
   +K('PROFIT after ad spend',(pas<0?'−':'')+'E£ '+money(Math.abs(pas)),'GP at real margins ('+(gpOn*100).toFixed(1)+'% on / '+(gpSt*100).toFixed(1)+'% store) minus spend',pas>=0?'#12a06e':'#e23a63')
   +K('CTR',imp?(clk/imp*100).toFixed(2)+'%':'—',money(imp)+' impressions')
   +'</div>';
@@ -4538,23 +4540,38 @@ function rTK(){if(TAB!=='tk')return;dCh();
    .map(r=>'<tr><td style="text-align:left;font-weight:700">'+r[0]+'</td><td>'+r[1]+'</td><td style="font-weight:800">'+r[2]+'</td><td style="text-align:left;font-size:11.5px;color:#555">'+r[3]+'</td></tr>').join('')
   +'</table></div><div class="rtNote">TikTok has NO incremental attribution product — nothing like Meta&rsquo;s incremental column exists on any TikTok endpoint or page. The last-click floor is the closest honest stand-in. The only true incrementality test is a spend holiday: at current ~E£2.5k/day it costs ~E£35k to run one for two weeks against the POS.</div>');
  /* ---- per-ad table ---- */
- const T=(O.tads||[]).filter(a=>(a.pf||'tiktok')==='tiktok');
+ const T0=(O.tads||[]).filter(a=>(a.pf||'tiktok')==='tiktok');
+ // by-campaign rollup: same rows, grouped on cmp
+ const VIEW=window.__tkView||(window.__tkView='ad');
+ window.tkView=v=>{window.__tkView=v;rTK();};
+ let T=T0;
+ if(VIEW==='cmp'&&T0.length){const gmap={};
+  T0.forEach(a=>{const k=a.cmp||'(no campaign)';const g2=gmap[k]||(gmap[k]={id:k,n:k,cmp:'',sp:0,pv:0,ofv:0,pur:0,opur:0,imp:0,clk:0,ads:0,pf:'tiktok'});
+   ['sp','pv','ofv','pur','opur','imp','clk'].forEach(f=>g2[f]+=(a[f]||0));g2.ads++;});
+  T=Object.values(gmap);}
  if(T.length){
   const TS=window.__tkSort||(window.__tkSort={col:'sp',dir:-1});
   const rows=T.slice().sort((a,b)=>TS.dir*(((b[TS.col]||0)-(a[TS.col]||0))));
   window.tkSort=c=>{TS.dir=TS.col===c?-TS.dir:-1;TS.col=c;rTK();};
   const cols=[['n','Ad'],['cmp','Campaign'],['sp','Spend'],['pv','Online value'],['roas','ROAS online'],['pur','Purch.'],['ofv','In-store value'],['opur','In-store conv.'],['clk','Clicks'],['ctr','CTR'],['cpp','CPP']];
   let t='<div style="overflow-x:auto"><table class="bt" style="min-width:980px"><tr>'+cols.map(c=>'<th onclick="tkSort(\''+c[0]+'\')" style="cursor:pointer'+(c[0]==='n'||c[0]==='cmp'?';text-align:left':'')+'">'+c[1]+(TS.col===c[0]?' '+(TS.dir<0?'▼':'▲'):'')+'</th>').join('')+'</tr>';
-  rows.forEach(a=>{const v=(a.pv||0)*fTT,ov=(a.ofv||0)*fTT,ro=a.sp?(v/a.sp):0,ctr=a.imp?(a.clk/a.imp*100):0,cpp=a.pur?(a.sp/a.pur):null;
+  const X={sp:0,pv:0,ofv:0,pur:0,opur:0,imp:0,clk:0};
+  rows.forEach(a=>{const v=(a.pv||0)*fTT,ov=(a.ofv||0)*fTT,pu=(a.pur||0)*fTT,op=(a.opur||0)*fTT,ro=a.sp?(v/a.sp):0,ctr=a.imp?(a.clk/a.imp*100):0,cpp=pu?(a.sp/pu):null;
+   X.sp+=a.sp||0;X.pv+=v;X.ofv+=ov;X.pur+=pu;X.opur+=op;X.imp+=a.imp||0;X.clk+=a.clk||0;
    const dead=(a.sp>150&&v===0&&ov===0);
-   t+='<tr'+(dead?' style="background:#fdeef2"':'')+'><td style="text-align:left;font-weight:700;max-width:280px">'+(a.n||a.id)+(dead?' <span style="color:#e23a63;font-size:10px;font-weight:800">KILL — spends, sells nothing</span>':'')+'</td>'
+   t+='<tr'+(dead?' style="background:#fdeef2"':'')+'><td style="text-align:left;font-weight:700;max-width:280px">'+(a.n||a.id)+(VIEW==='cmp'?' <span style="font-size:10px;color:#8a93a6">('+a.ads+' ads)</span>':'')+(dead?' <span style="color:#e23a63;font-size:10px;font-weight:800">KILL — spends, sells nothing</span>':'')+'</td>'
     +'<td style="text-align:left;font-size:11px;color:#666;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(a.cmp||'')+'</td>'
-    +'<td>'+money(a.sp||0)+'</td><td>'+money(v)+'</td><td style="font-weight:800;color:'+(ro>=3?'#12a06e':ro>=1?'#b8860b':'#e23a63')+'">'+ro.toFixed(1)+'x</td><td>'+money(a.pur||0)+'</td>'
-    +'<td'+(ov>0?' style="font-weight:800;color:#12a06e"':'')+'>'+(ov>0?money(ov):'—')+'</td><td>'+(a.opur||0)+'</td>'
+    +'<td>'+money(a.sp||0)+'</td><td>'+money(v)+'</td><td style="font-weight:800;color:'+(ro>=3?'#12a06e':ro>=1?'#b8860b':'#e23a63')+'">'+ro.toFixed(1)+'x</td><td>'+(pu>=10?money(pu):pu.toFixed(1))+'</td>'
+    +'<td'+(ov>0?' style="font-weight:800;color:#12a06e"':'')+'>'+(ov>0?money(ov):'—')+'</td><td>'+(op>=10?money(op):op?op.toFixed(1):'0')+'</td>'
     +'<td>'+money(a.clk||0)+'</td><td>'+ctr.toFixed(2)+'%</td><td>'+(cpp?money(cpp):'—')+'</td></tr>';});
+  const troTot=X.sp?(X.pv/X.sp):0;
+  t+='<tr style="background:#f4f6ff;font-weight:800;border-top:2px solid #c9cfda"><td style="text-align:left">TOTAL — value E£ '+money(X.pv+X.ofv)+'</td><td></td>'
+   +'<td>'+money(X.sp)+'</td><td>'+money(X.pv)+'</td><td>'+troTot.toFixed(1)+'x</td><td>'+money(X.pur)+'</td>'
+   +'<td style="color:#12a06e">'+money(X.ofv)+'</td><td>'+money(X.opur)+'</td>'
+   +'<td>'+money(X.clk)+'</td><td>'+(X.imp?(X.clk/X.imp*100).toFixed(2):'0')+'%</td><td>'+(X.pur?money(X.sp/X.pur):'—')+'</td></tr>';
   t+='</table></div>';
-  const spendTot=T.reduce((x,a)=>x+(a.sp||0),0),offTot=T.reduce((x,a)=>x+(a.ofv||0),0)*fTT;
-  pnlCard(g,'meta','Every spending ad — last 30 days ('+T.length+')','Online and in-store split per ad, scaled by the attribution selector. Red rows spend and sell NOTHING on either leg. E£ '+money(spendTot)+' total spend · E£ '+money(offTot)+' in-store value at this window. Click headers to sort.',t);}
+  const chips='<div style="display:flex;gap:5px;margin:0 0 8px"><span class="chip" style="'+(VIEW==='ad'?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="tkView(\'ad\')">By ad</span><span class="chip" style="'+(VIEW==='cmp'?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="tkView(\'cmp\')">By campaign</span></div>';
+  pnlCard(g,'meta',(VIEW==='cmp'?'By campaign':'Every spending ad')+' — last 30 days ('+T.length+')','Online and in-store split, scaled by the attribution selector — counts scale too, so a purchase column at 7d-click means purchases the CLICK window supports. Red rows spend and sell NOTHING on either leg. TOTAL row at the bottom. Click headers to sort.',chips+t);}
  else pnlCard(g,'meta','Per-ad table','Arrives with the next bridge refresh (the daily 8:30 agent ships ad-level rows).','');
 }
 
