@@ -774,6 +774,32 @@ def _cvr_series(days=30):
     log("cvr series days", len(dset), "rows", len(out))
     return {"days": dset, "rows": out}
 
+def pull_tiktok_shopify(win):
+    """TikTok ONLINE revenue without TikTok.
+
+    The Marketing API needs an approved developer app, and the developer PROFILE on this
+    account is rejected -- so no app, no App ID, no token, and pull_tiktok() is dead until
+    TikTok reviews it. Shopify already tags every order with the referrer that brought it,
+    so TikTok-driven online orders are readable from data we own. This is LAST-CLICK and
+    will read lower than TikTok's own reporting (no view-through, no 7-day window) -- that
+    is a feature: it is the number that survives a holdout. Zero TikTok approval needed."""
+    out = {"ttShopRev": {d: 0.0 for d in win}, "ttShopOrd": {d: 0.0 for d in win}}
+    days = len(win)
+    rows = shopify_ql("FROM sales SHOW orders, net_sales TIMESERIES day "
+                      "WHERE order_referrer_name = 'tiktok' "
+                      "SINCE -%dd UNTIL today" % min(365, days), "ttshop")
+    hit = 0
+    for r in (rows or []):
+        d = str(r.get("day") or "")[:10]
+        if d not in out["ttShopRev"]:
+            continue
+        out["ttShopRev"][d] = float(r.get("net_sales") or 0)
+        out["ttShopOrd"][d] = float(r.get("orders") or 0)
+        hit += 1
+    log("tiktok via shopify :: days", hit, ":: revenue",
+        round(sum(out["ttShopRev"].values())), ":: orders", int(sum(out["ttShopOrd"].values())))
+    return out
+
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -3414,6 +3440,9 @@ def build():
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
+    # v9.7.3: TikTok online revenue read from Shopify's own referrer tagging, so the tab has
+    # a LIVE TikTok number even while the Marketing API app is unapproved.
+    tik.update(safe(pull_tiktok_shopify, win) or {k: {d: 0.0 for d in win} for k in ["ttShopRev", "ttShopOrd"]})
     shc = safe(pull_shop_channel, [FIN_START]) or {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
     safe(pull_meta_reach, win, os.environ.get("META_ACCESS_TOKEN", "").strip())
     safe(pull_cvr_routing)
@@ -3565,6 +3594,7 @@ def build():
           "mimp": arr(meta, "mimp"), "mclk": arr(meta, "mclk"), "moffv": arr(meta, "moffv"),
           "gimp": arr(goog, "gimp"), "gclk": arr(goog, "gclk"),
           "timp": arr(tik, "timp"), "tclk": arr(tik, "tclk"),
+          "ttShopRev": arr(tik, "ttShopRev"), "ttShopOrd": arr(tik, "ttShopOrd"),
           "atcRatio": arr(shop, "atcRatio", 1), "checkoutRatio": arr(shop, "checkoutRatio", 1),
           "cvr": arr(shop, "cvr", 1)}
     ad["spend"] = [ad["mspend"][i] + ad["gspend"][i] + ad["tspend"][i] for i in range(len(win))]
