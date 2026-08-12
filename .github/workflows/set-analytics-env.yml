@@ -1,0 +1,28 @@
+name: set-analytics-env
+# One-off. Pushes the existing RIS_USER / RIS_PASS repo secrets into the
+# ourkids-analytics Vercel project so docs/middleware.js stops failing open.
+# Delete this workflow once the gate is verified.
+on: workflow_dispatch
+
+jobs:
+  setenv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Push RIS_USER / RIS_PASS to Vercel (production)
+        env:
+          VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RIS_USER:          ${{ secrets.RIS_USER }}
+          RIS_PASS:          ${{ secrets.RIS_PASS }}
+        run: |
+          set -uo pipefail
+          V="npx --yes vercel@latest"
+          # remove first so a re-run is idempotent; ignore "not found"
+          $V env rm RIS_USER production --yes --token="$VERCEL_TOKEN" || true
+          $V env rm RIS_PASS production --yes --token="$VERCEL_TOKEN" || true
+          printf '%s' "$RIS_USER" | $V env add RIS_USER production --token="$VERCEL_TOKEN"
+          printf '%s' "$RIS_PASS" | $V env add RIS_PASS production --token="$VERCEL_TOKEN"
+          echo "--- names only, values are never printed:"
+          $V env ls production --token="$VERCEL_TOKEN"
