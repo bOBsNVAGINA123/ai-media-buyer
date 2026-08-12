@@ -1,6 +1,11 @@
 name: set-analytics-env
 # One-off. Pushes the existing RIS_USER / RIS_PASS repo secrets into the
 # ourkids-analytics Vercel project so docs/middleware.js stops failing open.
+#
+# Uses the REST API rather than the Vercel CLI: the CLI insists on a linked
+# .vercel directory and fails with "Could not retrieve Project Settings",
+# while the API takes the project and team ids directly.
+#
 # Delete this workflow once the gate is verified.
 on: workflow_dispatch
 
@@ -11,18 +16,40 @@ jobs:
     steps:
       - name: Push RIS_USER / RIS_PASS to Vercel (production)
         env:
-          VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          RIS_USER:          ${{ secrets.RIS_USER }}
-          RIS_PASS:          ${{ secrets.RIS_PASS }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RIS_USER:     ${{ secrets.RIS_USER }}
+          RIS_PASS:     ${{ secrets.RIS_PASS }}
+          PROJECT_ID:   prj_H4YVozCm5idirVYHvVyZhzvzyyvZ
+          TEAM_ID:      team_f9pi561ocnJiAXGdpgOZWMR0
         run: |
-          set -uo pipefail
-          V="npx --yes vercel@latest"
-          # remove first so a re-run is idempotent; ignore "not found"
-          $V env rm RIS_USER production --yes --token="$VERCEL_TOKEN" || true
-          $V env rm RIS_PASS production --yes --token="$VERCEL_TOKEN" || true
-          printf '%s' "$RIS_USER" | $V env add RIS_USER production --token="$VERCEL_TOKEN"
-          printf '%s' "$RIS_PASS" | $V env add RIS_PASS production --token="$VERCEL_TOKEN"
-          echo "--- names only, values are never printed:"
-          $V env ls production --token="$VERCEL_TOKEN"
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          tok  = os.environ["VERCEL_TOKEN"]
+          proj = os.environ["PROJECT_ID"]
+          team = os.environ["TEAM_ID"]
+          url  = f"https://api.vercel.com/v10/projects/{proj}/env?teamId={team}&upsert=true"
+
+          failed = False
+          for key in ("RIS_USER", "RIS_PASS"):
+              val = os.environ.get(key, "")
+              if not val:
+                  print(f"{key}: SECRET IS EMPTY -- skipping"); failed = True; continue
+              body = json.dumps({
+                  "key": key, "value": val,
+                  "type": "encrypted", "target": ["production"],
+              }).encode()
+              req = urllib.request.Request(url, data=body, method="POST", headers={
+                  "Authorization": f"Bearer {tok}",
+                  "Content-Type": "application/json",
+              })
+              try:
+                  with urllib.request.urlopen(req) as r:
+                      # never print the response body; it echoes the value back
+                      print(f"{key}: HTTP {r.status} OK ({len(val)} chars)")
+              except urllib.error.HTTPError as e:
+                  # error bodies carry no secret, so they are safe to show
+                  print(f"{key}: HTTP {e.code} {e.read().decode()[:300]}"); failed = True
+
+          raise SystemExit(1 if failed else 0)
+          PY
