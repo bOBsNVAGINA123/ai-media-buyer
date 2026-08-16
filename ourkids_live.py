@@ -956,9 +956,12 @@ def pull_google_ads():
     dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
     at = GTOK[0]
     if not (dev and cid and at): log("google campaigns skipped"); return out
-    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
+    N = 60; base = END - datetime.timedelta(days=N - 1)
+    c1 = END.isoformat(); c0 = base.isoformat()
+    # v9.7.6: segments.date in the SELECT makes searchStream return one row per campaign PER DAY
+    # (no extra request) so the dashboard can slice Google by any date range, like Meta.
     gql = ("SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, "
-           "metrics.cost_micros, metrics.conversions_value, metrics.conversions, "
+           "segments.date, metrics.cost_micros, metrics.conversions_value, metrics.conversions, "
            "metrics.impressions, metrics.clicks FROM campaign "
            "WHERE segments.date BETWEEN '%s' AND '%s'" % (c0, c1))
     hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
@@ -973,22 +976,29 @@ def pull_google_ads():
     agg = {}
     for b in (batches if isinstance(batches, list) else [batches]):
         for row in b.get("results", []):
-            c = row.get("campaign", {}); m = row.get("metrics", {})
+            c = row.get("campaign", {}); m = row.get("metrics", {}); seg = row.get("segments", {})
             k = str(c.get("id"))
             e = agg.setdefault(k, {"id": k, "n": str(c.get("name") or "")[:80], "sp": 0.0, "pv": 0.0,
                                    "ov": 0.0, "ofv": 0, "pur": 0.0, "opur": 0, "imp": 0.0, "clk": 0.0,
                                    "st": str(c.get("status") or "UNKNOWN"),
-                                   "cmp": str(c.get("advertisingChannelType") or ""), "pf": "google"})
-            e["sp"] += float(m.get("costMicros", 0)) / 1e6
-            e["pv"] += float(m.get("conversionsValue", 0))
-            e["pur"] += float(m.get("conversions", 0))
-            e["imp"] += float(m.get("impressions", 0))
-            e["clk"] += float(m.get("clicks", 0))
+                                   "cmp": str(c.get("advertisingChannelType") or ""), "pf": "google",
+                                   "d": {kk: [0.0] * N for kk in ("sp", "pv", "pur", "imp", "clk")}})
+            sp = float(m.get("costMicros", 0)) / 1e6; pv = float(m.get("conversionsValue", 0))
+            pu = float(m.get("conversions", 0)); im = float(m.get("impressions", 0)); ck = float(m.get("clicks", 0))
+            e["sp"] += sp; e["pv"] += pv; e["pur"] += pu; e["imp"] += im; e["clk"] += ck
+            dd = seg.get("date")
+            if dd:
+                try: idx = (datetime.date.fromisoformat(dd) - base).days
+                except Exception: idx = -1
+                if 0 <= idx < N:
+                    D = e["d"]; D["sp"][idx] += sp; D["pv"][idx] += pv; D["pur"][idx] += pu; D["imp"][idx] += im; D["clk"][idx] += ck
     for e in agg.values():
         e["ov"] = e["pv"]
         for kk in ("sp", "pv", "ov"): e[kk] = round(e[kk])
         for kk in ("pur", "imp", "clk"): e[kk] = int(round(e[kk]))
+        e["d"] = {kk: [int(round(x)) for x in v] for kk, v in e["d"].items()}
     out = sorted(agg.values(), key=lambda a: -a["sp"])[:40]
+    XTRA["gadsW"] = {"start": c0, "n": N}
     log("google campaigns", len(out))
     return out
 
@@ -1009,9 +1019,12 @@ def pull_tiktok_ads():
         except Exception as e:
             log("tiktok campaigns bridge failed", str(e)[:120])
         log("tiktok campaigns skipped"); return out
-    c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=29)).isoformat()
+    N = 60; base = END - datetime.timedelta(days=N - 1)
+    c1 = END.isoformat(); c0 = base.isoformat()
+    # v9.7.6: stat_time_day dimension -> one row per campaign PER DAY from the same report call,
+    # so TikTok can be sliced by date range like Meta/Google.
     p = {"advertiser_id": adv, "report_type": "BASIC", "data_level": "AUCTION_CAMPAIGN",
-         "dimensions": json.dumps(["campaign_id"]),
+         "dimensions": json.dumps(["campaign_id", "stat_time_day"]),
          "metrics": json.dumps(["campaign_name", "spend", "complete_payment", "complete_payment_roas",
                                 "impressions", "clicks", "offline_shopping_events",
                                 "offline_shopping_events_value"]),
@@ -1032,20 +1045,34 @@ def pull_tiktok_ads():
             st[str(c.get("campaign_id"))] = str(c.get("secondary_status") or c.get("operation_status") or "UNKNOWN")
     except Exception as e:
         log("tiktok campaign status", str(e)[:120])
+    agg = {}
     for r in rows:
-        cid = str((r.get("dimensions") or {}).get("campaign_id") or "")
+        dims = r.get("dimensions") or {}; cid = str(dims.get("campaign_id") or "")
         m = r.get("metrics") or {}
         sp = float(m.get("spend") or 0)
-        if sp <= 0: continue
-        out.append({"id": cid, "n": str(m.get("campaign_name") or "")[:80], "sp": round(sp),
-                    "pv": round(float(m.get("complete_payment") or 0)),
-                    "ov": round(float(m.get("complete_payment") or 0) + float(m.get("offline_shopping_events_value") or 0)),
-                    "ofv": round(float(m.get("offline_shopping_events_value") or 0)),
-                    "pur": 0, "opur": int(float(m.get("offline_shopping_events") or 0)),
-                    "imp": int(float(m.get("impressions") or 0)),
-                    "clk": int(float(m.get("clicks") or 0)),
-                    "st": st.get(cid, "UNKNOWN"), "cmp": "", "pf": "tiktok"})
+        pv = float(m.get("complete_payment") or 0); ov2 = float(m.get("offline_shopping_events_value") or 0)
+        im = float(m.get("impressions") or 0); ck = float(m.get("clicks") or 0)
+        e = agg.setdefault(cid, {"id": cid, "n": str(m.get("campaign_name") or "")[:80], "sp": 0.0, "pv": 0.0,
+                                 "ov": 0.0, "ofv": 0.0, "pur": 0, "opur": 0, "imp": 0.0, "clk": 0.0,
+                                 "st": st.get(cid, "UNKNOWN"), "cmp": "", "pf": "tiktok",
+                                 "d": {kk: [0.0] * N for kk in ("sp", "pv", "pur", "imp", "clk")}})
+        e["sp"] += sp; e["pv"] += pv; e["ov"] += pv + ov2; e["ofv"] += ov2
+        e["opur"] += float(m.get("offline_shopping_events") or 0); e["imp"] += im; e["clk"] += ck
+        if e["n"] == "" and m.get("campaign_name"): e["n"] = str(m.get("campaign_name"))[:80]
+        dd = dims.get("stat_time_day") or ""
+        if dd:
+            try: idx = (datetime.date.fromisoformat(dd[:10]) - base).days
+            except Exception: idx = -1
+            if 0 <= idx < N:
+                D = e["d"]; D["sp"][idx] += sp; D["pv"][idx] += pv; D["imp"][idx] += im; D["clk"][idx] += ck
+    for e in agg.values():
+        for kk in ("sp", "pv", "ov", "ofv"): e[kk] = round(e[kk])
+        for kk in ("imp", "clk"): e[kk] = int(round(e[kk]))
+        e["opur"] = int(round(e["opur"]))
+        e["d"] = {kk: [int(round(x)) for x in v] for kk, v in e["d"].items()}
+    out = [e for e in agg.values() if e["sp"] > 0]
     out.sort(key=lambda a: -a["sp"]); out = out[:40]
+    XTRA["tadsW"] = {"start": c0, "n": N}
     log("tiktok campaigns", len(out))
     return out
 
@@ -3494,7 +3521,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.4 (per-ad reach -> real CPMR by ad/adset/campaign; Google v22 probe; empty gattr no longer wipes good data)")
+    log("collector v9.7.6 (per-campaign DAILY for Google + TikTok -> advisor date-range aware; per-ad reach CPMR; Google v22 probe)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3746,7 +3773,9 @@ def build():
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads,
-              "madsW": XTRA.get("madsW") or prev.get("madsW"), "bev": bev, "cre": cre, "jour": jour,
+              "madsW": XTRA.get("madsW") or prev.get("madsW"),
+              "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
+              "bev": bev, "cre": cre, "jour": jour,
               "cvr": XTRA.get("cvr") or prev.get("cvr") or {},
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
