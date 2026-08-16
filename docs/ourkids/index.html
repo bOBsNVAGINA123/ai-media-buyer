@@ -311,7 +311,8 @@ function applyHeat(root){(root||document).querySelectorAll('table.heat').forEach
  tb.querySelectorAll('tr').forEach(function(tr){cols.forEach(function(ci){const c=tr.children[ci];
   if(c&&c.tagName==='TD'){const n=parseFloat(String(c.textContent).replace(/,/g,'').replace(/[^0-9.\-]/g,''));if(!isNaN(n))cells.push([c,n]);}});});
  if(cells.length<2)return;const vs=cells.map(function(x){return x[1];}),lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs);
- cells.forEach(function(x){x[0].style.background=heatColor(hi>lo?(x[1]-lo)/(hi-lo):0.5);x[0].style.color='#3d3d3d';x[0].style.fontWeight='700';});});}
+ const inv=tb.dataset.hcinv==='1';  // inv=1 -> low value is GREEN (good), e.g. CAC/CPM where cheaper is better
+ cells.forEach(function(x){var t=hi>lo?(x[1]-lo)/(hi-lo):0.5;if(inv)t=1-t;x[0].style.background=heatColor(t);x[0].style.color='#3d3d3d';x[0].style.fontWeight='700';});});}
 function rRT(){if(TAB!=='rt')return;dCh();
  const g=document.getElementById('g20');
  const M=rtM();if(!M.length){g.innerHTML='';document.getElementById('bn20').innerHTML='No monthly P&amp;L data in this sync.';return;}
@@ -1039,6 +1040,29 @@ function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const 
   const ln365=(age>=335&&c.size&&c.r365!=null&&ncac)?(c.r365/c.size)/ncac:null;
   return {m:c.m,size:c.size,ms:a?a.ms:null,gs:a?a.gs:null,ts:a?a.ts:null,s:a?a.s:null,ncac,gp30,gp90a,nr90a,ln90,ln365,l30:r(30),l90:r(90),l180:r(180),l365:r(365),age};});}
 
+/* CAC by cohort month. Spend that month ÷ new customers that month. MEALLNC=true assumes
+   EVERY new customer (online + in-store) was driven by the ad spend -> lowest, most generous
+   CAC; toggle off to count online first-time buyers only. New-customer counts come from
+   RT_COH (ONLINE vs BLENDED = online+stores); spend from adMonthly(). */
+let MEALLNC=true;
+function setMeAllNc(v){MEALLNC=!!v;rMedia();}
+function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
+ const AM=adMonthly(),ON=RT_COH.ONLINE||{},BL=RT_COH.BLENDED||{},money=v=>Math.round(v).toLocaleString();
+ const months=Object.keys(BL).sort();let rows='',tSp=0,tNc=0;
+ months.forEach(function(m){const sp=(AM[m]&&AM[m].s)||0;if(sp<=0)return;
+  const onc=(ON[m]&&ON[m][0])||0,bnc=(BL[m]&&BL[m][0])||0,inst=Math.max(0,bnc-onc);
+  const nc=MEALLNC?bnc:onc;if(!nc)return;const cac=sp/nc;tSp+=sp;tNc+=nc;
+  rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+nc.toLocaleString('en-US')+'</td>'
+   +(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+onc.toLocaleString('en-US')+' online / '+inst.toLocaleString('en-US')+' in-store</td>':'')
+   +'<td style="font-weight:800">E£ '+money(cac)+'</td></tr>';});
+ const bCac=tNc?tSp/tNc:0,cacCol=MEALLNC?4:3;
+ const tog='<label style="font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(MEALLNC?'checked':'')+' onchange="setMeAllNc(this.checked)" style="width:auto"> Assume every new customer (incl. in-store) came from ad spend</label>';
+ const head='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+tog
+  +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px;font-size:12px">Blended CAC <b style="color:#5a5bf0">E£ '+money(bCac)+'</b> &middot; E£ '+money(tSp)+' spend &divide; '+tNc.toLocaleString('en-US')+' new '+(MEALLNC?'(online+store)':'(online only)')+'</div></div>';
+ const table='<div style="overflow-x:auto"><table class="bt heat" data-hc="'+cacCol+'" data-hcinv="1"><tr><th style="text-align:left">Cohort month</th><th>Ad spend</th><th>New customers</th>'+(MEALLNC?'<th>split</th>':'')+'<th>CAC</th></tr>'+rows+'</table></div>';
+ pnlCard(g,'blend','CAC by cohort month'+(MEALLNC?' &mdash; all new customers attributed to spend':' &mdash; online new customers only'),'Total ad spend that month &divide; new customers acquired that month. Toggle ON attributes in-store new customers to the online ad spend (most generous CAC); OFF counts online first-time buyers only. CAC coloured green = cheaper.',head+table);
+ applyHeat(g);}
+
 let CWIN={};
 function cwS(id){return (CWIN[id]&&CWIN[id].s)||ST.s;}
 function cwE(id){return (CWIN[id]&&CWIN[id].e)||ST.e;}
@@ -1349,7 +1373,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
   +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>LTGP:nCAC GROWS with cohort age &mdash; on average +'+gavg.toFixed(0)+'% from 30d to 90d, because GP keeps accumulating while CAC was paid once. Dashes mean the cohort is too young for that window.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+(a30>=b30?C.grn:C.red)+'"></span><span>Last 3 cohorts average <b>'+a30.toFixed(2)+'x</b> at 30 days vs '+b30.toFixed(2)+'x for the earliest measurable cohorts.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc.m+' ('+bc.l30.toFixed(2)+'x, nCAC E&pound; '+bc.ncac.toFixed(0)+'). Weakest: '+wc.m+' ('+wc.l30.toFixed(2)+'x, nCAC E&pound; '+wc.ncac.toFixed(0)+'). Pull the media mix that ran in '+bc.m+'.</span></div></div>';}
- pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);applyHeat(g);
+ pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);applyHeat(g);blendCacCard(g);
  // ALL customers: total GP vs media spend
  const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=(O.shop.gp[i]||0)*1000;SHM[m].net+=((O.shop.rev[i]||0)-(O.shop.ref[i]||0))*1000;}
  const amons=Object.keys(AM2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1&&AM2[m].s>0&&SHM[m]);
