@@ -2151,7 +2151,7 @@ def pull_meta_ads(tok):
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                               "spend,impressions,outbound_clicks,actions,action_values",
+                               "spend,impressions,reach,outbound_clicks,actions,action_values",
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -2195,11 +2195,12 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "nc", "ncv", "vv")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
                         D["im"][i] += float(r.get("impressions") or 0)
+                        D["rch"][i] += float(r.get("reach") or 0)
                         D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
                         D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
                         D["fv"][i] += _av(av, ("offline_conversion.purchase",))
@@ -2217,7 +2218,7 @@ def pull_meta_ads(tok):
             a.update({"sp": round(sp), "pv": round(sum(D["pv"])), "ofv": round(sum(D["fv"])),
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
-                      "imp": int(sum(D["im"])), "clk": int(sum(D["oc"])),
+                      "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
@@ -3493,7 +3494,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.3 (Google Ads API version probe -- v21 sunset killed every Google pull + branch events; empty gattr no longer wipes good data)")
+    log("collector v9.7.4 (per-ad reach -> real CPMR by ad/adset/campaign; Google v22 probe; empty gattr no longer wipes good data)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
