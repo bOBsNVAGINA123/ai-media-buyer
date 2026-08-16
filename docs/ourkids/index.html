@@ -5138,11 +5138,11 @@ function rCO(){if(TAB!=='co')return;
  const rows2=months.map(m=>({m,A:A[m],B:B?B[m]:null})).filter(r=>r.A&&r.A.n);
  const kept=rows2.filter(r=>{if(!LIFT)return true;const c=r.A;if(!c||c.m.length<2)return true;return (c.m[1][0]/c.n*100)>=LIFT;});
  const dropped=rows2.length-kept.length;
- const maxK=Math.max.apply(null,kept.map(r=>r.A.m.length).concat(B?kept.map(r=>r.B?r.B.m.length:0):[1]));
+ const maxK=Math.min(13,Math.max.apply(null,kept.map(r=>r.A.m.length).concat(B?kept.map(r=>r.B?r.B.m.length:0):[1])));
  // heat range across the grid (blue mono like Shopify) or A-vs-B green/red
  let lo=Infinity,hi=-Infinity;
  kept.forEach(r=>{for(let k=0;k<r.A.m.length;k++){const v=cell(r.A,k,VIEW==='c');if(v!=null&&isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v);}}});
- const heat=v=>{if(v==null||!isFinite(v)||hi===lo)return'';const t=(v-lo)/(hi-lo);return' style="background:rgba(90,91,240,'+(t*.55+.04).toFixed(2)+');color:'+(t>.6?'#fff':'#1c2333')+'"';};
+ const heat=v=>{if(v==null||!isFinite(v)||hi===lo)return'';const t=(v-lo)/(hi-lo);return' style="background:'+heatColor(t)+';color:#3d3d3d;font-weight:700"';};
  const vsB=(va,vb)=>{if(va==null)return'';if(vb==null||!isFinite(vb)||vb===0)return'';const d=(va-vb)/Math.abs(vb);return d>=.03?' style="background:rgba(18,160,110,'+Math.min(.4,d*.5+.08).toFixed(2)+')"':(d<=-.03?' style="background:rgba(226,58,99,'+Math.min(.35,Math.abs(d)*.4+.07).toFixed(2)+')"':'');};
  // TOTAL row (all kept cohorts blended)
  const blend=src=>{const t={n:0,r:0,rx:0,rOk:true,m:[]};kept.forEach(r=>{const c=src==='A'?r.A:r.B;if(!c)return;t.n+=c.n;if(c.r==null)t.rOk=false;else t.r+=c.r;t.rx+=(c.rx||0);for(let k=0;k<c.m.length;k++){const a2=t.m[k]=t.m[k]||[0,0,0,0,0,0];for(let q=0;q<6;q++)a2[q]+=(c.m[k][q]||0);}});return t;};
