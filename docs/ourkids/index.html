@@ -893,7 +893,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();[['t1','on'],['t2','off'],['t3','pl'],[
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC']];
+const TBT=[['off','offC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
 function attrOpts(p){const SL=(O.attr&&O.attr.labels)||{};return ((O.attr&&O.attr.order)||['default']).filter(k=>((O.attr&&O.attr[p])||{})[k]!=null).map(k=>'<option value="'+k+'"'+(((ST.att&&ST.att[p])||'default')===k?' selected':'')+'>'+String(SL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('');}
 const PRESETS=[['L7D',7],['MTD','mtd'],['30d',30],['60d',60],['90d',90],['180d',180],['365d',365],['YTD','ytd'],['All',9999]];
 const CMPOPT=[['off','Off'],['prev','Previous period'],['wk','Previous week (-7d)'],['mo','Previous month (-30d)'],['yoy','Same period last year'],['custom','Custom range…']];
@@ -1723,7 +1723,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl')rPlan();else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -4699,20 +4699,37 @@ const ABPF={meta:['Meta','#3a9bff'],google:['Google','#5a5bf0'],tiktok:['TikTok'
 function abOpen(c){if(c.pf==='meta'){const u=amURL('campaign',c.id,c.acct);return u||'https://adsmanager.facebook.com/adsmanager/manage/campaigns';}
  if(c.pf==='google')return 'https://ads.google.com/aw/campaigns?campaignId='+c.id;
  return 'https://ads.tiktok.com/i18n/perf/campaign';}
-function abCamps(){const out=[],ads=[],WM=(O.madsW&&O.madsW.n)||60,GW=60,afM=af('meta');const M={};
- (O.mads||[]).forEach(a=>{const id=a.cid||a.id;const m=M[id]||(M[id]={pf:'meta',id:id,name:a.cmp||a.n||id,acct:a.acct,sp:0,pv:0,pur:0,imp:0,rch:0,clk:0,nc:0,ncv:0,active:false});
-  m.sp+=a.sp||0;m.pv+=a.pv||0;m.pur+=a.pur||0;m.imp+=a.imp||0;m.rch+=a.rch||0;m.clk+=a.clk||0;m.nc+=a.nc||0;m.ncv+=a.ncv||0;if(a.st==='ACTIVE')m.active=true;
-  if((a.sp||0)>0){const pv=a.pv||0,np=(a.ncv!=null&&pv>0)?a.ncv/pv:null;
-   ads.push({pf:'meta',id:a.id,name:a.n||a.id,as:a.as,asid:a.asid,cmp:a.cmp,cid:a.cid,acct:a.acct,active:a.st==='ACTIVE',sp:a.sp||0,pv:pv,pur:a.pur||0,imp:a.imp||0,rch:a.rch||0,clk:a.clk||0,af:afM,days:WM,newPct:np});}});
- Object.values(M).forEach(m=>{m.days=WM;m.af=afM;out.push(m);});
- (O.gads||[]).forEach(a=>out.push({pf:'google',id:a.id,name:a.n||a.id,sp:a.sp||0,pv:a.pv||0,pur:a.pur||0,imp:a.imp||0,rch:0,clk:a.clk||0,nc:null,ncv:null,active:a.st==='ENABLED',days:GW,af:af('google')}));
- (O.tads||[]).forEach(a=>out.push({pf:'tiktok',id:a.id,name:a.n||a.id,sp:a.sp||0,pv:a.pv||0,pur:a.pur||0,imp:a.imp||0,rch:0,clk:a.clk||0,nc:null,ncv:null,active:(a.st==='ENABLE'||a.st==='ENABLED'),days:GW,af:af('tt')}));
+// slice a campaign/ad's daily arrays to the selected ST range, clamped to that platform's
+// ~60d daily window. Returns summed metrics + _days covered, or null if no daily / no overlap
+// (caller then falls back to the window aggregate). window.__abRanged flags when slicing happened.
+function abSlice(d,winStart,winN,keys){if(!d||!winStart||!(ST.s&&ST.e))return null;
+ const st=Date.parse(winStart);if(isNaN(st))return null;
+ let i0=Math.round((Date.parse(ST.s)-st)/864e5),i1=Math.round((Date.parse(ST.e)-st)/864e5);
+ i0=Math.max(0,i0);i1=Math.min((winN||60)-1,i1);if(i1<i0)return null;
+ const o={_days:i1-i0+1};for(const k of keys){const a=d[k]||[];let t=0;for(let i=i0;i<=i1;i++)t+=a[i]||0;o[k]=t;}return o;}
+function abCamps(){const WM=(O.madsW&&O.madsW.n)||60,afM=af('meta');const M={},ads=[];
+ const MW=O.madsW||{},GW=O.gadsW||{},TW=O.tadsW||{};let ranged=false;
+ (O.mads||[]).forEach(a=>{const id=a.cid||a.id;
+  let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,rch=a.rch||0,clk=a.clk||0,nc=a.nc||0,ncv=a.ncv||0,days=WM;
+  const sl=abSlice(a.d,MW.start,MW.n,['sp','pv','pu','im','rch','oc','nc','ncv']);
+  if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pu;imp=sl.im;rch=sl.rch;clk=sl.oc;nc=sl.nc;ncv=sl.ncv;days=sl._days;ranged=true;}
+  const m=M[id]||(M[id]={pf:'meta',id:id,name:a.cmp||a.n||id,acct:a.acct,sp:0,pv:0,pur:0,imp:0,rch:0,clk:0,nc:0,ncv:0,active:false,days:days});
+  m.sp+=sp;m.pv+=pv;m.pur+=pur;m.imp+=imp;m.rch+=rch;m.clk+=clk;m.nc+=nc;m.ncv+=ncv;m.days=days;if(a.st==='ACTIVE')m.active=true;
+  if(sp>0){const np=(ncv!=null&&pv>0)?ncv/pv:null;
+   ads.push({pf:'meta',id:a.id,name:a.n||a.id,as:a.as,asid:a.asid,cmp:a.cmp,cid:a.cid,acct:a.acct,active:a.st==='ACTIVE',sp:sp,pv:pv,pur:pur,imp:imp,rch:rch,clk:clk,af:afM,days:days,newPct:np});}});
+ const out=[];Object.values(M).forEach(m=>{m.af=afM;out.push(m);});
+ (O.gads||[]).forEach(a=>{let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,clk=a.clk||0,days=(GW.n||60);
+  const sl=abSlice(a.d,GW.start,GW.n,['sp','pv','pur','imp','clk']);if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pur;imp=sl.imp;clk=sl.clk;days=sl._days;ranged=true;}
+  out.push({pf:'google',id:a.id,name:a.n||a.id,sp:sp,pv:pv,pur:pur,imp:imp,rch:0,clk:clk,nc:null,ncv:null,active:a.st==='ENABLED',days:days,af:af('google')});});
+ (O.tads||[]).forEach(a=>{let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,clk=a.clk||0,days=(TW.n||60);
+  const sl=abSlice(a.d,TW.start,TW.n,['sp','pv','pur','imp','clk']);if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pur;imp=sl.imp;clk=sl.clk;days=sl._days;ranged=true;}
+  out.push({pf:'tiktok',id:a.id,name:a.n||a.id,sp:sp,pv:pv,pur:pur,imp:imp,rch:0,clk:clk,nc:null,ncv:null,active:(a.st==='ENABLE'||a.st==='ENABLED'),days:days,af:af('tt')});});
  const fin=c=>{c.value=c.pv*(c.af||1);c.roas=c.sp>0?c.value/c.sp:0;c.daily=c.sp/(c.days||60);
   c.cpm=c.imp>0?c.sp/c.imp*1000:0;c.cpmr=c.rch>0?c.sp/c.rch*1000:null;c.cvr=c.clk>0?c.pur/c.clk*100:0;
   if(c.newPct===undefined)c.newPct=(c.ncv!=null&&c.pv>0)?c.ncv/c.pv:null;
   c.intent=(c.newPct==null)?'n/a':(c.newPct>=0.55?'prospecting':(c.newPct<=0.35?'retargeting':'mixed'));};
  out.forEach(fin);ads.forEach(fin);
- window.__abCamps=out;window.__abAds=ads;return {camps:out,ads:ads};}
+ window.__abCamps=out;window.__abAds=ads;window.__abRanged=ranged;return {camps:out,ads:ads};}
 function abLog(pf,id){const c=(window.__abCamps||[]).concat(window.__abAds||[]).find(x=>x.pf===pf&&String(x.id)===String(id));
  const nm=c?c.name:id,fromD=c?c.daily:0;
  const to=prompt('Log budget change — '+nm+'\nNew daily budget E£ (was ~E£ '+Math.round(fromD)+'):',Math.round(fromD));
@@ -4818,7 +4835,8 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
   +'<div style="background:#fff7ef;border:1px solid #ffe3c7;border-radius:10px;padding:8px 12px">Breakeven bar <b>'+be.toFixed(1)+'x</b> &middot; prospecting @ bar, existing @ '+(be*1.4).toFixed(1)+'x</div></div>';
  const body=head+(moves?'<div style="margin-bottom:10px">'+moves+'</div>':'<div style="color:#8a93a6;font-size:12px;margin-bottom:10px">No clear cross-platform move right now &mdash; nothing far enough under bar to fund a raise.</div>')
   +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><thead><tr style="color:#8a93a6;font-size:10px;text-transform:uppercase"><th>#</th><th style="text-align:left">Plat</th><th style="text-align:left">Active campaign</th><th>Spend/day</th><th>ROAS</th><th>CPM</th><th>CPMR</th><th>CVR</th><th>Action</th><th>Status</th><th>Do</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+pauseH+graftH+clog;
- pnlCard(g,'meta','&#9873; Budget Advisor &mdash; cross-platform reallocation','Active campaigns ranked by SIGNIFICANCE (E£ at stake &times; distance from bar) on ROAS vs an intent-adjusted breakeven bar &mdash; retargeting (existing customers) held to a higher bar than prospecting (new). CPMR = spend &divide; unique reach &times;1000 (Meta, ad-summed). Actions open the exact campaign/ad in the platform; nothing is auto-pushed. Log a change to track its before/after. Budgets moved aggressively per your instruction.',body);offlineDowCard(g);}
+ const winNote=window.__abRanged?(' <b style="color:#12a06e">Sliced to '+ST.s+' &rarr; '+ST.e+'</b> (per-campaign daily, within each platform’s last-60d window).'):(' <b>Full ~60-day window</b> &mdash; pick a range inside the last 60 days to slice.');
+ pnlCard(g,'meta','&#9873; Budget Advisor &mdash; cross-platform reallocation','Active campaigns ranked by SIGNIFICANCE (E£ at stake &times; distance from bar) on ROAS vs an intent-adjusted breakeven bar &mdash; retargeting (existing customers) held to a higher bar than prospecting (new). CPMR = spend &divide; unique reach &times;1000 (Meta, ad-summed). Actions open the exact campaign/ad in the platform; nothing is auto-pushed.'+winNote,body);offlineDowCard(g);}
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
