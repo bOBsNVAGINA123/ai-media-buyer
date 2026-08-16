@@ -861,7 +861,7 @@ def pull_google(win):
     lc = os.environ.get("GOOGLE_LOGIN_CID", "")
     if lc: hd["login-customer-id"] = lc
     try:
-        req = urllib.request.Request("https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid,
+        req = urllib.request.Request("https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid),
                                      data=json.dumps({"query": gql}).encode(), headers=hd)
         with urllib.request.urlopen(req, timeout=90) as r: batches = json.loads(r.read())
     except Exception as e:
@@ -965,7 +965,7 @@ def pull_google_ads():
     lc = os.environ.get("GOOGLE_LOGIN_CID", "")
     if lc: hd["login-customer-id"] = lc
     try:
-        req = urllib.request.Request("https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid,
+        req = urllib.request.Request("https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid),
                                      data=json.dumps({"query": gql}).encode(), headers=hd)
         with urllib.request.urlopen(req, timeout=90) as r: batches = json.loads(r.read())
     except Exception as e:
@@ -1978,7 +1978,7 @@ def pull_google_attr():
         log("google attr :: token fail", str(e)[:120]); return {}
     if not at: return {}
     c1 = END.isoformat(); c0 = (END - datetime.timedelta(days=59)).isoformat()
-    base = "https://googleads.googleapis.com/v21/customers/%s/googleAds:searchStream" % cid
+    base = "https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid)
     def q(gql):
         try:
             req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
@@ -2090,6 +2090,11 @@ def pull_google_attr():
     log("google attr :: campaigns", len(out["campaigns"]), ":: asset groups", len(out["assetGroups"]),
         ":: ads", len(out["ads"]), ":: cmp-action rows", len(out["cmpAct"]),
         ":: offline actions", len(out["offline"]), ":: assets", len(out["assets"]))
+    if not (out["campaigns"] or out["actions"]):
+        # v9.7.3: every query failed (dead API version wiped the live card for days) --
+        # keep yesterday's real data instead of emitting an empty shell
+        log("google attr :: ALL queries empty -- keeping the previous pull")
+        return {}
     return out
 
 def pull_meta_ads(tok):
@@ -2488,7 +2493,7 @@ def sync_gmb_branch_sales():
     try:
         at, hd = _gads_hdr()
         if not at: log("gmb branch sales :: skipped, no google creds"); return
-        base = "https://googleads.googleapis.com/v21/customers/%s" % cid
+        base = "https://googleads.googleapis.com/%s/customers/%s" % (_gads_ver(hd), cid)
         def q(gql):
             d = http_json(base + "/googleAds:searchStream", {"query": gql}, hd)
             rows = []
@@ -2681,6 +2686,26 @@ def _buyer_window(created):
     the full backfill; BUYERS_BACKFILL_DAYS forces a one-off wider re-scan."""
     return int(os.environ.get("BUYERS_BACKFILL_DAYS") or 0) or (730 if created else 4)
 
+GADS_VER = {"v": ""}
+
+def _gads_ver(hd):
+    """v9.7.3: pick a LIVE Google Ads API version. v21 was sunset mid-Aug 2026
+    (requestError UNSUPPORTED_VERSION) and silently killed every Google pull +
+    the branch-sales pipeline. Probes newest-first, caches for the run."""
+    if GADS_VER["v"]: return GADS_VER["v"]
+    cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    for v in ("v22", "v23", "v24", "v25", "v21"):
+        d = http_json("https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (v, cid),
+                      {"query": "SELECT customer.id FROM customer LIMIT 1"}, hd, tries=1)
+        if isinstance(d, list) or (isinstance(d, dict) and not d.get("error")):
+            GADS_VER["v"] = v
+            log("google ads api :: version probe picked", v)
+            return v
+    GADS_VER["v"] = "v22"
+    log("google ads api :: NO live version found among v21-v25 -- Google moved again; "
+        "using v22 so the errors stay loud")
+    return GADS_VER["v"]
+
 def _gads_hdr():
     """OAuth access token + headers for the Google Ads REST API (same creds as the pull)."""
     dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", "")
@@ -2713,7 +2738,7 @@ def sync_google_audience():
         at, hd = _gads_hdr()
         if not at: log("google audience :: skipped, no google creds"); return
         name = BUYERS_LIST_NAME
-        base = "https://googleads.googleapis.com/v21/customers/%s" % cid
+        base = "https://googleads.googleapis.com/%s/customers/%s" % (_gads_ver(hd), cid)
         d = http_json(base + "/googleAds:searchStream",
                       {"query": "SELECT user_list.id, user_list.name, user_list.resource_name FROM user_list"}, hd)
         rn = None
@@ -3468,7 +3493,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.2 (branch custom conversions arrive as offline_conversion.custom.* -- matched now; ad landing pages; Egypt-only CVR routing; POS units for UPT)")
+    log("collector v9.7.3 (Google Ads API version probe -- v21 sunset killed every Google pull + branch events; empty gattr no longer wipes good data)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
