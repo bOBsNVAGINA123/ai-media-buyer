@@ -299,6 +299,19 @@ function rtCalc(){
 }
 function rtSel(sc){RT.sc=sc;rRT();}
 function rtSelM(m){RT.m=m;rRT();}
+/* Google-Sheets-style heatmap. Any <table class="heat" data-hc="i,j,..."> gets its listed
+   column indices coloured red(low)->yellow(mid)->green(high), scaled across ALL those cells
+   together (one shared min/max), so the whole grid is comparable like the cohort sheet. */
+function heatColor(t){t=Math.max(0,Math.min(1,isFinite(t)?t:0.5));
+ const s=[[248,105,107],[255,235,132],[99,190,123]];const i=t<0.5?0:1,u=t<0.5?t/0.5:(t-0.5)/0.5,a=s[i],b=s[i+1];
+ return 'rgb('+Math.round(a[0]+(b[0]-a[0])*u)+','+Math.round(a[1]+(b[1]-a[1])*u)+','+Math.round(a[2]+(b[2]-a[2])*u)+')';}
+function applyHeat(root){(root||document).querySelectorAll('table.heat').forEach(function(tb){
+ const cols=String(tb.dataset.hc||'').split(',').map(function(x){return parseInt(x,10);}).filter(function(x){return !isNaN(x);});
+ if(!cols.length)return;const cells=[];
+ tb.querySelectorAll('tr').forEach(function(tr){cols.forEach(function(ci){const c=tr.children[ci];
+  if(c&&c.tagName==='TD'){const n=parseFloat(String(c.textContent).replace(/,/g,'').replace(/[^0-9.\-]/g,''));if(!isNaN(n))cells.push([c,n]);}});});
+ if(cells.length<2)return;const vs=cells.map(function(x){return x[1];}),lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs);
+ cells.forEach(function(x){x[0].style.background=heatColor(hi>lo?(x[1]-lo)/(hi-lo):0.5);x[0].style.color='#3d3d3d';x[0].style.fontWeight='700';});});}
 function rRT(){if(TAB!=='rt')return;dCh();
  const g=document.getElementById('g20');
  const M=rtM();if(!M.length){g.innerHTML='';document.getElementById('bn20').innerHTML='No monthly P&amp;L data in this sync.';return;}
@@ -341,8 +354,8 @@ function rRT(){if(TAB!=='rt')return;dCh();
   const rows=ms.map(function(mm){const c=C[mm],rt=c[0]?100*c[1]/c[0]:0,op=open(mm);
    return '<tr><td>'+mm+(op?' <span style="color:#b8860b;font-weight:700;font-size:10px">WINDOW OPEN</span>':'')+'</td><td>'+c[0].toLocaleString('en-US')+'</td><td>'+c[1].toLocaleString('en-US')+'</td><td style="font-weight:800;color:'+(op?'#b8860b':'var(--indigo)')+'">'+rt.toFixed(1)+'%</td><td style="text-align:left;min-width:160px"><div style="background:'+(op?'#b8860b':'var(--indigo)')+';height:8px;border-radius:4px;width:'+(mx?Math.round(100*rt/mx):0)+'%;opacity:.85"></div></td></tr>';}).join('');
   return '<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">30-day repurchase by cohort — '+sc+'</div><div class="cs">Each row = customers whose first purchase in this scope was that month, and how many came back within 30 days. Real Odoo per-customer order history, returns excluded (read-only pull '+RT_PULL+'). Amber rows: the 30-day window hasn’t fully closed, the rate still climbs.</div></div></div>'
-  +'<table class="bt"><tr><th>Cohort month</th><th>New customers</th><th>Back ≤30d</th><th>Rate</th><th style="text-align:left">vs best month</th></tr>'+rows+'</table></div>';})();
- rtCalc();
+  +'<table class="bt heat" data-hc="3"><tr><th>Cohort month</th><th>New customers</th><th>Back ≤30d</th><th>Rate</th><th style="text-align:left">vs best month</th></tr>'+rows+'</table></div>';})();
+ rtCalc();applyHeat(g);
 }
 
 /* ================= LTGP : CAC ("lt") =================
@@ -501,7 +514,7 @@ function rLT(){if(TAB!=='lt')return;dCh();
   const ms=Object.keys(L.byM).sort().reverse();
   let mxv=0;ms.forEach(function(m){const v=L.byM[m][hi+1];if(ltMature(m,h))mxv=Math.max(mxv,v||0);});
   html+='<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">By cohort month \u2014 is a customer worth more or less than they used to be?</div><div class="cs">LTGP @'+h+'d for each acquisition month, against that month\u2019s own CAC from the live books. Greyed rows have not finished their '+h+'-day window.</div></div></div>'
-  +'<table class="bt"><tr><th>Cohort</th><th>New customers</th><th>LTGP @'+h+'d</th><th>CAC that month</th><th>Ratio</th><th style="text-align:left">&nbsp;</th></tr>'
+  +'<table class="bt heat" data-hc="4"><tr><th>Cohort</th><th>New customers</th><th>LTGP @'+h+'d</th><th>CAC that month</th><th>Ratio</th><th style="text-align:left">&nbsp;</th></tr>'
   +ms.map(function(m){const row=L.byM[m],mat=ltMature(m,h),v=row[hi+1];
     const D=M.indexOf(m)>=0?rtScopeD(sc,m):null,mc=(D&&D.nc)?D.cac/D.nc:0;
     const r=(mat&&mc)?v/mc:null;
@@ -523,7 +536,7 @@ function rLT(){if(TAB!=='lt')return;dCh();
  +'</table><div class="rtNote">D1 = the top 10% of customers by lifetime spend in this scope (they are '+(L?L.d1rev:'\u2014')+'% of its revenue, entry ticket E\u00A3 '+(L?Math.round(L.d1cut).toLocaleString('en-US'):'\u2014')+'). <b>Lift</b> = how much likelier a customer acquired on this product is to end up in that top decile than an average new customer. Median, not average, so a couple of whales cannot crown a product. Minimum '+(D1[0].minn||60)+' acquisitions to make the list.</div></div>';}
  /* ---- 5. written advice ---- */
  html+='<div class="card full" data-a="ins"><div class="chead"><div><div class="ct">Where the next pound goes</div><div class="cs">Generated from the numbers above, not from a template \u2014 it changes as the books change</div></div></div><div class="rtNote" style="padding-left:12px;line-height:1.75">'+ltAdvice(rows,h,D1)+'</div></div>';
- g.innerHTML=html;}
+ g.innerHTML=html;applyHeat(g);}
 function ltJoin(a){return a.length<2?(a[0]||''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];}
 function ltAdvice(rows,h,D1){
  if(!rows.length)return 'No scope has both cohort data and live spend yet.';
@@ -1323,7 +1336,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
  const R0=cohRows(),R=R0.filter(r=>r.m>=ST.pm0&&r.m<=ST.pm1);const money=v=>Math.round(v).toLocaleString();
  if(!R.length){pnlCard(g,'blend','Media Efficiency','Cohort feed missing — run one sync.','');return;}
  const cols=[['Cohort',r=>r.m,0,0],['New customers',r=>r.size,v=>money(v),1],['Meta spend',r=>r.ms,v=>money(v),0],['Google spend',r=>r.gs,v=>money(v),0],['TikTok spend',r=>r.ts,v=>money(v),0],['Total spend',r=>r.s,v=>money(v),0],['nCAC',r=>r.ncac,v=>'E&pound; '+v.toFixed(0),-1],['LTGP:nCAC 30d',r=>r.l30,v=>v.toFixed(2)+'x',1],['90d',r=>r.l90,v=>v.toFixed(2)+'x',1],['180d',r=>r.l180,v=>v.toFixed(2)+'x',1],['365d',r=>r.l365,v=>v.toFixed(2)+'x',1],['LTNB:nCAC 90d',r=>r.ln90,v=>v.toFixed(2)+'x',1],['365d rev',r=>r.ln365,v=>v.toFixed(2)+'x',1],['GP/cust 90d',r=>r.gp90a,v=>'E&pound; '+money(v),1],['Rev/cust 90d',r=>r.nr90a,v=>'E&pound; '+money(v),1]];
- let h='<div style="overflow-x:auto"><table class="bt" style="min-width:1000px"><tr>'+cols.map((c,i)=>'<th'+(i===0?' style="text-align:left"':'')+'>'+c[0]+'</th>').join('')+'</tr>';
+ let h='<div style="overflow-x:auto"><table class="bt heat" data-hc="7,8,9,10" style="min-width:1000px"><tr>'+cols.map((c,i)=>'<th'+(i===0?' style="text-align:left"':'')+'>'+c[0]+'</th>').join('')+'</tr>';
  const st2={};cols.forEach((c,ci)=>{if(!ci)return;const vs=R.map(r=>c[1](r)).filter(v=>v!=null&&isFinite(v));st2[ci]=vs.length?[Math.min(...vs),Math.max(...vs)]:[0,0];});
  R.forEach(r=>{h+='<tr>'+cols.map((c,ci)=>{if(!ci)return '<td style="text-align:left;font-weight:700">'+r.m+'</td>';const v=c[1](r);if(v==null||!isFinite(v))return '<td>&mdash;</td>';return '<td'+(c[3]?shade(v,st2[ci][0],st2[ci][1],c[3]):'')+'>'+c[2](v)+'</td>';}).join('')+'</tr>';});
  h+='</table></div>';
@@ -1336,7 +1349,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
   +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>LTGP:nCAC GROWS with cohort age &mdash; on average +'+gavg.toFixed(0)+'% from 30d to 90d, because GP keeps accumulating while CAC was paid once. Dashes mean the cohort is too young for that window.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+(a30>=b30?C.grn:C.red)+'"></span><span>Last 3 cohorts average <b>'+a30.toFixed(2)+'x</b> at 30 days vs '+b30.toFixed(2)+'x for the earliest measurable cohorts.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc.m+' ('+bc.l30.toFixed(2)+'x, nCAC E&pound; '+bc.ncac.toFixed(0)+'). Weakest: '+wc.m+' ('+wc.l30.toFixed(2)+'x, nCAC E&pound; '+wc.ncac.toFixed(0)+'). Pull the media mix that ran in '+bc.m+'.</span></div></div>';}
- pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);
+ pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);applyHeat(g);
  // ALL customers: total GP vs media spend
  const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=(O.shop.gp[i]||0)*1000;SHM[m].net+=((O.shop.rev[i]||0)-(O.shop.ref[i]||0))*1000;}
  const amons=Object.keys(AM2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1&&AM2[m].s>0&&SHM[m]);
