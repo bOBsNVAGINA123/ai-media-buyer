@@ -1044,23 +1044,34 @@ function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const 
    EVERY new customer (online + in-store) was driven by the ad spend -> lowest, most generous
    CAC; toggle off to count online first-time buyers only. New-customer counts come from
    RT_COH (ONLINE vs BLENDED = online+stores); spend from adMonthly(). */
-let MEALLNC=true;
+let MEALLNC=true,MEDEL=false;
 function setMeAllNc(v){MEALLNC=!!v;rMedia();}
+function setMeDel(v){MEDEL=!!v;rMedia();}
+/* Real monthly delivered-kept rate from the synced Bosta/shipping feed (O.ship2):
+   kept ÷ confirmed = share of orders that were DELIVERED and NOT returned (cancels are
+   excluded from confirmed already). Used as the delivery signal for the "delivered only"
+   toggle. It is an online rate applied to all new customers (in-store delivery isn't tracked
+   separately); early months read ~100% because return data wasn't captured that far back. */
+function shipKept(m){if(!O.ship2||!O.ship2.m)return null;const i=O.ship2.m.indexOf(m);if(i<0)return null;const cf=(O.ship2.conf||[])[i]||0,kp=(O.ship2.kept||[])[i]||0;return cf?kp/cf:null;}
 function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
  const AM=adMonthly(),ON=RT_COH.ONLINE||{},BL=RT_COH.BLENDED||{},money=v=>Math.round(v).toLocaleString();
  const months=Object.keys(BL).sort();let rows='',tSp=0,tNc=0;
  months.forEach(function(m){const sp=(AM[m]&&AM[m].s)||0;if(sp<=0)return;
   const onc=(ON[m]&&ON[m][0])||0,bnc=(BL[m]&&BL[m][0])||0,inst=Math.max(0,bnc-onc);
-  const nc=MEALLNC?bnc:onc;if(!nc)return;const cac=sp/nc;tSp+=sp;tNc+=nc;
-  rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+nc.toLocaleString('en-US')+'</td>'
-   +(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+onc.toLocaleString('en-US')+' online / '+inst.toLocaleString('en-US')+' in-store</td>':'')
+  let dr=1;if(MEDEL){const kr=shipKept(m);if(kr!=null)dr=kr;}
+  const oncE=onc*dr,instE=inst*dr;                       // apply delivered rate
+  const nc=MEALLNC?(oncE+instE):oncE;if(nc<1)return;const cac=sp/nc;tSp+=sp;tNc+=nc;
+  rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+money(nc)+(MEDEL?'<span style="color:#8a93a6;font-size:9.5px"> ('+Math.round(dr*100)+'% kept)</span>':'')+'</td>'
+   +(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+money(oncE)+' online / '+money(instE)+' in-store</td>':'')
    +'<td style="font-weight:800">E£ '+money(cac)+'</td></tr>';});
  const bCac=tNc?tSp/tNc:0,cacCol=MEALLNC?4:3;
- const tog='<label style="font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(MEALLNC?'checked':'')+' onchange="setMeAllNc(this.checked)" style="width:auto"> Assume every new customer (incl. in-store) came from ad spend</label>';
- const head='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+tog
-  +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px;font-size:12px">Blended CAC <b style="color:#5a5bf0">E£ '+money(bCac)+'</b> &middot; E£ '+money(tSp)+' spend &divide; '+tNc.toLocaleString('en-US')+' new '+(MEALLNC?'(online+store)':'(online only)')+'</div></div>';
- const table='<div style="overflow-x:auto"><table class="bt heat" data-hc="'+cacCol+'" data-hcinv="1"><tr><th style="text-align:left">Cohort month</th><th>Ad spend</th><th>New customers</th>'+(MEALLNC?'<th>split</th>':'')+'<th>CAC</th></tr>'+rows+'</table></div>';
- pnlCard(g,'blend','CAC by cohort month'+(MEALLNC?' &mdash; all new customers attributed to spend':' &mdash; online new customers only'),'Total ad spend that month &divide; new customers acquired that month. Toggle ON attributes in-store new customers to the online ad spend (most generous CAC); OFF counts online first-time buyers only. CAC coloured green = cheaper.',head+table);
+ const tg=function(on,fn,lbl){return '<label style="font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(on?'checked':'')+' onchange="'+fn+'(this.checked)" style="width:auto"> '+lbl+'</label>';};
+ const head='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+  +tg(MEALLNC,'setMeAllNc','Assume every new customer (incl. in-store) came from ad spend')
+  +tg(MEDEL,'setMeDel','Delivered only (net of cancels &amp; returns)')
+  +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px;font-size:12px">Blended CAC <b style="color:#5a5bf0">E£ '+money(bCac)+'</b> &middot; E£ '+money(tSp)+' spend &divide; '+money(tNc)+' '+(MEDEL?'delivered ':'')+'new '+(MEALLNC?'(online+store)':'(online only)')+'</div></div>';
+ const table='<div style="overflow-x:auto"><table class="bt heat" data-hc="'+cacCol+'" data-hcinv="1"><tr><th style="text-align:left">Cohort month</th><th>Ad spend</th><th>'+(MEDEL?'Delivered new':'New customers')+'</th>'+(MEALLNC?'<th>split</th>':'')+'<th>CAC</th></tr>'+rows+'</table></div>';
+ pnlCard(g,'blend','CAC by cohort month'+(MEDEL?' &mdash; delivered':'')+(MEALLNC?' &mdash; all attributed':' &mdash; online only'),'Total ad spend that month &divide; new customers acquired. <b>Attribute toggle</b>: ON credits in-store new customers to the online ad spend; OFF = online first-time buyers only. <b>Delivered toggle</b>: multiplies by the real monthly kept-rate from the synced Bosta feed (kept &divide; confirmed = delivered, not cancelled, not returned) &mdash; online rate applied to all; early months read ~100% before return data was captured. CAC green = cheaper.',head+table);
  applyHeat(g);}
 
 let CWIN={};
