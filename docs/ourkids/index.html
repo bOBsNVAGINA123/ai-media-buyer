@@ -4770,13 +4770,13 @@ function abSlice(d,winStart,winN,keys){if(!d||!winStart||!(ST.s&&ST.e))return nu
 function abCamps(){const WM=(O.madsW&&O.madsW.n)||60,afM=af('meta');const M={},ads=[];
  const MW=O.madsW||{},GW=O.gadsW||{},TW=O.tadsW||{};let ranged=false;
  (O.mads||[]).forEach(a=>{const id=a.cid||a.id;
-  let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,rch=a.rch||0,clk=a.clk||0,nc=a.nc||0,ncv=a.ncv||0,days=WM;
-  const sl=abSlice(a.d,MW.start,MW.n,['sp','pv','pu','im','rch','oc','nc','ncv']);
-  if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pu;imp=sl.im;rch=sl.rch;clk=sl.oc;nc=sl.nc;ncv=sl.ncv;days=sl._days;ranged=true;}
-  const m=M[id]||(M[id]={pf:'meta',id:id,name:a.cmp||a.n||id,acct:a.acct,sp:0,pv:0,pur:0,imp:0,rch:0,clk:0,nc:0,ncv:0,active:false,days:days});
-  m.sp+=sp;m.pv+=pv;m.pur+=pur;m.imp+=imp;m.rch+=rch;m.clk+=clk;m.nc+=nc;m.ncv+=ncv;m.days=days;if(a.st==='ACTIVE')m.active=true;
-  if(sp>0){const np=(ncv!=null&&pv>0)?ncv/pv:null;
-   ads.push({pf:'meta',id:a.id,name:a.n||a.id,as:a.as,asid:a.asid,cmp:a.cmp,cid:a.cid,acct:a.acct,active:a.st==='ACTIVE',sp:sp,pv:pv,pur:pur,imp:imp,rch:rch,clk:clk,af:afM,days:days,newPct:np});}});
+  let sp=a.sp||0,pv=a.pv||0,ofv=a.ofv||0,pur=a.pur||0,imp=a.imp||0,rch=a.rch||0,clk=a.clk||0,nc=a.nc||0,ncv=a.ncv||0,days=WM;
+  const sl=abSlice(a.d,MW.start,MW.n,['sp','pv','fv','pu','im','rch','oc','nc','ncv']);
+  if(sl){sp=sl.sp;pv=sl.pv;ofv=sl.fv;pur=sl.pu;imp=sl.im;rch=sl.rch;clk=sl.oc;nc=sl.nc;ncv=sl.ncv;days=sl._days;ranged=true;}
+  const m=M[id]||(M[id]={pf:'meta',id:id,name:a.cmp||a.n||id,acct:a.acct,sp:0,pv:0,ofv:0,pur:0,imp:0,rch:0,clk:0,nc:0,ncv:0,active:false,days:days});
+  m.sp+=sp;m.pv+=pv;m.ofv+=ofv;m.pur+=pur;m.imp+=imp;m.rch+=rch;m.clk+=clk;m.nc+=nc;m.ncv+=ncv;m.days=days;if(a.st==='ACTIVE')m.active=true;
+  if(sp>0){
+   ads.push({pf:'meta',id:a.id,name:a.n||a.id,as:a.as,asid:a.asid,cmp:a.cmp,cid:a.cid,acct:a.acct,active:a.st==='ACTIVE',sp:sp,pv:pv,ofv:ofv,pur:pur,imp:imp,rch:rch,clk:clk,af:afM,days:days});}});
  const out=[];Object.values(M).forEach(m=>{m.af=afM;out.push(m);});
  (O.gads||[]).forEach(a=>{let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,clk=a.clk||0,days=(GW.n||60);
   const sl=abSlice(a.d,GW.start,GW.n,['sp','pv','pur','imp','clk']);if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pur;imp=sl.imp;clk=sl.clk;days=sl._days;ranged=true;}
@@ -4784,7 +4784,9 @@ function abCamps(){const WM=(O.madsW&&O.madsW.n)||60,afM=af('meta');const M={},a
  (O.tads||[]).forEach(a=>{let sp=a.sp||0,pv=a.pv||0,pur=a.pur||0,imp=a.imp||0,clk=a.clk||0,days=(TW.n||60);
   const sl=abSlice(a.d,TW.start,TW.n,['sp','pv','pur','imp','clk']);if(sl){sp=sl.sp;pv=sl.pv;pur=sl.pur;imp=sl.imp;clk=sl.clk;days=sl._days;ranged=true;}
   out.push({pf:'tiktok',id:a.id,name:a.n||a.id,sp:sp,pv:pv,pur:pur,imp:imp,rch:0,clk:clk,nc:null,ncv:null,active:(a.st==='ENABLE'||a.st==='ENABLED'),days:days,af:af('tt')});});
+ const _afo=(typeof afo==='function')?afo():1;
  const fin=c=>{c.value=c.pv*(c.af||1);c.roas=c.sp>0?c.value/c.sp:0;c.daily=c.sp/(c.days||60);
+  c.instoreVal=(c.ofv||0)*_afo;c.instoreRoas=c.sp>0?c.instoreVal/c.sp:0;c.totRoas=c.sp>0?(c.value+c.instoreVal)/c.sp:0;
   c.cpm=c.imp>0?c.sp/c.imp*1000:0;c.cpmr=c.rch>0?c.sp/c.rch*1000:null;c.cvr=c.clk>0?c.pur/c.clk*100:0;
   c.intent=abIntent(c.cmp||c.name);};
  out.forEach(fin);ads.forEach(fin);
@@ -4825,8 +4827,9 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  const barFor=c=>c.intent==='prospecting'?be:(c.intent==='retargeting'?be*1.4:be*1.15);
  const seen=abGet(AB_SEEN,{}),today=abToday(),log=abGet(AB_CHG,[]);let dirty=false;
  const act=camps.filter(c=>c.active&&c.daily>=100).sort((a,b)=>b.daily-a.daily);
- act.forEach(c=>{const bar=barFor(c),r=bar?c.roas/bar:0;
+ act.forEach(c=>{const bar=barFor(c),r=bar?c.totRoas/bar:0;
   c.bar=bar;c.r=r;c.rec=r>=1.2?'raise':(r<0.9?'cut':'hold');
+  c.qOn=c.roas>=bar;c.qOff=c.instoreRoas>=be;c.quad=(c.qOn&&c.qOff)?'both':c.qOn?'online':c.qOff?'instore':'weak';
   // conservative: a campaign just over the bar gets a small nudge (+5%), only a strong
   // multiple of the bar earns a hard scale (+30% cap). A 5x on a 3.8x bar => ~+5%, not +50%.
   let pct=0;
@@ -4856,7 +4859,9 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  // ---- rows: recommendations ranked by significance (E£ at stake x distance from bar), holds after ----
  const recsS=act.filter(c=>c.rec!=='hold').sort((a,b)=>b.sig-a.sig);recsS.forEach((c,i)=>c.rank=i+1);
  const ordered=recsS.concat(act.filter(c=>c.rec==='hold').sort((a,b)=>b.daily-a.daily));
- const roasHi=Math.max.apply(null,act.map(c=>c.roas).concat([be*2]));
+ const roasHi=Math.max.apply(null,act.map(c=>c.totRoas).concat([be*2]));
+ const QUAD={both:['★ best at both','#12a06e'],online:['online driver','#3a9bff'],instore:['in-store driver','#ff8b42'],weak:['weak at both','#e23a63']};
+ function quadTag(c){const q=QUAD[c.quad]||QUAD.weak;return '<span style="background:'+q[1]+'1e;color:'+q[1]+';font-weight:800;font-size:9px;padding:1px 6px;border-radius:6px">'+q[0]+'</span>';}
  const med=arr=>{const a=arr.filter(v=>v!=null&&isFinite(v)&&v>0).sort((x,y)=>x-y);return a.length?a[Math.floor(a.length/2)]:0;};
  const mCpm=med(act.map(c=>c.cpm)),mCpmr=med(act.map(c=>c.cpmr)),mCvr=med(act.map(c=>c.cvr));
  // relative-to-typical badge: lowGood=true -> below median is green (CPM/CPMR); false -> above is green (CVR)
@@ -4868,9 +4873,9 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
   return '<tr style="border-top:1px solid #eef0f5">'
    +'<td style="color:#8a93a6;font-weight:800">'+(c.rank?'#'+c.rank:'')+'</td>'
    +'<td style="text-align:left">'+pfTag(c)+'</td>'
-   +'<td style="text-align:left"><b>'+esc(c.name)+'</b><div>'+intentTag(c)+'</div></td>'
+   +'<td style="text-align:left"><b>'+esc(c.name)+'</b><div>'+quadTag(c)+' '+intentTag(c)+'</div></td>'
    +'<td>E£ '+money(c.daily)+'</td>'
-   +'<td style="background:'+heatColor(Math.min(1,c.roas/roasHi))+';color:#26313f;font-weight:800">'+c.roas.toFixed(1)+'x<div style="font-size:9.5px;font-weight:700;color:'+(rr>=1?'#0f6e56':'#a3271a')+'">'+rr.toFixed(1)+'&times; bar</div></td>'
+   +'<td style="background:'+heatColor(Math.min(1,c.totRoas/roasHi))+';color:#26313f;font-weight:800">'+c.totRoas.toFixed(1)+'x<div style="font-size:9px;font-weight:600;color:#3d4756">on '+c.roas.toFixed(1)+' &middot; st '+c.instoreRoas.toFixed(1)+'</div></td>'
    +'<td>E£ '+money(c.cpm)+dv(c.cpm,mCpm,true)+'</td>'
    +'<td>'+(c.cpmr!=null?'E£ '+money(c.cpmr)+dv(c.cpmr,mCpmr,true):'<span style="color:#c9ccd6">—</span>')+'</td>'
    +'<td>'+c.cvr.toFixed(1)+'%'+dv(c.cvr,mCvr,false)+'</td>'
@@ -4879,7 +4884,7 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
    +'<td style="white-space:nowrap"><a href="'+abOpen(c)+'" target="_blank" rel="noopener" style="color:#3a9bff;font-weight:700">open&#9658;</a>'+(c.rec!=='hold'?' &middot; <a href="javascript:void(0)" onclick="abLog(\''+c.pf+'\',\''+c.id+'\')" style="color:#5a5bf0;font-weight:700">log&#10003;</a>':'')+'</td></tr>';}).join('');
  // ---- ad-level: pause the wasters, graft winners into a scaling adset ----
  const AA=(window.__abAds||[]);
- const pausers=AA.filter(a=>a.active&&a.daily>=30&&a.roas< (a.intent==='retargeting'?be*1.4:be*1.15)*0.6).sort((a,b)=>b.daily-a.daily).slice(0,8);
+ const pausers=AA.filter(a=>a.active&&a.daily>=30&&a.totRoas< (a.intent==='retargeting'?be*1.4:be*1.15)*0.6).sort((a,b)=>b.daily-a.daily).slice(0,8);
  let pauseH='';if(pausers.length){pauseH='<div style="margin-top:14px;font-weight:800;font-size:12px;color:#161d2e">Pause these ads <span style="font-weight:600;color:#8a93a6">(active, ≥E£30/day, ROAS &lt;60% of bar &mdash; bleeding)</span></div>'
   +pausers.map(a=>'<div style="padding:6px 10px;border:1px solid #fbe0e8;border-radius:9px;margin:5px 0;font-size:11.5px;background:#fff6f9">'+pfTag(a)+' <b>'+esc(a.name)+'</b> <span style="color:#8a93a6">in '+esc(a.as||'')+'</span> &middot; <b style="color:#e23a63">'+a.roas.toFixed(1)+'x</b> &middot; E£ '+money(a.daily)+'/day '+intentTag(a)+' &middot; <a href="'+abOpen(a)+'" target="_blank" rel="noopener" style="color:#3a9bff;font-weight:700">pause here&#9658;</a> &middot; <a href="javascript:void(0)" onclick="abLog(\'meta\',\''+a.id+'\')" style="color:#5a5bf0;font-weight:700">log&#10003;</a></div>').join('');}
  // scaling target = active meta campaign whose name says scal*, biggest spend
@@ -4915,9 +4920,18 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
   +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px">'+raises.length+' winners with headroom (+E£ '+money(wantR)+'/day)</div>'
   +'<div style="background:#eef6ff;border:1px solid #cfe4fb;border-radius:10px;padding:8px 12px">Spend &middot; <b style="color:#12a06e">'+Math.round(psp/tsp*100)+'% prospecting</b> / <b style="color:#ff8b42">'+Math.round(rsp/tsp*100)+'% retargeting</b> / <b style="color:#9aa3b5">'+Math.round(msp/tsp*100)+'% mixed</b></div>'
   +'<div style="background:#fff7ef;border:1px solid #ffe3c7;border-radius:10px;padding:8px 12px">Breakeven <b>'+be.toFixed(1)+'x</b> &middot; existing held to '+(be*1.4).toFixed(1)+'x</div></div>';
+ // ---- quadrant: online vs in-store ROAS ----
+ const QG={both:[],online:[],instore:[],weak:[]};act.forEach(c=>{(QG[c.quad]||QG.weak).push(c);});
+ const qBox=k=>{const q=QUAD[k],list=QG[k].slice().sort((a,b)=>b.totRoas-a.totRoas);
+  return '<div style="flex:1;min-width:210px;border:1px solid '+q[1]+'44;border-radius:11px;padding:9px 11px;background:'+q[1]+'0c">'
+   +'<div style="font-weight:800;font-size:11.5px;color:'+q[1]+'">'+q[0]+' <span style="color:#8a93a6;font-weight:600">('+QG[k].length+')</span></div>'
+   +list.slice(0,5).map(c=>'<div style="font-size:10.5px;margin-top:3px;color:#3d4756">'+esc(c.name).slice(0,30)+' <span style="color:#8a93a6">on '+c.roas.toFixed(1)+' / st '+c.instoreRoas.toFixed(1)+'</span></div>').join('')
+   +(QG[k].length>5?'<div style="font-size:10px;color:#8a93a6;margin-top:2px">+'+(QG[k].length-5)+' more</div>':'')+'</div>';};
+ const quadBoard='<div style="font-weight:800;font-size:12.5px;color:#161d2e;margin:6px 0 7px">Online vs in-store &mdash; where each campaign actually earns <span style="font-weight:600;color:#8a93a6">(in-store = Meta offline-CAPI value; Google in-store never synced)</span></div>'
+  +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+qBox('both')+qBox('instore')+qBox('online')+qBox('weak')+'</div>';
  const tier2='<div style="font-weight:800;font-size:12.5px;color:#161d2e;margin:2px 0 7px">2 &middot; Specific &mdash; campaigns &amp; ads</div>'
   +(moves?'<div style="margin-bottom:10px">'+moves+'</div>':'<div style="color:#8a93a6;font-size:12px;margin-bottom:10px">No clear cross-platform campaign move right now.</div>');
- const body=chips+tier1+tier2
+ const body=chips+tier1+quadBoard+tier2
   +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><thead><tr style="color:#8a93a6;font-size:10px;text-transform:uppercase"><th>#</th><th style="text-align:left">Plat</th><th style="text-align:left">Active campaign</th><th>Spend/day</th><th>ROAS</th><th>CPM</th><th>CPMR</th><th>CVR</th><th>Action</th><th>Status</th><th>Do</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+pauseH+graftH+clog;
  const winNote=window.__abRanged?(' <b style="color:#12a06e">Sliced to '+ST.s+' &rarr; '+ST.e+'</b> (per-campaign daily, within each platform’s last-60d window).'):(' <b>Full ~60-day window</b> &mdash; pick a range inside the last 60 days to slice.');
  pnlCard(g,'meta','&#9873; Budget Advisor &mdash; cross-platform reallocation','Active campaigns ranked by SIGNIFICANCE (E£ at stake &times; distance from bar) on ROAS vs an intent-adjusted breakeven bar &mdash; retargeting (existing customers) held to a higher bar than prospecting (new). CPMR = spend &divide; unique reach &times;1000 (Meta, ad-summed). Actions open the exact campaign/ad in the platform; nothing is auto-pushed.'+winNote,body);offlineDowCard(g);}
