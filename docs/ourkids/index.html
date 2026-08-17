@@ -216,6 +216,11 @@ function insWrap(id){const el=document.getElementById(id);if(!el||!el.querySelec
    pulled READ-ONLY 2026-08-02 via odoo_read.py. Static: the nightly sync does NOT refresh it. */
 const RT_INV={'2024-08':12386089,'2024-09':9485606,'2024-10':9476203,'2024-11':10440256,'2024-12':6358253,'2025-01':7710373,'2025-02':9080803,'2025-03':19689199,'2025-04':16299852,'2025-05':16964379,'2025-06':11688952,'2025-07':26818191,'2025-08':11653147,'2025-09':33071829,'2025-10':26003316,'2025-11':11767814,'2025-12':16168201,'2026-01':8565998,'2026-02':14209457,'2026-03':18082270,'2026-04':30425104,'2026-05':24591028,'2026-06':18352585,'2026-07':29704299};
 const RT_PULL='2026-08-02';
+/* EXACT per-customer delivered rate (ONLINE / sale.order): of each cohort's new customers,
+   the share whose FIRST order was KEPT = state sale/done AND NOT is_return_total (the same
+   return signal the collector's ship2 uses). Real 13% overall return rate; ~1.0 before
+   2025-06 because return data wasn't captured that far back. Static Odoo pull 2026-08-16. */
+const RT_DELRATE={"2024-08":1.0,"2024-09":1.0,"2024-10":1.0,"2024-11":1.0,"2024-12":1.0,"2025-01":1.0,"2025-02":0.9992,"2025-03":1.0,"2025-04":0.999,"2025-05":0.9749,"2025-06":0.8535,"2025-07":0.8518,"2025-08":0.8384,"2025-09":0.7956,"2025-10":0.8031,"2025-11":0.8026,"2025-12":0.8241,"2026-01":0.8384,"2026-02":0.7951,"2026-03":0.7828,"2026-04":0.8222,"2026-05":0.8168,"2026-06":0.8359,"2026-07":0.8241,"2026-08":0.9463};
 /* Measured 30-day repurchase rate: % of first-time customers with a 2nd order
    within 30 days of their first, weighted over the last 12 fully-mature cohort
    months. Odoo per-customer order dates (sale.order online, report.pos.order
@@ -1058,10 +1063,10 @@ function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
  const months=Object.keys(BL).sort();let rows='',tSp=0,tNc=0;
  months.forEach(function(m){const sp=(AM[m]&&AM[m].s)||0;if(sp<=0)return;
   const onc=(ON[m]&&ON[m][0])||0,bnc=(BL[m]&&BL[m][0])||0,inst=Math.max(0,bnc-onc);
-  let dr=1;if(MEDEL){const kr=shipKept(m);if(kr!=null)dr=kr;}
-  const oncE=onc*dr,instE=inst*dr;                       // apply delivered rate
+  let odr=1;if(MEDEL){const kr=(typeof RT_DELRATE!=='undefined'&&RT_DELRATE[m]!=null)?RT_DELRATE[m]:shipKept(m);if(kr!=null)odr=kr;}
+  const oncE=onc*odr,instE=inst;                          // online: exact kept-rate; in-store: walk-out (delivered)
   const nc=MEALLNC?(oncE+instE):oncE;if(nc<1)return;const cac=sp/nc;tSp+=sp;tNc+=nc;
-  rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+money(nc)+(MEDEL?'<span style="color:#8a93a6;font-size:9.5px"> ('+Math.round(dr*100)+'% kept)</span>':'')+'</td>'
+  rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+money(nc)+(MEDEL?'<span style="color:#8a93a6;font-size:9.5px"> ('+Math.round(odr*100)+'% online kept)</span>':'')+'</td>'
    +(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+money(oncE)+' online / '+money(instE)+' in-store</td>':'')
    +'<td style="font-weight:800">E£ '+money(cac)+'</td></tr>';});
  const bCac=tNc?tSp/tNc:0,cacCol=MEALLNC?4:3;
@@ -1071,7 +1076,7 @@ function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
   +tg(MEDEL,'setMeDel','Delivered only (net of cancels &amp; returns)')
   +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px;font-size:12px">Blended CAC <b style="color:#5a5bf0">E£ '+money(bCac)+'</b> &middot; E£ '+money(tSp)+' spend &divide; '+money(tNc)+' '+(MEDEL?'delivered ':'')+'new '+(MEALLNC?'(online+store)':'(online only)')+'</div></div>';
  const table='<div style="overflow-x:auto"><table class="bt heat" data-hc="'+cacCol+'" data-hcinv="1"><tr><th style="text-align:left">Cohort month</th><th>Ad spend</th><th>'+(MEDEL?'Delivered new':'New customers')+'</th>'+(MEALLNC?'<th>split</th>':'')+'<th>CAC</th></tr>'+rows+'</table></div>';
- pnlCard(g,'blend','CAC by cohort month'+(MEDEL?' &mdash; delivered':'')+(MEALLNC?' &mdash; all attributed':' &mdash; online only'),'Total ad spend that month &divide; new customers acquired. <b>Attribute toggle</b>: ON credits in-store new customers to the online ad spend; OFF = online first-time buyers only. <b>Delivered toggle</b>: multiplies by the real monthly kept-rate from the synced Bosta feed (kept &divide; confirmed = delivered, not cancelled, not returned) &mdash; online rate applied to all; early months read ~100% before return data was captured. CAC green = cheaper.',head+table);
+ pnlCard(g,'blend','CAC by cohort month'+(MEDEL?' &mdash; delivered':'')+(MEALLNC?' &mdash; all attributed':' &mdash; online only'),'Total ad spend that month &divide; new customers acquired. <b>Attribute toggle</b>: ON credits in-store new customers to the online ad spend; OFF = online first-time buyers only. <b>Delivered toggle</b>: counts only new customers whose FIRST order was KEPT &mdash; exact per-customer online rate from Odoo (state sale/done AND not is_return_total; real ~13% return rate, so ~80% kept recently). In-store walk-outs count as delivered (in-store returns not separately tracked). Early months read ~100% before return data was captured. CAC green = cheaper.',head+table);
  applyHeat(g);}
 
 let CWIN={};
