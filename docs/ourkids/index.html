@@ -3394,8 +3394,8 @@ function rFind(g,M,SH,A,names){try{
 function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
  document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. MATURITY: deciles are LIFETIME sums, so recently-acquired customers sit in low deciles until their cohort matures &mdash; that is age, not weakness; the age-fair view is <b>Branch cohort quality (SAME-AGE)</b> on the Retail P&amp;L tab. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
- rDec(g,ST.decSc||'ALL STORES',1);
- rDec(g,'Shopify',0);
+ rDec(g,ST.decSc||'ALL STORES','decSc');
+ rDec(g,ST.decScB||'Shopify','decScB');
  qsweep('g15');}
 function decIns(D,tt,money){
  if(!D||D.length<10)return '';
@@ -3470,6 +3470,9 @@ function decAttr(D,tt,sc,money){
   note,
   h+'<div style="margin-top:10px">'+blocks+'</div>');
  return '';}
+// full scope picker (Shopify + ALL STORES + every branch) for compare mode; key = the ST state slot
+function decSelAny(sc,key){const all=Object.keys(O.dec||{});const order=['Shopify','ALL STORES'].filter(k=>all.indexOf(k)>=0).concat(all.filter(k=>k!=='Shopify'&&k!=='ALL STORES').sort());
+ return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;'+key+'&quot;,this.value)">'+order.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+(key==='decSc'?'<option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>':'')+'</select></div>';}
 function decSel(sc){const ks=Object.keys(O.dec||{}).filter(k=>k!=='Shopify').sort();
  return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;decSc&quot;,this.value)"><option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>'+ks.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+'</select></div>';}
 function decTot(D){return D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});}
@@ -3506,9 +3509,15 @@ function rDec(g,sc,withSel){
  const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
  const DD2=O.dec||{};let sel='';
  if(withSel){const ks=Object.keys(DD2).filter(k=>k!=='Shopify').sort();
-  if(sc==='__ALL__'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
-  if(ks.length&&(!sc||!DD2[sc]))sc=ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0];
-  sel=decSel(sc);}
+  if(typeof withSel==='string'){  // compare mode: a scope-state key -> full scope picker (Shopify + any branch)
+   if(sc==='__ALL__'&&withSel==='decSc'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
+   if(!sc||!DD2[sc])sc=DD2['Shopify']?'Shopify':(ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0]);
+   sel=decSelAny(sc,withSel);
+  }else{
+   if(sc==='__ALL__'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
+   if(ks.length&&(!sc||!DD2[sc]))sc=ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0];
+   sel=decSel(sc);
+  }}
  const D=DD2[sc]||[];
  if(!D.length){pnlCard(g,'odoo','Customer portfolio by decile &mdash; awaiting first v6.5 sync','The per-customer decile crawl ships with this version and lands automatically on the next heavy sync. Nothing to do on your side.','');return;}
  const tt=D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});
@@ -4270,7 +4279,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
  const attExpl=AK==='default'?'LIVE = exactly what Ads Manager reports under your account setting (7-day click / 1-day view). No scaling.':
   (_pctLive?'&ldquo;'+_pctLive+'% of live&rdquo; means: Meta re-measured the SAME conversions under this stricter view and only '+_pctLive+'% of the value it claims under your live setting survives. So of every E&pound;100 Ads Manager shows, E&pound;'+_pctLive+' is what this view credits to ads. Every number below is scaled by its own leg&rsquo;s measured factor &mdash; online &times;'+fON.toFixed(2)+', store &times;'+fOFF.toFixed(2)+' &mdash; not by one blanket ratio.':
   'This window re-scales both legs by ladders Meta measured on your own conversions: online &times;'+fON.toFixed(2)+', store &times;'+fOFF.toFixed(2)+'.');
- const attSel='<div style="margin:0 0 4px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION</span><select onchange="attrSet(\'meta\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===AK?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">online leg &times;'+fON.toFixed(2)+' &middot; store leg &times;'+fOFF.toFixed(2)+' (each measured on its own conversions)</span></div>'+
+ const attSel='<div style="margin:0 0 4px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION</span><select onchange="attrSet(\'meta\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===AK?' selected':'')+'>'+attrLabel('meta',k)+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">online leg &times;'+fON.toFixed(2)+' &middot; store leg &times;'+fOFF.toFixed(2)+' (each measured on its own conversions)</span></div>'+
   '<div class="cs" style="margin:0 0 10px;max-width:900px">'+attExpl+'</div>';
  // v9.7.2: the tab is segmented — budget changes and ad launches are two different jobs
  // and nobody should scroll one to reach the other
@@ -4566,7 +4575,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    +K('IN-STORE revenue',off>0?'E£ '+money(off):'<span style="font-size:15px;color:#8a93a6">NOT MEASURED</span>',off>0?(sp?(off/sp).toFixed(2)+'x ROAS':'')+' · '+money(opu)+' offline conversions':'TikTok returns 0 offline shopping events — the in-store event feed to TikTok is not delivering')
    +K('PROFIT after ad spend','<span style="color:'+(pas>=0?'#12a06e':'#e23a63')+'">'+(pas<0?'−':'')+'E£ '+money(Math.abs(pas))+'</span>','GP at your real margins minus spend')
    +'</div>';
-  const ttSel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION &middot; TIKTOK</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===((ST.att&&ST.att.tt)||ST.at)?' selected':'')+'>'+String(AL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok leg &times;'+fTT.toFixed(2)+'</span></div>';
+  const ttSel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:6px">ATTRIBUTION &middot; TIKTOK</span><select onchange="attrSet(\'tt\',this.value)">'+((O.attr&&O.attr.order)||['default']).map(k=>'<option value="'+k+'"'+(k===((ST.att&&ST.att.tt)||ST.at)?' selected':'')+'>'+attrLabel('tt',k)+'</option>').join('')+'</select><span style="font-size:10px;color:#8a93a6;margin-left:8px">TikTok leg &times;'+fTT.toFixed(2)+'</span></div>';
   pnlCard(g,'meta','TikTok &mdash; online and in-store revenue','TikTok has its OWN attribution ladder (O.attr.tt), so it gets its own selector rather than inheriting Meta&rsquo;s. Same real Odoo margins as the Meta cards above. Online revenue is measured from <b>Shopify&rsquo;s referrer tagging</b>, not from TikTok &mdash; it needs no TikTok app and cannot be switched off by their review queue. In-store still needs TikTok&rsquo;s API and is honestly marked when it is missing.',ttSel+h2);
  })();}
 
