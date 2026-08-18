@@ -315,9 +315,13 @@ function applyHeat(root){(root||document).querySelectorAll('table.heat').forEach
  if(!cols.length)return;const cells=[];
  tb.querySelectorAll('tr').forEach(function(tr){cols.forEach(function(ci){const c=tr.children[ci];
   if(c&&c.tagName==='TD'){const n=parseFloat(String(c.textContent).replace(/,/g,'').replace(/[^0-9.\-]/g,''));if(!isNaN(n))cells.push([c,n]);}});});
- if(cells.length<2)return;const vs=cells.map(function(x){return x[1];}),lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs);
+ if(cells.length<2)return;
+ // PERCENTILE-rank coloring: colour by position in the sorted distribution, not raw magnitude,
+ // so one huge column (e.g. acquisition-month revenue) can't crush every other cell into the
+ // same red. Even spread => variance is always visible.
+ const sorted=cells.map(function(x){return x[1];}).slice().sort(function(a,b){return a-b;}),n=sorted.length;
  const inv=tb.dataset.hcinv==='1';  // inv=1 -> low value is GREEN (good), e.g. CAC/CPM where cheaper is better
- cells.forEach(function(x){var t=hi>lo?(x[1]-lo)/(hi-lo):0.5;if(inv)t=1-t;x[0].style.background=heatColor(t);x[0].style.color='#3d3d3d';x[0].style.fontWeight='700';});});}
+ cells.forEach(function(x){var lo=0,hi=n,v=x[1];while(lo<hi){var m=(lo+hi)>>1;if(sorted[m]<=v)lo=m+1;else hi=m;}var t=n>1?(lo-1)/(n-1):0.5;if(inv)t=1-t;x[0].style.background=heatColor(Math.max(0,Math.min(1,t)));x[0].style.color='#3d3d3d';x[0].style.fontWeight='700';});});}
 function rRT(){if(TAB!=='rt')return;dCh();
  const g=document.getElementById('g20');
  const M=rtM();if(!M.length){g.innerHTML='';document.getElementById('bn20').innerHTML='No monthly P&amp;L data in this sync.';return;}
@@ -5201,9 +5205,12 @@ function rCO(){if(TAB!=='co')return;
  const dropped=rows2.length-kept.length;
  const maxK=Math.min(13,Math.max.apply(null,kept.map(r=>r.A.m.length).concat(B?kept.map(r=>r.B?r.B.m.length:0):[1])));
  // heat range across the grid (blue mono like Shopify) or A-vs-B green/red
- let lo=Infinity,hi=-Infinity;
- kept.forEach(r=>{for(let k=0;k<r.A.m.length;k++){const v=cell(r.A,k,VIEW==='c');if(v!=null&&isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v);}}});
- const heat=v=>{if(v==null||!isFinite(v)||hi===lo)return'';const t=(v-lo)/(hi-lo);return' style="background:'+heatColor(t)+';color:#3d3d3d;font-weight:700"';};
+ // PERCENTILE-rank coloring — Month 0 (acquisition) revenue is ~50x the retention months, so a
+ // linear scale would crush every later cell into identical red. Rank spreads colour by position.
+ let vals=[];
+ kept.forEach(r=>{for(let k=0;k<r.A.m.length;k++){const v=cell(r.A,k,VIEW==='c');if(v!=null&&isFinite(v))vals.push(v);}});
+ vals.sort((a,b)=>a-b);const NV=vals.length;
+ const heat=v=>{if(v==null||!isFinite(v)||NV<2)return'';let lo=0,hi=NV;while(lo<hi){const m=(lo+hi)>>1;if(vals[m]<=v)lo=m+1;else hi=m;}const t=(lo-1)/(NV-1);return' style="background:'+heatColor(Math.max(0,Math.min(1,t)))+';color:#3d3d3d;font-weight:700"';};
  const vsB=(va,vb)=>{if(va==null)return'';if(vb==null||!isFinite(vb)||vb===0)return'';const d=(va-vb)/Math.abs(vb);return d>=.03?' style="background:rgba(18,160,110,'+Math.min(.4,d*.5+.08).toFixed(2)+')"':(d<=-.03?' style="background:rgba(226,58,99,'+Math.min(.35,Math.abs(d)*.4+.07).toFixed(2)+')"':'');};
  // TOTAL row (all kept cohorts blended)
  const blend=src=>{const t={n:0,r:0,rx:0,rOk:true,m:[]};kept.forEach(r=>{const c=src==='A'?r.A:r.B;if(!c)return;t.n+=c.n;if(c.r==null)t.rOk=false;else t.r+=c.r;t.rx+=(c.rx||0);for(let k=0;k<c.m.length;k++){const a2=t.m[k]=t.m[k]||[0,0,0,0,0,0];for(let q=0;q<6;q++)a2[q]+=(c.m[k][q]||0);}});return t;};
