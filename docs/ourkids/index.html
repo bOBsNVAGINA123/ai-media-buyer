@@ -892,7 +892,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();
  // v8.1: say out loud whether Incremental is Meta's own column or a fallback model.
  const _iL=((O.attr&&O.attr.labels)||{}).incr||'';
  const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':/ACTUAL/.test(_iL)?'Incremental (Meta actual)':'Incremental (modelled)'};
- [['am','meta'],['ag','google'],['ax','tt']].forEach(pr=>{const op2=O.attr.order.filter(k=>(O.attr[pr[1]]||{})[k]!=null).map(k=>`<option value="${k}">${SL[k]||k}</option>`).join('');
+ [['am','meta'],['ag','google'],['ax','tt']].forEach(pr=>{const op2=O.attr.order.filter(k=>(O.attr[pr[1]]||{})[k]!=null).map(k=>`<option value="${k}">${attrLabel(pr[1],k)}</option>`).join('');
   [pr[0],pr[0]+'2'].forEach(id=>{const el=document.getElementById(id);el.innerHTML=op2;el.value=ST.att[pr[1]];el.title=O.attr.order.map(k=>((O.attr.labels||{})[k]||k)).join('\n');
    el.onchange=e=>{ST.att[pr[1]]=e.target.value;document.getElementById(id===pr[0]?pr[0]+'2':pr[0]).value=e.target.value;rTab();};});});
  d0.onchange=e=>{ST.s=e.target.value;RDR();};d1.onchange=e=>{ST.e=e.target.value;RDR();};
@@ -932,7 +932,14 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();syncTabGroup(t);renderTabs();document.g
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
 const TBT=[['off','offC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
-function attrOpts(p){const SL=(O.attr&&O.attr.labels)||{};return ((O.attr&&O.attr.order)||['default']).filter(k=>((O.attr&&O.attr[p])||{})[k]!=null).map(k=>'<option value="'+k+'"'+(((ST.att&&ST.att[p])||'default')===k?' selected':'')+'>'+String(SL[k]||k).replace(/<[^>]*>/g,'')+'</option>').join('');}
+// PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
+// Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
+// platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
+function attrLabel(p,k){const f=((O.attr&&O.attr[p])||{})[k];const P={meta:'Meta',google:'Google',tt:'TikTok'}[p]||p;
+ if(k==='default')return p==='google'?'Google DDA (live)':'Default · '+P+' 7dc/1dv (live)';
+ const base={'7dc':'7-day click','1dc':'1-day click','incr':'Incremental'}[k]||k;
+ return P+' '+base+(f!=null?' · '+Math.round(f*100)+'%':'');}
+function attrOpts(p){return ((O.attr&&O.attr.order)||['default']).filter(k=>((O.attr&&O.attr[p])||{})[k]!=null).map(k=>'<option value="'+k+'"'+(((ST.att&&ST.att[p])||'default')===k?' selected':'')+'>'+attrLabel(p,k)+'</option>').join('');}
 const PRESETS=[['L7D',7],['MTD','mtd'],['30d',30],['60d',60],['90d',90],['180d',180],['365d',365],['YTD','ytd'],['All',9999]];
 const CMPOPT=[['off','Off'],['prev','Previous period'],['wk','Previous week (-7d)'],['mo','Previous month (-30d)'],['yoy','Same period last year'],['custom','Custom range…']];
 function barHTML(t){
@@ -1801,7 +1808,7 @@ function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
   const ks=(O.attr.order||[]).filter(k=>(O.attr[p[0]]||{})[k]!=null);
   if(!ks.length)return '';
-  return '<label>'+p[1]+'</label><select onchange="attrSet(&quot;'+p[0]+'&quot;,this.value)">'+ks.map(k=>'<option value="'+k+'"'+(ST.att[p[0]]===k?' selected':'')+'>'+(SL[k]||k)+'</option>').join('')+'</select>';}).join('');}
+  return '<label>'+p[1]+'</label><select onchange="attrSet(&quot;'+p[0]+'&quot;,this.value)">'+ks.map(k=>'<option value="'+k+'"'+(ST.att[p[0]]===k?' selected':'')+'>'+attrLabel(p[0],k)+'</option>').join('')+'</select>';}).join('');}
 // ---- SMALL MULTIPLES: the cure for spaghetti. One panel per series, shared
 // y-scale so panels are comparable, faint network backdrop for context.
 var SMO={};
