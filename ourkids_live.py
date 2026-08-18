@@ -2326,6 +2326,68 @@ def pull_meta_ads(tok):
             except Exception: pass
         return out
 
+def _classify_adset(targeting):
+    """Audience intent of ONE ad set, from its INCLUDED custom audiences (targeting.custom_audiences).
+    existing = includes a purchaser / customer-list audience; engaged = includes an engagement /
+    view / cart audience (warm, not bought); new = broad / interest / lookalike / no inclusion
+    (prospecting -- the 'abo' sets target broad and EXCLUDE purchasers). Verified against the live
+    account 2026-08-18 (broad 'abo' sets vs 'school existing customers' including Purchase audiences)."""
+    cas = (targeting or {}).get("custom_audiences") or []
+    if not cas:
+        return "new"
+    has_purchase = has_engage = has_lal = False
+    for ca in cas:
+        if ca.get("is_lookalike_container") or ca.get("subtype") == "LOOKALIKE" or (ca.get("lookalike_type") not in (None, "None", "")):
+            has_lal = True; continue
+        low = (str(ca.get("rule") or "") + " " + str(ca.get("name") or "")).lower()
+        if ca.get("customer_file_source") == "USER_PROVIDED_ONLY" or "purchase" in low or "buyer" in low or "customer" in low:
+            has_purchase = True
+        elif any(k in low for k in ("viewcontent", "view_content", "addtocart", "add_to_cart",
+                                    "initiatecheckout", "pageview", "page_view", "engage", "video",
+                                    "visit", "\"lead\"", "subscribe")):
+            has_engage = True
+    if has_purchase: return "existing"
+    if has_engage: return "engaged"
+    return "new"
+
+def pull_meta_audiences(tok, mads):
+    """Per-CAMPAIGN audience mix (new / engaged / existing) as SHARE OF SPEND. Pulls each active
+    ad set's targeting, classifies it, weights by the ad-set's spend (from mads), rolls up to the
+    campaign. Server-side so only the compact {cid:{n,e,x}} shares reach data.js. Meta only."""
+    out = {}
+    if not tok: return out
+    try:
+        sp_by_as = {}
+        for a in (mads or []):
+            if a.get("pf") != "meta": continue
+            k = str(a.get("asid"))
+            sp_by_as[k] = sp_by_as.get(k, 0) + (a.get("sp") or 0)
+        agg = {}   # cid -> {"n":,"e":,"x":}
+        for acct in (meta_accounts(tok) or DEFAULT_ACCTS):
+            p = {"fields": "id,campaign_id,targeting", "limit": 200, "access_token": tok,
+                 "filtering": json.dumps([{"field": "effective_status", "operator": "IN", "value": ["ACTIVE"]}])}
+            url = "%s/%s/adsets?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+            pages = 0
+            while url and pages < 20:
+                d = http_json(url); pages += 1
+                if not d or d.get("error"): break
+                for r in (d.get("data") or []):
+                    cid = str(r.get("campaign_id") or "")
+                    if not cid: continue
+                    cls = _classify_adset(r.get("targeting"))
+                    sp = sp_by_as.get(str(r.get("id")), 0)
+                    o = agg.setdefault(cid, {"n": 0.0, "e": 0.0, "x": 0.0})
+                    o[{"new": "n", "engaged": "e", "existing": "x"}[cls]] += sp
+                url = (d.get("paging") or {}).get("next")
+        for cid, o in agg.items():
+            t = o["n"] + o["e"] + o["x"]
+            if t > 0:
+                out[cid] = {"n": round(o["n"] / t, 3), "e": round(o["e"] / t, 3), "x": round(o["x"] / t, 3)}
+        log("meta audiences :: campaigns", len(out))
+    except Exception as e:
+        log("meta audiences fail", str(e)[:150])
+    return out
+
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
     CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
@@ -3521,7 +3583,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.6 (per-campaign DAILY for Google + TikTok -> advisor date-range aware; per-ad reach CPMR; Google v22 probe)")
+    log("collector v9.7.8 (per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3772,7 +3834,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads,
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
