@@ -4876,9 +4876,16 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  const dv=(v,m,lowGood)=>{if(!m||v==null||!isFinite(v))return '';const d=(v/m-1)*100;if(Math.abs(d)<3)return '<div style="font-size:9px;color:#9aa3b5">≈ typical</div>';const good=lowGood?d<0:d>0;return '<div style="font-size:9px;font-weight:700;color:'+(good?'#12a06e':'#e23a63')+'">'+(d>=0?'+':'&minus;')+Math.abs(Math.round(d))+'% vs typ</div>';};
  // new-customer share of value (from custom-conv value ncv ÷ total value). "Engaged" isn't a
  // PURCHASE segment (it's an audience type, not in the pixel), so this is new vs existing only.
- const nsArr=act.map(c=>c.newShare).filter(v=>v!=null),avgNew=nsArr.length?nsArr.reduce((a,b)=>a+b,0)/nsArr.length:null;
- const segTag=c=>{if(c.newShare==null)return '';const n=Math.round(c.newShare*100);const rel=avgNew?Math.round((c.newShare/avgNew-1)*100):null;
-  return '<div style="font-size:9.5px;color:#64748b;margin-top:1px"><b style="color:#12a06e">'+n+'% new</b> / '+(100-n)+'% existing'+(rel!=null&&Math.abs(rel)>=5?' <span style="color:'+(rel>=0?'#3a9bff':'#8a93a6')+'">('+(rel>=0?'+':'&minus;')+Math.abs(rel)+'% vs avg)</span>':'')+'</div>';};
+ // 3-way audience mix (new/engaged/existing) from the collector's ad-set-targeting pull (O.audMix,
+ // keyed by campaign id, spend-weighted). Falls back to the 2-way value-share until that lands.
+ const AM=(typeof O!=='undefined'&&O.audMix)||null;
+ const newOf=c=>{const a=AM&&AM[String(c.id)];return a?a.n:(c.newShare!=null?c.newShare:null);};
+ const nsArr=act.map(newOf).filter(v=>v!=null),avgNew=nsArr.length?nsArr.reduce((a,b)=>a+b,0)/nsArr.length:null;
+ const segTag=c=>{const a=AM&&AM[String(c.id)];
+  if(a){const n=Math.round(a.n*100),e=Math.round(a.e*100),x=Math.round(a.x*100),rel=avgNew?Math.round((a.n/avgNew-1)*100):null;
+   return '<div style="font-size:9.5px;color:#64748b;margin-top:1px"><b style="color:#12a06e">'+n+'% new</b>'+(e>0?' / <b style="color:#ff8b42">'+e+'% engaged</b>':'')+' / '+x+'% existing'+(rel!=null&&Math.abs(rel)>=5?' <span style="color:'+(rel>=0?'#3a9bff':'#8a93a6')+'">('+(rel>=0?'+':'&minus;')+Math.abs(rel)+'% vs avg new)</span>':'')+'</div>';}
+  if(c.newShare==null)return '';const n=Math.round(c.newShare*100);
+  return '<div style="font-size:9.5px;color:#64748b;margin-top:1px"><b style="color:#12a06e">'+n+'% new</b> / '+(100-n)+'% existing <span style="color:#9aa3b5">(targeting mix syncing…)</span></div>';};
  const rows=ordered.map(c=>{const rr=c.roas/c.bar;const col=c.rec==='cut'?'#e23a63':(c.rec==='raise'?'#12a06e':'#7c869c');
   const arrow=c.rec==='raise'?'&#9650;':(c.rec==='cut'?'&#9660;':'&#9679;');
   const acttxt=c.rec==='hold'?'&#9679; hold':(arrow+' '+(c.rec==='raise'?'RAISE':(c.rec2==='pause'?'PAUSE':'CUT'))+' '+(c.rec==='raise'?'+':'&minus;')+Math.round(c.pct*100)+'%<div style="font-size:9.5px;font-weight:600;color:#64748b">E£ '+money(c.daily)+' &rarr; <b>E£ '+money(c.recD)+'</b>/d</div>');
