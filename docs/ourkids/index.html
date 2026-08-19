@@ -393,7 +393,7 @@ function ltPay(cur,cac){let ph=0,pv=0;
  return null;}
 function ltIdx(h){return RT_LTH.indexOf(h);}
 function ltCurve(cur,cac){
- const W=760,HH=250,pl=70,pr=20,pt=16,pb=44,n=RT_LTH.length;
+ const W=760,HH=120,pl=70,pr=20,pt=12,pb=30,n=RT_LTH.length;
  let mx=cac;cur.forEach(function(v){if(v!=null)mx=Math.max(mx,v);});mx=(mx||1)*1.18;
  const X=function(i){return pl+(W-pl-pr)*(n<2?0:i/(n-1));};
  const Y=function(v){return pt+(HH-pt-pb)*(1-v/mx);};
@@ -1239,7 +1239,24 @@ function offI(){return FF._ov||(FF._ov={});}
 function resetOff(){FF._ov={};document.getElementById('gp').value='26.6';document.getElementById('rf').value='17.5';document.getElementById('tgt').value='10';document.getElementById('oh').checked=false;rOff();}
 function blSeries(name,r){const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(bD(i).slice(5));d.push(O.bl.b[name][i]||0);}return{L,d};}
 function pearson(a,b){const n=Math.min(a.length,b.length);if(n<3)return 0;let sa=0,sb=0;for(let i=0;i<n;i++){sa+=a[i];sb+=b[i];}const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;for(let i=0;i<n;i++){num+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);}return da&&db?num/Math.sqrt(da*db):0;}
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';
+function bncYoY(g){const B=O.bnr||{};const ks=Object.keys(B);if(!ks.length)return;const money=v=>Math.round(v).toLocaleString();
+ const lastFull=(function(){const t=(O.today||'').slice(0,7);const ms=Object.keys(B[ks[0]]||{}).sort();return ms.filter(m=>m<t).pop();})();
+ if(!lastFull)return;
+ const ly=(+lastFull.slice(0,4)-1)+lastFull.slice(4);
+ const d=(a,b)=>(b&&a!=null)?Math.round((a/b-1)*100):null;
+ const cell=v=>v==null?'<span style="color:#c9ccd6">—</span>':'<b style="color:'+(v>=0?'#12a06e':'#e23a63')+'">'+(v>=0?'+':'')+v+'%</b>';
+ // 6-month NC sparkline per branch (text bars), + YoY on NC / NC rev / RC rev
+ const ms6=Object.keys(B[ks[0]]||{}).sort().filter(m=>m<=lastFull).slice(-6);
+ let rows='';ks.sort().forEach(n=>{const M=B[n]||{},cur=M[lastFull]||{},old=M[ly]||{};
+  const mx=Math.max.apply(null,ms6.map(m=>(M[m]||{}).nc||0))||1;
+  const spark=ms6.map(m=>{const v=(M[m]||{}).nc||0;const h=Math.max(2,Math.round(v/mx*16));return '<span title="'+m+': '+money(v)+'" style="display:inline-block;width:7px;height:'+h+'px;background:#5a5bf0;opacity:.75;margin-right:2px;vertical-align:bottom;border-radius:1px"></span>';}).join('');
+  rows+='<tr><td style="text-align:left;font-weight:800">'+n+'</td><td style="text-align:left">'+spark+'</td>'
+   +'<td>'+money(cur.nc||0)+'</td><td>'+money(old.nc||0)+'</td><td>'+cell(d(cur.nc,old.nc))+'</td>'
+   +'<td>E£ '+money(cur.nrev||0)+'</td><td>'+cell(d(cur.nrev,old.nrev))+'</td>'
+   +'<td>E£ '+money(cur.rrev||0)+'</td><td>'+cell(d(cur.rrev,old.rrev))+'</td></tr>';});
+ pnlCard(g,'odoo','New customers by branch &mdash; '+lastFull+' vs '+ly+' (same month last year)','REGISTERED first-time customers per branch (walk-ins without a phone are invisible, so true footfall is higher — the trend and YoY are what to read). Spark = last 6 months of new customers. NC rev = revenue from that month&rsquo;s first-time customers; RC rev = revenue from customers acquired earlier.',
+  '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Branch</th><th style="text-align:left">NC 6-mo trend</th><th>NC '+lastFull+'</th><th>NC '+ly+'</th><th>YoY</th><th>NC revenue</th><th>YoY</th><th>RC revenue</th><th>YoY</th></tr>'+rows+'</table></div>');}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bncYoY(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  const N=+document.getElementById('bw').value||30;const wf=N/30.44;
@@ -3233,6 +3250,9 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {n:'GP margin, %',f:m=>P[m]&&P[m][0]?P[m][1]/P[m][0]*100:null,fmt:PCT,sh:1},
     {n:'Orders',f:m=>P[m]?P[m][2]:null,fmt:v=>Math.round(v).toLocaleString(),sh:1},
     {n:'AOV',f:m=>P[m]&&P[m][2]?P[m][0]/P[m][2]:null,fmt:POS,sh:1},
+    {n:'New customers',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].nc:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,tt:'REGISTERED first-time customers of this branch that month (walk-ins without a phone are not countable)'},
+    {n:'New-customer revenue',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].nrev:null,fmt:POS,sh:1,tt:'Revenue from customers whose FIRST purchase at this branch was that month'},
+    {n:'Returning revenue',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].rrev:null,fmt:POS,sh:1,tt:'Revenue from customers acquired in an earlier month'},
     {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,tt:'Salary ledger lines carrying this branch&rsquo;s analytic account; months without a posting fall back to the Excel payroll'},
     {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,tt:'RENT Branches lines by analytic distribution; missing months use the branch average / unlabelled pool'},
     {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:1,tt:'Actual accounting, allocated by revenue share'},
