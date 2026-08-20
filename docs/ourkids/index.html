@@ -1060,6 +1060,7 @@ function aSeriesR(k,m,s,e){if(!O.ad[k])return null;const r=aRange(s,e);if(!r)ret
 function gcN(N){const e2=O.aw[1],s2=addD(e2,-(N-1));const gp2=fSum('gp',s2,e2),or2=fSum('orders',s2,e2);const r2=aRange(s2,e2);if(!r2||!or2)return null;let sp2=0,nc2=0;for(let i=r2[0];i<=r2[1];i++){sp2+=O.ad.spend[i]||0;nc2+=O.ad.newcust[i]||0;}const cac2=nc2?sp2/nc2:0;return cac2?(gp2/or2)/cac2:null;}
 function origIdxFin(decIdx,ixArr){const r=rng(ST.s,ST.e);return r?r[0]+ixArr[Math.min(decIdx,ixArr.length-1)]:0;}
 
+function adFull(m){const a0=(O.ad&&O.ad.start)||'';if(!a0)return false;const first=a0.slice(0,7);if(m<first)return false;if(m===first&&a0.slice(8,10)!=='01')return false;return true;}
 function adMonthly(){const M2={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(M2[m]=M2[m]||{ms:0,gs:0,ts:0,s:0});a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.s+=(O.ad.spend||[])[i]||0;}return M2;}
 function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const last=O.aw[1];
  return O.coh.map(c=>{const a=AM[c.m];const full=a&&c.m>'2025-07';const ncac=full&&c.size?a.s/c.size:null;
@@ -1101,6 +1102,11 @@ function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
   rows+='<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>E£ '+money(sp)+'</td><td>'+money(nc)+(MEDEL?'<span style="color:#8a93a6;font-size:9.5px"> ('+Math.round(odr*100)+'% online kept)</span>':'')+'</td>'
    +(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+money(oncE)+' online / '+money(instE)+' in-store</td>':'')
    +'<td style="font-weight:800">E£ '+money(cac)+'</td></tr>';});
+ // current month: show as explicit MTD (partial) row — never silently dropped, never posing as full
+ (function(){const cm=(O.today||'').slice(0,7);if(cm<_m0||cm>_m1)return;const sp=(AM[cm]&&AM[cm].s)||0;
+  const onc=(ON[cm]&&ON[cm][0])||0,bnc=(BL[cm]&&BL[cm][0])||0,inst=Math.max(0,bnc-onc);
+  const nc=MEALLNC?bnc:onc;if(!sp||!nc)return;
+  rows+='<tr style="opacity:.6"><td style="text-align:left;font-weight:700">'+cm+' <span style="color:#b8860b;font-size:9px;font-weight:800">MTD · counts through '+(typeof RT_PULL!=='undefined'?RT_PULL:'last pull')+'</span></td><td>E£ '+money(sp)+'</td><td>'+money(nc)+'</td>'+(MEALLNC?'<td style="color:#8a93a6;font-size:10.5px">'+money(onc)+' online / '+money(inst)+' in-store</td>':'')+'<td style="font-weight:800">E£ '+money(sp/nc)+'</td></tr>';})();
  const bCac=tNc?tSp/tNc:0,cacCol=MEALLNC?4:3;
  const tg=function(on,fn,lbl){return '<label style="font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(on?'checked':'')+' onchange="'+fn+'(this.checked)" style="width:auto"> '+lbl+'</label>';};
  const head='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
@@ -1187,7 +1193,8 @@ function draw(cv,cfg,big,cid){
   O.ann.forEach(a=>{if(a.d<WS||a.d>WE)return;const oi=idxOf(a.d,1);let best=0,bd2=1e9;for(let j=0;j<ixMap.length;j++){const d2=Math.abs(r[0]+ixMap[j]-oi);if(d2<bd2){bd2=d2;best=j;}}(annMap[best]=annMap[best]||[]).push(a);});
   if(Object.keys(annMap).length){const pts=L.map((_,j)=>annMap[j]?sets[0].d[j]:null);
    ds.push({label:'Annotations',data:pts,showLine:false,pointRadius:6,pointHoverRadius:8,pointStyle:'triangle',pointBackgroundColor:L.map((_,j)=>annMap[j]?ANNC[annMap[j][0].k]:C.grey),borderColor:'transparent'});}}
- const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
+ const _fmt=(FM[cfg.tip]||fI);const LV={id:'lv',afterDatasetsDraw:cc=>{const x=cc.ctx;x.save();x.font='700 9.5px Inter,sans-serif';cc.data.datasets.forEach((d,i)=>{if(!d.label||/^0?\d-\d/.test(d.label))return;const mt=cc.getDatasetMeta(i);if(mt.hidden)return;let p=null,v=null;for(let j=mt.data.length-1;j>=0;j--){if(mt.data[j]&&d.data[j]!=null){p=mt.data[j];v=d.data[j];break;}}if(!p)return;x.fillStyle=d.borderColor||'#333';x.fillText(_fmt(v),Math.min(p.x+4,cc.chartArea.right-46),Math.max(p.y-4,cc.chartArea.top+8));});x.restore();}};
+ const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},plugins:[LV],options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
   plugins:{legend:{display:true},tooltip:{filter:x=>x.dataset.label==='Annotations'||(x.parsed.y!=null&&x.parsed.y!==0),callbacks:{label:x=>x.dataset.label==='Annotations'?null:x.dataset.label+': '+(FM[cfg.tip]||fI)(x.parsed.y)+((x.dataset._cl&&x.dataset._cl[x.dataIndex])?' ('+x.dataset._cl[x.dataIndex]+')':''),
    afterBody:items=>{if(!items.length)return[];const i=items[0].dataIndex;let out=[];if(annMap[i])annMap[i].forEach(a=>out.push('▲ '+a.t));if(cfg.bd&&ixMap)out=out.concat(cfg.bd(origIdxFin(i,ixMap)));return out;}}}},
   scales:Object.assign({x:{grid:{display:0},ticks:{maxTicksLimit:big?12:6,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:big?8:5,color:'#0F172A',font:{size:12},callback:v=>(FM[cfg.tip]||fI)(v)}}},hasY2?{y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:big?8:5,color:'#c9834a',font:{size:10},callback:v=>(FM[cfg.tip]||fI)(v)}}}:{})}});
@@ -4031,10 +4038,12 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'&nbsp;&nbsp;of which: COST OF FREE DELIVERY (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The courier bill for the month multiplied by the share of that month\u2019s confirmed orders on which the customer paid nothing for delivery. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. This is the price of the free-delivery offer, in pounds, month by month.'},
    {n:'Shipping recovery, % of the courier bill covered by customers',f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself. Anything below that is the share of every delivery you are funding yourself.'},
    {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below this line now subtracts from THIS number, not from the gross profit row above it.'},
-   {n:'Ads &mdash; Meta',f:m=>A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0},
-   {n:'Ads &mdash; Google',f:m=>A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
-   {n:'Ads &mdash; TikTok',f:m=>A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'TikTok API history baked in for the full year'},
-   {n:'Ads &mdash; total',f:m=>A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0},
+   /* months where the ads feed does not cover the FULL month (feed starts O.ad.start, rolling
+      365d) must not print a partial sum as if it were the month's spend — show a dash. */
+   {n:'Ads &mdash; Meta',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0,tt:'Months before the ads feed window (or only partially inside it) show a dash, not a misleading partial sum'},
+   {n:'Ads &mdash; Google',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
+   {n:'Ads &mdash; TikTok',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'TikTok API history baked in for the full year'},
+   {n:'Ads &mdash; total',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Dash = the ads feed only covers part of this month (window starts '+((O.ad&&O.ad.start)||'?')+')'},
    {n:'Profit contribution (after shipping &amp; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?GPF(m)+shipNet(m)-A[m].s:null,fmt:POS,sh:1,b:1,q:'sh_pc',tt:'Gross profit AFTER shipping &minus; all platform ad spend. Nothing hidden: the lines you can see subtract to this one. This used to be struck off gross profit before shipping &mdash; it is now the harder, truer number.'},
    {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026'},
    {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?GPF(m)+shipNet(m)-A[m].s-EP:null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Now carries the shipping subsidy too.'},
