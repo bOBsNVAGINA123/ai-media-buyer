@@ -2388,7 +2388,7 @@ def pull_meta_audiences(tok, mads):
         log("meta audiences fail", str(e)[:150])
     return out
 
-def pull_cohorts():
+def pull_cohorts_pack():
     """Nightly cohort crawl -> replaces the hand-baked RT_COH / RT_DELRATE / BWALK constants.
     New customers + 30d repurchase per scope/month (ONLINE, ALL STORES, per branch, BLENDED),
     exact online delivered-kept rate (first order not is_return_total), walk-ins per branch."""
@@ -3647,7 +3647,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.9 (nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.10 (FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3733,7 +3733,7 @@ def build():
         bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
     if heavy:
-        rtpk = safe(pull_cohorts) or {}
+        rtpk = safe(pull_cohorts_pack) or {}
         if not rtpk.get("coh"): rtpk = prev.get("rtCohPack") or {}
     else:
         rtpk = prev.get("rtCohPack") or {}
