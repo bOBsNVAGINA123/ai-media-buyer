@@ -1088,7 +1088,11 @@ function setMeDel(v){MEDEL=!!v;rMedia();}
 function shipKept(m){if(!O.ship2||!O.ship2.m)return null;const i=O.ship2.m.indexOf(m);if(i<0)return null;const cf=(O.ship2.conf||[])[i]||0,kp=(O.ship2.kept||[])[i]||0;return cf?kp/cf:null;}
 function blendCacCard(g){if(typeof RT_COH==='undefined'||!RT_COH.BLENDED)return;
  const AM=adMonthly(),ON=RT_COH.ONLINE||{},BL=RT_COH.BLENDED||{},money=v=>Math.round(v).toLocaleString();
- const months=Object.keys(BL).sort();let rows='',tSp=0,tNc=0;
+ // skip the month the static cohort pull only partially covers (RT_PULL cutoff) and any
+ // future months; honor the page date range so the table follows the picker.
+ const _cut=(typeof RT_PULL!=='undefined'?RT_PULL:'9999').slice(0,7);
+ const _m0=(ST.s||'0000').slice(0,7),_m1=(ST.e||'9999').slice(0,7);
+ const months=Object.keys(BL).sort().filter(function(m){return m<_cut&&m>=_m0&&m<=_m1;});let rows='',tSp=0,tNc=0;
  months.forEach(function(m){const sp=(AM[m]&&AM[m].s)||0;if(sp<=0)return;
   const onc=(ON[m]&&ON[m][0])||0,bnc=(BL[m]&&BL[m][0])||0,inst=Math.max(0,bnc-onc);
   let odr=1;if(MEDEL){const kr=(typeof RT_DELRATE!=='undefined'&&RT_DELRATE[m]!=null)?RT_DELRATE[m]:shipKept(m);if(kr!=null)odr=kr;}
@@ -1259,7 +1263,25 @@ function bncYoY(g){const B=O.bnr||{};const ks=Object.keys(B);if(!ks.length)retur
    +(function(){var W=(typeof BWALK!=='undefined'&&BWALK[n])||{};var w=(W[lastFull]||[0,0])[0];var tot=(cur.nc||0)+(cur.rc||0)+w;return '<td>'+money(w)+'<div style="font-size:9px;color:#8a93a6">'+(tot?(w/tot*100).toFixed(1):'0')+'% of orders</div></td>';})()+'</tr>';});
  pnlCard(g,'odoo','New customers by branch &mdash; '+lastFull+' vs '+ly+' (same month last year)','REGISTERED first-time customers per branch (verified: unregistered walk-ins are only ~1% of receipts, so these counts are near-complete). Spark = last 6 months of new customers. <b>Unregistered = walk-in receipts with no customer attached — ~1% of all orders, so the registered counts ARE the real picture.</b> NC rev = revenue from that month&rsquo;s first-time customers; RC rev = revenue from customers acquired earlier.',
   '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Branch</th><th style="text-align:left">NC 6-mo trend</th><th>NC '+lastFull+'</th><th>NC '+ly+'</th><th>YoY</th><th>NC revenue</th><th>YoY</th><th>RC revenue</th><th>YoY</th><th>Unregistered</th></tr>'+rows+'</table></div>');}
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bncYoY(g);
+let BNCM='nc';
+function setBncm(v){BNCM=v;rOff();}
+function bncTs(g){const B=O.bnr||{};const ks=Object.keys(B).sort();if(!ks.length||typeof Chart==='undefined')return;
+ const t=(O.today||'').slice(0,7);
+ const ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<t;});
+ const MET={nc:['New customers',function(M,m){return (M[m]||{}).nc||0;}],
+  nrev:['New-customer revenue',function(M,m){return (M[m]||{}).nrev||0;}],
+  rrev:['Returning revenue',function(M,m){return (M[m]||{}).rrev||0;}],
+  walk:['Unregistered orders',function(M,m){var w=(typeof BWALK!=='undefined'&&BWALK[arguments[2]])||null;return (w&&w[m]&&w[m][0])||0;}]};
+ const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ');
+ pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch','Monthly, full history (registered customers; unregistered = walk-in receipts). Click a legend line to isolate a branch.',
+  '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="position:relative;height:230px"><canvas id="bncTsCv"></canvas></div>');
+ const ds=ks.map(function(n){const M=B[n]||{};return {label:n,data:ms.map(function(m){return BNCM==='walk'?(((typeof BWALK!=='undefined'&&BWALK[n])||{})[m]||[0])[0]:MET[BNCM][1](M,m);}),borderColor:(typeof BCOL!=='undefined'&&BCOL[n])||'#5a5bf0',borderWidth:2,pointRadius:0,tension:0};});
+ const c=new Chart(document.getElementById('bncTsCv'),{type:'line',data:{labels:ms.map(function(m){return m.slice(2);}),datasets:ds},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{display:true,labels:{boxWidth:14,font:{size:10}}}},
+   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
+ ch.push(c);}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  const N=+document.getElementById('bw').value||30;const wf=N/30.44;
