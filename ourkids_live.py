@@ -2388,6 +2388,70 @@ def pull_meta_audiences(tok, mads):
         log("meta audiences fail", str(e)[:150])
     return out
 
+def pull_cohorts():
+    """Nightly cohort crawl -> replaces the hand-baked RT_COH / RT_DELRATE / BWALK constants.
+    New customers + 30d repurchase per scope/month (ONLINE, ALL STORES, per branch, BLENDED),
+    exact online delivered-kept rate (first order not is_return_total), walk-ins per branch."""
+    def _norm(b):
+        b = " ".join(str(b).split())
+        return {"Mall OF Arabia": "Mall of Arabia"}.get(b, b)
+    def _scan(model, dom, fields, order):
+        out = []; off = 0
+        while True:
+            rows = oexec(model, "search_read", [dom], {"fields": fields, "limit": 10000, "offset": off, "order": order})
+            if not rows: break
+            out.extend(rows); off += 10000
+            if len(rows) < 10000: break
+        return out
+    ev = _scan("sale.order", [["state", "in", ["sale", "done"]]],
+               ["partner_id", "date_order", "is_return_total"], "date_order asc")
+    sv = _scan("report.pos.order", [["partner_id", "!=", 1654], ["partner_id", "!=", False]],
+               ["partner_id", "date", "config_id"], "date asc")
+    def coh_run(events):
+        first = {}; out = {}
+        for d, pid in events:
+            f = first.get(pid)
+            if f is None:
+                first[pid] = [d, False]
+                out.setdefault(d[:7], [0, 0])[0] += 1
+            elif not f[1]:
+                if (datetime.date.fromisoformat(d[:10]) - datetime.date.fromisoformat(f[0][:10])).days <= 30:
+                    f[1] = True; out[f[0][:7]][1] += 1
+        return out
+    on = [((r.get("date_order") or "")[:10], r["partner_id"][0]) for r in ev if r.get("partner_id") and r.get("date_order")]
+    br = {}; stall = []
+    for r in sv:
+        d = (r.get("date") or "")[:10]
+        if not d or not r.get("partner_id"): continue
+        cfg = r.get("config_id")
+        b = _norm(cfg[1].split("(")[0].replace("Retail", "").strip()) if cfg else "?"
+        br.setdefault(b, []).append((d, r["partner_id"][0]))
+        stall.append((d, r["partner_id"][0]))
+    coh = {"ONLINE": coh_run(on), "ALL STORES": coh_run(sorted(stall)), "BLENDED": coh_run(sorted(on + stall))}
+    for b, evs in br.items(): coh[b] = coh_run(evs)
+    firstK = {}
+    for r in ev:
+        p = r.get("partner_id"); d = (r.get("date_order") or "")[:10]
+        if not p or not d or p[0] in firstK: continue
+        firstK[p[0]] = (d[:7], not r.get("is_return_total"))
+    dr = {}
+    for m, k in firstK.values():
+        a = dr.setdefault(m, [0, 0]); a[0] += 1
+        if k: a[1] += 1
+    delrate = {m: round(v[1] / v[0], 4) for m, v in dr.items() if v[0]}
+    bw = {}
+    for r in oexec("report.pos.order", "read_group",
+                   [["|", ["partner_id", "=", 1654], ["partner_id", "=", False]],
+                    ["price_total"], ["config_id", "date:month"]], {"lazy": False}):
+        cfg = r.get("config_id"); lbl = str(r.get("date:month")); m = None
+        for f in ("%B %Y", "%b %Y"):
+            try: m = datetime.datetime.strptime(lbl, f).strftime("%Y-%m"); break
+            except Exception: pass
+        if not cfg or not m: continue
+        bw.setdefault(_norm(cfg[1].split("(")[0].replace("Retail", "").strip()), {})[m] = [int(r.get("__count") or 0), round(r.get("price_total") or 0)]
+    log("cohorts crawl :: scopes", len(coh), ":: online ev", len(on), ":: store ev", len(stall))
+    return {"pulled": END.isoformat(), "coh": coh, "delRate": delrate, "bwalk": bw}
+
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
     CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
@@ -3583,7 +3647,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.8 (per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.9 (nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3668,6 +3732,11 @@ def build():
     else:
         bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
+    if heavy:
+        rtpk = safe(pull_cohorts) or {}
+        if not rtpk.get("coh"): rtpk = prev.get("rtCohPack") or {}
+    else:
+        rtpk = prev.get("rtCohPack") or {}
     if heavy:
         _vd = safe(pull_vendors) or ({}, {})
         vend, prodv = _vd if isinstance(_vd, tuple) and len(_vd) == 2 else ({}, {})
@@ -3834,7 +3903,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {},
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
