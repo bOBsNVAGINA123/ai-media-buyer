@@ -886,6 +886,15 @@ function trBI(U,SC){
  +'</div></div>';
  return h;}
 function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtCohPack&&O.rtCohPack.coh){RT_COH=O.rtCohPack.coh;RT_PULL=O.rtCohPack.pulled||RT_PULL;if(O.rtCohPack.delRate)RT_DELRATE=O.rtCohPack.delRate;if(O.rtCohPack.bwalk)BWALK=O.rtCohPack.bwalk;}
+ /* OUTLIER CLAMP — Meta's offline last-touch lottery can dump a whole store-day onto one ad
+    (verified: one E£150/day ad credited E£1.77M = ~a full network day). Cap each ad-day's
+    offline value at 6x that ad's own median non-zero day (floor E£60k); subtract the clipped
+    amount from the ad's totals and flag it. Kills fantasy ROAS in every advisor view. */
+ if(O.mads)O.mads.forEach(function(a){var d=a.d;if(!d||!d.fv)return;
+  var nz=d.fv.filter(function(v){return v>0;}).sort(function(x,y){return x-y;});
+  if(nz.length<3)return;var med=nz[Math.floor(nz.length/2)];var cap=Math.max(60000,med*6);var clip=0;
+  d.fv=d.fv.map(function(v){if(v>cap){clip+=v-cap;return cap;}return v;});
+  if(clip>0){a.ofv=Math.max(0,(a.ofv||0)-Math.round(clip));a._fvClip=Math.round(clip);}});
  if(typeof MutationObserver!=='undefined')try{['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g12','g13','g14','g15'].forEach(id=>{const el=document.getElementById(id);if(!el)return;new MutationObserver(()=>insWrap(id)).observe(el,{childList:true,subtree:true});});}catch(e){}LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
  LSF=cairoFull(O.lastSync);
  document.getElementById('sync').innerHTML='↻ Synced <b>'+LSF+'</b> Cairo · next ~<b>'+NXC+'</b>'+srcHealth();
@@ -5232,7 +5241,8 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
     +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over 14 days at your real margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store).')
     +'</div>';
    if(store.length)h3+='<div style="margin-top:14px">'+card('STORE DRIVERS &mdash; most of their return is in-store',store,'#9d6bff','60%+ of the value these produce is in-store, not website. Judging them on website ROAS alone would kill your best footfall ads.')+'</div>';
-   pnlCard(g,'meta','Where the next E&pound; goes &mdash; last 14 days','Scale, kill, and the ads whose real return is walking into your branches.',h3);
+   (function(){var nclip=(O.mads||[]).filter(function(a){return a._fvClip;}).length;
+   pnlCard(g,'meta','Where the next E&pound; goes &mdash; last 14 days','Scale, kill, and the ads whose real return is walking into your branches.'+(nclip?' <b style=\"color:#b8860b\">'+nclip+' ads had impossible single-day in-store spikes (Meta last-touch lottery) clipped to a sane ceiling — their ROAS is now honest.</b>':''),h3);})();
   }
  }}
 function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19');g.innerHTML='';
