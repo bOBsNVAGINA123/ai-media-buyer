@@ -2455,6 +2455,47 @@ def pull_cohorts_pack():
     log("cohorts crawl :: scopes", len(coh), ":: online ev", len(on), ":: store ev", len(stall))
     return {"pulled": END.isoformat(), "v2": 1, "coh": coh, "delRate": delrate, "bwalk": bw}
 
+def _trends_eg():
+    """Google Trends, geo=EG, for the target demographic's seed terms (Arabic mom/kids/school
+    queries). Unofficial endpoints -- wrapped so ANY failure degrades to {} without touching
+    the sync. rising related queries = the NEW SIGNALS feed."""
+    seeds = ["\u0645\u0633\u062a\u0644\u0632\u0645\u0627\u062a \u0645\u062f\u0631\u0633\u064a\u0629",
+             "\u0634\u0646\u0637\u0629 \u0645\u062f\u0631\u0633\u0629",
+             "\u0644\u0627\u0646\u0634 \u0628\u0648\u0643\u0633",
+             "\u0639\u0631\u0628\u064a\u0629 \u0627\u0637\u0641\u0627\u0644",
+             "\u0645\u0644\u0627\u0628\u0633 \u0627\u0637\u0641\u0627\u0644"]
+    out = {}
+    hd = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "Accept-Language": "en-US"}
+    def get(url):
+        req = urllib.request.Request(url, headers=hd)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = r.read().decode("utf-8", errors="ignore")
+        i = d.find("{")
+        return d[i:] if i >= 0 else "{}"
+    for kw in seeds:
+        try:
+            pay = {"comparisonItem": [{"keyword": kw, "geo": "EG", "time": "today 12-m"}], "category": 0, "property": ""}
+            j = json.loads(get("https://trends.google.com/trends/api/explore?hl=en&tz=-120&req=" + urllib.parse.quote(json.dumps(pay))))
+            wid = {w.get("id"): w for w in j.get("widgets", [])}
+            e = {}
+            tl = wid.get("TIMESERIES")
+            if tl:
+                d2 = json.loads(get("https://trends.google.com/trends/api/widgetdata/multiline?hl=en&tz=-120&req=" + urllib.parse.quote(json.dumps(tl["request"])) + "&token=" + tl["token"]))
+                pts = ((d2.get("default") or {}).get("timelineData")) or []
+                e["series"] = {p.get("formattedAxisTime", ""): (p.get("value") or [0])[0] for p in pts}
+            rs = wid.get("RELATED_QUERIES")
+            if rs:
+                d3 = json.loads(get("https://trends.google.com/trends/api/widgetdata/relatedsearches?hl=en&tz=-120&req=" + urllib.parse.quote(json.dumps(rs["request"])) + "&token=" + rs["token"]))
+                rl = (d3.get("default") or {}).get("rankedList") or []
+                rising = (rl[1] if len(rl) > 1 else (rl[0] if rl else {})).get("rankedKeyword") or []
+                e["rising"] = [[q.get("query", ""), str(q.get("formattedValue", ""))] for q in rising[:8]]
+            if e: out[kw] = e
+            time.sleep(2)
+        except Exception as ex:
+            log("trends eg fail ::", str(ex)[:90])
+    log("trends eg :: seeds ok", len(out))
+    return out
+
 def pull_search_intel():
     """Daily search intelligence for the Search Advisor tab: YoY search terms (28d vs same
     weekday-aligned window last year), per-term CVR/CPA, weekly demand curves for the top
@@ -2524,8 +2565,11 @@ def pull_search_intel():
         return out
     isc = ishare(s1, e1); isp = ishare(s0, e0)
     log("search intel :: terms", len(T), ":: weekly", len(wk), ":: campaigns IS", len(isc))
+    tr = {}
+    try: tr = _trends_eg()
+    except Exception as e: log("trends wrapper fail", str(e)[:80])
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
-            "terms": T, "weekly": wk, "is": isc, "isLY": isp}
+            "terms": T, "weekly": wk, "is": isc, "isLY": isp, "trends": tr}
 
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
@@ -3722,7 +3766,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.12 (Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.13 (Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
