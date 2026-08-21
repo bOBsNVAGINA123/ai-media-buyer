@@ -1039,7 +1039,12 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   o.mer=[sp?o.net[0]/sp:0,spc?o.net[1]/spc:null];
   o.gpcac=[o.cac[0]?o.gpp[0]/o.cac[0]:0,o.cac[1]?o.gpp[1]/o.cac[1]:null];
   o.mpur=[S('mpur'),P('mpur')];o.gconv=[S('gconv'),P('gconv')];
-  o.gcpp=[o.gconv[0]?o.gsp[0]/o.gconv[0]:0,rc&&o.gconv[1]?o.gsp[1]/o.gconv[1]:null];
+  /* Google goal pollution (store-finder/calls as PRIMARY) ended 2026-07-01 — verified via GAQL:
+     conversions are 100% PURCHASE since. Apply the purchase-share haircut ONLY to pre-July days. */
+  const GPS=(function(){const c=(O.gattr||{}).cmpAct;if(!c||!c.length)return 1;let p=0,a=0;c.forEach(r=>{a+=r.cn||0;if(/PURCHASE/i.test(r.cat||''))p+=r.cn||0;});return (a&&p)?p/a:1;})();
+  const gcAdj=r=>{if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++){t+=(O.ad.gconv[i]||0)*(aD(i)<'2026-07-01'?GPS:1);}return t;};
+  const _ga=gcAdj(ra),_gb=rc?gcAdj(rc):null;
+  o.gcpp=[_ga?o.gsp[0]/_ga:0,rc&&_gb?o.gsp[1]/_gb:null];
   o.cpp=[o.mpur[0]?o.msp[0]/o.mpur[0]:0,rc&&o.mpur[1]?o.msp[1]/o.mpur[1]:null];
   const tp0=aSum('tpur',ra),tp1=rc?aSum('tpur',rc):0;
   o.tcpp=[tp0?o.tsp[0]/tp0:null,tp1?o.tsp[1]/tp1:null];
@@ -1161,8 +1166,9 @@ function cards(){CARDS=[
  {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). Cost / order = total spend ÷ confirmed orders. GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['Cost / order',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
- {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: platform spend ÷ platform-reported purchases. TikTok purchases now live from the TikTok API (complete payments).',ad:1,k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',o.tcpp[0],o.tcpp[1],'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
+ {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: spend ÷ purchases. Google is scaled to PURCHASE-category conversions only — its raw conversions were ~63% store-finder clicks/calls until 2026-06-30 (goal pollution, fixed Jul 1) — pre-July days are scaled to purchases-only, recent days are already clean.',ad:1,c:o=>({ad:[{l:'Meta purchases',k:'mpur',c:C.blue},{l:'Google conv (all goals)',k:'gconv',c:C.indigo},{l:'TikTok purchases',k:'tpur',c:C.pink}],tip:'n'}),k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP · purchases only',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',o.tcpp[0],o.tcpp[1],'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
  {id:'nvr',full:1,a:'shop',t:'New vs Returning — Revenue, Orders & AOV',src:'orders',cs:'First-time vs returning: revenue, order counts and AOV each, with % vs previous period.',ad:1,k:o=>[['NC revenue',o.ncrev[0],o.ncrev[1],'cur',1],['RC revenue',o.rcrev[0],o.rcrev[1],'cur',1],['NC AOV',o.ncaov[0],o.ncaov[1],'cur',1],['RC AOV',o.rcaov[0],o.rcaov[1],'cur',1],['New',o.nc[0],o.nc[1],'n',1],['Returning',o.rcn[0],o.rcn[1],'n',1]],c:o=>({ad:[{l:'NC revenue',k:'ncrev',c:C.blue,f:1},{l:'RC revenue',k:'rcrev',c:C.indigo,f:1}],tip:'cur'})},
+ {id:'olyoy',full:1,a:'shop',t:'Online &mdash; month vs same month last year (with expenses)',src:'orders',cs:'Branch-style YoY for the ONLINE channel with its own cost lines. NC = first-time orders that month; ads = Meta+Google+TikTok that month; e-com payroll E£372,076/mo; contribution = channel GP &minus; ads &minus; payroll.',k:o=>{const N=O.nr||{};const t=(O.today||'').slice(0,7);const ms=Object.keys(N).sort().filter(m=>m<t);if(!ms.length)return[['Online','\u2014',null,'n',1]];const m=ms[ms.length-1],ly=(+m.slice(0,4)-1)+m.slice(4);const A=adMonthly();const c=N[m]||{},p=N[ly]||{};const sp=(A[m]||{}).s||0,spL=(A[ly]||{}).s||0;const gp=(c.ngp||0)+(c.rgp||0),gpL=(p.ngp||0)+(p.rgp||0);return [['New customers \u00b7 '+m,c.nord,p.nord,'n',1],['NC revenue',c.nrev,p.nrev,'cur',1],['Returning revenue',c.rrev,p.rrev,'cur',1],['Ad spend',sp,spL,'cur',0],['E-com payroll',372076,372076,'cur',0],['Contribution (GP\u2212ads\u2212payroll)',gp-sp-372076,gpL?gpL-spL-372076:null,'cur',1]];}},
  {id:'fn',a:'shop',t:'Funnel — ATC / Checkout / CVR',src:'cvr',cs:'Shopify cart-adds, checkout, completed ÷ sessions.',ad:1,k:o=>[['ATC %',o.atc[0],o.atc[1],'pct',1],['Checkout %',o.cko[0],o.cko[1],'pct',1],['CVR %',o.cvr[0],o.cvr[1],'pct',1]],c:o=>({ad:[{l:'ATC',k:'atcRatio',c:C.orange},{l:'Checkout',k:'checkoutRatio',c:C.violet},{l:'CVR',k:'cvr',c:C.pink}],tip:'pct'})},
  {id:'ss',a:'shop',t:'Sessions',src:'sessions',cs:'Shopify online-store sessions.',ad:1,k:o=>[['Sessions',o.sess[0],o.sess[1],'n',1]],c:o=>({ad:[{l:'Sessions',k:'sessions',c:C.blue,f:1}],tip:'n'})},
  {id:'np',a:'odoo',t:'Shopify Net Contribution (est)',src:'gp',cs:'Odoo GP net of returns − ad spend − e-com payroll (E£ 372,076/mo prorated). Before HQ overhead.',ad:1,k:o=>[['Net contribution',o.onp[0],o.onp[1],'cur',1],['GP',o.gp[0],o.gp[1],'cur',1],['Ad spend',o.sp[0],o.sp[1],'cur',0]]},
@@ -1252,7 +1258,8 @@ function offI(){return FF._ov||(FF._ov={});}
 function resetOff(){FF._ov={};document.getElementById('gp').value='26.6';document.getElementById('rf').value='17.5';document.getElementById('tgt').value='10';document.getElementById('oh').checked=false;rOff();}
 function blSeries(name,r){const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(bD(i).slice(5));d.push(O.bl.b[name][i]||0);}return{L,d};}
 function pearson(a,b){const n=Math.min(a.length,b.length);if(n<3)return 0;let sa=0,sb=0;for(let i=0;i<n;i++){sa+=a[i];sb+=b[i];}const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;for(let i=0;i<n;i++){num+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);}return da&&db?num/Math.sqrt(da*db):0;}
-function bncYoY(g){const B=O.bnr||{};const ks=Object.keys(B);if(!ks.length)return;const money=v=>Math.round(v).toLocaleString();
+const _bnrAll=function(){var b=Object.assign({},O.bnr||{});var N=O.nr||{};if(Object.keys(N).length){var m={};Object.keys(N).forEach(function(k){var n=N[k];m[k]={nc:n.nord||0,rc:n.rord||0,nord:n.nord||0,rord:n.rord||0,nrev:n.nrev||0,rrev:n.rrev||0};});b['ONLINE']=m;}return b;};
+function bncYoY(g){const B=_bnrAll();const ks=Object.keys(B);if(!ks.length)return;const money=v=>Math.round(v).toLocaleString();
  const lastFull=(function(){const t=(O.today||'').slice(0,7);const ms=Object.keys(B[ks[0]]||{}).sort();return ms.filter(m=>m<t).pop();})();
  if(!lastFull)return;
  const ly=(+lastFull.slice(0,4)-1)+lastFull.slice(4);
@@ -1272,29 +1279,35 @@ function bncYoY(g){const B=O.bnr||{};const ks=Object.keys(B);if(!ks.length)retur
   '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Branch</th><th style="text-align:left">NC 6-mo trend</th><th>NC '+lastFull+'</th><th>NC '+ly+'</th><th>YoY</th><th>NC revenue</th><th>YoY</th><th>RC revenue</th><th>YoY</th><th>Unregistered</th></tr>'+rows+'</table></div>');}
 let BNCM='nc';
 function setBncm(v){BNCM=v;rOff();}
-function bncTs(g){const B=O.bnr||{};const ks=Object.keys(B).sort();if(!ks.length||typeof Chart==='undefined')return;
+function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length||typeof Chart==='undefined')return;
  const t=(O.today||'').slice(0,7);
- const ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<t;});
- const MET={nc:['New customers',function(M,m){return (M[m]||{}).nc||0;}],
-  rc:['Returning customers',function(M,m){return (M[m]||{}).rc||0;}],
-  ord:['Total orders',function(M,m){return ((M[m]||{}).nord||0)+((M[m]||{}).rord||0);}],
-  nrev:['New-customer revenue',function(M,m){return (M[m]||{}).nrev||0;}],
-  rrev:['Returning revenue',function(M,m){return (M[m]||{}).rrev||0;}],
-  walk:['Unregistered orders',function(M,m){var w=(typeof BWALK!=='undefined'&&BWALK[arguments[2]])||null;return (w&&w[m]&&w[m][0])||0;}]};
- const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ');
- pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch','Monthly, full history (registered customers; unregistered = walk-in receipts). Click a legend line to isolate a branch.',
-  '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=!window.BNCPIE;rOff()">PIE &middot; latest month share</span></div><div style="position:relative;height:'+(window.BNCPIE?'300':'230')+'px"><canvas id="bncTsCv"></canvas></div>');
- const ds=ks.map(function(n){const M=B[n]||{};return {label:n,data:ms.map(function(m){return BNCM==='walk'?(((typeof BWALK!=='undefined'&&BWALK[n])||{})[m]||[0])[0]:MET[BNCM][1](M,m);}),borderColor:(typeof BCOL!=='undefined'&&BCOL[n])||'#5a5bf0',borderWidth:2,pointRadius:0,tension:0};});
- if(window.BNCPIE){var lastM=ms[ms.length-1];var vals=ks.map(function(n){var M=B[n]||{};return BNCM==='walk'?((((typeof BWALK!=='undefined'&&BWALK[n])||{})[lastM]||[0])[0]):MET[BNCM][1](M,lastM);});
-  var tot=vals.reduce(function(a,b){return a+b;},0)||1;
-  var cp=new Chart(document.getElementById('bncTsCv'),{type:'pie',data:{labels:ks.map(function(n,i){return n+' — '+Math.round(vals[i]).toLocaleString()+' ('+Math.round(vals[i]/tot*100)+'%)';}),datasets:[{data:vals,backgroundColor:ks.map(function(n){return (typeof BCOL!=='undefined'&&BCOL[n])||'#5a5bf0';})}]},
-   options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{position:'right',labels:{font:{size:11}}},tooltip:{callbacks:{label:function(x){return x.label;}}},title:{display:true,text:MET[BNCM][0]+' — '+lastM}}}});
-  ch.push(cp);return;}
+ const ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<=t;});
+ const MET={nc:['New customers',function(M){return M.nc||0;}],rc:['Returning customers',function(M){return M.rc||0;}],ord:['Total orders',function(M){return (M.nord||0)+(M.rord||0);}],nrev:['New-customer revenue',function(M){return M.nrev||0;}],rrev:['Returning revenue',function(M){return M.rrev||0;}],walk:['Unregistered orders',function(M){return 0;}]};
+ const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
+  +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;rOff()">PIES &middot; per branch</span>';
+ if(window.BNCPIE){
+  const lastM=ms[ms.length-1],mtd=lastM===t;
+  const PM={ord:['Orders',['New','Returning','Unregistered'],['#12a06e','#5a5bf0','#c3c9d6']],cust:['Customers',['New','Returning'],['#12a06e','#5a5bf0']],rev:['Revenue',['New','Returning'],['#12a06e','#5a5bf0']]};
+  const pk=(window.BNCP&&PM[window.BNCP])?window.BNCP:'ord',pm=PM[pk];
+  const pchips=Object.keys(PM).map(function(k){return '<span class="chip" style="'+(k===pk?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCP=\''+k+'\';rOff()">'+PM[k][0]+'</span>';}).join(' ');
+  const leg=pm[1].map(function(l,j){return '<span style="margin-right:14px"><i style="display:inline-block;width:10px;height:10px;background:'+pm[2][j]+';border-radius:2px;margin-right:4px"></i>'+l+'</span>';}).join('');
+  const cells=ks.map(function(n,i){return '<div style="width:195px;text-align:center;background:#fff;border:1px solid #eef0f5;border-radius:10px;padding:8px 4px"><div style="font-weight:800;font-size:12px">'+n+'</div><div style="position:relative;height:120px"><canvas id="bncPie'+i+'"></canvas></div><div id="bncPieL'+i+'" style="font-size:10px;color:#64748b;margin-top:4px;line-height:1.5"></div></div>';}).join('');
+  pnlCard(g,'odoo','Branch mix &mdash; '+pm[0].toLowerCase()+' &middot; '+lastM+(mtd?' <span style="color:#b8860b;font-size:11px">(MTD)</span>':''),'One pie per branch. '+leg+' &mdash; exact numbers under each pie.','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+' &nbsp; '+pchips+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+cells+'</div>');
+  ks.forEach(function(n,i){const M=(B[n]||{})[lastM]||{};const wo=(((typeof BWALK!=='undefined'&&BWALK[n])||{})[lastM]||[0])[0];
+   const vals=pk==='ord'?[(M.nord||0),(M.rord||0),wo]:pk==='cust'?[(M.nc||0),(M.rc||0)]:[(M.nrev||0),(M.rrev||0)];
+   const tot=vals.reduce(function(a,b){return a+b;},0)||1;
+   document.getElementById('bncPieL'+i).innerHTML=vals.map(function(v,j){return '<b style="color:'+pm[2][j]+'">'+(pk==='rev'?'E£ ':'')+Math.round(v).toLocaleString()+'</b> ('+Math.round(v/tot*100)+'%)';}).join('<br>');
+   const cp=new Chart(document.getElementById('bncPie'+i),{type:'pie',data:{labels:pm[1],datasets:[{data:vals,backgroundColor:pm[2],borderWidth:1}]},options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(x){return x.label+': '+Math.round(x.parsed).toLocaleString();}}}}}});
+   ch.push(cp);});
+  return;}
+ pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch','Monthly, full history INCLUDING the current month (last point = MTD, still filling). Unregistered = walk-in receipts. Click a legend line to isolate a branch.',
+  '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="position:relative;height:230px"><canvas id="bncTsCv"></canvas></div>');
+ const ds=ks.map(function(n){const M=B[n]||{};return {label:n,data:ms.map(function(m){return BNCM==='walk'?((((typeof BWALK!=='undefined'&&BWALK[n])||{})[m]||[0])[0]):MET[BNCM][1](M[m]||{});}),borderColor:(typeof BCOL!=='undefined'&&BCOL[n])||(n==='ONLINE'?'#161d2e':'#e2a33a'),borderWidth:2,pointRadius:0,tension:0};});
  const LASTV={id:'lastv',afterDatasetsDraw:function(cc){var x=cc.ctx;x.save();x.font='700 10px Inter,sans-serif';cc.data.datasets.forEach(function(d,i){var mt=cc.getDatasetMeta(i);if(mt.hidden)return;var p=mt.data[mt.data.length-1];if(!p)return;var v=d.data[d.data.length-1];x.fillStyle=d.borderColor;x.fillText(Math.round(v).toLocaleString(),p.x+4,p.y+3);});x.restore();}};
- const c=new Chart(document.getElementById('bncTsCv'),{type:'line',data:{labels:ms.map(function(m){return m.slice(2);}),datasets:ds},plugins:[LASTV],
+ const c=new Chart(document.getElementById('bncTsCv'),{type:'line',data:{labels:ms.map(function(m){return m.slice(2)+(m===t?' MTD':'');}),datasets:ds},plugins:[LASTV],
   options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
    plugins:{legend:{display:true,labels:{boxWidth:14,font:{size:10}}}},
-   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
+   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
  ch.push(c);}
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
@@ -3531,8 +3544,8 @@ function decAttr(D,tt,sc,money){
   h+'<div style="margin-top:10px">'+blocks+'</div>');
  return '';}
 // full scope picker (Shopify + ALL STORES + every branch) for compare mode; key = the ST state slot
-function decSelAny(sc,key){const all=Object.keys(O.dec||{});const order=['Shopify','ALL STORES'].filter(k=>all.indexOf(k)>=0).concat(all.filter(k=>k!=='Shopify'&&k!=='ALL STORES').sort());
- return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;'+key+'&quot;,this.value)">'+order.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+(key==='decSc'?'<option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>':'')+'</select></div>';}
+function decSelAny(sc,key){const all=Object.keys(O.dec||{});const lbl=key==='decScB'?'SCOPE B \u2014 compare against':'SCOPE A';const order=['Shopify','ALL STORES'].filter(k=>all.indexOf(k)>=0).concat(all.filter(k=>k!=='Shopify'&&k!=='ALL STORES').sort());
+ return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">'+lbl+'</span><select onchange="decCtl(&quot;'+key+'&quot;,this.value)">'+order.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+(key==='decSc'?'<option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>':'')+'</select></div>';}
 function decSel(sc){const ks=Object.keys(O.dec||{}).filter(k=>k!=='Shopify').sort();
  return '<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b;margin-right:8px">SCOPE</span><select onchange="decCtl(&quot;decSc&quot;,this.value)"><option value="__ALL__"'+(sc==='__ALL__'?' selected':'')+'>Every branch, one after another</option>'+ks.map(k=>'<option'+(k===sc?' selected':'')+'>'+k+'</option>').join('')+'</select></div>';}
 function decTot(D){return D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});}
