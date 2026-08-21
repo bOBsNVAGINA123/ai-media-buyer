@@ -1183,6 +1183,18 @@ function cards(){CARDS=[
  {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). Cost / order = total spend ÷ confirmed orders. GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['Cost / order',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
+ {id:'kv',a:'blend',t:'The essentials',src:'gross',cs:'One glance: revenue, what it kept as profit, what a NEW vs RETURNING customer spends per order, and site conversion.',
+  k:o=>{const A=O.ad||{};const out=[['Revenue (net of returns)',o.net[0],o.net[1],'cur',0],['Gross profit',o.gp[0],o.gp[1],'cur',0]];
+   if(A.ncrev&&A.newcust){const t0=new Date(A.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+    const S=(arr,a,b)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(A.n-1,b);i++)t+=arr[i]||0;return t;};
+    const rg=[ix(ST.s),ix(ST.e)];const pw=cmpWr(ST.s,ST.e);const pg=[ix(pw[0]),ix(pw[1])];
+    const ok=r=>r[1]>=0&&r[0]<=A.n-1;
+    const av=(rv,ct,r)=>ok(r)&&S(A[ct],r[0],r[1])?S(A[rv],r[0],r[1])/S(A[ct],r[0],r[1]):null;
+    out.push(['AOV — NEW customers',av('ncrev','newcust',rg),ST.cmp==='off'?null:av('ncrev','newcust',pg),'cur',0]);
+    out.push(['AOV — RETURNING',av('rcrev','retcust',rg),ST.cmp==='off'?null:av('rcrev','retcust',pg),'cur',0]);
+    if(A.cvr&&A.sessions){const cv=r=>{if(!ok(r))return null;let s=0,c=0;for(let i=Math.max(0,r[0]);i<=Math.min(A.n-1,r[1]);i++){s+=A.sessions[i]||0;c+=(A.cvr[i]||0)*(A.sessions[i]||0);}return s?c/s:null;};
+     out.push(['Site CVR',cv(rg),ST.cmp==='off'?null:cv(pg),'pct',1]);}}
+   return out;}},
  {id:'cppx',a:'blend',full:1,t:'CPP by platform — decomposed',src:'cacgp',cs:'Cost per purchase over time, one clean panel per platform (7-day rolling, dashed = previous period). Google is scaled to PURCHASE-category conversions only — pre-Jul-1 days carry the goal-pollution fix.',ad:1,
   html:o=>'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:4px 12px 12px">'+['Meta','Google','TikTok'].map((p,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="font-size:10.5px;font-weight:800;color:'+[C.blue,C.indigo,C.pink][i]+'">'+p+' CPP</div><div style="position:relative;height:130px"><canvas id="cppM'+i+'"></canvas></div></div>').join('')+'</div>',
   mount:(el,o)=>{const A=O.ad;if(!A)return;
@@ -1210,7 +1222,7 @@ function cards(){CARDS=[
  {id:'is',a:'meta',t:'In-store Revenue from Meta',src:'instoreMeta',cs:'Meta’s own offline_conversion.purchase VALUE from your in-store CAPI feed. This used to be omni − pixel, which also swept in on-Meta (Shops) and in-app purchases and reported them as store sales — that residual is now the separate grey line, not store revenue.',ad:1,k:o=>[['Meta in-store value',o.instore[0],o.instore[1],'cur',1],['On-Meta / in-app (not store)',o.onsiteMeta[0],o.onsiteMeta[1],'cur',1]],c:o=>({ad:[{l:'Meta in-store (offline CAPI)',k:'instoreMeta',c:C.orange,m:afo(),f:1},{l:'On-Meta / in-app (not store)',k:'instoreOnsite',c:'#94a3b8'}],tip:'cur'})}
 ];/* story order: WHAT HAPPENED (insights, revenue, profit) -> WAS IT EFFICIENT (MER,
    blended ROAS, spend, CAC) -> WHY (per-platform CPP, LTGP) -> WHO (customers, channels) */
-const _abFront=['ins','rev','np','gp','gpp','mer','broas','sp','cac','cppx','ltg','tr','is','ch','ord','nvr','olyoy'];CARDS.sort((a,b)=>((_abFront.indexOf(a.id)+1||99)-(_abFront.indexOf(b.id)+1||99)));if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
+const _abFront=['ins','kv','rev','np','gp','gpp','mer','broas','sp','cac','cppx','ltg','tr','is','ch','ord','nvr','olyoy'];CARDS.sort((a,b)=>((_abFront.indexOf(a.id)+1||99)-(_abFront.indexOf(b.id)+1||99)));if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
 function kH(l,src){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}${QF(k[0],src)}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">prev ${f(k[2])}</span>`:''}</div></div>`;}).join('');}
 
 function draw(cv,cfg,big,cid){
@@ -1410,11 +1422,14 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const mk=(t,s)=>{const d=document.createElement('div');d.className='card sechd';d.innerHTML='<div class="sh1">'+t+'</div><div class="sh2">'+s+'</div>';return d;};
   const before=(sel,el2)=>{const a=g.querySelector(sel);if(a)g.insertBefore(el2,a);};
   const first=g.querySelector('.card[data-id="ins"]')||g.firstChild;
-  if(first)g.insertBefore(mk('&#128200; WHAT HAPPENED','Revenue, profit and margin for the selected window — the outcome.'),first);
-  before('.card[data-id="mer"]',mk('&#9889; WAS IT EFFICIENT?','What every ad pound actually returned — MER, aMER, GP:CAC, and whether new customers are growing.'));
-  before('.card[data-id="broas"]',mk('&#128269; WHY — PLATFORMS &amp; COSTS','Which platform is doing the work and what a purchase costs on each.'));
-  before('.card[data-id="tr"]',mk('&#128101; WHO&rsquo;S BUYING &amp; EVERYTHING ELSE','Channels, sessions, funnel and the deep-dive cards.'));
+  if(first)g.insertBefore(mk('WHAT HAPPENED','Revenue, profit and margin for the selected window — the outcome.'),first);
+  before('.card[data-id="mer"]',mk('WAS IT EFFICIENT?','What every ad pound actually returned — MER, aMER, GP:CAC, and whether new customers are growing.'));
+  before('.card[data-id="broas"]',mk('WHY — PLATFORMS &amp; COSTS','Which platform is doing the work and what a purchase costs on each.'));
+  before('.card[data-id="tr"]',mk('WHO&rsquo;S BUYING &amp; EVERYTHING ELSE','Channels, sessions, funnel and the deep-dive cards.'));
  })();
+ // no half-row holes: if a section ends on an odd half-card, stretch that card full-width
+ (function(){let run=[];const flush=()=>{if(run.length%2===1)run[run.length-1].classList.add('full');run=[];};
+  [...g.children].forEach(el2=>{if(el2.classList.contains('sechd')||el2.classList.contains('full'))flush();else run.push(el2);});flush();})();
  wDrag(g);}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
@@ -5284,7 +5299,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  const winChips=['7','28','90'].map(w=>'<span class="chip" style="'+(w===window.SIW?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.SIW=\''+w+'\';rSI()">'+w+'d vs LY</span>').join(' ');
  const vchip=(id,lbl)=>'<span class="chip" style="'+(SIV===id?'background:#0f172a;color:#fff;border-color:#0f172a':'font-weight:700')+'" onclick="window.SIV=\''+id+'\';rSI()">'+lbl+'</span>';
  g.insertAdjacentHTML('beforeend','<div class="card full" style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:800;color:#8a93a6">VIEW</span>'
-  +vchip('over','&#9889; Overview')+vchip('terms','Search terms')+vchip('kw','Keywords')+vchip('cov','Am I covering it?')+vchip('act','&#127919; Actions')+vchip('all','Everything')
+  +vchip('over','Overview')+vchip('terms','Search terms')+vchip('kw','Keywords')+vchip('cov','Am I covering it?')+vchip('act','Actions')+vchip('all','Everything')
   +'<span style="width:1px;height:18px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">WINDOW</span>'+winChips
   +' <input placeholder="search terms… (e.g. هدية)" value="'+String(window.SIQ).replace(/"/g,'&quot;')+'" style="width:170px" onchange="window.SIQ=this.value;rSI()"></div>');
  // ---- 0a. RECOMMENDED ACTIONS ----
@@ -5300,7 +5315,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
   T.filter(r=>r.roas>=3.8&&(r.yoy!=null&&r.yoy>=0.3)&&r.im>=50).sort((a,b)=>b.roas*b.im-a.roas*a.im).slice(0,5).forEach(r=>A.push(['SCALE','#12a06e','Push <b>&ldquo;'+r.t+'&rdquo;</b> — demand +'+Math.round(r.yoy*100)+'% YoY at '+r.roas.toFixed(1)+'x ROAS. Raise bids / add as exact-match keyword',r.t,'kw']));
   T.filter(r=>r.imL===0&&r.im>=100&&r.cn>0).slice(0,4).forEach(r=>A.push(['CREATE','#5a5bf0','New demand: <b>&ldquo;'+r.t+'&rdquo;</b> ('+money(r.im)+' impressions, converting) — build a dedicated ad group / campaign around it',r.t,'kw']));
   if(!A.length)return;
-  pnlCard(g,'blend','&#127919; Recommended actions','Each is one concrete move. APPLY copies the term and opens the right Google Ads screen — paste, save, done. One-click auto-apply (with your approval) unlocks when the Google Ads API Basic Access application (submitted '+new Date().toISOString().slice(0,10)+') is approved.',
+  pnlCard(g,'blend','Recommended actions','Each is one concrete move. APPLY copies the term and opens the right Google Ads screen — paste, save, done. One-click auto-apply (with your approval) unlocks when the Google Ads API Basic Access application (submitted '+new Date().toISOString().slice(0,10)+') is approved.',
    A.slice(0,10).map((a,i)=>'<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><b style="color:#8a93a6">'+(i+1)+'</b><span style="min-width:74px;text-align:center;font-size:10px;font-weight:800;color:#fff;background:'+a[1]+';border-radius:6px;padding:2px 6px">'+a[0]+'</span><span style="flex:1">'+a[2]+'</span><button onclick="siApply(\''+a[4]+'\',\''+String(a[3]).replace(/['"\\\\]/g,'')+'\',this)" style="background:#0f172a;color:#fff;border:0;border-radius:7px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap">APPLY &rarr;</button></div>').join(''));})();
  // ---- 0a2. KEYWORD PERFORMANCE QUADRANT ----
  if(V('kw'))(function(){const money=v=>Math.round(v).toLocaleString();
@@ -5314,17 +5329,17 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
   const row=(r,extra)=>'<div style="font-size:10.5px;margin-top:3px;color:#3d4756"><b>'+String(r.t).replace(/</g,'&lt;').slice(0,30)+'</b> <span style="color:#8a93a6">'+extra(r)+'</span></div>';
   pnlCard(g,'blend','Keywords &mdash; converters vs dead weight vs new signals','Every term bucketed by what it actually does. Protect the left box, negative the second, feed the third, fix ad copy on the fourth.',
    '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-   +box('&#127942; GOOD CONVERTERS','#12a06e',conv,r=>row(r,x=>x.roas.toFixed(1)+'x · '+x.cvr.toFixed(1)+'% CVR · E£ '+money(x.cv)),'ROAS above bar with real conversions — protect bids, add exact-match')
-   +box('&#128184; SPEND, NO RESULTS','#e23a63',waste,r=>row(r,x=>'E£ '+money(x.sp)+' spent · 0 conv'),'Burning money — add as negatives')
-   +box('&#127793; NEW SIGNALS','#5a5bf0',fresh,r=>row(r,x=>(x.imL===0?'NEW':'+'+Math.round(x.yoy*100)+'%')+' · '+money(x.im)+' impr'),'Fresh or doubling demand — test dedicated ads')
-   +box('&#128564; DEMAND, NO CLICKS','#b8860b',sleep,r=>row(r,x=>money(x.im)+' impr · '+x.ctr.toFixed(2)+'% CTR'),'People search it, ignore your ad — copy/asset problem, not demand problem')
+   +box('GOOD CONVERTERS','#12a06e',conv,r=>row(r,x=>x.roas.toFixed(1)+'x · '+x.cvr.toFixed(1)+'% CVR · E£ '+money(x.cv)),'ROAS above bar with real conversions — protect bids, add exact-match')
+   +box('SPEND, NO RESULTS','#e23a63',waste,r=>row(r,x=>'E£ '+money(x.sp)+' spent · 0 conv'),'Burning money — add as negatives')
+   +box('NEW SIGNALS','#5a5bf0',fresh,r=>row(r,x=>(x.imL===0?'NEW':'+'+Math.round(x.yoy*100)+'%')+' · '+money(x.im)+' impr'),'Fresh or doubling demand — test dedicated ads')
+   +box('DEMAND, NO CLICKS','#b8860b',sleep,r=>row(r,x=>money(x.im)+' impr · '+x.ctr.toFixed(2)+'% CTR'),'People search it, ignore your ad — copy/asset problem, not demand problem')
    +'</div>');})();
  // ---- 0b. TRENDING THIS WEEK ----
  if(V('over'))(function(){const W7=SI.trend7;if(!W7||!W7.length)return;const money=v=>Math.round(v).toLocaleString();
   W7.forEach(r=>{r.mom=(r.imL>0)?(r.im/r.imL-1):null;});
   const up=W7.filter(r=>r.im>=30&&(r.imL===0||r.mom>=0.4)).sort((a,b)=>(b.im-b.imL)-(a.im-a.imL)).slice(0,14);
   if(!up.length)return;
-  pnlCard(g,'blend','&#128293; Trending THIS WEEK','Last 7 days vs the 7 days before — momentum right now, not seasonality.',
+  pnlCard(g,'blend','Trending THIS WEEK','Last 7 days vs the 7 days before — momentum right now, not seasonality.',
    up.map(r=>'<span class="chip" style="background:#fff4ec;border-color:#ffdcc2;color:#b4571b" title="'+r.imL+' → '+r.im+' impressions">'+String(r.t).replace(/</g,'&lt;')+' '+(r.imL===0?'NEW':'+'+Math.round(r.mom*100)+'%')+' &middot; '+money(r.im)+'</span>').join(' '));})();
  // ---- 0. NEW SIGNALS — Egypt ----
  if(V('over')){
@@ -5341,7 +5356,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
   trKeys.forEach(k=>{const ris=((TR[k]||{}).rising||[]).filter(q=>String(q[0]||'').trim().length>1);if(!ris.length)return;
    sig+='<div style="font-size:10.5px;color:#64748b;margin:6px 0 2px" dir="auto"><b>'+k+'</b></div><div style="display:flex;flex-wrap:wrap;gap:4px">'+ris.map(q=>'<span class="chip" dir="auto" style="background:#f3efff;border-color:#e4dcf9;color:#6b46c1">'+String(q[0]).replace(/</g,'&lt;')+' <b>'+q[1]+'</b></span>').join('')+'</div>';});
  }
- pnlCard(g,'blend','&#9889; New signals &mdash; Egypt, your demographic','What just appeared or accelerated: NEW terms from your own Egypt search traffic, 50%+ risers YoY, and Google Trends (geo=EG) rising queries around your category seeds — the earliest demand you can get ahead of. Refreshes with every sync.',sig);
+ pnlCard(g,'blend','New signals &mdash; Egypt, your demographic','What just appeared or accelerated: NEW terms from your own Egypt search traffic, 50%+ risers YoY, and Google Trends (geo=EG) rising queries around your category seeds — the earliest demand you can get ahead of. Refreshes with every sync.',sig);
  if(trKeys.length){const anyS=trKeys.filter(k=>(TR[k]||{}).series&&Object.keys(TR[k].series).length);
   if(anyS.length){const lab=Object.keys(TR[anyS[0]].series);
    pnlCard(g,'blend','Google Trends &mdash; Egypt, 12 months','Relative search interest (0–100) in Egypt for your category seed terms — the macro demand wave over your vertical.','<div style="position:relative;height:220px"><canvas id="siTr"></canvas></div>');
@@ -5396,7 +5411,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
    inner+='<div style="margin-top:8px;font-size:12.5px"><b>Verdict:</b> '+verdict+(K.length?'':' Market-volume coverage (vs Keyword Planner EG volume) lights up when the Basic Access application is approved.')+'</div>';
    pnlCard(g,'blend','Am I covering it enough?','One answer, from your impression share (share of auctions you appear in) plus Keyword Planner Egypt volume vs where your ads actually show.',inner);
    const opp=K.filter(k=>k.v>=1000&&!covered(k.t)).slice(0,15);
-   if(opp.length)pnlCard(g,'blend','&#128142; Opportunity scout &mdash; demand you are NOT capturing','Real Keyword Planner volume (Egypt) where your ads get ~zero impressions. Each is open demand — add the keyword / build the ad group.',
+   if(opp.length)pnlCard(g,'blend','Opportunity scout &mdash; demand you are NOT capturing','Real Keyword Planner volume (Egypt) where your ads get ~zero impressions. Each is open demand — add the keyword / build the ad group.',
     opp.map((k,i)=>'<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><b style="color:#8a93a6">'+(i+1)+'</b><b style="min-width:200px" dir="auto">'+String(k.t).replace(/</g,'&lt;')+'</b><span style="color:#5a5bf0;font-weight:800">'+money(k.v)+' searches/mo</span><span style="color:#8a93a6;font-size:10.5px">competition '+k.c+'</span><span style="color:#12a06e;font-weight:700;font-size:10.5px">&larr; you capture ~0</span><button onclick="siApply(\'kw\',\''+String(k.t).replace(/['"\\\\]/g,'')+'\',this)" style="background:#0f172a;color:#fff;border:0;border-radius:7px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer">APPLY &rarr;</button></div>').join(''));
   }
   if(V('kw')&&K.length){
