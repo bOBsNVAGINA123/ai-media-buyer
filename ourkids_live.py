@@ -2455,6 +2455,78 @@ def pull_cohorts_pack():
     log("cohorts crawl :: scopes", len(coh), ":: online ev", len(on), ":: store ev", len(stall))
     return {"pulled": END.isoformat(), "v2": 1, "coh": coh, "delRate": delrate, "bwalk": bw}
 
+def pull_search_intel():
+    """Daily search intelligence for the Search Advisor tab: YoY search terms (28d vs same
+    weekday-aligned window last year), per-term CVR/CPA, weekly demand curves for the top
+    terms (our own impressions = live demand in our vertical), and campaign impression-share
+    vs last year (rank-lost share rising = competitors outbidding us). All from GAQL, free."""
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    at = GTOK[0]
+    if not (dev and cid and at): return {}
+    hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
+    lc = os.environ.get("GOOGLE_LOGIN_CID", "")
+    if lc: hd["login-customer-id"] = lc
+    ver = _gads_ver(hd)
+    base = "https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (ver, cid)
+    def q(gql):
+        try:
+            req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=120) as r: bt = json.loads(r.read())
+            rows = []
+            for b in (bt if isinstance(bt, list) else [bt]): rows.extend(b.get("results") or [])
+            return rows
+        except Exception as e:
+            log("search intel q fail", str(e)[:120]); return []
+    e1 = END; s1 = END - datetime.timedelta(days=27)
+    s0 = s1 - datetime.timedelta(days=364); e0 = e1 - datetime.timedelta(days=364)
+    ST_F = ("SELECT search_term_view.search_term, metrics.impressions, metrics.clicks, "
+            "metrics.conversions, metrics.conversions_value, metrics.cost_micros FROM search_term_view "
+            "WHERE segments.date BETWEEN '%s' AND '%s' AND metrics.impressions > 5")
+    def terms(a, b):
+        out = {}
+        for r in q(ST_F % (a.isoformat(), b.isoformat())):
+            t = (r.get("searchTermView") or {}).get("searchTerm") or ""
+            m = r.get("metrics") or {}
+            o = out.setdefault(t, [0, 0, 0.0, 0.0, 0.0])
+            o[0] += int(m.get("impressions") or 0); o[1] += int(m.get("clicks") or 0)
+            o[2] += float(m.get("conversions") or 0); o[3] += float(m.get("conversionsValue") or 0)
+            o[4] += float(m.get("costMicros") or 0) / 1e6
+        return out
+    cur = terms(s1, e1); prv = terms(s0, e0)
+    keys = sorted(set(list(cur.keys()) + list(prv.keys())),
+                  key=lambda k: -(cur.get(k, [0]*5)[0] + prv.get(k, [0]*5)[0]))[:250]
+    T = [{"t": k,
+          "im": cur.get(k, [0]*5)[0], "ck": cur.get(k, [0]*5)[1], "cn": round(cur.get(k, [0]*5)[2], 1),
+          "cv": round(cur.get(k, [0]*5)[3]), "sp": round(cur.get(k, [0]*5)[4]),
+          "imL": prv.get(k, [0]*5)[0], "ckL": prv.get(k, [0]*5)[1], "cnL": round(prv.get(k, [0]*5)[2], 1),
+          "cvL": round(prv.get(k, [0]*5)[3])} for k in keys]
+    # weekly demand curves for the top 15 current terms (26 weeks)
+    top15 = [t["t"] for t in T if t["im"] > 0][:15]
+    wk = {}
+    if top15:
+        inlist = ",".join("'" + t.replace("'", "\\'") + "'" for t in top15)
+        ws = (END - datetime.timedelta(weeks=26)).isoformat()
+        for r in q("SELECT search_term_view.search_term, segments.week, metrics.impressions FROM search_term_view "
+                   "WHERE segments.date BETWEEN '%s' AND '%s' AND search_term_view.search_term IN (%s)" % (ws, END.isoformat(), inlist)):
+            t = (r.get("searchTermView") or {}).get("searchTerm") or ""
+            w = (r.get("segments") or {}).get("week") or ""
+            wk.setdefault(t, {})[w] = wk.setdefault(t, {}).get(w, 0) + int((r.get("metrics") or {}).get("impressions") or 0)
+    IS_F = ("SELECT campaign.name, metrics.search_impression_share, metrics.search_rank_lost_impression_share, "
+            "metrics.search_budget_lost_impression_share, metrics.impressions FROM campaign "
+            "WHERE segments.date BETWEEN '%s' AND '%s' AND campaign.advertising_channel_type IN ('SEARCH','SHOPPING') AND metrics.impressions > 100")
+    def ishare(a, b):
+        out = {}
+        for r in q(IS_F % (a.isoformat(), b.isoformat())):
+            n = (r.get("campaign") or {}).get("name") or ""; m = r.get("metrics") or {}
+            out[n] = {"is": round(float(m.get("searchImpressionShare") or 0), 3),
+                      "rl": round(float(m.get("searchRankLostImpressionShare") or 0), 3),
+                      "bl": round(float(m.get("searchBudgetLostImpressionShare") or 0), 3)}
+        return out
+    isc = ishare(s1, e1); isp = ishare(s0, e0)
+    log("search intel :: terms", len(T), ":: weekly", len(wk), ":: campaigns IS", len(isc))
+    return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
+            "terms": T, "weekly": wk, "is": isc, "isLY": isp}
+
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
     CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
@@ -3650,7 +3722,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.11 (repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.12 (Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -3906,7 +3978,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk,
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
