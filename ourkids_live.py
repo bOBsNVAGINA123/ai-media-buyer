@@ -2517,6 +2517,31 @@ def _trends_eg():
     log("trends eg :: seeds ok", len(out))
     return out
 
+def _kw_ideas(hd, ver, cid, seeds):
+    """REAL Google Keyword Planner data: generateKeywordIdeas (read-only idea generation) for
+    Egypt (geo 2818) in Arabic (1019) — avg monthly searches, competition, 12-mo volume curve."""
+    try:
+        body = {"geoTargetConstants": ["geoTargetConstants/2818"],
+                "language": "languageConstants/1019",
+                "includeAdultKeywords": False,
+                "keywordSeed": {"keywords": [str(x)[:80] for x in seeds[:20]]},
+                "pageSize": 500}
+        req = urllib.request.Request("https://googleads.googleapis.com/%s/customers/%s:generateKeywordIdeas" % (ver, cid),
+                                     data=json.dumps(body).encode(), headers=hd)
+        with urllib.request.urlopen(req, timeout=90) as r: d = json.loads(r.read())
+        out = []
+        for it in (d.get("results") or []):
+            m = it.get("keywordIdeaMetrics") or {}
+            vols = m.get("monthlySearchVolumes") or []
+            out.append({"t": it.get("text", ""), "v": int(m.get("avgMonthlySearches") or 0),
+                        "c": str(m.get("competition", ""))[:6],
+                        "m": [int(x.get("monthlySearches") or 0) for x in vols[-12:]]})
+        out.sort(key=lambda x: -x["v"])
+        log("kw ideas ::", len(out))
+        return out[:150]
+    except Exception as e:
+        log("kw ideas fail ::", str(e)[:120]); return []
+
 def pull_search_intel():
     """Daily search intelligence for the Search Advisor tab: YoY search terms (28d vs same
     weekday-aligned window last year), per-term CVR/CPA, weekly demand curves for the top
@@ -2596,11 +2621,13 @@ def pull_search_intel():
         return out
     isc = ishare(s1, e1); isp = ishare(s0, e0)
     log("search intel :: terms", len(T), ":: weekly", len(wk), ":: campaigns IS", len(isc))
+    seeds = ["\u0634\u0646\u0637 \u0645\u062f\u0631\u0633\u064a\u0629", "\u0644\u0627\u0646\u0634 \u0628\u0648\u0643\u0633", "\u0639\u0631\u0628\u064a\u0629 \u0627\u0637\u0641\u0627\u0644", "\u0645\u0644\u0627\u0628\u0633 \u0627\u0637\u0641\u0627\u0644", "\u0647\u062f\u0627\u064a\u0627 \u0627\u0637\u0641\u0627\u0644", "school bags", "baby stroller egypt"] + [t["t"] for t in T[:8]]
+    kw = _kw_ideas(hd, ver, cid, seeds)
     tr = {}
     try: tr = _trends_eg()
     except Exception as e: log("trends wrapper fail", str(e)[:80])
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
-            "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp, "trends": tr}
+            "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp, "trends": tr, "kw": kw}
 
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
@@ -3797,7 +3824,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.15 (search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.16 (Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
