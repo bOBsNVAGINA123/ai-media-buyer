@@ -2465,11 +2465,30 @@ def _trends_eg():
              "\u0639\u0631\u0628\u064a\u0629 \u0627\u0637\u0641\u0627\u0644",
              "\u0645\u0644\u0627\u0628\u0633 \u0627\u0637\u0641\u0627\u0644"]
     out = {}
-    hd = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "Accept-Language": "en-US"}
-    def get(url):
-        req = urllib.request.Request(url, headers=hd)
-        with urllib.request.urlopen(req, timeout=30) as r:
-            d = r.read().decode("utf-8", errors="ignore")
+    hd = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9"}
+    def prime():
+        # a cookie from the public explore page usually clears the 429 on datacenter IPs
+        try:
+            req = urllib.request.Request("https://trends.google.com/trends/explore?geo=EG&hl=en", headers=hd)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                cks = r.headers.get_all("Set-Cookie") or []
+        except urllib.error.HTTPError as e:
+            cks = e.headers.get_all("Set-Cookie") or []
+        except Exception:
+            cks = []
+        jar = "; ".join(c.split(";")[0] for c in cks if "=" in c)
+        if jar: hd["Cookie"] = jar
+    prime()
+    def get(url, _retry=True):
+        try:
+            req = urllib.request.Request(url, headers=hd)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = r.read().decode("utf-8", errors="ignore")
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and _retry:
+                time.sleep(25); prime()
+                return get(url, _retry=False)
+            raise
         i = d.find("{")
         return d[i:] if i >= 0 else "{}"
     for kw in seeds:
@@ -3766,7 +3785,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.13 (Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.14 (trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
