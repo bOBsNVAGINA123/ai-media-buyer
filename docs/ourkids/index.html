@@ -359,14 +359,18 @@ function rRT(){if(TAB!=='rt')return;dCh();
  +'<div><div class="lbl9">AOV</div><input id="rtAov" value="'+Math.round(D.aov).toLocaleString('en-US')+'" oninput="rtCalc()" style="width:100%"><div class="rtNote">net revenue \u00F7 orders for '+m+'</div></div>'
  +'<div><div class="lbl9">30-DAY REPURCHASE RATE <span id="rtRepV" style="color:var(--indigo)">'+Math.round(rep30)+'%</span></div><input type="range" id="rtRep" min="0" max="100" step="1" value="'+Math.round(rep30)+'" oninput="rtCalc()"><div class="rtNote">% of first-time buyers who order again within 30 days \u2014 <b>measured from real Odoo order history, returns excluded</b> (read-only pull '+RT_PULL+', last 12 mature cohort months weighted): '+sc.toLowerCase()+' sits at <b>'+rep30+'%</b>. Full cohort table below. Drag to war-game.'+(D.repRef!=null?' For reference, the <b>lifetime</b> repeat rate for '+sc.toLowerCase()+' is <b>'+D.repRef+'%</b>.':'')+' Benchmark: <b>below 60% is a problem, 70%+ compounds</b>.</div></div>'
  +'</div><div class="rtNote" id="rtDebtX" style="padding-left:12px;margin-top:10px"></div></div>'
- +(function(){const C=RT_COH[sc];if(!C)return '';
+ +(function(){const _cohT=function(sc2){const C=RT_COH[sc2];if(!C)return '';
   const ms=Object.keys(C).sort().reverse();
   const open=function(mm){const y=+mm.slice(0,4),mo=+mm.slice(5,7);const e=new Date(Date.UTC(y,mo,0));e.setUTCDate(e.getUTCDate()+30);return e.toISOString().slice(0,10)>=RT_PULL;};
   let mx=0;ms.forEach(function(mm){const c=C[mm];if(c[0])mx=Math.max(mx,100*c[1]/c[0]);});
   const rows=ms.map(function(mm){const c=C[mm],rt=c[0]?100*c[1]/c[0]:0,op=open(mm);
    return '<tr><td>'+mm+(op?' <span style="color:#b8860b;font-weight:700;font-size:10px">WINDOW OPEN</span>':'')+'</td><td>'+c[0].toLocaleString('en-US')+'</td><td>'+c[1].toLocaleString('en-US')+'</td><td style="font-weight:800;color:'+(op?'#b8860b':'var(--indigo)')+'">'+rt.toFixed(1)+'%</td><td style="text-align:left;min-width:160px"><div style="background:'+(op?'#b8860b':'var(--indigo)')+';height:8px;border-radius:4px;width:'+(mx?Math.round(100*rt/mx):0)+'%;opacity:.85"></div></td></tr>';}).join('');
-  return '<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">30-day repurchase by cohort — '+sc+'</div><div class="cs">Each row = customers whose first purchase in this scope was that month, and how many came back within 30 days. <b>Scope note:</b> BLENDED = online &cup; stores union — the Cohorts-grid tab has no BLENDED, its widest scope is ALL STORES (POS only), so its counts are smaller BY DEFINITION, not in error. Real Odoo per-customer order history, returns excluded (read-only pull '+RT_PULL+'). Amber rows: the 30-day window hasn’t fully closed, the rate still climbs.</div></div></div>'
-  +'<table class="bt heat" data-hc="3"><tr><th>Cohort month</th><th>New customers</th><th>Back ≤30d</th><th>Rate</th><th style="text-align:left">vs best month</th></tr>'+rows+'</table></div>';})();
+  return '<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">30-day repurchase by cohort — '+sc2+'</div><div class="cs">Each row = customers whose first purchase in this scope was that month, and how many came back within 30 days. <b>Scope note:</b> BLENDED = online &cup; stores union — the Cohorts-grid tab has no BLENDED, its widest scope is ALL STORES (POS only), so its counts are smaller BY DEFINITION, not in error. Real Odoo per-customer order history, returns excluded (read-only pull '+RT_PULL+'). Amber rows: the 30-day window hasn’t fully closed, the rate still climbs.</div></div></div>'
+  +'<table class="bt heat" data-hc="3"><tr><th>Cohort month</th><th>New customers</th><th>Back ≤30d</th><th>Rate</th><th style="text-align:left">vs best month</th></tr>'+rows+'</table></div>';};
+  const _scopes=['BLENDED','ONLINE','ALL STORES'].concat(Object.keys(O.pos||{}));const _b=window.RTB||'';
+  return _cohT(sc)
+   +'<div class="card full" data-a="odoo" style="padding:12px 16px"><b style="font-size:12px;color:#64748b">COMPARE REPURCHASE WITH</b> <select onchange="window.RTB=this.value;rRT()"><option value="">&mdash; none &mdash;</option>'+_scopes.filter(x=>x!==sc).map(x=>'<option'+(x===_b?' selected':'')+'>'+x+'</option>').join('')+'</select></div>'
+   +((_b&&_b!==sc&&RT_COH[_b])?_cohT(_b):'');})();
  rtCalc();applyHeat(g);
 }
 
