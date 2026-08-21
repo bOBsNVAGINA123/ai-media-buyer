@@ -2453,7 +2453,7 @@ def pull_cohorts_pack():
         if not cfg or not m: continue
         bw.setdefault(_norm(cfg[1].split("(")[0].replace("Retail", "").strip()), {})[m] = [int(r.get("__count") or 0), round(r.get("price_total") or 0)]
     log("cohorts crawl :: scopes", len(coh), ":: online ev", len(on), ":: store ev", len(stall))
-    return {"pulled": END.isoformat(), "coh": coh, "delRate": delrate, "bwalk": bw}
+    return {"pulled": END.isoformat(), "v2": 1, "coh": coh, "delRate": delrate, "bwalk": bw}
 
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
@@ -3735,7 +3735,7 @@ def build():
     else:
         bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
         log("pos customers carried forward (heavy crawl runs on first sync of the day)")
-    if heavy:
+    if heavy or not ((prev.get("rtCohPack") or {}).get("v2")):
         rtpk = safe(pull_cohorts_pack) or {}
         if not rtpk.get("coh"): rtpk = prev.get("rtCohPack") or {}
     else:
