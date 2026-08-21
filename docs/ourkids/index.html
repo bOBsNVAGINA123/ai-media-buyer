@@ -17,7 +17,7 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .chip{cursor:pointer;background:#eef0fb;color:#4b4fd0;border:1px solid #e0e3f6;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700}
 .btn{background:var(--indigo);color:#fff;border:1px solid var(--indigo);border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12.5px}.btn.g{background:#eef0fb;color:var(--indigo)}
 .sp{flex:1}.banner{background:#fff7ed;border:1px solid #ffe1bf;color:#8a5a1e;border-radius:11px;padding:9px 13px;font-size:11.5px;margin-bottom:12px;line-height:1.55}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;grid-auto-flow:dense}
 .card{background:#fff;border-radius:16px;padding:16px 18px 12px;box-shadow:0 10px 26px rgba(20,30,60,.05);border:1px solid #f0f2f7;border-top:3px solid #e8ebf3;position:relative}
 .card.full{grid-column:1/-1}
 .card[data-a=odoo]{border-top-color:#5a5bf0}.card[data-a=shop]{border-top-color:#12a06e}.card[data-a=meta]{border-top-color:#2f7fe0}.card[data-a=blend]{border-top-color:#12b0a4}.card[data-a=ins]{border-top-color:#ff8b42}
@@ -1179,7 +1179,25 @@ function cards(){CARDS=[
  {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). Cost / order = total spend ÷ confirmed orders. GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['Cost / order',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
- {id:'cppx',a:'blend',t:'CPP Snapshot — per platform',src:'cacgp',cs:'Cost per purchase, per platform: spend ÷ purchases. Google is scaled to PURCHASE-category conversions only — its raw conversions were ~63% store-finder clicks/calls until 2026-06-30 (goal pollution, fixed Jul 1) — pre-July days are scaled to purchases-only, recent days are already clean.',ad:1,c:o=>({ad:[{l:'Meta purchases',k:'mpur',c:C.blue},{l:'Google conv (all goals)',k:'gconv',c:C.indigo},{l:'TikTok purchases',k:'tpur',c:C.pink}],tip:'n'}),k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP · purchases only',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',o.tcpp[0],o.tcpp[1],'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
+ {id:'cppx',a:'blend',full:1,t:'CPP by platform — decomposed',src:'cacgp',cs:'Cost per purchase over time, one clean panel per platform (7-day rolling, dashed = previous period). Google is scaled to PURCHASE-category conversions only — pre-Jul-1 days carry the goal-pollution fix.',ad:1,
+  html:o=>'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:4px 12px 12px">'+['Meta','Google','TikTok'].map((p,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="font-size:10.5px;font-weight:800;color:'+[C.blue,C.indigo,C.pink][i]+'">'+p+' CPP</div><div style="position:relative;height:130px"><canvas id="cppM'+i+'"></canvas></div></div>').join('')+'</div>',
+  mount:(el,o)=>{const A=O.ad;if(!A)return;
+   const GPS=(function(){const c=(O.gattr||{}).cmpAct;if(!c||!c.length)return 1;let p=0,a=0;c.forEach(r=>{a+=r.cn||0;if(/PURCHASE/i.test(r.cat||''))p+=r.cn||0;});return (a&&p)?p/a:1;})();
+   const t0=new Date(A.start+'T00:00:00Z').getTime();const dS=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
+   const i1=Math.min(A.n-1,Math.round((new Date((ST.e||dS(A.n-1))+'T00:00:00Z')-t0)/864e5));
+   const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):i1-29);
+   const span=i1-i0+1;
+   const conv=[a=>A.mpur[a]||0,a=>(A.gconv[a]||0)*(dS(a)<'2026-07-01'?GPS:1),a=>A.tpur[a]||0];
+   const sp=[a=>A.mspend[a]||0,a=>A.gspend[a]||0,a=>A.tspend[a]||0];
+   const roll=(f,gpay,a)=>{let s=0,c2=0;for(let k=Math.max(0,a-6);k<=a;k++){s+=gpay(k);c2+=f(k);}return c2>0?s/c2:null;};
+   const labs=[];for(let a=i0;a<=i1;a++)labs.push(dS(a).slice(5));
+   [0,1,2].forEach(pi=>{const cv=el.querySelector('#cppM'+pi);if(!cv)return;
+    const cur=[],prv=[];for(let a=i0;a<=i1;a++){cur.push(roll(conv[pi],sp[pi],a));const b=a-span;prv.push(b>=6?roll(conv[pi],sp[pi],b):null);}
+    ch.push(new Chart(cv,{type:'line',data:{labels:labs,datasets:[
+     {label:'CPP',data:cur,borderColor:[C.blue,C.indigo,C.pink][pi],borderWidth:2,pointRadius:0,tension:.3},
+     {label:'prev period',data:prv,borderColor:'#b9c2d4',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:.3}]},
+     options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c3=>c3.dataset.label+': E£ '+(c3.parsed.y!=null?Math.round(c3.parsed.y).toLocaleString():'—')}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:6,font:{size:8.5}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:9},callback:v=>'E£'+Math.round(v)}}}}}));});},
+  k:o=>[['Meta CPP',o.cpp[0],o.cpp[1],'cur',0],['Google CPP · purchases only',o.gcpp[0],o.gcpp[1],'cur',0],['TikTok CPP',o.tcpp[0],o.tcpp[1],'cur',0],['Blended CPP',o.bcpp[0],o.bcpp[1],'cur',0]]},
  {id:'nvr',full:1,a:'shop',t:'New vs Returning — Revenue, Orders & AOV',src:'orders',cs:'First-time vs returning: revenue, order counts and AOV each, with % vs previous period.',ad:1,k:o=>[['NC revenue',o.ncrev[0],o.ncrev[1],'cur',1],['RC revenue',o.rcrev[0],o.rcrev[1],'cur',1],['NC AOV',o.ncaov[0],o.ncaov[1],'cur',1],['RC AOV',o.rcaov[0],o.rcaov[1],'cur',1],['New',o.nc[0],o.nc[1],'n',1],['Returning',o.rcn[0],o.rcn[1],'n',1]],c:o=>({ad:[{l:'NC revenue',k:'ncrev',c:C.blue,f:1},{l:'RC revenue',k:'rcrev',c:C.indigo,f:1}],tip:'cur'})},
  {id:'olyoy',full:1,a:'shop',t:'Online &mdash; month vs same month last year (with expenses)',src:'orders',cs:'Branch-style YoY for the ONLINE channel with its own cost lines. NC = first-time orders that month; ads = Meta+Google+TikTok that month; e-com payroll E£372,076/mo; contribution = channel GP &minus; ads &minus; payroll.',k:o=>{const N=O.nr||{};const t=(O.today||'').slice(0,7);const ms=Object.keys(N).sort().filter(m=>m<t);if(!ms.length)return[['Online','\u2014',null,'n',1]];const m=ms[ms.length-1],ly=(+m.slice(0,4)-1)+m.slice(4);const A=adMonthly();const c=N[m]||{},p=N[ly]||{};const sp=(A[m]||{}).s||0,spL=(A[ly]||{}).s||0;const gp=(c.ngp||0)+(c.rgp||0),gpL=(p.ngp||0)+(p.rgp||0);return [['New customers \u00b7 '+m,c.nord,p.nord,'n',1],['NC revenue',c.nrev,p.nrev,'cur',1],['Returning revenue',c.rrev,p.rrev,'cur',1],['Ad spend',sp,spL,'cur',0],['E-com payroll',372076,372076,'cur',0],['Contribution (GP\u2212ads\u2212payroll)',gp-sp-372076,gpL?gpL-spL-372076:null,'cur',1]];}},
  {id:'fn',a:'shop',t:'Funnel — ATC / Checkout / CVR',src:'cvr',cs:'Shopify cart-adds, checkout, completed ÷ sessions.',ad:1,k:o=>[['ATC %',o.atc[0],o.atc[1],'pct',1],['Checkout %',o.cko[0],o.cko[1],'pct',1],['CVR %',o.cvr[0],o.cvr[1],'pct',1]],c:o=>({ad:[{l:'ATC',k:'atcRatio',c:C.orange},{l:'Checkout',k:'checkoutRatio',c:C.violet},{l:'CVR',k:'cvr',c:C.pink}],tip:'pct'})},
@@ -1245,10 +1263,12 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   else if(na)b='<div class="cv" style="display:flex;align-items:center;justify-content:center;color:#7c869c;font-size:12px">No ad data in this range · ads cover '+O.aw[0]+' → '+O.aw[1]+'</div>';
   else if(c.chan){const t=Object.values(o.ch).reduce((a,x)=>a+Math.max(0,x),0)||1;
    b='<div class="chan">'+Object.keys(o.ch).map(n=>{const v=o.ch[n],vp=o.chP[n],d=dl(v,vp,1);return `<div class="r"><div class="n">${n}</div><div class="t"><div class="f" style="width:${Math.max(0,v/t*100).toFixed(1)}%;background:${CHC[n]||C.blue}"></div></div><div class="vl" style="${v<0?'color:#e23a63':''}">E£ ${Math.round(v).toLocaleString()} <span class="${d.cls}" style="font-size:10px">${d.t.replace(' vs prev','')}</span></div></div>`;}).join('')+'</div>';}
+  else if(c.html)b=c.html(o);
   else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(c.k(o),c.src)+'</div>';
   el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
+  if(c.mount&&!na)setTimeout(()=>{try{c.mount(el,o);}catch(e){}},0);
   if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf,0,id);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}})(cwAny(id)?(cardCalc(id)||O0):O0);PREVLBL=_pl;});
  // ---- MER & aMER BY TIME — rolling weekly, toggles: delivered-only / include in-store ----
  (function(){const A=O.ad;if(!A||!A.spend||!A.ncrev)return;
@@ -1278,6 +1298,58 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3}];
   if(MG.off)ds.push({label:'MER incl in-store',data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3});
   ch.push(new Chart(document.getElementById('mergT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:ds},
+   options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v+'x'}}}}}));
+ })();
+ // ---- GP : CAC OVER TIME — heated monthly table + weekly graph, delivered toggle ----
+ (function(){const A=O.ad;if(!A||!A.ncrev||!A.newcust)return;
+  window.GPCAC=window.GPCAC||{del:false};const GD=window.GPCAC.del;
+  const S2=O.ship2||{};const kr={};(S2.m||[]).forEach((m,i)=>{const kv=(S2.keptV||[])[i]||0,rv=(S2.retV||[])[i]||0;kr[m]=(kv+rv)?kv/(kv+rv):1;});
+  const gpm={};Object.keys(O.nr||{}).forEach(m=>{const r=O.nr[m];if(r&&r.nrev)gpm[m]=r.ngp/r.nrev;});
+  const gpOf=m=>gpm[m]!=null?gpm[m]:0.45;
+  const t0=new Date(A.start+'T00:00:00Z').getTime();const day=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
+  const n=A.n;
+  // weekly ratio series (rolling 7-day blocks, newest last)
+  const wk=[];for(let e=n-1;e>=6&&wk.length<26;e-=7){let gp=0,sp=0,nc=0;
+   for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);gp+=(A.ncrev[i]||0)*gpOf(m)*(GD?(kr[m]||0.86):1);sp+=A.spend[i]||0;nc+=A.newcust[i]||0;}
+   wk.unshift({lbl:day(e-6).slice(5),r:sp?gp/sp:null,cac:nc?sp/nc:null,gpc:nc?gp/nc:null});}
+  if(wk.length<2)return;
+  // monthly table (months fully/partly inside the ad window)
+  const mAgg={};for(let i=0;i<n;i++){const m=day(i).slice(0,7);const x=mAgg[m]||(mAgg[m]={sp:0,nc:0,ncrev:0});x.sp+=A.spend[i]||0;x.nc+=A.newcust[i]||0;x.ncrev+=A.ncrev[i]||0;}
+  const mons=Object.keys(mAgg).sort().slice(-13).filter(m=>mAgg[m].sp>0);
+  const rows=mons.map(m=>{const x=mAgg[m];const f=GD?(kr[m]||0.86):1;const gp=x.ncrev*gpOf(m)*f;
+   const cac=x.nc?x.sp/x.nc:null,gpc=x.nc?gp/x.nc:null,r=x.sp?gp/x.sp:null;
+   return '<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>'+Math.round(x.nc).toLocaleString()+'</td><td>E£ '+Math.round(x.sp).toLocaleString()+'</td><td>E£ '+(cac?Math.round(cac).toLocaleString():'—')+'</td><td>E£ '+(gpc?Math.round(gpc).toLocaleString():'—')+'</td><td style="font-weight:800">'+(r?r.toFixed(2)+'x':'—')+'</td></tr>';}).join('');
+  const cur=wk[wk.length-1],prv=wk[wk.length-2];
+  const dl2=(a,b)=>(a!=null&&b)?' <span style="font-size:10.5px;font-weight:800;color:'+(a>=b?'#12a06e':'#e23a63')+'">'+(a>=b?'▲':'▼')+' '+Math.abs((a/b-1)*100).toFixed(0)+'% vs prior wk</span>':'';
+  const el=document.createElement('div');el.className='card full';el.dataset.a='blend';
+  el.innerHTML='<div class="chead"><div><div class="ct">GP : CAC over time — new customers<span class="bg b-blend">blend</span></div>'
+   +'<div class="cs">First-order economics by acquisition period: GP = new-customer Shopify revenue &times; that month&rsquo;s real new-customer margin (Odoo) &middot; CAC = spend &divide; new customers. Above 1x = acquisition pays for itself on order one. <a href="javascript:void(0)" onclick="window.GPCAC.del=!window.GPCAC.del;rOn()" style="color:#5a5bf0;font-weight:800">'+(GD?'&#9745;':'&#9744;')+' delivered only</a> scales GP by each month&rsquo;s real kept-rate.</div></div>'
+   +'<div class="kpis"><div class="kpi"><div class="l">GP:CAC this wk'+(GD?' · deliv':'')+'</div><div class="v">'+(cur.r?cur.r.toFixed(2):'—')+'x'+dl2(cur.r,prv.r)+'</div></div>'
+   +'<div class="kpi"><div class="l">CAC this wk</div><div class="v">E£ '+(cur.cac?Math.round(cur.cac).toLocaleString():'—')+((cur.cac&&prv.cac)?' <span style="font-size:10.5px;font-weight:800;color:'+(cur.cac<=prv.cac?'#12a06e':'#e23a63')+'">'+(cur.cac>=prv.cac?'▲':'▼')+' '+Math.abs((cur.cac/prv.cac-1)*100).toFixed(0)+'% vs prior wk</span>':'')+'</div></div>'
+   +'<div class="kpi"><div class="l">GP / new customer</div><div class="v">E£ '+(cur.gpc?Math.round(cur.gpc).toLocaleString():'—')+dl2(cur.gpc,prv.gpc)+'</div></div></div></div>'
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;padding:4px 12px 12px">'
+   +'<div style="position:relative;height:230px"><canvas id="gpcacT"></canvas></div>'
+   +'<div style="overflow-x:auto"><table class="bt heat" data-hc="5" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Month</th><th>New cust</th><th>Spend</th><th>CAC</th><th>GP/NC'+(GD?' deliv':'')+'</th><th>GP:CAC</th></tr>'+rows+'</table></div></div>'
+   // GP per customer at 30/90/180/365 days, by scope, against each scope's own live CAC
+   +(typeof RT_LT!=='undefined'?(function(){
+     const scopes=LT_SCOPES().filter(s=>RT_LT[s]&&ltCac(s).cac);
+     if(!scopes.length)return '';
+     const rws=scopes.map(s=>{const L=RT_LT[s],cac=ltCac(s).cac;
+      return {s:s,cac:cac,gp:RT_LTH.map((h,i)=>L.cur[i]),r365:(L.cur[3]!=null&&cac)?L.cur[3]/cac:null};})
+      .sort((a,b)=>(b.r365||-1)-(a.r365||-1));
+     return '<div style="padding:0 12px 12px"><div style="font-weight:800;font-size:12px;margin:2px 0 6px">GP per customer @ 30 / 90 / 180 / 365 days — by branch &amp; online, vs each scope&rsquo;s own CAC</div>'
+      +'<div style="overflow-x:auto"><table class="bt heat" data-hc="2,3,4,5" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Scope</th><th>CAC</th><th>GP @30d</th><th>GP @90d</th><th>GP @180d</th><th>GP @365d</th><th>GP:CAC @365d</th></tr>'
+      +rws.map(r=>'<tr><td style="text-align:left;font-weight:800">'+r.s+'</td><td>E£ '+Math.round(r.cac).toLocaleString()+'</td>'
+       +r.gp.map((v,i)=>'<td title="'+(v!=null&&r.cac?'GP:CAC @'+RT_LTH[i]+'d = '+(v/r.cac).toFixed(2)+'x':'')+'">'+(v!=null?'E£ '+Math.round(v).toLocaleString():'—')+'</td>').join('')
+       +'<td style="font-weight:800;color:'+ltCol(r.r365)+'">'+(r.r365!=null?r.r365.toFixed(2)+'×':'—')+'</td></tr>').join('')
+      +'</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">LTGP = real Odoo per-customer gross profit as cohorts age (returns netted, static pull) · CAC live per scope from the LTGP:CAC tab&rsquo;s allocation. Small grey number = that horizon&rsquo;s GP:CAC. 3× at 365d is the healthy line.</div></div>';})():'');
+  g.appendChild(el);
+  applyHeat(el);
+  ch.push(new Chart(document.getElementById('gpcacT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:[
+   {label:'GP:CAC'+(GD?' (delivered)':''),data:wk.map(w=>w.r),borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:2,tension:.3},
+   {label:'breakeven 1x',data:wk.map(_=>1),borderColor:'#e23a63',borderDash:[4,4],borderWidth:1.2,pointRadius:0}]},
    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v+'x'}}}}}));
