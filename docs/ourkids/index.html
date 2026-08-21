@@ -1278,7 +1278,9 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const offM={};Object.keys(O.pos||{}).forEach(b=>{const P=O.pos[b];Object.keys(P).forEach(m=>{offM[m]=(offM[m]||0)+((P[m]||[])[0]||0);});});
   const t0=new Date(A.start+'T00:00:00Z').getTime();const day=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
   const n=A.n,wk=[];
-  for(let e=n-1;e>=6&&wk.length<26;e-=7){let rev=0,ncr=0,sp=0,off=0;
+  const i1=Math.min(n-1,ST.e?Math.round((new Date(ST.e+'T00:00:00Z')-t0)/864e5):n-1);
+  const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):0);
+  for(let e=i1;e>=Math.max(6,i0)&&wk.length<40;e-=7){let rev=0,ncr=0,sp=0,off=0;
    for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);const f=MG.del?(kr[m]||0.86):1;
     rev+=((A.ncrev[i]||0)+(A.rcrev[i]||0))*f;ncr+=(A.ncrev[i]||0)*f;sp+=A.spend[i]||0;off+=(offM[m]||0)/dim(m);}
    wk.unshift({lbl:day(e-6).slice(5),mer:sp?rev/sp:null,amer:sp?ncr/sp:null,mero:sp?(rev+off)/sp:null});}
@@ -1287,16 +1289,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const dl2=(a,b)=>(a!=null&&b)?' <span style="font-size:10.5px;font-weight:800;color:'+(a>=b?'#12a06e':'#e23a63')+'">'+(a>=b?'▲':'▼')+' '+Math.abs((a/b-1)*100).toFixed(0)+'% vs prior wk</span>':'';
   const tgl=(k,lbl)=>'<a href="javascript:void(0)" onclick="window.MERG.'+k+'=!window.MERG.'+k+';rOn()" style="color:#5a5bf0;font-weight:800">'+(MG[k]?'&#9745;':'&#9744;')+' '+lbl+'</a>';
   const el=document.createElement('div');el.className='card full';el.dataset.a='blend';
-  el.innerHTML='<div class="chead"><div><div class="ct">MER &amp; aMER by time — rolling weeks<span class="bg b-blend">blend</span></div>'
-   +'<div class="cs">Each point = a 7-day block ending on the newest data day. MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. '+tgl('del','delivered only')+' scales revenue by each month&rsquo;s real kept-rate &middot; '+tgl('off','include in-store')+' adds branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
-   +'<div class="kpis"><div class="kpi"><div class="l">MER this wk'+(MG.del?' · deliv':'')+'</div><div class="v">'+(cur.mer?cur.mer.toFixed(2):'—')+'x'+dl2(cur.mer,prv.mer)+'</div></div>'
-   +'<div class="kpi"><div class="l">aMER this wk</div><div class="v">'+(cur.amer?cur.amer.toFixed(2):'—')+'x'+dl2(cur.amer,prv.amer)+'</div></div>'
-   +(MG.off?'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div>':'')+'</div></div>'
+  el.innerHTML='<div class="chead"><div><div class="ct">MER &amp; aMER by time — rolling weeks · '+wk[0].lbl+' &rarr; '+wk[wk.length-1].lbl+'<span class="bg b-blend">blend</span></div>'
+   +'<div class="cs">Follows the date filter; each point = a 7-day block ending at the range end. MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. <b>Cancelled orders are already excluded at source</b> (only confirmed sale/done orders count as revenue); '+tgl('del','delivered only')+' additionally removes the value that later comes back as RETURNS, using each month&rsquo;s real kept-rate. The green dashed line is MER <b>including in-store</b> branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
+   +'<div class="kpis"><div class="kpi"><div class="l">MER'+(MG.del?' · deliv':'')+'</div><div class="v">'+(cur.mer?cur.mer.toFixed(2):'—')+'x'+dl2(cur.mer,prv.mer)+'</div></div>'
+   +'<div class="kpi"><div class="l">aMER</div><div class="v">'+(cur.amer?cur.amer.toFixed(2):'—')+'x'+dl2(cur.amer,prv.amer)+'</div></div>'
+   +'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div></div></div>'
    +'<div style="position:relative;height:240px;padding:0 12px 12px"><canvas id="mergT"></canvas></div>';
   g.appendChild(el);
   const ds=[{label:'MER'+(MG.del?' (delivered)':''),data:wk.map(w=>w.mer),borderColor:'#3a9bff',backgroundColor:'#3a9bff22',borderWidth:2.5,pointRadius:2,tension:.3},
-   {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3}];
-  if(MG.off)ds.push({label:'MER incl in-store',data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3});
+   {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3},
+   {label:'MER incl in-store'+(MG.del?' (deliv online leg)':''),data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3}];
   ch.push(new Chart(document.getElementById('mergT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:ds},
    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
@@ -1311,7 +1313,9 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const t0=new Date(A.start+'T00:00:00Z').getTime();const day=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
   const n=A.n;
   // weekly ratio series (rolling 7-day blocks, newest last)
-  const wk=[];for(let e=n-1;e>=6&&wk.length<26;e-=7){let gp=0,sp=0,nc=0;
+  const i1=Math.min(n-1,ST.e?Math.round((new Date(ST.e+'T00:00:00Z')-t0)/864e5):n-1);
+  const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):0);
+  const wk=[];for(let e=i1;e>=Math.max(6,i0)&&wk.length<40;e-=7){let gp=0,sp=0,nc=0;
    for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);gp+=(A.ncrev[i]||0)*gpOf(m)*(GD?(kr[m]||0.86):1);sp+=A.spend[i]||0;nc+=A.newcust[i]||0;}
    wk.unshift({lbl:day(e-6).slice(5),r:sp?gp/sp:null,cac:nc?sp/nc:null,gpc:nc?gp/nc:null});}
   if(wk.length<2)return;
@@ -1356,9 +1360,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  })();
  // ---- NEW vs RETURNING CUSTOMERS OVER TIME (online) — counts + YoY growth ----
  (function(){const NR=O.nr;if(!NR)return;
-  const mons=Object.keys(NR).sort();if(mons.length<3)return;
+  let mons=Object.keys(NR).sort();if(mons.length<3)return;
   const curM=(O.today||'').slice(0,7);
-  const rows=mons.map(m=>({m:m,nc:NR[m].nord||0,rc:NR[m].rord||0,mtd:m===curM}));
+  // respect the global date filter (min 6 months so YoY/trend stay readable)
+  const m0=(ST.s||'').slice(0,7),m1=(ST.e||'').slice(0,7)||curM;
+  const mR=mons.filter(m=>(!m0||m>=m0)&&m<=m1);
+  mons=mR.length>=6?mR:mons.filter(m=>m<=m1).slice(-6);
+  // monthly ad spend from the daily panel, for the NC-vs-spend relation
+  const spM={};(function(){const A=O.ad;if(!A||!A.spend)return;const t0=new Date(A.start+'T00:00:00Z').getTime();
+   for(let i=0;i<A.n;i++){const m=new Date(t0+i*864e5).toISOString().slice(0,7);spM[m]=(spM[m]||0)+(A.spend[i]||0);}})();
+  const rows=mons.map(m=>({m:m,nc:NR[m].nord||0,rc:NR[m].rord||0,sp:spM[m]!=null?spM[m]:null,mtd:m===curM}));
   const yoy=(m,k)=>{const ly=(+m.slice(0,4)-1)+m.slice(4);const a=NR[m]?NR[m][k]:null,b=NR[ly]?NR[ly][k]:null;return (a!=null&&b)?a/b-1:null;};
   const lastFull=rows.filter(r=>!r.mtd).slice(-1)[0];
   const yN=yoy(lastFull.m,'nord'),yR=yoy(lastFull.m,'rord');
@@ -1368,19 +1379,20 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const col=v=>v==null?'#8a93a6':(v>=0?'#12a06e':'#e23a63');
   const el=document.createElement('div');el.className='card full';el.dataset.a='odoo';
   el.innerHTML='<div class="chead"><div><div class="ct">New vs returning customers over time — online<span class="bg b-odoo">odoo</span></div>'
-   +'<div class="cs">Monthly count of Shopify orders from NEW customers (first ever order) vs RETURNING. YoY = same calendar month last year, so seasonality cancels out. Last point is MTD — read it with the label, not against full months. Per-branch versions live on the Branches tab.</div></div>'
+   +'<div class="cs">Follows the date filter ('+mons[0]+' &rarr; '+mons[mons.length-1]+', min 6 months). Monthly count of Shopify orders from NEW customers (first ever order) vs RETURNING, with <b>ad spend as grey bars</b> (right axis) so you can see whether new customers move when spend moves. YoY = same calendar month last year, so seasonality cancels out. Last point is MTD. Per-branch versions live on the Branches tab.</div></div>'
    +'<div class="kpis"><div class="kpi"><div class="l">NC '+lastFull.m+'</div><div class="v">'+lastFull.nc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yN)+'">'+fmt(yN)+' YoY</span></div></div>'
    +'<div class="kpi"><div class="l">RC '+lastFull.m+'</div><div class="v">'+lastFull.rc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yR)+'">'+fmt(yR)+' YoY</span></div></div>'
    +'<div class="kpi"><div class="l">NC trend (3mo vs prior 3)</div><div class="v" style="color:'+col(trN)+'">'+fmt(trN)+'</div></div></div></div>'
    +'<div style="position:relative;height:240px;padding:0 12px 4px"><canvas id="nrcT"></canvas></div>'
    +'<div class="rtNote" style="padding:0 12px 10px">Verdict: new-customer acquisition is <b style="color:'+col(yN)+'">'+(yN==null?'unmeasured':(yN>=0.05?'GROWING':(yN<=-0.05?'SHRINKING':'FLAT')))+'</b> vs last year'+(yN!=null?' ('+fmt(yN)+' in '+lastFull.m+')':'')+'; returning base '+(yR==null?'—':(yR>=0.05?'growing':(yR<=-0.05?'shrinking':'flat'))+' ('+fmt(yR)+')')+'. Counts are orders by customer type from Odoo (Shopify channel), the same nrev/rrev split the P&amp;L uses.</div>';
   g.appendChild(el);
-  ch.push(new Chart(document.getElementById('nrcT'),{type:'line',data:{labels:rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),datasets:[
-   {label:'NEW customers',data:rows.map(r=>r.nc),borderColor:'#5a5bf0',backgroundColor:'#5a5bf018',fill:true,borderWidth:2.5,pointRadius:2,tension:.3},
-   {label:'RETURNING customers',data:rows.map(r=>r.rc),borderColor:'#12a06e',borderWidth:2,pointRadius:2,tension:.3}]},
+  ch.push(new Chart(document.getElementById('nrcT'),{data:{labels:rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),datasets:[
+   {type:'line',label:'NEW customers',data:rows.map(r=>r.nc),borderColor:'#5a5bf0',backgroundColor:'#5a5bf018',fill:true,borderWidth:2.5,pointRadius:2,tension:.3,yAxisID:'y'},
+   {type:'line',label:'RETURNING customers',data:rows.map(r=>r.rc),borderColor:'#12a06e',borderWidth:2,pointRadius:2,tension:.3,yAxisID:'y'},
+   {type:'bar',label:'Ad spend (E£, right)',data:rows.map(r=>r.sp),backgroundColor:'#c3c9d666',borderWidth:0,yAxisID:'y2',order:10}]},
    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
-    plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}},
-    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}}}}}));
+    plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?Math.round(c2.parsed.y).toLocaleString():'no ad data')}}},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}},y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}}}}}));
  })();
  wDrag(g);}
 function expand(c,o){
@@ -1426,7 +1438,11 @@ let BNCM='nc';
 function setBncm(v){BNCM=v;rOff();}
 function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length||typeof Chart==='undefined')return;
  const t=(O.today||'').slice(0,7);
- const ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<=t;});
+ let ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<=t;});
+ // respect the global date filter (min 3 months so the chart never blanks)
+ const _m0=(ST.s||'').slice(0,7),_m1=(ST.e||'').slice(0,7)||t;
+ const _msR=ms.filter(function(m){return (!_m0||m>=_m0)&&m<=_m1;});
+ ms=_msR.length>=3?_msR:ms.filter(function(m){return m<=_m1;}).slice(-6);
  const MET={nc:['New customers',function(M){return M.nc||0;}],rc:['Returning customers',function(M){return M.rc||0;}],ord:['Total orders',function(M){return (M.nord||0)+(M.rord||0);}],nrev:['New-customer revenue',function(M){return M.nrev||0;}],rrev:['Returning revenue',function(M){return M.rrev||0;}],walk:['Unregistered orders',function(M){return 0;}]};
  const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
   +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;rOff()">PIES &middot; per branch</span>';
@@ -1445,7 +1461,7 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
    const cp=new Chart(document.getElementById('bncPie'+i),{type:'pie',data:{labels:pm[1],datasets:[{data:vals,backgroundColor:pm[2],borderWidth:1}]},options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(x){return x.label+': '+Math.round(x.parsed).toLocaleString();}}}}}});
    ch.push(cp);});
   return;}
- pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch','Monthly, full history INCLUDING the current month (last point = MTD, still filling). Unregistered = walk-in receipts. Click a legend line to isolate a branch.',
+ pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch &middot; '+ms[0]+' &rarr; '+ms[ms.length-1],'Monthly, follows the date filter above (last point = MTD if the current month is in range). Unregistered = walk-in receipts. Click a legend line to isolate a branch.',
   '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="position:relative;height:230px"><canvas id="bncTsCv"></canvas></div>');
  const ds=ks.map(function(n){const M=B[n]||{};return {label:n,data:ms.map(function(m){return BNCM==='walk'?((((typeof BWALK!=='undefined'&&BWALK[n])||{})[m]||[0])[0]):MET[BNCM][1](M[m]||{});}),borderColor:(typeof BCOL!=='undefined'&&BCOL[n])||(n==='ONLINE'?'#161d2e':'#e2a33a'),borderWidth:2,pointRadius:0,tension:0};});
  const LASTV={id:'lastv',afterDatasetsDraw:function(cc){var x=cc.ctx;x.save();x.font='700 10px Inter,sans-serif';cc.data.datasets.forEach(function(d,i){var mt=cc.getDatasetMeta(i);if(mt.hidden)return;var p=mt.data[mt.data.length-1];if(!p)return;var v=d.data[d.data.length-1];x.fillStyle=d.borderColor;x.fillText(Math.round(v).toLocaleString(),p.x+4,p.y+3);});x.restore();}};
