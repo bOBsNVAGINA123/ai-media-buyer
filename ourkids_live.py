@@ -2415,7 +2415,10 @@ def pull_cohorts_pack():
                 first[pid] = [d, False]
                 out.setdefault(d[:7], [0, 0])[0] += 1
             elif not f[1]:
-                if (datetime.date.fromisoformat(d[:10]) - datetime.date.fromisoformat(f[0][:10])).days <= 30:
+                dd = (datetime.date.fromisoformat(d[:10]) - datetime.date.fromisoformat(f[0][:10])).days
+                # a LATER-DAY return only: two receipts in the same store visit are one purchase,
+                # not a repurchase -- counting day-0 inflated the rate ~4x (49% vs the true ~13%)
+                if 1 <= dd <= 30:
                     f[1] = True; out[f[0][:7]][1] += 1
         return out
     on = [((r.get("date_order") or "")[:10], r["partner_id"][0]) for r in ev if r.get("partner_id") and r.get("date_order")]
@@ -3647,7 +3650,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.10 (FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.11 (repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
