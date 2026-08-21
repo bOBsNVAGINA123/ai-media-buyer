@@ -899,7 +899,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
  LSF=cairoFull(O.lastSync);
  document.getElementById('sync').innerHTML='↻ Synced <b>'+LSF+'</b> Cairo · next ~<b>'+NXC+'</b>'+srcHealth();
  staleBar();
- ST.e=O.aw[1];ST.s=addD(ST.e,-29);
+ ST.e=O.aw[1];ST.s=addD(ST.e,-6);
  (function(){const aM=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);if(aM[aM.length-1]!==m)aM.push(m);}if(aM.length){if(!ST.pm0)ST.pm0=aM[Math.max(0,aM.length-13)];if(!ST.pm1)ST.pm1=aM[aM.length-1];}})();
  const d0=document.getElementById('d0'),d1=document.getElementById('d1');
  d0.value=ST.s;d1.value=ST.e;d0.min=O.fin.start;d1.max=ST.e;
@@ -1204,7 +1204,9 @@ function cards(){CARDS=[
  {id:'ss',a:'shop',t:'Sessions',src:'sessions',cs:'Shopify online-store sessions.',ad:1,k:o=>[['Sessions',o.sess[0],o.sess[1],'n',1]],c:o=>({ad:[{l:'Sessions',k:'sessions',c:C.blue,f:1}],tip:'n'})},
  {id:'np',a:'odoo',t:'Shopify Net Contribution (est)',src:'gp',cs:'Odoo GP net of returns − ad spend − e-com payroll (E£ 372,076/mo prorated). Before HQ overhead.',ad:1,k:o=>[['Net contribution',o.onp[0],o.onp[1],'cur',1],['GP',o.gp[0],o.gp[1],'cur',1],['Ad spend',o.sp[0],o.sp[1],'cur',0]]},
  {id:'is',a:'meta',t:'In-store Revenue from Meta',src:'instoreMeta',cs:'Meta’s own offline_conversion.purchase VALUE from your in-store CAPI feed. This used to be omni − pixel, which also swept in on-Meta (Shops) and in-app purchases and reported them as store sales — that residual is now the separate grey line, not store revenue.',ad:1,k:o=>[['Meta in-store value',o.instore[0],o.instore[1],'cur',1],['On-Meta / in-app (not store)',o.onsiteMeta[0],o.onsiteMeta[1],'cur',1]],c:o=>({ad:[{l:'Meta in-store (offline CAPI)',k:'instoreMeta',c:C.orange,m:afo(),f:1},{l:'On-Meta / in-app (not store)',k:'instoreOnsite',c:'#94a3b8'}],tip:'cur'})}
-];const _abFront=['sp','broas','mer','tr','is'];CARDS.sort((a,b)=>((_abFront.indexOf(a.id)+1||99)-(_abFront.indexOf(b.id)+1||99)));if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
+];/* story order: WHAT HAPPENED (insights, revenue, profit) -> WAS IT EFFICIENT (MER,
+   blended ROAS, spend, CAC) -> WHY (per-platform CPP, LTGP) -> WHO (customers, channels) */
+const _abFront=['ins','rev','np','gp','gpp','mer','broas','sp','cac','cppx','ltg','tr','is','ch','ord','nvr','olyoy'];CARDS.sort((a,b)=>((_abFront.indexOf(a.id)+1||99)-(_abFront.indexOf(b.id)+1||99)));if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
 function kH(l,src){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;return `<div class="kpi"><div class="l">${k[0]}${QF(k[0],src)}</div><div class="v">${k[1]==null||!isFinite(k[1])?'—':f(k[1])}</div><div class="d ${d.cls}">${d.t}${k[2]!=null&&isFinite(k[2])?` <span style="color:#c2c8d4">prev ${f(k[2])}</span>`:''}</div></div>`;}).join('');}
 
 function draw(cv,cfg,big,cid){
@@ -1280,7 +1282,8 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const n=A.n,wk=[];
   const i1=Math.min(n-1,ST.e?Math.round((new Date(ST.e+'T00:00:00Z')-t0)/864e5):n-1);
   const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):0);
-  for(let e=i1;e>=Math.max(6,i0)&&wk.length<40;e-=7){let rev=0,ncr=0,sp=0,off=0;
+  const _bk=Math.min(40,Math.max(12,Math.ceil((i1-i0+1)/7)));
+  for(let e=i1;e>=6&&wk.length<_bk;e-=7){let rev=0,ncr=0,sp=0,off=0;
    for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);const f=MG.del?(kr[m]||0.86):1;
     rev+=((A.ncrev[i]||0)+(A.rcrev[i]||0))*f;ncr+=(A.ncrev[i]||0)*f;sp+=A.spend[i]||0;off+=(offM[m]||0)/dim(m);}
    wk.unshift({lbl:day(e-6).slice(5),mer:sp?rev/sp:null,amer:sp?ncr/sp:null,mero:sp?(rev+off)/sp:null});}
@@ -1290,12 +1293,12 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const tgl=(k,lbl)=>'<a href="javascript:void(0)" onclick="window.MERG.'+k+'=!window.MERG.'+k+';rOn()" style="color:#5a5bf0;font-weight:800">'+(MG[k]?'&#9745;':'&#9744;')+' '+lbl+'</a>';
   const el=document.createElement('div');el.className='card full';el.dataset.a='blend';
   el.innerHTML='<div class="chead"><div><div class="ct">MER &amp; aMER by time — rolling weeks · '+wk[0].lbl+' &rarr; '+wk[wk.length-1].lbl+'<span class="bg b-blend">blend</span></div>'
-   +'<div class="cs">Follows the date filter; each point = a 7-day block ending at the range end. MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. <b>Cancelled orders are already excluded at source</b> (only confirmed sale/done orders count as revenue); '+tgl('del','delivered only')+' additionally removes the value that later comes back as RETURNS, using each month&rsquo;s real kept-rate. The green dashed line is MER <b>including in-store</b> branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
+   +'<div class="cs">Anchored to the date-filter END (each point = a 7-day block; min 12 weeks of history shown for context). MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. <b>Cancelled orders are already excluded at source</b> (only confirmed sale/done orders count as revenue); '+tgl('del','delivered only')+' additionally removes the value that later comes back as RETURNS, using each month&rsquo;s real kept-rate. The green dashed line is MER <b>including in-store</b> branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
    +'<div class="kpis"><div class="kpi"><div class="l">MER'+(MG.del?' · deliv':'')+'</div><div class="v">'+(cur.mer?cur.mer.toFixed(2):'—')+'x'+dl2(cur.mer,prv.mer)+'</div></div>'
    +'<div class="kpi"><div class="l">aMER</div><div class="v">'+(cur.amer?cur.amer.toFixed(2):'—')+'x'+dl2(cur.amer,prv.amer)+'</div></div>'
    +'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div></div></div>'
    +'<div style="position:relative;height:240px;padding:0 12px 12px"><canvas id="mergT"></canvas></div>';
-  g.appendChild(el);
+  const _anc=g.querySelector('.card[data-id="mer"]');_anc?_anc.insertAdjacentElement('afterend',el):g.appendChild(el);
   const ds=[{label:'MER'+(MG.del?' (delivered)':''),data:wk.map(w=>w.mer),borderColor:'#3a9bff',backgroundColor:'#3a9bff22',borderWidth:2.5,pointRadius:2,tension:.3},
    {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3},
    {label:'MER incl in-store'+(MG.del?' (deliv online leg)':''),data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3}];
@@ -1315,13 +1318,17 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   // weekly ratio series (rolling 7-day blocks, newest last)
   const i1=Math.min(n-1,ST.e?Math.round((new Date(ST.e+'T00:00:00Z')-t0)/864e5):n-1);
   const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):0);
-  const wk=[];for(let e=i1;e>=Math.max(6,i0)&&wk.length<40;e-=7){let gp=0,sp=0,nc=0;
+  const _bk=Math.min(40,Math.max(12,Math.ceil((i1-i0+1)/7)));
+  const wk=[];for(let e=i1;e>=6&&wk.length<_bk;e-=7){let gp=0,sp=0,nc=0;
    for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);gp+=(A.ncrev[i]||0)*gpOf(m)*(GD?(kr[m]||0.86):1);sp+=A.spend[i]||0;nc+=A.newcust[i]||0;}
    wk.unshift({lbl:day(e-6).slice(5),r:sp?gp/sp:null,cac:nc?sp/nc:null,gpc:nc?gp/nc:null});}
   if(wk.length<2)return;
   // monthly table (months fully/partly inside the ad window)
   const mAgg={};for(let i=0;i<n;i++){const m=day(i).slice(0,7);const x=mAgg[m]||(mAgg[m]={sp:0,nc:0,ncrev:0});x.sp+=A.spend[i]||0;x.nc+=A.newcust[i]||0;x.ncrev+=A.ncrev[i]||0;}
-  const mons=Object.keys(mAgg).sort().slice(-13).filter(m=>mAgg[m].sp>0);
+  let mons=Object.keys(mAgg).sort().filter(m=>mAgg[m].sp>0);
+  const _gm0=(ST.s||'').slice(0,7),_gm1=(ST.e||'').slice(0,7);
+  const _gmR=mons.filter(m=>(!_gm0||m>=_gm0)&&(!_gm1||m<=_gm1));
+  mons=(_gmR.length>=6?_gmR:mons.filter(m=>!_gm1||m<=_gm1).slice(-6)).slice(-13);
   const rows=mons.map(m=>{const x=mAgg[m];const f=GD?(kr[m]||0.86):1;const gp=x.ncrev*gpOf(m)*f;
    const cac=x.nc?x.sp/x.nc:null,gpc=x.nc?gp/x.nc:null,r=x.sp?gp/x.sp:null;
    return '<tr><td style="text-align:left;font-weight:700">'+m+'</td><td>'+Math.round(x.nc).toLocaleString()+'</td><td>E£ '+Math.round(x.sp).toLocaleString()+'</td><td>E£ '+(cac?Math.round(cac).toLocaleString():'—')+'</td><td>E£ '+(gpc?Math.round(gpc).toLocaleString():'—')+'</td><td style="font-weight:800">'+(r?r.toFixed(2)+'x':'—')+'</td></tr>';}).join('');
@@ -1348,8 +1355,8 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
       +rws.map(r=>'<tr><td style="text-align:left;font-weight:800">'+r.s+'</td><td>E£ '+Math.round(r.cac).toLocaleString()+'</td>'
        +r.gp.map((v,i)=>'<td title="'+(v!=null&&r.cac?'GP:CAC @'+RT_LTH[i]+'d = '+(v/r.cac).toFixed(2)+'x':'')+'">'+(v!=null?'E£ '+Math.round(v).toLocaleString():'—')+'</td>').join('')
        +'<td style="font-weight:800;color:'+ltCol(r.r365)+'">'+(r.r365!=null?r.r365.toFixed(2)+'×':'—')+'</td></tr>').join('')
-      +'</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">LTGP = real Odoo per-customer gross profit as cohorts age (returns netted, static pull) · CAC live per scope from the LTGP:CAC tab&rsquo;s allocation. Small grey number = that horizon&rsquo;s GP:CAC. 3× at 365d is the healthy line.</div></div>';})():'');
-  g.appendChild(el);
+      +'</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">LTGP = real Odoo per-customer gross profit as cohorts age (returns netted, static pull) · CAC live per scope from the LTGP:CAC tab&rsquo;s allocation. Hover a GP cell for that horizon&rsquo;s GP:CAC. 3× at 365d is the healthy line. <b>This block is a fixed cohort snapshot — it does NOT follow the date filter</b> (cohorts need their full window to age).</div></div>';})():'');
+  const _anc2=document.getElementById('mergT');const _ac2=_anc2?_anc2.closest('.card'):null;_ac2?_ac2.insertAdjacentElement('afterend',el):g.appendChild(el);
   applyHeat(el);
   ch.push(new Chart(document.getElementById('gpcacT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:[
    {label:'GP:CAC'+(GD?' (delivered)':''),data:wk.map(w=>w.r),borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:2,tension:.3},
@@ -1385,7 +1392,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    +'<div class="kpi"><div class="l">NC trend (3mo vs prior 3)</div><div class="v" style="color:'+col(trN)+'">'+fmt(trN)+'</div></div></div></div>'
    +'<div style="position:relative;height:240px;padding:0 12px 4px"><canvas id="nrcT"></canvas></div>'
    +'<div class="rtNote" style="padding:0 12px 10px">Verdict: new-customer acquisition is <b style="color:'+col(yN)+'">'+(yN==null?'unmeasured':(yN>=0.05?'GROWING':(yN<=-0.05?'SHRINKING':'FLAT')))+'</b> vs last year'+(yN!=null?' ('+fmt(yN)+' in '+lastFull.m+')':'')+'; returning base '+(yR==null?'—':(yR>=0.05?'growing':(yR<=-0.05?'shrinking':'flat'))+' ('+fmt(yR)+')')+'. Counts are orders by customer type from Odoo (Shopify channel), the same nrev/rrev split the P&amp;L uses.</div>';
-  g.appendChild(el);
+  const _anc3=document.getElementById('gpcacT');const _ac3=_anc3?_anc3.closest('.card'):null;_ac3?_ac3.insertAdjacentElement('afterend',el):g.appendChild(el);
   ch.push(new Chart(document.getElementById('nrcT'),{data:{labels:rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),datasets:[
    {type:'line',label:'NEW customers',data:rows.map(r=>r.nc),borderColor:'#5a5bf0',backgroundColor:'#5a5bf018',fill:true,borderWidth:2.5,pointRadius:2,tension:.3,yAxisID:'y'},
    {type:'line',label:'RETURNING customers',data:rows.map(r=>r.rc),borderColor:'#12a06e',borderWidth:2,pointRadius:2,tension:.3,yAxisID:'y'},
