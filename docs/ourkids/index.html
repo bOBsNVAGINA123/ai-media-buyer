@@ -1183,7 +1183,7 @@ function cards(){CARDS=[
  {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). Cost / order = total spend ÷ confirmed orders. GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['Cost / order',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
- {id:'kv',a:'blend',t:'The essentials',src:'gross',cs:'One glance: revenue, what it kept as profit, what a NEW vs RETURNING customer spends per order, and site conversion.',
+ {id:'kv',a:'blend',t:'The essentials — Shopify online',src:'gross',cs:'SHOPIFY CHANNEL ONLY (Odoo confirmed orders, marketplaces &amp; branch POS excluded — branches live on the Branches tab). Revenue net of actual credit notes, GP, what a NEW vs RETURNING customer spends per order, and site conversion.',
   k:o=>{const A=O.ad||{};const out=[['Revenue (net of returns)',o.net[0],o.net[1],'cur',0],['Gross profit',o.gp[0],o.gp[1],'cur',0]];
    if(A.ncrev&&A.newcust){const t0=new Date(A.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
     const S=(arr,a,b)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(A.n-1,b);i++)t+=arr[i]||0;return t;};
@@ -1481,7 +1481,35 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
  ms=_msR.length>=3?_msR:ms.filter(function(m){return m<=_m1;}).slice(-6);
  const MET={nc:['New customers',function(M){return M.nc||0;}],rc:['Returning customers',function(M){return M.rc||0;}],ord:['Total orders',function(M){return (M.nord||0)+(M.rord||0);}],nrev:['New-customer revenue',function(M){return M.nrev||0;}],rrev:['Returning revenue',function(M){return M.rrev||0;}],walk:['Unregistered orders',function(M){return 0;}]};
  const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
-  +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;rOff()">PIES &middot; per branch</span>';
+  +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;window.BNCGRID=false;rOff()">PIES &middot; per branch</span>'
+  +' <span class="chip" style="'+(window.BNCGRID?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCGRID=true;window.BNCPIE=false;rOff()">GRID &middot; one graph per branch</span>';
+ if(window.BNCGRID){
+  // small multiples: each branch its own DAILY revenue graph, current range vs the
+  // compare window (dashed), from the per-branch POS journal daily feed (O.bl).
+  const BL=O.bl||{};const FN=O.fin||{};
+  if(!BL.b){pnlCard(g,'odoo','Per-branch graphs','Daily branch feed not in this sync yet.','');}
+  else{
+  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+  const tF=FN.start?new Date(FN.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
+  const pw=cmpWr(ST.s,ST.e);
+  const seg=(arr,a,b,nn)=>{const o2=[];for(let i=a;i<=b;i++)o2.push((i>=0&&i<nn)?(arr[i]||0):null);return o2;};
+  const scopes=[['ONLINE',(a,b)=>tF?seg(FN.rev,ixF(a),ixF(b),FN.rev.length).map((v,j)=>v==null?null:(v-((FN.refund||[])[ixF(a)+j]||0))*1000):null]]
+   .concat(Object.keys(BL.b).sort().map(n=>[n,(a,b)=>seg(BL.b[n],ix(a),ix(b),BL.n)]));
+  const cells=scopes.map((s,i)=>{
+   const cur=s[1](ST.s,ST.e)||[],prv=(ST.cmp!=='off'?(s[1](pw[0],pw[1])||[]):[]);
+   const tot=cur.reduce((x,v)=>x+(v||0),0),pt=prv.reduce((x,v)=>x+(v||0),0);
+   const hasP=prv.some(v=>v!=null&&v>0);const d=hasP&&pt?tot/pt-1:null;
+   return {n:s[0],cur:cur,prv:prv,tot:tot,d:d};});
+  const html2=cells.map((c2,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">'+c2.n+'</b><span style="font-size:11px;font-weight:800">E£ '+Math.round(c2.tot).toLocaleString()+(c2.d!=null?' <span style="color:'+(c2.d>=0?'#12a06e':'#e23a63')+'">'+(c2.d>=0?'+':'')+Math.round(c2.d*100)+'%</span>':'')+'</span></div><div style="position:relative;height:96px"><canvas id="bgr'+i+'"></canvas></div></div>').join('');
+  pnlCard(g,'odoo','Each branch, its own graph &mdash; daily revenue '+ST.s+' &rarr; '+ST.e,'Solid = this window &middot; dashed grey = the compare window ('+(ST.cmp==='off'?'off':pw[0]+' &rarr; '+pw[1])+') &middot; number = window total with % vs compare. ONLINE = Shopify net daily; branches = POS journal income (daily feed starts '+BL.start+').',
+   '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'+html2+'</div>');
+  const labs=(function(){const o2=[];let d=new Date(ST.s+'T00:00:00Z');const e=new Date(ST.e+'T00:00:00Z');while(d<=e){o2.push(d.toISOString().slice(5,10));d=new Date(d.getTime()+864e5);}return o2;})();
+  cells.forEach((c2,i)=>{const cv=document.getElementById('bgr'+i);if(!cv)return;
+   ch.push(new Chart(cv,{type:'line',data:{labels:labs,datasets:[
+    {label:'this window',data:c2.cur,borderColor:'#5a5bf0',backgroundColor:'#5a5bf014',fill:true,borderWidth:2,pointRadius:0,tension:.3},
+    {label:'compare',data:c2.prv,borderColor:'#b9c2d4',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:.3}]},
+    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.dataset.label+': E£ '+(x.parsed.y!=null?Math.round(x.parsed.y).toLocaleString():'—')}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:5,font:{size:8}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:8},callback:v=>(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}}));});
+  return;}}
  if(window.BNCPIE){
   const lastM=ms[ms.length-1],mtd=lastM===t;
   const PM={ord:['Orders',['New','Returning','Unregistered'],['#12a06e','#5a5bf0','#c3c9d6']],cust:['Customers',['New','Returning'],['#12a06e','#5a5bf0']],rev:['Revenue',['New','Returning'],['#12a06e','#5a5bf0']]};
