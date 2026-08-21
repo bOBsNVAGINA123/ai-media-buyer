@@ -17,7 +17,11 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .chip{cursor:pointer;background:#eef0fb;color:#4b4fd0;border:1px solid #e0e3f6;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700}
 .btn{background:var(--indigo);color:#fff;border:1px solid var(--indigo);border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12.5px}.btn.g{background:#eef0fb;color:var(--indigo)}
 .sp{flex:1}.banner{background:#fff7ed;border:1px solid #ffe1bf;color:#8a5a1e;border-radius:11px;padding:9px 13px;font-size:11.5px;margin-bottom:12px;line-height:1.55}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;grid-auto-flow:dense}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.sechd{grid-column:1/-1;background:transparent!important;box-shadow:none!important;border:0!important;padding:10px 4px 0!important;margin-bottom:-6px}
+.sechd .sh1{font-size:12px;font-weight:800;letter-spacing:2px;color:#64748b;display:flex;align-items:center;gap:8px}
+.sechd .sh1:after{content:'';flex:1;height:1px;background:#e3e7ef}
+.sechd .sh2{font-size:11px;color:#8a93a6;margin-top:2px}
 .card{background:#fff;border-radius:16px;padding:16px 18px 12px;box-shadow:0 10px 26px rgba(20,30,60,.05);border:1px solid #f0f2f7;border-top:3px solid #e8ebf3;position:relative}
 .card.full{grid-column:1/-1}
 .card[data-a=odoo]{border-top-color:#5a5bf0}.card[data-a=shop]{border-top-color:#12a06e}.card[data-a=meta]{border-top-color:#2f7fe0}.card[data-a=blend]{border-top-color:#12b0a4}.card[data-a=ins]{border-top-color:#ff8b42}
@@ -1400,6 +1404,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?Math.round(c2.parsed.y).toLocaleString():'no ad data')}}},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}},y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}}}}}));
+ })();
+ // story-section headers — orient the eye, one act at a time
+ (function(){
+  const mk=(t,s)=>{const d=document.createElement('div');d.className='card sechd';d.innerHTML='<div class="sh1">'+t+'</div><div class="sh2">'+s+'</div>';return d;};
+  const before=(sel,el2)=>{const a=g.querySelector(sel);if(a)g.insertBefore(el2,a);};
+  const first=g.querySelector('.card[data-id="ins"]')||g.firstChild;
+  if(first)g.insertBefore(mk('&#128200; WHAT HAPPENED','Revenue, profit and margin for the selected window — the outcome.'),first);
+  before('.card[data-id="mer"]',mk('&#9889; WAS IT EFFICIENT?','What every ad pound actually returned — MER, aMER, GP:CAC, and whether new customers are growing.'));
+  before('.card[data-id="broas"]',mk('&#128269; WHY — PLATFORMS &amp; COSTS','Which platform is doing the work and what a purchase costs on each.'));
+  before('.card[data-id="tr"]',mk('&#128101; WHO&rsquo;S BUYING &amp; EVERYTHING ELSE','Channels, sessions, funnel and the deep-dive cards.'));
  })();
  wDrag(g);}
 function expand(c,o){
