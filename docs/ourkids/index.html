@@ -5073,6 +5073,27 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  document.getElementById('bn26').innerHTML='&#8635; <b>SEARCH ADVISOR</b> &mdash; your own Google search terms ARE live demand in your vertical. 28-day window '+((SI.win||[])[0]||'')+' &rarr; '+((SI.win||[])[1]||'')+' vs the same weekday-aligned window last year. Refreshed automatically every sync (pulled '+(SI.pulled||'&mdash;')+').';
  if(!SI.terms||!SI.terms.length){pnlCard(g,'blend','Search Advisor','Search-term intelligence arrives on the next sync (collector v9.7.12+). Nothing to do — check back within 3 hours.','');return;}
  const T=SI.terms;
+ // ---- 0. NEW SIGNALS — Egypt ----
+ T.forEach(r=>{r.yoy=(r.imL>0)?(r.im/r.imL-1):null;});
+ const newTerms=T.filter(r=>r.imL===0&&r.im>=20).sort((a,b)=>b.im-a.im).slice(0,12);
+ const risers=T.filter(r=>r.yoy!=null&&r.yoy>=0.5&&r.im>=30).sort((a,b)=>b.yoy-a.yoy).slice(0,12);
+ const TR=SI.trends||{};const trKeys=Object.keys(TR);
+ let sig='<div style="font-weight:800;font-size:11.5px;color:#12a06e;margin-bottom:4px">NEW — didn\'t exist last year (your own Egypt searches)</div>'
+  +(newTerms.length?newTerms.map(r=>'<span class="chip" style="background:#e7f8f1;border-color:#cdeede;color:#0f6e56" title="'+r.im+' impressions, CVR '+(r.ck?(r.cn/r.ck*100).toFixed(1):0)+'%">'+String(r.t).replace(/</g,'&lt;')+' &middot; '+r.im+'</span>').join(' '):'<span style="color:#8a93a6;font-size:11px">none this window</span>')
+  +'<div style="font-weight:800;font-size:11.5px;color:#3a9bff;margin:10px 0 4px">RISING — 50%+ more demand than last year</div>'
+  +(risers.length?risers.map(r=>'<span class="chip" style="background:#eef6ff;border-color:#cfe4fb;color:#185fa5">'+String(r.t).replace(/</g,'&lt;')+' &middot; +'+Math.round(r.yoy*100)+'%</span>').join(' '):'<span style="color:#8a93a6;font-size:11px">none</span>');
+ if(trKeys.length){
+  sig+='<div style="font-weight:800;font-size:11.5px;color:#9d6bff;margin:10px 0 4px">GOOGLE TRENDS &middot; EGYPT — rising queries around your category seeds</div>';
+  trKeys.forEach(k=>{const ris=(TR[k]||{}).rising||[];if(!ris.length)return;
+   sig+='<div style="font-size:10.5px;color:#64748b;margin:4px 0 2px"><b>'+k+'</b></div>'+ris.map(q=>'<span class="chip" style="background:#f3efff;border-color:#e4dcf9;color:#6b46c1">'+String(q[0]).replace(/</g,'&lt;')+' '+q[1]+'</span>').join(' ');});
+ }
+ pnlCard(g,'blend','&#9889; New signals &mdash; Egypt, your demographic','What just appeared or accelerated: NEW terms from your own Egypt search traffic, 50%+ risers YoY, and Google Trends (geo=EG) rising queries around your category seeds — the earliest demand you can get ahead of. Refreshes with every sync.',sig);
+ if(trKeys.length){const anyS=trKeys.filter(k=>(TR[k]||{}).series&&Object.keys(TR[k].series).length);
+  if(anyS.length){const lab=Object.keys(TR[anyS[0]].series);
+   pnlCard(g,'blend','Google Trends &mdash; Egypt, 12 months','Relative search interest (0–100) in Egypt for your category seed terms — the macro demand wave over your vertical.','<div style="position:relative;height:220px"><canvas id="siTr"></canvas></div>');
+   const CS=['#3a9bff','#5a5bf0','#ff5da2','#12a06e','#ff8b42'];
+   const c0=new Chart(document.getElementById('siTr'),{type:'line',data:{labels:lab,datasets:anyS.map((k,i)=>({label:k,data:lab.map(l=>(TR[k].series||{})[l]||0),borderColor:CS[i%5],borderWidth:2,pointRadius:0,tension:.3}))},options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}}}}});
+   ch.push(c0);}}
  // ---- 1. YoY movers ----
  T.forEach(r=>{r.yoy=(r.imL>0)?(r.im/r.imL-1):null;r.cvr=r.ck>0?r.cn/r.ck*100:0;r.cpa=r.cn>0?r.sp/r.cn:null;r.roas=r.sp>0?r.cv/r.sp:0;
   r.state=r.imL===0&&r.im>0?'NEW':(r.im===0&&r.imL>0?'GONE':(r.yoy!=null&&r.yoy>=0.3?'RISING':(r.yoy!=null&&r.yoy<=-0.3?'FALLING':'STEADY')));});
