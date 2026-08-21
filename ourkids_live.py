@@ -2463,7 +2463,9 @@ def _trends_eg():
              "\u0634\u0646\u0637\u0629 \u0645\u062f\u0631\u0633\u0629",
              "\u0644\u0627\u0646\u0634 \u0628\u0648\u0643\u0633",
              "\u0639\u0631\u0628\u064a\u0629 \u0627\u0637\u0641\u0627\u0644",
-             "\u0645\u0644\u0627\u0628\u0633 \u0627\u0637\u0641\u0627\u0644"]
+             "\u0645\u0644\u0627\u0628\u0633 \u0627\u0637\u0641\u0627\u0644",
+             "\u0647\u062f\u0627\u064a\u0627 \u0627\u0637\u0641\u0627\u0644",
+             "\u0647\u062f\u064a\u0629"]
     out = {}
     hd = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9"}
     def prime():
@@ -2552,14 +2554,24 @@ def pull_search_intel():
             o[2] += float(m.get("conversions") or 0); o[3] += float(m.get("conversionsValue") or 0)
             o[4] += float(m.get("costMicros") or 0) / 1e6
         return out
+    def pack(cur, prv, cap=250):
+        keys = sorted(set(list(cur.keys()) + list(prv.keys())),
+                      key=lambda k: -(cur.get(k, [0]*5)[0] + prv.get(k, [0]*5)[0]))[:cap]
+        return [{"t": k,
+                 "im": cur.get(k, [0]*5)[0], "ck": cur.get(k, [0]*5)[1], "cn": round(cur.get(k, [0]*5)[2], 1),
+                 "cv": round(cur.get(k, [0]*5)[3]), "sp": round(cur.get(k, [0]*5)[4]),
+                 "imL": prv.get(k, [0]*5)[0], "ckL": prv.get(k, [0]*5)[1], "cnL": round(prv.get(k, [0]*5)[2], 1),
+                 "cvL": round(prv.get(k, [0]*5)[3])} for k in keys]
     cur = terms(s1, e1); prv = terms(s0, e0)
-    keys = sorted(set(list(cur.keys()) + list(prv.keys())),
-                  key=lambda k: -(cur.get(k, [0]*5)[0] + prv.get(k, [0]*5)[0]))[:250]
-    T = [{"t": k,
-          "im": cur.get(k, [0]*5)[0], "ck": cur.get(k, [0]*5)[1], "cn": round(cur.get(k, [0]*5)[2], 1),
-          "cv": round(cur.get(k, [0]*5)[3]), "sp": round(cur.get(k, [0]*5)[4]),
-          "imL": prv.get(k, [0]*5)[0], "ckL": prv.get(k, [0]*5)[1], "cnL": round(prv.get(k, [0]*5)[2], 1),
-          "cvL": round(prv.get(k, [0]*5)[3])} for k in keys]
+    T = pack(cur, prv)
+    # selectable windows: 7d and 90d, each vs weekday-aligned LY
+    s7 = END - datetime.timedelta(days=6); s90 = END - datetime.timedelta(days=89)
+    multi = {"7": pack(terms(s7, e1), terms(s7 - datetime.timedelta(days=364), e0), 200),
+             "28": T,
+             "90": pack(terms(s90, e1), terms(s90 - datetime.timedelta(days=364), e0), 250)}
+    # trending THIS WEEK: 7d vs the PRIOR 7d (momentum, not seasonality)
+    p7a = s7 - datetime.timedelta(days=7); p7b = s7 - datetime.timedelta(days=1)
+    trend7 = pack(terms(s7, e1), terms(p7a, p7b), 150)
     # weekly demand curves for the top 15 current terms (26 weeks)
     top15 = [t["t"] for t in T if t["im"] > 0][:15]
     wk = {}
@@ -2588,7 +2600,7 @@ def pull_search_intel():
     try: tr = _trends_eg()
     except Exception as e: log("trends wrapper fail", str(e)[:80])
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
-            "terms": T, "weekly": wk, "is": isc, "isLY": isp, "trends": tr}
+            "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp, "trends": tr}
 
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
@@ -3785,7 +3797,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.14 (trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.15 (search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
