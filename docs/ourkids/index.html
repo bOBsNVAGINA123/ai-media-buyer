@@ -5052,11 +5052,17 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  let tier1='<div style="font-weight:800;font-size:12.5px;color:#161d2e;margin:2px 0 7px">1 &middot; General &mdash; move budget between platforms</div>'
   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+order.map(p=>'<div style="border:1px solid #e6e9f1;border-radius:11px;padding:8px 12px;font-size:12px"><b>'+ABPF[p][0]+'</b> <span style="color:#8a93a6">E£ '+money(PF[p].sp)+'/day</span><div style="margin-top:5px;display:flex;gap:6px">'+roPill('online',pfRoas(p))+(p==='meta'?roPill('in-store',mis):'')+'</div></div>').join('')+'</div>'
   +(flow>0?'<div style="padding:9px 12px;border:1px solid #cdeede;background:#f0fdf6;border-radius:10px;font-size:13px;font-weight:700;margin-bottom:14px">&#8594; Shift <b style="color:#12a06e">E£ '+money(flow)+'/day</b> from '+ABPF[donor][0]+' &rarr; '+ABPF[rcv][0]+' <span style="font-weight:500;color:#64748b">&mdash; '+ABPF[donor][0]+' has under-bar spend to free, '+ABPF[rcv][0]+' has room to scale</span></div>':'<div style="font-size:12px;color:#8a93a6;margin-bottom:14px">Platform efficiency is balanced in this range &mdash; no net cross-platform shift.</div>');
- const chips='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">'
-  +'<div style="background:#f0fdf6;border:1px solid #cdeede;border-radius:10px;padding:8px 12px">Reallocatable <b style="color:#12a06e">E£ '+money(freed)+'/day</b> from '+cuts.length+' under-bar</div>'
-  +'<div style="background:#eef0fb;border:1px solid #e0e3f6;border-radius:10px;padding:8px 12px">'+raises.length+' winners with headroom (+E£ '+money(wantR)+'/day)</div>'
-  +'<div style="background:#eef6ff;border:1px solid #cfe4fb;border-radius:10px;padding:8px 12px">Spend &middot; <b style="color:#12a06e">'+Math.round(psp/tsp*100)+'% prospecting</b> / <b style="color:#ff8b42">'+Math.round(rsp/tsp*100)+'% retargeting</b> / <b style="color:#9aa3b5">'+Math.round(msp/tsp*100)+'% mixed</b></div>'
-  +'<div style="background:#fff7ef;border:1px solid #ffe3c7;border-radius:10px;padding:8px 12px">Breakeven <b>'+be.toFixed(1)+'x</b> &middot; existing held to '+(be*1.4).toFixed(1)+'x</div></div>';
+ const chips='<div style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.7">Reallocatable <b style="color:#161d2e">E£ '+money(freed)+'/day</b> from '+cuts.length+' under-bar &middot; '+raises.length+' winners want <b style="color:#161d2e">+E£ '+money(wantR)+'/day</b> &middot; spend mix '+Math.round(psp/tsp*100)+'% prospecting / '+Math.round(rsp/tsp*100)+'% retargeting / '+Math.round(msp/tsp*100)+'% mixed &middot; breakeven '+be.toFixed(1)+'x (existing '+(be*1.4).toFixed(1)+'x)</div>'
+  // THE HEADLINE: exactly what to do, ranked, plain language
+  +(function(){const top=act.filter(c=>c.rec!=='hold').sort((a,b)=>b.sig-a.sig).slice(0,5);if(!top.length)return '';
+    return '<div style="font-weight:800;font-size:14px;color:#161d2e;margin:2px 0 8px">Do this now</div>'
+     +top.map((c,i)=>{const up=c.rec==='raise';
+      return '<div style="display:flex;gap:12px;align-items:center;padding:10px 12px;margin-bottom:6px;background:#fff;border:1px solid #edf0f6;border-left:4px solid '+(up?'#12a06e':'#e23a63')+';border-radius:10px">'
+       +'<b style="color:#8a93a6;font-size:13px">'+(i+1)+'</b>'
+       +'<div style="flex:1"><b style="font-size:13px">'+(up?'Raise':'Cut')+' &ldquo;'+esc(c.name)+'&rdquo; '+(up?'+':'&minus;')+Math.round(c.pct*100)+'%</b>'
+       +'<div style="font-size:11.5px;color:#64748b">E£ '+money(c.daily)+' &rarr; <b style="color:#161d2e">E£ '+money(c.recD)+'</b>/day &middot; total ROAS '+c.totRoas.toFixed(1)+'x ('+c.r.toFixed(1)+'&times; its bar) &middot; '+(c.intent==='retargeting'?'existing customers':c.intent==='prospecting'?'new customers':'mixed audience')+'</div></div>'
+       +'<a href="'+abOpen(c)+'" target="_blank" rel="noopener" style="background:'+(up?'#12a06e':'#e23a63')+';color:#fff;font-weight:800;font-size:11px;border-radius:8px;padding:7px 12px;text-decoration:none;white-space:nowrap">Open &amp; '+(up?'raise':'cut')+'</a>'
+       +'<a href="javascript:void(0)" onclick="abLog(\''+c.pf+'\',\''+c.id+'\')" style="color:#8a93a6;font-size:11px;font-weight:700">log</a></div>';}).join('');})();
  // ---- quadrant: online vs in-store ROAS ----
  const QG={both:[],online:[],instore:[],weak:[]};act.forEach(c=>{(QG[c.quad]||QG.weak).push(c);});
  const qBox=k=>{const q=QUAD[k],list=QG[k].slice().sort((a,b)=>b.totRoas-a.totRoas);
@@ -5076,7 +5082,26 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  const SI=O.searchIntel||{};
  document.getElementById('bn26').innerHTML='&#8635; <b>SEARCH ADVISOR</b> &mdash; your own Google search terms ARE live demand in your vertical. 28-day window '+((SI.win||[])[0]||'')+' &rarr; '+((SI.win||[])[1]||'')+' vs the same weekday-aligned window last year. Refreshed automatically every sync (pulled '+(SI.pulled||'&mdash;')+').';
  if(!SI.terms||!SI.terms.length){pnlCard(g,'blend','Search Advisor','Search-term intelligence arrives on the next sync (collector v9.7.12+). Nothing to do — check back within 3 hours.','');return;}
- const T=SI.terms;
+ window.SIW=window.SIW||'28';window.SIQ=window.SIQ||'';
+ const T=(SI.multi&&SI.multi[window.SIW])||SI.terms;
+ const winChips=['7','28','90'].map(w=>'<span class="chip" style="'+(w===window.SIW?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.SIW=\''+w+'\';rSI()">'+w+'d vs LY</span>').join(' ')
+  +' <input placeholder="search terms… (e.g. هدية)" value="'+String(window.SIQ).replace(/"/g,'&quot;')+'" style="width:190px" onchange="window.SIQ=this.value;rSI()">';
+ // ---- 0a. RECOMMENDED ACTIONS ----
+ (function(){const A=[];const money=v=>Math.round(v).toLocaleString();
+  T.forEach(r=>{r.yoy=(r.imL>0)?(r.im/r.imL-1):null;r.cvr=r.ck>0?r.cn/r.ck*100:0;r.roas=r.sp>0?r.cv/r.sp:0;});
+  T.filter(r=>r.sp>=300&&r.cn===0).sort((a,b)=>b.sp-a.sp).slice(0,5).forEach(r=>A.push(['NEGATIVE','#e23a63','Add <b>&ldquo;'+r.t+'&rdquo;</b> as a negative keyword — E£ '+money(r.sp)+' spent, zero conversions']));
+  T.filter(r=>r.roas>=3.8&&(r.yoy!=null&&r.yoy>=0.3)&&r.im>=50).sort((a,b)=>b.roas*b.im-a.roas*a.im).slice(0,5).forEach(r=>A.push(['SCALE','#12a06e','Push <b>&ldquo;'+r.t+'&rdquo;</b> — demand +'+Math.round(r.yoy*100)+'% YoY at '+r.roas.toFixed(1)+'x ROAS. Raise bids / add as exact-match keyword']));
+  T.filter(r=>r.imL===0&&r.im>=100&&r.cn>0).slice(0,4).forEach(r=>A.push(['CREATE','#5a5bf0','New demand: <b>&ldquo;'+r.t+'&rdquo;</b> ('+money(r.im)+' impressions, converting) — build a dedicated ad group / campaign around it']));
+  if(!A.length)return;
+  pnlCard(g,'blend','&#127919; Recommended actions','Computed from this window&rsquo;s terms. Each is one concrete move — do it in <a href="https://ads.google.com/aw/keywords" target="_blank" rel="noopener" style="color:#3a9bff;font-weight:700">Google Ads &#9658;</a>',
+   A.slice(0,10).map((a,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><b style="color:#8a93a6">'+(i+1)+'</b><span style="min-width:74px;text-align:center;font-size:10px;font-weight:800;color:#fff;background:'+a[1]+';border-radius:6px;padding:2px 6px">'+a[0]+'</span><span>'+a[2]+'</span></div>').join(''));})();
+ // ---- 0b. TRENDING THIS WEEK ----
+ (function(){const W7=SI.trend7;if(!W7||!W7.length)return;const money=v=>Math.round(v).toLocaleString();
+  W7.forEach(r=>{r.mom=(r.imL>0)?(r.im/r.imL-1):null;});
+  const up=W7.filter(r=>r.im>=30&&(r.imL===0||r.mom>=0.4)).sort((a,b)=>(b.im-b.imL)-(a.im-a.imL)).slice(0,14);
+  if(!up.length)return;
+  pnlCard(g,'blend','&#128293; Trending THIS WEEK','Last 7 days vs the 7 days before — momentum right now, not seasonality.',
+   up.map(r=>'<span class="chip" style="background:#fff4ec;border-color:#ffdcc2;color:#b4571b" title="'+r.imL+' → '+r.im+' impressions">'+String(r.t).replace(/</g,'&lt;')+' '+(r.imL===0?'NEW':'+'+Math.round(r.mom*100)+'%')+' &middot; '+money(r.im)+'</span>').join(' '));})();
  // ---- 0. NEW SIGNALS — Egypt ----
  T.forEach(r=>{r.yoy=(r.imL>0)?(r.im/r.imL-1):null;});
  const newTerms=T.filter(r=>r.imL===0&&r.im>=20).sort((a,b)=>b.im-a.im).slice(0,12);
@@ -5102,14 +5127,15 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  T.forEach(r=>{r.yoy=(r.imL>0)?(r.im/r.imL-1):null;r.cvr=r.ck>0?r.cn/r.ck*100:0;r.cpa=r.cn>0?r.sp/r.cn:null;r.roas=r.sp>0?r.cv/r.sp:0;
   r.state=r.imL===0&&r.im>0?'NEW':(r.im===0&&r.imL>0?'GONE':(r.yoy!=null&&r.yoy>=0.3?'RISING':(r.yoy!=null&&r.yoy<=-0.3?'FALLING':'STEADY')));});
  const SCLR={NEW:'#12a06e',RISING:'#12a06e',STEADY:'#7c869c',FALLING:'#e23a63',GONE:'#e23a63'};
- const rows=T.slice(0,80).map(r=>'<tr><td style="text-align:left;max-width:280px;overflow:hidden;text-overflow:ellipsis"><b>'+String(r.t).replace(/</g,'&lt;')+'</b></td>'
+ const TQ=window.SIQ?T.filter(r=>String(r.t).toLowerCase().indexOf(String(window.SIQ).toLowerCase())>=0):T;
+ const rows=TQ.slice(0,window.SIQ?200:80).map(r=>'<tr><td style="text-align:left;max-width:280px;overflow:hidden;text-overflow:ellipsis"><b>'+String(r.t).replace(/</g,'&lt;')+'</b></td>'
   +'<td><span style="color:'+SCLR[r.state]+';font-weight:800;font-size:10px">'+r.state+'</span></td>'
   +'<td>'+money(r.im)+'</td><td>'+money(r.imL)+'</td>'
   +'<td style="font-weight:800;color:'+(r.yoy==null?'#9aa3b5':(r.yoy>=0?'#12a06e':'#e23a63'))+'">'+(r.yoy==null?'&mdash;':((r.yoy>=0?'+':'')+Math.round(r.yoy*100)+'%'))+'</td>'
-  +'<td>'+money(r.ck)+'</td><td>'+r.cvr.toFixed(1)+'%</td><td>'+(r.cpa!=null?'E£ '+money(r.cpa):'&mdash;')+'</td>'
+  +'<td>'+money(r.ck)+'</td><td>'+(r.im?(r.ck/r.im*100).toFixed(1):'0.0')+'%</td><td>'+r.cvr.toFixed(1)+'%</td><td>'+(r.cn>0?'E£ '+money(r.cv/r.cn):'&mdash;')+'</td><td>'+(r.cpa!=null?'E£ '+money(r.cpa):'&mdash;')+'</td>' 
   +'<td style="font-weight:800;color:'+(r.roas>=3.8?'#12a06e':(r.roas>0?'#e23a63':'#9aa3b5'))+'">'+(r.roas?r.roas.toFixed(1)+'x':'&mdash;')+'</td></tr>').join('');
- pnlCard(g,'blend','Search terms &mdash; this year vs last year','What Egypt is typing, and whether demand rose. NEW = did not exist last year. CVR = conversions &divide; clicks. Sorted by volume; top 80 shown of '+T.length+'.',
-  '<div style="overflow-x:auto"><table class="bt heat" data-hc="6" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Search term</th><th>State</th><th>Impr</th><th>Impr LY</th><th>YoY</th><th>Clicks</th><th>CVR</th><th>CPA</th><th>ROAS</th></tr>'+rows+'</table></div>');
+ pnlCard(g,'blend','Search terms &mdash; '+window.SIW+'d vs same window last year','What Egypt is typing, and whether demand rose. NEW = did not exist last year. CVR = conv &divide; clicks &middot; CPP = spend &divide; conv &middot; AOV = value &divide; conv. Type in the box to filter (e.g. &#1607;&#1583;&#1610;&#1577;).','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+winChips+'</div>'+
+  '<div style="overflow-x:auto"><table class="bt heat" data-hc="6" style="width:100%;font-size:10.5px;text-align:right"><tr><th style="text-align:left">Search term</th><th>State</th><th>Impr</th><th>Impr LY</th><th>YoY</th><th>Clicks</th><th>CTR</th><th>CVR</th><th>AOV</th><th>CPP</th><th>ROAS</th></tr>'+rows+'</table></div>');
  applyHeat(g);
  // ---- 2. demand curves ----
  const W=SI.weekly||{};const wt=Object.keys(W).slice(0,8);
