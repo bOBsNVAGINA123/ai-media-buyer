@@ -1250,6 +1250,38 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
   if(c.c&&!na&&!c.chan){const cf=c.c(o);lazyDraw(el,()=>{const cc=draw(el.querySelector('canvas'),cf,0,id);if(cc){const lg=el.querySelector('.lgd');cc.data.datasets.forEach((d,i)=>{if(d.label==='Annotations')return;const s=document.createElement('span');s.className='lg';s.innerHTML=`<i class="sw" style="background:${d.borderColor}"></i>${d.label}`;s.onclick=()=>{const m=cc.getDatasetMeta(i);m.hidden=m.hidden===null?!cc.data.datasets[i].hidden:!m.hidden;s.classList.toggle('off');cc.update('none');};lg.appendChild(s);});}});}})(cwAny(id)?(cardCalc(id)||O0):O0);PREVLBL=_pl;});
+ // ---- MER & aMER BY TIME — rolling weekly, toggles: delivered-only / include in-store ----
+ (function(){const A=O.ad;if(!A||!A.spend||!A.ncrev)return;
+  window.MERG=window.MERG||{del:false,off:false};const MG=window.MERG;
+  const S2=O.ship2||{};const kr={};(S2.m||[]).forEach((m,i)=>{const kv=(S2.keptV||[])[i]||0,rv=(S2.retV||[])[i]||0;kr[m]=(kv+rv)?kv/(kv+rv):1;});
+  const dim=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+  const offM={};Object.keys(O.pos||{}).forEach(b=>{const P=O.pos[b];Object.keys(P).forEach(m=>{offM[m]=(offM[m]||0)+((P[m]||[])[0]||0);});});
+  const t0=new Date(A.start+'T00:00:00Z').getTime();const day=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
+  const n=A.n,wk=[];
+  for(let e=n-1;e>=6&&wk.length<26;e-=7){let rev=0,ncr=0,sp=0,off=0;
+   for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);const f=MG.del?(kr[m]||0.86):1;
+    rev+=((A.ncrev[i]||0)+(A.rcrev[i]||0))*f;ncr+=(A.ncrev[i]||0)*f;sp+=A.spend[i]||0;off+=(offM[m]||0)/dim(m);}
+   wk.unshift({lbl:day(e-6).slice(5),mer:sp?rev/sp:null,amer:sp?ncr/sp:null,mero:sp?(rev+off)/sp:null});}
+  if(wk.length<2)return;
+  const cur=wk[wk.length-1],prv=wk[wk.length-2];
+  const dl2=(a,b)=>(a!=null&&b)?' <span style="font-size:10.5px;font-weight:800;color:'+(a>=b?'#12a06e':'#e23a63')+'">'+(a>=b?'▲':'▼')+' '+Math.abs((a/b-1)*100).toFixed(0)+'% vs prior wk</span>':'';
+  const tgl=(k,lbl)=>'<a href="javascript:void(0)" onclick="window.MERG.'+k+'=!window.MERG.'+k+';rOn()" style="color:#5a5bf0;font-weight:800">'+(MG[k]?'&#9745;':'&#9744;')+' '+lbl+'</a>';
+  const el=document.createElement('div');el.className='card full';el.dataset.a='blend';
+  el.innerHTML='<div class="chead"><div><div class="ct">MER &amp; aMER by time — rolling weeks<span class="bg b-blend">blend</span></div>'
+   +'<div class="cs">Each point = a 7-day block ending on the newest data day. MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. '+tgl('del','delivered only')+' scales revenue by each month&rsquo;s real kept-rate &middot; '+tgl('off','include in-store')+' adds branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
+   +'<div class="kpis"><div class="kpi"><div class="l">MER this wk'+(MG.del?' · deliv':'')+'</div><div class="v">'+(cur.mer?cur.mer.toFixed(2):'—')+'x'+dl2(cur.mer,prv.mer)+'</div></div>'
+   +'<div class="kpi"><div class="l">aMER this wk</div><div class="v">'+(cur.amer?cur.amer.toFixed(2):'—')+'x'+dl2(cur.amer,prv.amer)+'</div></div>'
+   +(MG.off?'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div>':'')+'</div></div>'
+   +'<div style="position:relative;height:240px;padding:0 12px 12px"><canvas id="mergT"></canvas></div>';
+  g.appendChild(el);
+  const ds=[{label:'MER'+(MG.del?' (delivered)':''),data:wk.map(w=>w.mer),borderColor:'#3a9bff',backgroundColor:'#3a9bff22',borderWidth:2.5,pointRadius:2,tension:.3},
+   {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3}];
+  if(MG.off)ds.push({label:'MER incl in-store',data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3});
+  ch.push(new Chart(document.getElementById('mergT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:ds},
+   options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v+'x'}}}}}));
+ })();
  wDrag(g);}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
