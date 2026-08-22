@@ -5466,6 +5466,10 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
+const BUILD='20260822T143244Z';
+// self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260822T143244Z'&&v!==BUILD)location.reload();}catch(e){}}
+if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
 window.WHYW=window.WHYW||'7';
