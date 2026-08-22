@@ -2629,6 +2629,56 @@ def pull_search_intel():
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
             "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp, "trends": tr, "kw": kw}
 
+def pull_why():
+    """WHY tab: Shopify order-line decomposition for 1/7/28-day windows vs the prior window —
+    per product (with on-hand stock for the movers), per vendor, plus discount and shipping
+    lines and order counts. Read-only read_group / search_count only."""
+    TV = tmpl_vendor_map() or {}; PT = prod_tmpl_map() or {}; NM = vendor_names() or {}
+    SHOP = [["order_id.state", "in", ["sale", "done"]], ["order_id.team_id.name", "ilike", "shopify"], ["display_type", "=", False]]
+    def agg(a, b):
+        P = {}; tot = {"units": 0.0, "rev": 0.0, "disc": 0.0, "ship": 0, "ord": 0}
+        dom = [["order_id.date_order", ">=", a + " 00:00:00"], ["order_id.date_order", "<=", b + " 23:59:59"]] + SHOP
+        for r in ogroup("sale.order.line", dom, ["product_uom_qty", "price_subtotal"], ["product_id"]):
+            pr = r.get("product_id") or [0, ""]; pid = pr[0]; nm = pr[1] or ""
+            q = float(r.get("product_uom_qty") or 0); v = float(r.get("price_subtotal") or 0)
+            if pid == 24: tot["ship"] += int(r.get("product_id_count") or 0); continue
+            if pid == 23: tot["disc"] += v; continue
+            tot["units"] += q; tot["rev"] += v
+            P[pid] = {"n": nm[:60], "q": q, "r": v}
+        try:
+            tot["ord"] = oexec("sale.order", "search_count", [[["date_order", ">=", a + " 00:00:00"], ["date_order", "<=", b + " 23:59:59"],
+                                                               ["state", "in", ["sale", "done"]], ["team_id.name", "ilike", "shopify"]]])
+        except Exception as ex: log("why ord count fail", str(ex)[:100])
+        return P, tot
+    out = {}
+    for d in (1, 7, 28):
+        e = END; s = END - datetime.timedelta(days=d - 1); pe = s - datetime.timedelta(days=1); ps = pe - datetime.timedelta(days=d - 1)
+        Pc, tc = agg(s.isoformat(), e.isoformat()); Pp, tp = agg(ps.isoformat(), pe.isoformat())
+        rows = []
+        for pid in set(Pc) | set(Pp):
+            c = Pc.get(pid) or {"n": (Pp.get(pid) or {}).get("n", ""), "q": 0, "r": 0}; p = Pp.get(pid) or {"q": 0, "r": 0}
+            tid = PT.get(pid); vt = TV.get(tid, ("", "", "")) if tid else ("", "", "")
+            rows.append({"id": pid, "n": c["n"], "v": vt[0], "vn": (NM.get(vt[0], vt[0]) or "")[:30], "cat": vt[1],
+                         "q": round(c["q"]), "r": round(c["r"]), "pq": round(p["q"]), "pr": round(p["r"])})
+        rows.sort(key=lambda x: -abs(x["r"] - x["pr"]))
+        top = rows[:80]
+        st = {}
+        try:
+            for r in ogroup("stock.quant", [["product_id", "in", [x["id"] for x in top]], ["location_id.usage", "=", "internal"]], ["quantity"], ["product_id"]):
+                st[(r.get("product_id") or [0])[0]] = round(float(r.get("quantity") or 0))
+        except Exception as ex: log("why stock fail", str(ex)[:120])
+        for x in top: x["st"] = st.get(x["id"])
+        V = {}
+        for x in rows:
+            k = x["v"] or "?"; e2 = V.setdefault(k, {"v": k, "n": x["vn"] or "(no vendor on file)", "r": 0, "pr": 0, "q": 0, "pq": 0})
+            e2["r"] += x["r"]; e2["pr"] += x["pr"]; e2["q"] += x["q"]; e2["pq"] += x["pq"]
+        vend = sorted(V.values(), key=lambda z: -abs(z["r"] - z["pr"]))[:40]
+        out[str(d)] = {"s": s.isoformat(), "e": e.isoformat(), "ps": ps.isoformat(), "pe": pe.isoformat(),
+                       "cur": {k: round(v) for k, v in tc.items()}, "prv": {k: round(v) for k, v in tp.items()},
+                       "prods": top, "vend": vend, "nprod": len(rows)}
+        log("why", d, "d :: prods", len(rows), ":: orders", tc.get("ord"), "vs", tp.get("ord"))
+    return {"pulled": END.isoformat(), "win": out}
+
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
     CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
@@ -3824,7 +3874,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.16 (Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.17 (WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -4080,7 +4130,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {},
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "why": safe(pull_why) or prev.get("why") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
