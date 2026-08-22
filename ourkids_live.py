@@ -2652,7 +2652,7 @@ def pull_why():
         return P, tot
     out = {}
     for d in (1, 7, 28):
-        e = END; s = END - datetime.timedelta(days=d - 1); pe = s - datetime.timedelta(days=1); ps = pe - datetime.timedelta(days=d - 1)
+        e = END - datetime.timedelta(days=1); s = e - datetime.timedelta(days=d - 1); pe = s - datetime.timedelta(days=1); ps = pe - datetime.timedelta(days=d - 1)  # last COMPLETE day, aligned with the daily panel
         Pc, tc = agg(s.isoformat(), e.isoformat()); Pp, tp = agg(ps.isoformat(), pe.isoformat())
         rows = []
         for pid in set(Pc) | set(Pp):
