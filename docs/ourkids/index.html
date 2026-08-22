@@ -1323,6 +1323,59 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v+'x'}}}}}));
  })();
+ // ---- MEMO READ — the Slack memo's "understand the numbers" logic, on the dashboard ----
+ // 1) decompose: ΔRevenue = prevMER×Δspend (BUDGET) + spend×ΔMER (PERFORMANCE) — exact identity
+ // 2) three levers: Revenue = clicks × CVR × AOV, clicks priced by CPC; MER = CVR×AOV/CPC
+ // 3) |Δ|<5% = held flat; |ΔMER|<12% = steady, else spike / dip
+ (function(){const A=O.ad;if(!A||!A.spend||!A.ncrev)return;
+  window.MEMOW=window.MEMOW||'3';const MW=window.MEMOW;
+  const t0=new Date(A.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);const dS=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
+  const last=Math.min(A.n-1,ix(ST.e||dS(A.n-1)));
+  let cur,prv,lbl;
+  if(MW==='sel'){cur=[ix(ST.s),last];const pw=cmpWr(ST.s,ST.e);prv=[ix(pw[0]),ix(pw[1])];lbl='selected range vs compare window';}
+  else{const k=+MW;cur=[last-k+1,last];prv=[last-2*k+1,last-k];lbl=(k===1?'yesterday vs the day before':'last '+k+' days vs the '+k+' before');}
+  const S=(key,r)=>{let t=0;for(let i=Math.max(0,r[0]);i<=Math.min(A.n-1,r[1]);i++)t+=(A[key]||[])[i]||0;return t;};
+  const W=(key,wk,r)=>{let s=0,c=0;for(let i=Math.max(0,r[0]);i<=Math.min(A.n-1,r[1]);i++){const w=(A[wk]||[])[i]||0;s+=w;c+=((A[key]||[])[i]||0)*w;}return s?c/s:0;};
+  const M=r=>{const rev=S('ncrev',r)+S('rcrev',r),sp=S('spend',r),pur=S('newcust',r)+S('retcust',r),ck=S('mclk',r)+S('gclk',r)+S('tclk',r),im=S('mimp',r)+S('gimp',r)+S('timp',r);
+   return {rev:rev,sp:sp,pur:pur,ck:ck,mer:sp?rev/sp:0,cpp:pur?sp/pur:0,aov:pur?rev/pur:0,cpc:ck?sp/ck:0,cvr:W('cvr','sessions',r),atc:W('atcRatio','sessions',r),ctr:im?ck/im*100:0,cpm:im?sp/im*1000:0};};
+  const m=M(cur),p=M(prv);if(!p.sp||!m.sp)return;
+  const pct=(a,b)=>b?(a/b-1)*100:null;const sg=v=>v==null?'n/a':((v>=0?'+':'')+v.toFixed(0)+'%');
+  const col=(v,up)=>v==null?'#8a93a6':((up?v>=0:v<=0)?'#12a06e':'#e23a63');
+  const K=v=>Math.round(v).toLocaleString();
+  // 1) decomposition
+  const seff=p.mer*(m.sp-p.sp),peff=m.sp*(m.mer-p.mer),den=Math.abs(seff)+Math.abs(peff)||1,drv=Math.abs(seff)>=Math.abs(peff)?'BUDGET':'PERFORMANCE';
+  // 2) levers
+  const dcpc=pct(m.cpc,p.cpc),dcvr=pct(m.cvr,p.cvr),daov=pct(m.aov,p.aov),dmer=pct(m.mer,p.mer),drev=pct(m.rev,p.rev),dsp=pct(m.sp,p.sp);
+  const lev=[['CVR',dcvr,true,m.ck*(m.cvr-p.cvr)/100*m.aov,'of revenue at the same clicks'],['AOV',daov,true,m.pur*(m.aov-p.aov),'of revenue'],['CPC',dcpc,false,-m.ck*(m.cpc-p.cpc),'of spend saved']].filter(x=>x[1]!=null);
+  const big=lev.length?lev.reduce((a,b)=>Math.abs(b[1])>Math.abs(a[1])?b:a):null;
+  const flat=!big||Math.abs(big[1])<5;
+  const mood=dmer==null?'':(Math.abs(dmer)<12?'steady':(dmer>0?'a spike, not the norm':'a dip — watch it'));
+  const chip=(id,t)=>'<span class="chip" style="'+(MW===id?'background:#0f172a;color:#fff;border-color:#0f172a':'')+'" onclick="window.MEMOW=\''+id+'\';rOn()">'+t+'</span>';
+  const row=(n,a,b,d,up,fmt)=>'<tr><td style="text-align:left;font-weight:700">'+n+'</td><td>'+fmt(b)+'</td><td>'+fmt(a)+'</td><td style="font-weight:800;color:'+col(d,up)+'">'+sg(d)+'</td></tr>';
+  const fx=v=>v.toFixed(2)+'x',fe=v=>'E£ '+K(v),fp=v=>v.toFixed(2)+'%',fn=v=>K(v);
+  const bar=(lab,v,c)=>'<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="width:118px;font-size:11px;font-weight:800;color:#64748b">'+lab+'</div><div style="flex:1;background:#eef0f5;border-radius:5px;height:14px;position:relative"><div style="position:absolute;left:'+(v<0?50-Math.abs(v)/den*50:50)+'%;width:'+(Math.abs(v)/den*50)+'%;height:14px;border-radius:5px;background:'+c+'"></div><div style="position:absolute;left:50%;top:0;width:1px;height:14px;background:#b9c2d4"></div></div><div style="width:110px;text-align:right;font-weight:800;font-size:12px;color:'+(v>=0?'#12a06e':'#e23a63')+'">'+(v>=0?'+':'−')+'E£ '+K(Math.abs(v))+'</div></div>';
+  const el=document.createElement('div');el.className='card full';el.dataset.a='blend';el.id='memoRd';
+  el.innerHTML='<div class="chead"><div><div class="ct">Memo read — why the numbers moved<span class="bg b-blend">blend</span></div>'
+   +'<div class="cs">The Slack memo logic, live: '+lbl+' ('+dS(Math.max(0,cur[0]))+' &rarr; '+dS(cur[1])+' vs '+dS(Math.max(0,prv[0]))+' &rarr; '+dS(prv[1])+'). Shopify revenue &amp; orders, all-platform spend. MER = revenue &divide; spend.</div></div>'
+   +'<div class="kpis"><div class="kpi"><div class="l">Revenue</div><div class="v">E£ '+K(m.rev)+' <span style="font-size:10.5px;font-weight:800;color:'+col(drev,true)+'">'+sg(drev)+'</span></div></div>'
+   +'<div class="kpi"><div class="l">Spend</div><div class="v">E£ '+K(m.sp)+' <span style="font-size:10.5px;font-weight:800;color:#64748b">'+sg(dsp)+'</span></div></div>'
+   +'<div class="kpi"><div class="l">MER</div><div class="v">'+fx(m.mer)+' <span style="font-size:10.5px;font-weight:800;color:'+col(dmer,true)+'">'+sg(dmer)+' · '+mood+'</span></div></div></div></div>'
+   +'<div style="padding:4px 12px 12px"><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'+chip('1','1 day')+chip('3','3 days')+chip('7','7 days')+chip('sel','selected range')+'</div>'
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">'
+   +'<div><div style="font-weight:800;font-size:12px;margin-bottom:4px">1 · Who moved the revenue — the budget, or the account?</div>'
+   +'<div style="font-size:12px;margin-bottom:6px">Revenue moved <b style="color:'+col(m.rev-p.rev,true)+'">'+(m.rev-p.rev>=0?'+':'−')+'E£ '+K(Math.abs(m.rev-p.rev))+'</b>. '
+   +'<b>'+drv+'</b> drove it: <b>'+(seff>=0?'+':'−')+K(Math.abs(seff))+'</b> of the move was the budget (you '+(m.sp>=p.sp?'added':'removed')+' E£ '+K(Math.abs(m.sp-p.sp))+' of spend at the old '+fx(p.mer)+'), <b>'+(peff>=0?'+':'−')+K(Math.abs(peff))+'</b> was the account itself (MER '+fx(p.mer)+' &rarr; '+fx(m.mer)+').</div>'
+   +bar('BUDGET effect',seff,'#3a9bff')+bar('PERFORMANCE effect',peff,'#5a5bf0')
+   +'<div style="font-size:10.5px;color:#8a93a6;margin-top:6px">Exact identity — the two bars always sum to the revenue change. Revenue down on spend down is a smaller bet; revenue down on flat spend is a collapse. Never read one without the other.</div></div>'
+   +'<div><div style="font-weight:800;font-size:12px;margin-bottom:4px">2 · The three levers — Revenue = clicks &times; CVR &times; AOV, clicks priced by CPC</div>'
+   +'<table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Lever</th><th>Before</th><th>Now</th><th>Change</th></tr>'
+   +row('CPC (click cost)',m.cpc,p.cpc,dcpc,false,fe)+row('CVR (site)',m.cvr,p.cvr,dcvr,true,fp)+row('AOV',m.aov,p.aov,daov,true,fe)
+   +row('Clicks',m.ck,p.ck,pct(m.ck,p.ck),true,fn)+row('Orders',m.pur,p.pur,pct(m.pur,p.pur),true,fn)+row('CPP',m.cpp,p.cpp,pct(m.cpp,p.cpp),false,fe)+row('ATC rate',m.atc,p.atc,pct(m.atc,p.atc),true,fp)+row('CTR',m.ctr,p.ctr,pct(m.ctr,p.ctr),true,fp)+row('CPM',m.cpm,p.cpm,pct(m.cpm,p.cpm),false,fe)+'</table>'
+   +'<div style="font-size:12px;margin-top:8px;padding:8px 10px;background:#f8f9fc;border:1px solid #eef0f6;border-radius:10px"><b>Read:</b> '+(flat?'all three levers held flat (under 5%) — efficiency is steady, the revenue move is the spend, nothing to fix.'
+     :('<b>'+big[0]+'</b> '+(big[1]>0?'rose':'fell')+' '+sg(big[1])+', the biggest of the three — worth about <b>E£ '+K(Math.abs(big[3]))+'</b> '+big[4]+'. '+((((big[1]>0)===big[2])!==(dmer>=0))?'But the other levers pulled harder the other way ('+lev.filter(x=>x[0]!==big[0]).map(x=>x[0]+' '+sg(x[1])).join(', ')+'), so MER still '+(dmer>=0?'rose':'fell')+' '+sg(dmer)+'.':'That drove MER '+sg(dmer)+'.')+' Revenue '+sg(drev)+' because spend '+sg(dsp)+'.'))
+   +'</div></div></div></div>';
+  const _a=document.getElementById('mergT');const _c=_a?_a.closest('.card'):null;_c?_c.insertAdjacentElement('afterend',el):g.appendChild(el);
+ })();
  // ---- GP : CAC OVER TIME — heated monthly table + weekly graph, delivered toggle ----
  (function(){const A=O.ad;if(!A||!A.ncrev||!A.newcust)return;
   window.GPCAC=window.GPCAC||{del:false};const GD=window.GPCAC.del;
@@ -1372,7 +1425,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
        +r.gp.map((v,i)=>'<td title="'+(v!=null&&r.cac?'GP:CAC @'+RT_LTH[i]+'d = '+(v/r.cac).toFixed(2)+'x':'')+'">'+(v!=null?'E£ '+Math.round(v).toLocaleString():'—')+'</td>').join('')
        +'<td style="font-weight:800;color:'+ltCol(r.r365)+'">'+(r.r365!=null?r.r365.toFixed(2)+'×':'—')+'</td></tr>').join('')
       +'</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">LTGP = real Odoo per-customer gross profit as cohorts age (returns netted, static pull) · CAC live per scope from the LTGP:CAC tab&rsquo;s allocation. Hover a GP cell for that horizon&rsquo;s GP:CAC. 3× at 365d is the healthy line. <b>This block is a fixed cohort snapshot — it does NOT follow the date filter</b> (cohorts need their full window to age).</div></div>';})():'');
-  const _anc2=document.getElementById('mergT');const _ac2=_anc2?_anc2.closest('.card'):null;_ac2?_ac2.insertAdjacentElement('afterend',el):g.appendChild(el);
+  const _anc2=document.getElementById('mergT');const _ac2=document.getElementById('memoRd')||(_anc2?_anc2.closest('.card'):null);_ac2?_ac2.insertAdjacentElement('afterend',el):g.appendChild(el);
   applyHeat(el);
   ch.push(new Chart(document.getElementById('gpcacT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:[
    {label:'GP:CAC'+(GD?' (delivered)':''),data:wk.map(w=>w.r),borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:2,tension:.3},
