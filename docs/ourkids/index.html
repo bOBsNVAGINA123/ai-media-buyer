@@ -22,6 +22,7 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .sechd .sh1{font-size:12px;font-weight:800;letter-spacing:2px;color:#64748b;display:flex;align-items:center;gap:8px}
 .sechd .sh1:after{content:'';flex:1;height:1px;background:#e3e7ef}
 .sechd .sh2{font-size:11px;color:#8a93a6;margin-top:2px}
+.kpis.brk .kpi .v{font-size:17px}.kpis.brk .kpi{text-align:left;min-width:120px}
 .cwb{font-size:10px;color:#9aa3b5;margin-top:4px}.cwb .cwl{cursor:pointer}.cwb .cwc{display:none}.cwb.open .cwc,.cwb.on .cwc{display:inline}.cwb input,.cwb select{font-size:10px;padding:2px 4px}
 .dcmp{margin:6px 14px 12px;padding:8px 11px;border-left:3px solid #5a5bf0;background:#f8f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#3d4756;line-height:1.55}
 .card{background:#fff;border-radius:16px;padding:16px 18px 12px;box-shadow:0 10px 26px rgba(20,30,60,.05);border:1px solid #f0f2f7;border-top:3px solid #e8ebf3;position:relative}
@@ -1726,7 +1727,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   const REAL=_rv!=null&&(_rv>0||_rp>0||_rn>0);
   const mval=REAL?Math.round(_rv*afo()):(ALLOC?metaShare:null);
   el.innerHTML=`<div class="chead" style="padding-right:0"><div><div class="ct" style="padding-left:0">${b.name} <span class="bg b-live">live</span></div><div class="cs">Daily POS journal income (REAL) · ${REAL?'Meta in-store figures are this branch OWN custom conversion &mdash; a real per-branch measurement.':(ALLOC?'Meta custom conversion returned nothing for this window, so the Meta line is a revenue-weighted ALLOCATION you switched on. It is a model, not a measurement.':'Meta custom conversion returned nothing for this window. Allocation is off, so no Meta in-store number is shown rather than an invented one.')}</div></div>
-   <div class="kpis" style="flex:1 0 100%;justify-content:flex-start;gap:26px;padding:8px 0 2px;border-top:1px solid #f1f3f8;margin-top:6px"><div class="kpi" style="text-align:left"><div class="l">Revenue ${N}d${Q('branch')}</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t}</div></div>
+   <div class="kpis brk" style="flex:1 0 100%;justify-content:flex-start;gap:14px 22px;padding:8px 0 2px;border-top:1px solid #f1f3f8;margin-top:6px;flex-wrap:wrap"><div class="kpi" style="text-align:left"><div class="l">Revenue ${N}d${Q('branch')}</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t}</div></div>
    <div class="kpi"><div class="l">Meta in-store value ${REAL?'<span class="bg b-live">REAL</span>':(ALLOC?'<span class="bg b-est">allocated</span>':'<span class="bg b-est">not measured</span>')}${INFO(METAPROOF)}${Q('bmeta')}</div><div class="v">${mval==null?'&mdash;':fC(mval)}</div><div class="d ft">${REAL?'Meta attribution for this branch &rarr; '+(b.liveRev?(mval/b.liveRev*100).toFixed(1):0)+'% of this branch revenue':(ALLOC?(share*100).toFixed(1)+'% of network revenue &rarr; '+(mv&&b.liveRev?(metaShare/b.liveRev*100).toFixed(1):0)+'% of this branch (ALLOCATED, not measured)':'no branch-level custom conversion fired &mdash; tick &ldquo;allocate Meta offline&rdquo; above to model it')}</div></div>
    ${REAL?`<div class="kpi"><div class="l">In-store purchases <span class="bg b-live">REAL</span>${Q('bmeta')}</div><div class="v">${Math.round(_rp).toLocaleString()}</div><div class="d ft">${_rp?'avg basket '+fC(_rv/_rp):'no attributed purchases'}</div></div>
    <div class="kpi"><div class="l">New customers <span class="bg b-live">REAL</span>${Q('bmeta')}</div><div class="v">${Math.round(_rn).toLocaleString()}</div><div class="d ft">${_rp?(_rn/_rp*100).toFixed(0)+'% of attributed purchases were first-timers':'&mdash;'}</div></div>`:''}
@@ -5482,9 +5483,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260822T153134Z';
+const BUILD='20260822T153309Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260822T153134Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260822T153309Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
