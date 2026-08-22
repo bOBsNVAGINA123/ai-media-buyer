@@ -4298,7 +4298,7 @@ function peSel(k,v){ST[k]=v;if(TAB==='pn')rPnl();}
 function rPE(g){
  if(!O.shop||!O.ad||!O.ship2)return;
  const money=v=>Math.round(v).toLocaleString();
- const r=rng(ST.s,ST.e);if(!r)return;
+ let r=rng(ST.s,ST.e);if(r){r=[Math.max(0,Math.min(r[0],r[1]-27)),r[1]];} // at least 28 days of history so a 7-day filter still gets a real curveif(!r)return;
  const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept:S2.kept[j]||0,cost:S2.cost[j]||0,col:S2.col[j]||0};});
  const goodM=(S2.m||[]).filter(k=>SM[k].conf>=100).sort();
  const lastGood=SM[goodM[goodM.length-1]]||{conf:1,kept:1,cost:0,col:0};
@@ -4327,7 +4327,7 @@ function rPE(g){
   const m=d.slice(0,7),D=cpdOf(m),op=(opexDay(m)||lastOp)+FIX;
   const del=ord*D.cpdN;
   days.push({d,net,cogs,ord,sp,del,cpd:D.cpd,dr:D.dr,opx:op,prof:net-cogs-sp-del-op,mer:sp>0?net/sp:null});}
- if(days.length<7){pnlCard(g,'blend','Daily Profit Engine','Fewer than 7 overlapping revenue+spend days in this window &mdash; widen the date filter.','');return;}
+ if(days.length<5){pnlCard(g,'blend','Daily Profit Engine','Fewer than 5 overlapping revenue+spend days in this window &mdash; widen the date filter.','');return;}
  const sum=k=>days.reduce((t,x)=>t+(x[k]||0),0);
  const tRev=sum('net'),tSp=sum('sp'),tCg=sum('cogs'),tDel=sum('del'),tOp=sum('opx'),tPr=sum('prof'),tOrd=sum('ord');
  const cm=tRev>0?1-(tCg+tDel)/tRev:0;              // contribution per E£1 of net revenue AFTER cogs+delivery
@@ -5483,9 +5483,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260822T153309Z';
+const BUILD='20260822T155412Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260822T153309Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260822T155412Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
