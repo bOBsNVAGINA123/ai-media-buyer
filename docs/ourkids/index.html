@@ -1591,36 +1591,45 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
  const _msR=ms.filter(function(m){return (!_m0||m>=_m0)&&m<=_m1;});
  ms=_msR.length>=3?_msR:ms.filter(function(m){return m<=_m1;}).slice(-6);
  const MET={nc:['New customers',function(M){return M.nc||0;}],rc:['Returning customers',function(M){return M.rc||0;}],ord:['Total orders',function(M){return (M.nord||0)+(M.rord||0);}],nrev:['New-customer revenue',function(M){return M.nrev||0;}],rrev:['Returning revenue',function(M){return M.rrev||0;}],walk:['Unregistered orders',function(M){return 0;}]};
- const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
+ const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;window.BNCGRID=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
   +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;window.BNCGRID=false;rOff()">PIES &middot; per branch</span>'
   +' <span class="chip" style="'+(window.BNCGRID?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCGRID=true;window.BNCPIE=false;rOff()">GRID &middot; one graph per branch</span>';
+ if(window.BNCGRID==null)window.BNCGRID=true;
  if(window.BNCGRID){
-  // small multiples: each branch its own DAILY revenue graph, current range vs the
-  // compare window (dashed), from the per-branch POS journal daily feed (O.bl).
-  const BL=O.bl||{};const FN=O.fin||{};
-  if(!BL.b){pnlCard(g,'odoo','Per-branch graphs','Daily branch feed not in this sync yet.','');}
-  else{
-  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
-  const tF=FN.start?new Date(FN.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
-  const pw=cmpWr(ST.s,ST.e);
-  const seg=(arr,a,b,nn)=>{const o2=[];for(let i=a;i<=b;i++)o2.push((i>=0&&i<nn)?(arr[i]||0):null);return o2;};
-  const scopes=[['ONLINE',(a,b)=>tF?seg(FN.rev,ixF(a),ixF(b),FN.rev.length).map((v,j)=>v==null?null:(v-((FN.refund||[])[ixF(a)+j]||0))*1000):null]]
-   .concat(Object.keys(BL.b).sort().map(n=>[n,(a,b)=>seg(BL.b[n],ix(a),ix(b),BL.n)]));
-  const cells=scopes.map((s,i)=>{
-   const cur=s[1](ST.s,ST.e)||[],prv=(ST.cmp!=='off'?(s[1](pw[0],pw[1])||[]):[]);
-   const tot=cur.reduce((x,v)=>x+(v||0),0),pt=prv.reduce((x,v)=>x+(v||0),0);
-   const hasP=prv.some(v=>v!=null&&v>0);const d=hasP&&pt?tot/pt-1:null;
-   return {n:s[0],cur:cur,prv:prv,tot:tot,d:d};});
-  const html2=cells.map((c2,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">'+c2.n+'</b><span style="font-size:11px;font-weight:800">E£ '+Math.round(c2.tot).toLocaleString()+(c2.d!=null?' <span style="color:'+(c2.d>=0?'#12a06e':'#e23a63')+'">'+(c2.d>=0?'+':'')+Math.round(c2.d*100)+'%</span>':'')+'</span></div><div style="position:relative;height:96px"><canvas id="bgr'+i+'"></canvas></div></div>').join('');
-  pnlCard(g,'odoo','Each branch, its own graph &mdash; daily revenue '+ST.s+' &rarr; '+ST.e,'Solid = this window &middot; dashed grey = the compare window ('+(ST.cmp==='off'?'off':pw[0]+' &rarr; '+pw[1])+') &middot; number = window total with % vs compare. ONLINE = Shopify net daily; branches = POS journal income (daily feed starts '+BL.start+').',
-   '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'+html2+'</div>');
-  const labs=(function(){const o2=[];let d=new Date(ST.s+'T00:00:00Z');const e=new Date(ST.e+'T00:00:00Z');while(d<=e){o2.push(d.toISOString().slice(5,10));d=new Date(d.getTime()+864e5);}return o2;})();
-  cells.forEach((c2,i)=>{const cv=document.getElementById('bgr'+i);if(!cv)return;
-   ch.push(new Chart(cv,{type:'line',data:{labels:labs,datasets:[
-    {label:'this window',data:c2.cur,borderColor:'#5a5bf0',backgroundColor:'#5a5bf014',fill:true,borderWidth:2,pointRadius:0,tension:.3},
-    {label:'compare',data:c2.prv,borderColor:'#b9c2d4',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:.3}]},
-    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.dataset.label+': E£ '+(x.parsed.y!=null?Math.round(x.parsed.y).toLocaleString():'—')}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:5,font:{size:8}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:8},callback:v=>(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}}));});
-  return;}}
+  const BL=O.bl||{};const FN=O.fin||{};const AD=O.ad||{};const BM=O.bmeta||{};
+  window.BNCGM=window.BNCGM||'rev';const GM=window.BNCGM;
+  const GMS={rev:'Revenue (daily)',ads:'From Meta ads (daily, attributed)',nrev:'New-customer revenue (monthly)',rrev:'Returning revenue (monthly)',nc:'New customers (monthly)',rc:'Returning customers (monthly)'};
+  const gchips=Object.keys(GMS).map(k=>'<span class="chip" style="'+(k===GM?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCGM=\''+k+'\';rOff()">'+GMS[k]+'</span>').join(' ');
+  const daily=(GM==='rev'||GM==='ads');const names=Object.keys(O.pos||{}).sort();
+  let cells=[],labs=[],sub='';
+  if(daily&&!BL.b){pnlCard(g,'odoo','Per-branch graphs','Daily branch feed not in this sync yet.','');return;}
+  if(daily){
+   const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+   const tF=FN.start?new Date(FN.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
+   const tA=AD.start?new Date(AD.start+'T00:00:00Z').getTime():null;const ixA=d=>Math.round((new Date(d+'T00:00:00Z')-tA)/864e5);
+   const pw=cmpWr(ST.s,ST.e);
+   const seg=(arr,a,b,nn)=>{const o2=[];for(let i=a;i<=b;i++)o2.push((arr&&i>=0&&i<nn)?(arr[i]||0):null);return o2;};
+   const onl=(a,b)=>GM==='rev'?(tF?seg(FN.rev,ixF(a),ixF(b),FN.n||FN.rev.length).map((v,j)=>v==null?null:(v-((FN.refund||[])[ixF(a)+j]||0))*1000):null):(tA?seg(AD.mecomrev,ixA(a),ixA(b),AD.n).map((v,j)=>v==null?null:v+((AD.gecomrev||[])[ixA(a)+j]||0)+((AD.ttValue||[])[ixA(a)+j]||0)):null);
+   const br=n=>(a,b)=>GM==='rev'?seg((BL.b||{})[n],ix(a),ix(b),BL.n):(tA?seg((BM[n]||{}).v,ixA(a),ixA(b),AD.n):null);
+   const scopes=[['ONLINE',onl]].concat(names.map(n=>[n,br(n)]));
+   cells=scopes.map(s2=>{const cur=s2[1](ST.s,ST.e)||[],prv=(ST.cmp!=='off'?(s2[1](pw[0],pw[1])||[]):[]);const tot=cur.reduce((x,v)=>x+(v||0),0),pt=prv.reduce((x,v)=>x+(v||0),0);const hasP=prv.some(v=>v!=null&&v>0);return {n:s2[0],cur:cur,prv:prv,tot:tot,d:hasP&&pt?tot/pt-1:null};});
+   labs=(function(){const o2=[];let d=new Date(ST.s+'T00:00:00Z');const e=new Date(ST.e+'T00:00:00Z');while(d<=e){o2.push(d.toISOString().slice(5,10));d=new Date(d.getTime()+864e5);}return o2;})();
+   sub='Solid = this window &middot; dashed grey = compare window ('+(ST.cmp==='off'?'off':pw[0]+' &rarr; '+pw[1])+') &middot; number = window total, % vs compare. '+(GM==='rev'?'ONLINE = Shopify net daily; branches = POS journal income (daily feed from '+BL.start+').':'Meta-attributed value: ONLINE = website conversion value (Meta+Google+TikTok); branches = Meta in-store attributed value from the CAPI feed.');
+  }else{
+   const key={nrev:'nrev',rrev:'rrev',nc:'nc',rc:'rc'}[GM];const okey={nrev:'nrev',rrev:'rrev',nc:'nord',rc:'rord'}[GM];
+   const t2=(O.today||'').slice(0,7);let mons=Object.keys(B[names[0]]||{}).sort().filter(m=>m<=t2);const m0=(ST.s||'').slice(0,7),m1=(ST.e||'').slice(0,7)||t2;const mr=mons.filter(m=>(!m0||m>=m0)&&m<=m1);mons=mr.length>=6?mr:mons.filter(m=>m<=m1).slice(-6);
+   const ly=m=>(+m.slice(0,4)-1)+m.slice(4);
+   const scopes=[['ONLINE',m=>((O.nr||{})[m]||{})[okey]]].concat(names.map(n=>[n,m=>((B[n]||{})[m]||{})[key]]));
+   cells=scopes.map(s2=>{const cur=mons.map(m=>{const v=s2[1](m);return v==null?null:v;}),prv=mons.map(m=>{const v=s2[1](ly(m));return v==null?null:v;});const tot=cur.reduce((x,v)=>x+(v||0),0),pt=prv.reduce((x,v)=>x+(v||0),0);return {n:s2[0],cur:cur,prv:prv,tot:tot,d:pt?tot/pt-1:null};});
+   labs=mons.map(m=>m.slice(2)+(m===t2?' MTD':''));
+   sub='Monthly, the months inside the date filter (min 6) &middot; dashed grey = the same months LAST YEAR &middot; number = total over those months, % YoY. Last point is MTD.';
+  }
+  const money=(GM==='nc'||GM==='rc')?v=>Math.round(v).toLocaleString():v=>'E£ '+Math.round(v).toLocaleString();
+  const html2=cells.map((c2,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">'+c2.n+'</b><span style="font-size:11px;font-weight:800">'+money(c2.tot)+(c2.d!=null?' <span style="color:'+(c2.d>=0?'#12a06e':'#e23a63')+'">'+(c2.d>=0?'+':'')+Math.round(c2.d*100)+'%</span>':'')+'</span></div><div style="position:relative;height:96px"><canvas id="bgr'+i+'"></canvas></div></div>').join('');
+  pnlCard(g,'odoo','Each branch, its own graph &mdash; '+GMS[GM]+(daily?' &middot; '+ST.s+' &rarr; '+ST.e:''),sub,
+   '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:800;color:#8a93a6">METRIC</span> '+gchips+' <span style="width:1px;height:16px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">OTHER VIEWS</span> '+chips+'</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'+html2+'</div>');
+  cells.forEach((c2,i)=>{const cv=document.getElementById('bgr'+i);if(!cv)return;ch.push(new Chart(cv,{type:'line',data:{labels:labs,datasets:[{label:daily?'this window':'this year',data:c2.cur,borderColor:'#5a5bf0',backgroundColor:'#5a5bf014',fill:true,borderWidth:2,pointRadius:daily?0:2,tension:.3},{label:daily?'compare':'last year',data:c2.prv,borderColor:'#b9c2d4',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:.3}]},options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.dataset.label+': '+(x.parsed.y!=null?money(x.parsed.y):'—')}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:5,font:{size:8}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:8},callback:v=>(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}}));});
+  return;}
  if(window.BNCPIE){
   const lastM=ms[ms.length-1],mtd=lastM===t;
   const PM={ord:['Orders',['New','Returning','Unregistered'],['#12a06e','#5a5bf0','#c3c9d6']],cust:['Customers',['New','Returning'],['#12a06e','#5a5bf0']],rev:['Revenue',['New','Returning'],['#12a06e','#5a5bf0']]};
@@ -1645,7 +1654,28 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
    plugins:{legend:{display:true,labels:{boxWidth:14,font:{size:10}}}},
    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
  ch.push(c);}
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bncYoY(g);bncTs(g);
+
+function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
+ const pw=cmpWr(ST.s,ST.e);
+ const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ const tF=FN.start?new Date(FN.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
+ const tA=AD.start?new Date(AD.start+'T00:00:00Z').getTime():null;const ixA=d=>Math.round((new Date(d+'T00:00:00Z')-tA)/864e5);
+ const S=(arr,a,b,nn)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(nn-1,b);i++)t+=arr?(arr[i]||0):0;return t;};
+ const revOf=(n,a,b)=>n==='ONLINE'?(tF?(S(FN.rev,ixF(a),ixF(b),FN.n)-S(FN.refund,ixF(a),ixF(b),FN.n))*1000:0):S(BL.b[n],ix(a),ix(b),BL.n);
+ const adsOf=(n,a,b)=>!tA?0:(n==='ONLINE'?S(AD.mecomrev,ixA(a),ixA(b),AD.n)+S(AD.gecomrev,ixA(a),ixA(b),AD.n)+S(AD.ttValue,ixA(a),ixA(b),AD.n):S((BM[n]||{}).v,ixA(a),ixA(b),AD.n));
+ const m=(ST.e||'').slice(0,7),mly=(+m.slice(0,4)-1)+m.slice(4);const isMTD=m===(O.today||'').slice(0,7);
+ const mo=(n,mm)=>{if(n==='ONLINE'){const r=(O.nr||{})[mm]||{};return {nc:r.nord||0,rc:r.rord||0,nrev:r.nrev||0,rrev:r.rrev||0};}
+  if(n==='ALL STORES'){const o2={nc:0,rc:0,nrev:0,rrev:0};names.forEach(x=>{const r=(B[x]||{})[mm]||{};o2.nc+=r.nc||0;o2.rc+=r.rc||0;o2.nrev+=r.nrev||0;o2.rrev+=r.rrev||0;});return o2;}
+  const r=(B[n]||{})[mm]||{};return {nc:r.nc||0,rc:r.rc||0,nrev:r.nrev||0,rrev:r.rrev||0};};
+ const scopes=['ONLINE'].concat(names).concat(['ALL STORES']);
+ const rows=scopes.map(n=>{const all=n==='ALL STORES';const f=(fn,a,b)=>all?names.reduce((s2,x)=>s2+fn(x,a,b),0):fn(n,a,b);
+  return {n:n,rv:f(revOf,ST.s,ST.e),rp:f(revOf,pw[0],pw[1]),av:f(adsOf,ST.s,ST.e),ap:f(adsOf,pw[0],pw[1]),c:mo(n,m),l:mo(n,mly)};});
+ const pc=(c,p)=>p?((c/p-1)*100):null;const fp=v=>v==null?'<span style="color:#8a93a6">—</span>':'<span style="font-weight:800;color:'+(v>=0?'#12a06e':'#e23a63')+'">'+(v>=0?'▲ +':'▼ −')+Math.abs(v).toFixed(0)+'%</span>';const M=v=>'E£ '+Math.round(v).toLocaleString();
+ const tr=r=>'<tr'+(r.n==='ALL STORES'?' style="background:#f8f9fc;font-weight:800"':'')+'><td style="text-align:left;font-weight:800">'+r.n+'</td><td>'+M(r.rv)+'</td><td>'+fp(pc(r.rv,r.rp))+'</td><td>'+M(r.av)+'</td><td>'+fp(pc(r.av,r.ap))+'</td><td style="color:#8a93a6">'+(r.rv?Math.round(r.av/r.rv*100):0)+'%</td><td>'+r.c.nc.toLocaleString()+'</td><td>'+fp(pc(r.c.nc,r.l.nc))+'</td><td>'+r.c.rc.toLocaleString()+'</td><td>'+fp(pc(r.c.rc,r.l.rc))+'</td><td>'+M(r.c.nrev)+'</td><td>'+fp(pc(r.c.nrev,r.l.nrev))+'</td><td>'+M(r.c.rrev)+'</td><td>'+fp(pc(r.c.rrev,r.l.rrev))+'</td></tr>';
+ pnlCard(g,'odoo','Branch scoreboard &mdash; '+ST.s+' &rarr; '+ST.e+' vs '+pw[0]+' &rarr; '+pw[1]+' &middot; customers: '+m+(isMTD?' (MTD)':'')+' vs '+mly,
+  'Left block follows the date filter: daily POS revenue and Meta in-store attributed value (ONLINE = Shopify net and website conversion value). Right block is monthly because new/returning customers come from the monthly customer crawl: the month of the range end vs the same month last year. Everything below explains these rows.',
+  '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th></th><th colspan="5" style="text-align:center;background:#eef0f5">SELECTED PERIOD</th><th colspan="8" style="text-align:center;background:#f3efff">MONTH '+m+(isMTD?' MTD':'')+' vs '+mly+'</th></tr><tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>From Meta ads</th><th>vs prev</th><th>ads share</th><th>New cust</th><th>YoY</th><th>Returning</th><th>YoY</th><th>NC revenue</th><th>YoY</th><th>RC revenue</th><th>YoY</th></tr>'+rows.map(tr).join('')+'</table></div>');}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  const N=+document.getElementById('bw').value||30;const wf=N/30.44;
