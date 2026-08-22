@@ -22,6 +22,7 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .sechd .sh1{font-size:12px;font-weight:800;letter-spacing:2px;color:#64748b;display:flex;align-items:center;gap:8px}
 .sechd .sh1:after{content:'';flex:1;height:1px;background:#e3e7ef}
 .sechd .sh2{font-size:11px;color:#8a93a6;margin-top:2px}
+.dcmp{margin:6px 14px 12px;padding:8px 11px;border-left:3px solid #5a5bf0;background:#f8f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#3d4756;line-height:1.55}
 .card{background:#fff;border-radius:16px;padding:16px 18px 12px;box-shadow:0 10px 26px rgba(20,30,60,.05);border:1px solid #f0f2f7;border-top:3px solid #e8ebf3;position:relative}
 .card.full{grid-column:1/-1}
 .card[data-a=odoo]{border-top-color:#5a5bf0}.card[data-a=shop]{border-top-color:#12a06e}.card[data-a=meta]{border-top-color:#2f7fe0}.card[data-a=blend]{border-top-color:#12b0a4}.card[data-a=ins]{border-top-color:#ff8b42}
@@ -1184,14 +1185,14 @@ function cards(){CARDS=[
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
  {id:'kv',a:'blend',t:'The essentials — Shopify online',src:'gross',cs:'SHOPIFY CHANNEL ONLY (Odoo confirmed orders, marketplaces &amp; branch POS excluded — branches live on the Branches tab). Revenue net of actual credit notes, GP, what a NEW vs RETURNING customer spends per order, and site conversion.',
-  k:o=>{const A=O.ad||{};const out=[['Revenue (net of returns)',o.net[0],o.net[1],'cur',0],['Gross profit',o.gp[0],o.gp[1],'cur',0]];
+  k:o=>{const A=O.ad||{};const out=[['Revenue (net of returns)',o.net[0],o.net[1],'cur',1],['Gross profit',o.gp[0],o.gp[1],'cur',1]];
    if(A.ncrev&&A.newcust){const t0=new Date(A.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
     const S=(arr,a,b)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(A.n-1,b);i++)t+=arr[i]||0;return t;};
     const rg=[ix(ST.s),ix(ST.e)];const pw=cmpWr(ST.s,ST.e);const pg=[ix(pw[0]),ix(pw[1])];
     const ok=r=>r[1]>=0&&r[0]<=A.n-1;
     const av=(rv,ct,r)=>ok(r)&&S(A[ct],r[0],r[1])?S(A[rv],r[0],r[1])/S(A[ct],r[0],r[1]):null;
-    out.push(['AOV — NEW customers',av('ncrev','newcust',rg),ST.cmp==='off'?null:av('ncrev','newcust',pg),'cur',0]);
-    out.push(['AOV — RETURNING',av('rcrev','retcust',rg),ST.cmp==='off'?null:av('rcrev','retcust',pg),'cur',0]);
+    out.push(['AOV — NEW customers',av('ncrev','newcust',rg),ST.cmp==='off'?null:av('ncrev','newcust',pg),'cur',1]);
+    out.push(['AOV — RETURNING',av('rcrev','retcust',rg),ST.cmp==='off'?null:av('rcrev','retcust',pg),'cur',1]);
     if(A.cvr&&A.sessions){const cv=r=>{if(!ok(r))return null;let s=0,c=0;for(let i=Math.max(0,r[0]);i<=Math.min(A.n-1,r[1]);i++){s+=A.sessions[i]||0;c+=(A.cvr[i]||0)*(A.sessions[i]||0);}return s?c/s:null;};
      out.push(['Site CVR',cv(rg),ST.cmp==='off'?null:cv(pg),'pct',1]);}}
    return out;}},
@@ -1271,6 +1272,31 @@ function insHTML(o){const rows=[];
  O.ann.filter(a=>a.d>=ST.s&&a.d<=ST.e).slice(-8).forEach(a=>rows.push([ANNC[a.k],a.d+' — '+a.t]));
  return '<div class="ins">'+rows.map(x=>`<div class="row"><span class="dot" style="background:${x[0]}"></span><span>${x[1]}</span></div>`).join('')+'</div>';}
 
+
+/* ---- DECOMPOSITION: under each headline card, say exactly WHY the number moved ---- */
+const DCS={};
+function dcPct(c,p){return (c!=null&&p)?((c/p-1)*100):null;}
+function dcFmt(v){return v==null?'—':((v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%');}
+function dcMoney(v){return (v>=0?'+':'−')+'E£ '+Math.round(Math.abs(v)).toLocaleString();}
+function dcLog(parts){const L=parts.map(p=>(p[1]>0&&p[2]>0)?Math.log(p[1]/p[2]):0);const tot=L.reduce((a,b)=>a+Math.abs(b),0);return parts.map((p,i)=>({l:p[0],pc:dcPct(p[1],p[2]),sh:tot?Math.abs(L[i])/tot*100:0,pos:L[i]>=0}));}
+function dcHtml(head,items,note){return '<div class="dcmp"><b>'+head+'</b> '+items.map(it=>'<span style="color:'+(it.pos?'#12a06e':'#e23a63')+';font-weight:700">'+it.l+' '+dcFmt(it.pc)+'</span> <span style="color:#8a93a6">('+Math.round(it.sh)+'% of the move)</span>').join(' · ')+(note?' <span style="color:#8a93a6">'+note+'</span>':'')+'</div>';}
+function dcRevenue(){const A=O.ad;if(!A||!A.ncrev||ST.cmp==='off')return '';const t0=new Date(A.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ const S=(arr,a,b)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(A.n-1,b);i++)t+=arr[i]||0;return t;};
+ const r=[ix(ST.s),ix(ST.e)],pw=cmpWr(ST.s,ST.e),p=[ix(pw[0]),ix(pw[1])];if(p[1]<0||r[1]<0)return '';
+ const f=rg=>{const nr=S(A.ncrev,rg[0],rg[1]),rr=S(A.rcrev,rg[0],rg[1]),nc=S(A.newcust,rg[0],rg[1]),rc=S(A.retcust,rg[0],rg[1]);return {nr,rr,rev:nr+rr,ord:nc+rc,nc,rc,aov:(nc+rc)?(nr+rr)/(nc+rc):0};};
+ const c=f(r),q=f(p);if(!q.rev||!c.rev)return '';
+ const vp=dcLog([['orders',c.ord,q.ord],['AOV',c.aov,q.aov]]);
+ const dN=c.nr-q.nr,dR=c.rr-q.rr;const shN=(Math.abs(dN)+Math.abs(dR))?Math.abs(dN)/(Math.abs(dN)+Math.abs(dR))*100:0;
+ const col=v=>v>=0?'#12a06e':'#e23a63';
+ return dcHtml('Shopify order flow (gross, before returns) '+dcFmt(dcPct(c.rev,q.rev))+' — volume &times; price:',vp,'')
+  +'<div class="dcmp" style="margin-top:-6px"><b>By customer type:</b> new-customer revenue <span style="font-weight:700;color:'+col(dN)+'">'+dcMoney(dN)+'</span> ('+Math.round(shN)+'% of the move · '+dcFmt(dcPct(c.nr,q.nr))+' on '+dcFmt(dcPct(c.nc,q.nc))+' new customers, AOV '+dcFmt(dcPct(c.nc?c.nr/c.nc:0,q.nc?q.nr/q.nc:0))+') · returning revenue <span style="font-weight:700;color:'+col(dR)+'">'+dcMoney(dR)+'</span> ('+Math.round(100-shN)+'% · '+dcFmt(dcPct(c.rr,q.rr))+' on '+dcFmt(dcPct(c.rc,q.rc))+' returning customers)</div>';}
+DCS.kv=o=>DCS.rev(o);
+DCS.rev=o=>{if(!o.net||!o.net[1]||!o.ref)return '';const dG=o.gross[0]-o.gross[1],dR=o.ref[0]-o.ref[1],dN=o.net[0]-o.net[1];const t=Math.abs(dG)+Math.abs(dR)||1;
+ return '<div class="dcmp"><b>Why net moved '+dcFmt(dcPct(o.net[0],o.net[1]))+' ('+dcMoney(dN)+'):</b> gross sales <span style="font-weight:700;color:'+(dG>=0?'#12a06e':'#e23a63')+'">'+dcFmt(dcPct(o.gross[0],o.gross[1]))+' · '+dcMoney(dG)+'</span> ('+Math.round(Math.abs(dG)/t*100)+'% of the move) · returns <span style="font-weight:700;color:'+(dR<=0?'#12a06e':'#e23a63')+'">'+dcFmt(dcPct(o.ref[0],o.ref[1]))+' · '+dcMoney(-dR)+' to net</span> ('+Math.round(Math.abs(dR)/t*100)+'%)</div>'+dcRevenue();};
+DCS.gp=o=>{if(!o.gp||!o.gp[1]||!o.net||!o.net[1])return '';const m0=o.gp[1]/o.net[1],m1=o.net[0]?o.gp[0]/o.net[0]:0;const volE=(o.net[0]-o.net[1])*m0,mgE=(m1-m0)*o.net[0];const t=Math.abs(volE)+Math.abs(mgE)||1;
+ return '<div class="dcmp"><b>Why gross profit moved '+dcFmt(dcPct(o.gp[0],o.gp[1]))+':</b> revenue volume <span style="font-weight:700;color:'+(volE>=0?'#12a06e':'#e23a63')+'">'+dcMoney(volE)+'</span> ('+Math.round(Math.abs(volE)/t*100)+'% of the move) · margin '+((m1-m0)>=0?'+':'−')+Math.abs((m1-m0)*100).toFixed(1)+' pts <span style="font-weight:700;color:'+(mgE>=0?'#12a06e':'#e23a63')+'">'+dcMoney(mgE)+'</span> ('+Math.round(Math.abs(mgE)/t*100)+'%)</div>';};
+DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const parts=dcLog([['revenue',o.net[0],o.net[1]],['spend',o.sp[1],o.sp[0]]]);parts[1].pc=dcPct(o.sp[0],o.sp[1]);
+ return dcHtml('Why MER moved '+dcFmt(dcPct(o.net[0]/o.sp[0],o.net[1]/o.sp[1]))+' (Odoo net revenue ÷ spend):',parts,'red on spend means spend went UP.');};
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
@@ -1283,7 +1309,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    b='<div class="chan">'+Object.keys(o.ch).map(n=>{const v=o.ch[n],vp=o.chP[n],d=dl(v,vp,1);return `<div class="r"><div class="n">${n}</div><div class="t"><div class="f" style="width:${Math.max(0,v/t*100).toFixed(1)}%;background:${CHC[n]||C.blue}"></div></div><div class="vl" style="${v<0?'color:#e23a63':''}">E£ ${Math.round(v).toLocaleString()} <span class="${d.cls}" style="font-size:10px">${d.t.replace(' vs prev','')}</span></div></div>`;}).join('')+'</div>';}
   else if(c.html)b=c.html(o);
   else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(c.k(o),c.src)+'</div>';
-  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}`;
+  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}${(DCS[id]&&!na)?DCS[id](o):''}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
   if(c.mount&&!na)setTimeout(()=>{try{c.mount(el,o);}catch(e){}},0);
@@ -1299,10 +1325,19 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const i1=Math.min(n-1,ST.e?Math.round((new Date(ST.e+'T00:00:00Z')-t0)/864e5):n-1);
   const i0=Math.max(0,ST.s?Math.round((new Date(ST.s+'T00:00:00Z')-t0)/864e5):0);
   const _bk=Math.min(40,Math.max(12,Math.ceil((i1-i0+1)/7)));
-  for(let e=i1;e>=6&&wk.length<_bk;e-=7){let rev=0,ncr=0,sp=0,off=0;
-   for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);const f=MG.del?(kr[m]||0.86):1;
-    rev+=((A.ncrev[i]||0)+(A.rcrev[i]||0))*f;ncr+=(A.ncrev[i]||0)*f;sp+=A.spend[i]||0;off+=(offM[m]||0)/dim(m);}
-   wk.unshift({lbl:day(e-6).slice(5),mer:sp?rev/sp:null,amer:sp?ncr/sp:null,mero:sp?(rev+off)/sp:null});}
+  // in-store legs (monthly feeds spread per day): store NEW-customer revenue & count (bnr), store GP (pos), offline advertising GL
+  const stNR={},stNC={},stGP={},offAdv={};
+  Object.keys(O.bnr||{}).forEach(b=>{Object.keys(O.bnr[b]||{}).forEach(m=>{const x=O.bnr[b][m]||{};stNR[m]=(stNR[m]||0)+(x.nrev||0);stNC[m]=(stNC[m]||0)+(x.nc||0);});});
+  Object.keys(O.pos||{}).forEach(b=>{Object.keys(O.pos[b]||{}).forEach(m=>{stGP[m]=(stGP[m]||0)+((O.pos[b][m]||[])[1]||0);});});
+  const oa=m=>{if(offAdv[m]==null){try{offAdv[m]=(rtBase(m)||{}).offAdv||0;}catch(e){offAdv[m]=0;}}return offAdv[m];};
+  const tF=(O.fin&&O.fin.start)?new Date(O.fin.start+'T00:00:00Z').getTime():null;
+  for(let e=i1;e>=6&&wk.length<_bk;e-=7){let rev=0,ncr=0,sp=0,off=0,ncrS=0,gpO=0,gpS=0,nc=0,ncS=0,adv=0;
+   for(let i=e-6;i<=e;i++){const m=day(i).slice(0,7);const f=MG.del?(kr[m]||0.86):1;const dm=dim(m);
+    rev+=((A.ncrev[i]||0)+(A.rcrev[i]||0))*f;ncr+=(A.ncrev[i]||0)*f;sp+=A.spend[i]||0;off+=(offM[m]||0)/dm;
+    ncrS+=(stNR[m]||0)/dm;gpS+=(stGP[m]||0)/dm;ncS+=(stNC[m]||0)/dm;adv+=oa(m)/dm;nc+=A.newcust?(A.newcust[i]||0):0;
+    if(tF){const fi=Math.round((t0+i*864e5-tF)/864e5);gpO+=((O.fin.gp||[])[fi]||0)*1000*f;}}
+   wk.unshift({lbl:day(e-6).slice(5),rev:rev,sp:sp,mer:sp?rev/sp:null,amer:sp?ncr/sp:null,mero:sp?(rev+off)/sp:null,
+    amero:sp?(ncr+ncrS)/sp:null,gpa:gpO+gpS-sp-adv,ncac:(nc+ncS)?(sp+adv)/(nc+ncS):null});}
   if(wk.length<2)return;
   const cur=wk[wk.length-1],prv=wk[wk.length-2];
   const dl2=(a,b)=>(a!=null&&b)?' <span style="font-size:10.5px;font-weight:800;color:'+(a>=b?'#12a06e':'#e23a63')+'">'+(a>=b?'▲':'▼')+' '+Math.abs((a/b-1)*100).toFixed(0)+'% vs prior wk</span>':'';
@@ -1312,12 +1347,17 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    +'<div class="cs">Anchored to the date-filter END (each point = a 7-day block; min 12 weeks of history shown for context). MER = Shopify revenue &divide; total spend (Meta+Google+TikTok) &middot; aMER = NEW-customer revenue &divide; spend. <b>Cancelled orders are already excluded at source</b> (only confirmed sale/done orders count as revenue); '+tgl('del','delivered only')+' additionally removes the value that later comes back as RETURNS, using each month&rsquo;s real kept-rate. The green dashed line is MER <b>including in-store</b> branch POS revenue (month total spread evenly per day &mdash; POS has no daily feed).</div></div>'
    +'<div class="kpis"><div class="kpi"><div class="l">MER'+(MG.del?' · deliv':'')+'</div><div class="v">'+(cur.mer?cur.mer.toFixed(2):'—')+'x'+dl2(cur.mer,prv.mer)+'</div></div>'
    +'<div class="kpi"><div class="l">aMER</div><div class="v">'+(cur.amer?cur.amer.toFixed(2):'—')+'x'+dl2(cur.amer,prv.amer)+'</div></div>'
-   +'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div></div></div>'
-   +'<div style="position:relative;height:240px;padding:0 12px 12px"><canvas id="mergT"></canvas></div>';
+   +'<div class="kpi"><div class="l">MER incl in-store</div><div class="v">'+(cur.mero?cur.mero.toFixed(2):'—')+'x'+dl2(cur.mero,prv.mero)+'</div></div>'
+   +'<div class="kpi"><div class="l">aMER incl in-store</div><div class="v">'+(cur.amero?cur.amero.toFixed(2):'—')+'x'+dl2(cur.amero,prv.amero)+'</div></div>'
+   +'<div class="kpi"><div class="l">GP after ads (online + stores)</div><div class="v">E£ '+Math.round(cur.gpa).toLocaleString()+dl2(cur.gpa,prv.gpa)+'</div></div>'
+   +'<div class="kpi"><div class="l">nCAC incl stores</div><div class="v">E£ '+(cur.ncac?Math.round(cur.ncac).toLocaleString():'—')+((cur.ncac&&prv.ncac)?' <span style="font-size:10.5px;font-weight:800;color:'+(cur.ncac<=prv.ncac?'#12a06e':'#e23a63')+'">'+(cur.ncac>=prv.ncac?'▲':'▼')+' '+Math.abs((cur.ncac/prv.ncac-1)*100).toFixed(0)+'% vs prior wk</span>':'')+'</div></div></div></div>'
+   +'<div style="position:relative;height:240px;padding:0 12px 12px"><canvas id="mergT"></canvas></div>'
+   +((cur.rev&&prv.rev&&cur.sp&&prv.sp)?(function(){const parts=dcLog([['revenue',cur.rev,prv.rev],['spend',prv.sp,cur.sp]]);parts[1].pc=dcPct(cur.sp,prv.sp);return dcHtml('Why MER moved '+dcFmt(dcPct(cur.mer,prv.mer))+' this week (Shopify gross revenue ÷ spend):',parts,'aMER incl in-store adds store NEW-customer revenue · GP after ads = online GP + store GP − online ad spend − offline advertising GL · nCAC incl stores = (online spend + offline advertising) ÷ (online + store new customers).');})():'');
   const _anc=g.querySelector('.card[data-id="mer"]');_anc?_anc.insertAdjacentElement('afterend',el):g.appendChild(el);
   const ds=[{label:'MER'+(MG.del?' (delivered)':''),data:wk.map(w=>w.mer),borderColor:'#3a9bff',backgroundColor:'#3a9bff22',borderWidth:2.5,pointRadius:2,tension:.3},
    {label:'aMER (new customers)',data:wk.map(w=>w.amer),borderColor:'#5a5bf0',borderWidth:2,pointRadius:2,tension:.3},
-   {label:'MER incl in-store'+(MG.del?' (deliv online leg)':''),data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3}];
+   {label:'MER incl in-store'+(MG.del?' (deliv online leg)':''),data:wk.map(w=>w.mero),borderColor:'#12a06e',borderWidth:2,borderDash:[6,3],pointRadius:2,tension:.3},
+   {label:'aMER incl in-store',data:wk.map(w=>w.amero),borderColor:'#9d6bff',borderWidth:1.5,borderDash:[3,3],pointRadius:0,tension:.3}];
   ch.push(new Chart(document.getElementById('mergT'),{type:'line',data:{labels:wk.map(w=>w.lbl),datasets:ds},
    options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?c2.parsed.y.toFixed(2)+'x':'—')}}},
@@ -1409,6 +1449,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    +'<div class="kpis"><div class="kpi"><div class="l">GP:CAC this wk'+(GD?' · deliv':'')+'</div><div class="v">'+(cur.r?cur.r.toFixed(2):'—')+'x'+dl2(cur.r,prv.r)+'</div></div>'
    +'<div class="kpi"><div class="l">CAC this wk</div><div class="v">E£ '+(cur.cac?Math.round(cur.cac).toLocaleString():'—')+((cur.cac&&prv.cac)?' <span style="font-size:10.5px;font-weight:800;color:'+(cur.cac<=prv.cac?'#12a06e':'#e23a63')+'">'+(cur.cac>=prv.cac?'▲':'▼')+' '+Math.abs((cur.cac/prv.cac-1)*100).toFixed(0)+'% vs prior wk</span>':'')+'</div></div>'
    +'<div class="kpi"><div class="l">GP / new customer</div><div class="v">E£ '+(cur.gpc?Math.round(cur.gpc).toLocaleString():'—')+dl2(cur.gpc,prv.gpc)+'</div></div></div></div>'
+   +((cur.gpc&&prv.gpc&&cur.cac&&prv.cac)?(function(){const parts=dcLog([['GP per new customer',cur.gpc,prv.gpc],['CAC',prv.cac,cur.cac]]);parts[1].pc=dcPct(cur.cac,prv.cac);return dcHtml('Why GP:CAC moved '+dcFmt(dcPct(cur.r,prv.r))+' this week:',parts,'red on CAC means it got more expensive.');})():'')
    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;padding:4px 12px 12px">'
    +'<div style="position:relative;height:230px"><canvas id="gpcacT"></canvas></div>'
    +'<div style="overflow-x:auto"><table class="bt heat" data-hc="5" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Month</th><th>New cust</th><th>Spend</th><th>CAC</th><th>GP/NC'+(GD?' deliv':'')+'</th><th>GP:CAC</th></tr>'+rows+'</table></div></div>'
