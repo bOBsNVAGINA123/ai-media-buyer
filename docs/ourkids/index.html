@@ -1534,21 +1534,70 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
     plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?Math.round(c2.parsed.y).toLocaleString():'no ad data')}}},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}},y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}}}}}));
  })();
- // ---- SCOREBOARD: the numbers and what changed, one table, at the very top ----
+ // ---- WEEKLY AUDIT SCOREBOARD: week vs last week, plus month-vs-LY and year-vs-LY on every row ----
  (function(){const o2=calc();if(!o2)return;const pw=cmpWr(ST.s,ST.e);
-  const R=[['Revenue (net of returns)',o2.net,'cur',1],['Gross sales',o2.gross,'cur',1],['Returns (credit notes)',o2.ref,'cur',0],['Orders',o2.ord,'n',1],
-   ['New customers',o2.nc,'n',1],['Returning customers',o2.rcn,'n',1],['AOV',o2.aov,'cur',1],['AOV — new customers',o2.ncaov,'cur',1],['AOV — returning',o2.rcaov,'cur',1],
-   ['Gross profit',o2.gp,'cur',1],['GP %',o2.gpct,'pct',1],['Net contribution (GP − ads − e-com payroll)',o2.onp,'cur',1],
-   ['Ad spend',o2.sp,'cur',0],['MER (net revenue ÷ spend)',o2.mer,'x',1],['aMER (new-customer revenue ÷ spend)',o2.amer,'x',1],['Blended CPP',o2.bcpp,'cur',0],['nCAC (spend ÷ new customers)',o2.cac,'cur',0],['GP : CAC (first order)',o2.gpcac,'x',1],
-   ['Sessions',o2.sess,'n',1],['Site CVR',o2.cvr,'pct',1]];
-  const f=k=>FM[k]||fI;
-  const rows=R.map(r=>{const v=r[1]||[null,null];const c=v[0],p=v[1];const f2=f(r[2]);const d=(c!=null&&p)?c-p:null;const pc=(c!=null&&p)?(c/p-1)*100:null;const good=pc==null?null:((pc>=0)===!!r[3]);
-   return '<tr><td style="text-align:left;font-weight:700">'+r[0]+'</td><td style="font-weight:800">'+(c==null?'—':f2(c))+'</td><td style="color:#64748b">'+(p==null?'—':f2(p))+'</td><td style="color:'+(good==null?'#8a93a6':good?'#12a06e':'#e23a63')+';font-weight:700">'+(d==null?'—':((d>=0?'+':'−')+f2(Math.abs(d))))+'</td><td style="font-weight:800;color:'+(good==null?'#8a93a6':good?'#12a06e':'#e23a63')+'">'+(pc==null?'—':((pc>=0?'▲ +':'▼ −')+Math.abs(pc).toFixed(1)+'%'))+'</td></tr>';}).join('');
-  const chip=(p,l)=>'<span class="chip" onclick="pre(\''+p+'\')">'+l+'</span>';
+  const A=O.ad||{};const NRm=O.nr||{};
+  // monthly aggregates: finance (full history), ad panel (from A.start), customers (NR)
+  const FMo={};if(O.fin&&DD.length){for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const f=FMo[m]||(FMo[m]={rev:0,ref:0,gp:0,ord:0});f.rev+=(O.fin.rev[i]||0)*1000;f.ref+=(O.fin.refund[i]||0)*1000;f.gp+=(O.fin.gp[i]||0)*1000;f.ord+=(O.fin.orders?(O.fin.orders[i]||0):0);}}
+  const AMo={};if(A.start){const t0=new Date(A.start+'T00:00:00Z').getTime();for(let i=0;i<A.n;i++){const m=new Date(t0+i*864e5).toISOString().slice(0,7);const x=AMo[m]||(AMo[m]={sp:0,ncrev:0,rcrev:0,sess:0});x.sp+=(A.spend||[])[i]||0;x.ncrev+=(A.ncrev||[])[i]||0;x.rcrev+=(A.rcrev||[])[i]||0;x.sess+=(A.sessions||[])[i]||0;}}
+  const adOK=m=>m>='2025-09';  // ad panel fully covers months from Sep-2025
+  const curM=(ST.e||'').slice(0,7);const lyM=(+curM.slice(0,4)-1)+curM.slice(4);
+  const elapsed=Math.max(1,+(ST.e||'').slice(8,10));const dimM=new Date(Date.UTC(+curM.slice(0,4),+curM.slice(5,7),0)).getUTCDate();
+  const isMTD=curM===(O.today||'').slice(0,7)||(ST.e||'')<((O.today||''));const pfM=dimM/elapsed;
+  const F=m=>FMo[m]||{rev:0,ref:0,gp:0,ord:0};const N=m=>NRm[m]||{};const AD=m=>AMo[m]||{sp:0,ncrev:0,rcrev:0,sess:0};
+  const yr=curM.slice(0,4),yl=lyM.slice(0,4);
+  const monthsOf=(y,upto)=>{const o3=[];for(let k=1;k<=+upto;k++)o3.push(y+'-'+String(k).padStart(2,'0'));return o3;};
+  const mm=+curM.slice(5,7);
+  const sumf=(fn,ms3)=>ms3.reduce((t,m)=>t+(fn(m)||0),0);
+  // row spec: [label, [cur,prev], fmt, goodUp, num(m), den(m)|null, adSrc]
+  const R=[
+   ['Revenue (net of returns)',o2.net,'cur',1,m=>F(m).rev-F(m).ref,null,0],
+   ['Gross sales',o2.gross,'cur',1,m=>F(m).rev,null,0],
+   ['Returns (credit notes)',o2.ref,'cur',0,m=>F(m).ref,null,0],
+   ['Orders',o2.ord,'n',1,m=>F(m).ord,null,0],
+   ['New customers',o2.nc,'n',1,m=>N(m).nord,null,0],
+   ['Returning customers',o2.rcn,'n',1,m=>N(m).rord,null,0],
+   ['NC revenue',o2.ncrev,'cur',1,m=>N(m).nrev,null,0],
+   ['RC revenue',o2.rcrev,'cur',1,m=>N(m).rrev,null,0],
+   ['AOV — new customers',o2.ncaov,'cur',1,m=>N(m).nrev,m=>N(m).nord,0],
+   ['AOV — returning',o2.rcaov,'cur',1,m=>N(m).rrev,m=>N(m).rord,0],
+   ['Gross profit',o2.gp,'cur',1,m=>F(m).gp,null,0],
+   ['GP %',o2.gpct,'pct',1,m=>F(m).gp,m=>F(m).rev-F(m).ref,0],
+   ['Ad spend',o2.sp,'cur',0,m=>AD(m).sp,null,1],
+   ['MER (net ÷ spend)',o2.mer,'x',1,m=>F(m).rev-F(m).ref,m=>AD(m).sp,1],
+   ['aMER',o2.amer,'x',1,m=>AD(m).ncrev,m=>AD(m).sp,1],
+   ['nCAC (spend ÷ new customers)',o2.cac,'cur',0,m=>AD(m).sp,m=>N(m).nord,1],
+   ['Sessions',o2.sess,'n',1,m=>AD(m).sess,null,1],
+   ['Site CVR',o2.cvr,'pct',1,null,null,1]];
+  const f2=k=>FM[k]||fI;const pcF=(a2,b2)=>(a2!=null&&b2)?((a2/b2-1)*100):null;
+  const cell=(v,fmt)=>v==null||!isFinite(v)?'—':f2(fmt)(v);
+  const dcell=(pc2,good)=>pc2==null?'<td style="color:#c2c8d4">—</td>':'<td style="font-weight:800;color:'+(((pc2>=0)===!!good)?'#12a06e':'#e23a63')+'">'+(pc2>=0?'▲ +':'▼ −')+Math.abs(pc2).toFixed(0)+'%</td>';
+  const rows=R.map(r=>{const [lbl,per,fmt,gu,num,den,adS]=r;const c=per?per[0]:null,p2=per?per[1]:null;
+   let mv=null,mly=null,ytd=null,ytdL=null;
+   if(num){
+    const add=!den;
+    const mNum=num(curM),mDen=den?den(curM):1;const lNum=num(lyM),lDen=den?den(lyM):1;
+    const okC=!adS||adOK(curM),okL=!adS||adOK(lyM);
+    if(okC&&mDen)mv=mNum/mDen*(add&&isMTD?1:1);
+    if(okL&&lDen&&lNum!=null)mly=lNum/lDen;
+    // pace for additive rows when MTD
+    var mPc=(mv!=null&&mly)?pcF(add&&isMTD?mv*pfM:mv,mly):null;
+    // YTD (day-aligned: LY last month scaled by elapsed/dim)
+    const msC=monthsOf(yr,mm),msL=monthsOf(yl,mm);
+    const okY=!adS||adOK(msL[0]);
+    if(okY){const nC=sumf(num,msC),nL=sumf(num,msL.slice(0,-1))+(num(lyM)||0)*(isMTD?elapsed/dimM:1);
+     if(add){ytd=nC;ytdL=nL;}else{const dC=sumf(den,msC),dL=sumf(den,msL.slice(0,-1))+(den(lyM)||0)*(isMTD?elapsed/dimM:1);if(dC&&dL){ytd=nC/dC;ytdL=nL/dL;}}}
+    var yPc=(ytd!=null&&ytdL)?pcF(ytd,ytdL):null;
+   }
+   return '<tr><td style="text-align:left;font-weight:700">'+lbl+'</td>'
+    +'<td style="font-weight:800">'+cell(c,fmt)+'</td><td style="color:#64748b">'+cell(p2,fmt)+'</td>'+dcell(pcF(c,p2),gu)
+    +'<td style="border-left:1px solid #e6e9f0">'+(mv==null?'—':cell(mv,fmt))+'</td>'+dcell(typeof mPc==='undefined'?null:mPc,gu)
+    +'<td style="border-left:1px solid #e6e9f0">'+(ytd==null?'—':cell(ytd,fmt))+'</td>'+dcell(typeof yPc==='undefined'?null:yPc,gu)+'</tr>';}).join('');
+  const chip=(p2,l)=>'<span class="chip" onclick="pre(\''+p2+'\')">'+l+'</span>';
   const el=document.createElement('div');el.className='card full';el.dataset.a='blend';
-  el.innerHTML='<div class="chead"><div><div class="ct">Scoreboard — '+ST.s+' &rarr; '+ST.e+' vs '+(ST.cmp==='off'?'no comparison':pw[0]+' &rarr; '+pw[1])+'</div><div class="cs">Every headline number and what changed. Pick the period here or with the filter bar; the comparison follows the COMPARE selector. Shopify channel; green/red = good/bad for that metric. Everything below explains these rows.</div></div>'
+  el.innerHTML='<div class="chead"><div><div class="ct">Weekly audit — '+ST.s+' &rarr; '+ST.e+' vs '+(ST.cmp==='off'?'no comparison':pw[0]+' &rarr; '+pw[1])+'</div><div class="cs">The whole business in one table. Left block follows the PERIOD + COMPARE controls (default: this week vs last week). MONTH = '+curM+(isMTD?' month-to-date, % shown as PACE vs full '+lyM:' vs '+lyM)+'. YEAR = '+yr+' Jan &rarr; today vs the same days of '+yl+'. Ad-fed rows show — where last year&rsquo;s ad feed doesn&rsquo;t reach. Green/red = good/bad for that metric.</div></div>'
    +'<div class="kpis" style="gap:5px;flex-wrap:wrap">'+chip('1','Yesterday')+chip('7','7 days')+chip('30','30 days')+chip('mtd','MTD')+chip('90','90 days')+chip('ytd','YTD')+'</div></div>'
-   +'<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="width:100%;font-size:12px;text-align:right"><tr><th style="text-align:left">Metric</th><th>This period</th><th>Previous</th><th>Change</th><th>Change %</th></tr>'+rows+'</table></div>';
+   +'<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="width:100%;font-size:12px;text-align:right"><tr><th></th><th colspan="3" style="text-align:center;background:#eef0f5">SELECTED PERIOD vs COMPARE</th><th colspan="2" style="text-align:center;background:#f3efff">MONTH '+curM+(isMTD?' MTD (pace)':'')+' vs '+lyM+'</th><th colspan="2" style="text-align:center;background:#e7f8f1">YEAR '+yr+' vs '+yl+'</th></tr><tr><th style="text-align:left">Metric</th><th>This period</th><th>Previous</th><th>Δ%</th><th>Month</th><th>vs LY</th><th>YTD</th><th>vs LY</th></tr>'+rows+'</table></div>';
   const first=g.querySelector('.card[data-id="ins"]')||g.firstChild;if(first)g.insertBefore(el,first);else g.appendChild(el);
  })();
  // story-section headers — orient the eye, one act at a time
@@ -5492,9 +5541,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260823T180413Z';
+const BUILD='20260823T181735Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260823T180413Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260823T181735Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
