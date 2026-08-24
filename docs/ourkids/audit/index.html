@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Our Kids — Commercial Audit, August 2026</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-0:#f6f5f2; --surface-1:#fcfcfb; --surface-2:#f0efec;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#7a7975;
+  --line:#e3e2de; --grid:#eceae6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#008300; --warn:#eda100; --crit:#c0322f;
+  --seq1:#cde2fb; --seq2:#9ec5f4; --seq3:#5598e7; --seq4:#2a78d6; --seq5:#1c5cab;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+    --line:#33332f; --grid:#2a2a28;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+    --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+  --line:#33332f; --grid:#2a2a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+  --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);
+ font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1220px;margin:0 auto;padding:28px 20px 72px}
+header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--text-secondary);font-size:14px;margin:0}
+.tbtn{background:var(--surface-1);border:1px solid var(--line);color:var(--text-secondary);
+ border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer}
+.tbtn:hover{color:var(--text-primary)}
+.note{background:var(--surface-2);border-left:3px solid var(--warn);padding:11px 14px;border-radius:0 8px 8px 0;
+ font-size:13.5px;color:var(--text-secondary);margin:18px 0 26px}
+h2.sec{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);
+ margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:12px}
+.tile{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+.tile .lab{font-size:12px;color:var(--text-muted);margin-bottom:7px;letter-spacing:.01em}
+.tile .val{font-size:27px;font-weight:640;letter-spacing:-.025em;line-height:1.05}
+.tile .val small{font-size:14px;font-weight:500;color:var(--text-secondary);margin-left:2px}
+.tile .dlt{font-size:12.5px;margin-top:6px;color:var(--text-secondary)}
+.dn{color:var(--crit);font-weight:600} .up{color:var(--good);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px}
+.card h3{font-size:15px;margin:0 0 3px;font-weight:620;letter-spacing:-.01em}
+.card .cap{font-size:12.5px;color:var(--text-muted);margin:0 0 14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-bottom:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+svg{display:block;width:100%;overflow:visible}
+.gl{stroke:var(--grid);stroke-width:1}
+.ax{fill:var(--text-muted);font-size:11px}
+.dl{fill:var(--text-primary);font-size:11px;font-weight:600}
+.dl2{fill:var(--text-secondary);font-size:10.5px}
+.hit{fill:transparent;cursor:pointer}
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--surface-1);
+ border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12.5px;
+ box-shadow:0 6px 22px rgba(0,0,0,.14);z-index:99;min-width:132px;color:var(--text-primary)}
+#tip b{display:block;margin-bottom:5px;font-size:12.5px}
+#tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--text-secondary)}
+#tip .r i{font-style:normal;color:var(--text-primary);font-variant-numeric:tabular-nums}
+details{margin-top:12px;border-top:1px solid var(--line);padding-top:9px}
+summary{font-size:12px;color:var(--text-muted);cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:9px}
+th,td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text-muted);font-weight:600}
+.find{background:var(--surface-1);border:1px solid var(--line);border-left:3px solid var(--s2);
+ border-radius:0 12px 12px 0;padding:15px 17px;margin-bottom:11px}
+.find h4{margin:0 0 5px;font-size:14.5px;font-weight:640}
+.find p{margin:0;font-size:13.5px;color:var(--text-secondary)}
+.find.good{border-left-color:var(--good)}
+.find .tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--text-muted)}
+</style>
+
+<style>a.card:hover{border-color:var(--s1)}</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><div><h1>Our Kids &mdash; Commercial Audit</h1>
+<p class="sub">August 2026 &middot; built from Odoo, GA4 (Egypt only), Shopify and Google Ads &middot; four decks, one set of numbers</p></div>
+<button class="tbtn" id="themeBtn">Dark mode</button></header>
+<div class="note"><b>All four decks share one dataset and one set of rules.</b> Web traffic is Egypt-only; August 2026 is run-rated from 24 days where marked RR; every revenue figure has a gross and a net-of-returns reading; and the metric everything is ranked by is <b>GPPV &mdash; gross profit per visit</b>. Downloads: <a href="vendor-gmroi.csv">vendor GMROI &amp; buying file (354 vendors)</a> &middot; <a href="listing-gap.csv">listing gap file (4,854 SKUs)</a>.</div>
+<h2 class="sec">The four decks</h2>
+<div class="grid2">
+<a class="card" style="text-decoration:none;color:inherit;display:block" href="commercial.html"><h3>Commercial Diagnostic</h3><p class="cap">Where the business stands — channel shape, GPPV, MER with and without returns, the funnel, seven branches, vendor GMROI and the next-dollar call.</p><div class="legend" style="margin-top:10px"><span><i class="sw" style="background:var(--s1)"></i>522M EGP TTM</span><span><i class="sw" style="background:var(--s1)"></i>Media = 93% of online GP</span><span><i class="sw" style="background:var(--s1)"></i>GPPV 5.69 → 3.42</span><span><i class="sw" style="background:var(--s1)"></i>11.8M EGP to release</span></div></a>
+<a class="card" style="text-decoration:none;color:inherit;display:block" href="category.html"><h3>Category, Subcategory &amp; Competitor Review</h3><p class="cap">13 subcategories rebuilt from product names, the opportunity matrix, capital efficiency, and how we capture our own brands versus rivals.</p><div class="legend" style="margin-top:10px"><span><i class="sw" style="background:var(--s1)"></i>32% of views, 0.48% CVR</span><span><i class="sw" style="background:var(--s1)"></i>Stationery converts 3.68%</span><span><i class="sw" style="background:var(--s1)"></i>Clothing GMROI 0.95×</span><span><i class="sw" style="background:var(--s1)"></i>Own-brand demand lost</span></div></a>
+<a class="card" style="text-decoration:none;color:inherit;display:block" href="listing-gap.html"><h3>The Listing Gap</h3><p class="cap">What the seven shops sell that the website cannot — 18,756 SKUs matched barcode to barcode, ranked into four waves with a priority list.</p><div class="legend" style="margin-top:10px"><span><i class="sw" style="background:var(--s1)"></i>13.1M EGP/30d unlisted</span><span><i class="sw" style="background:var(--s1)"></i>4,854 SKUs</span><span><i class="sw" style="background:var(--s1)"></i>10.0M EGP/yr available</span><span><i class="sw" style="background:var(--s1)"></i>1,960 new arrivals</span></div></a>
+<a class="card" style="text-decoration:none;color:inherit;display:block" href="demand-gap.html"><h3>The Demand Gap</h3><p class="cap">The demand we already own and lose — sold-out pages, the cart leak, the price cliff, Arabic search, and where to widen range on consignment.</p><div class="legend" style="margin-top:10px"><span><i class="sw" style="background:var(--s1)"></i>8.28M EGP/mo available</span><span><i class="sw" style="background:var(--s1)"></i>85% of carts lost</span><span><i class="sw" style="background:var(--s1)"></i>191k sold-out views</span><span><i class="sw" style="background:var(--s1)"></i>Zero capital</span></div></a>
+</div>
+<footer>Built 24 Aug 2026 from Odoo (report.pos.order, sale.order.line, stock.move, product.product, account.move.line), GA4 property 297783390 filtered to Egypt, a Shopify Admin bulk export of 37,681 products and 71,944 variants, and Google Ads customer 2892178564. All figures EGP.</footer>
+</div>
+<script>(function(){const b=document.getElementById("themeBtn");const d=()=>document.documentElement.getAttribute("data-theme")==="dark"||(!document.documentElement.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme: dark)").matches);const s=()=>b.textContent=d()?"Light mode":"Dark mode";b.addEventListener("click",()=>{document.documentElement.setAttribute("data-theme",d()?"light":"dark");s();});s();})();</script>
+</body>
+</html>
