@@ -82,7 +82,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <label>COMPARE TO</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
 <div class="banner" id="bn"></div><div class="grid" id="g1"></div></div>
-<div id="offC" class="hide"><div class="bar"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select><span class="hide"><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select></span><label style="margin-left:8px" title="Meta only measures in-store revenue for a branch when that branch own custom conversion fires. Off = branches with no measurement show a dash. On = network Meta offline value is spread across branches by revenue share and badged allocated."><input type="checkbox" id="alloc" onchange="setAlloc(this.checked)"/> allocate Meta offline (modelled)</label><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
+<div id="offC" class="hide"><div class="bar"><span class="hide"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select></span><span class="hide"><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select></span><label style="margin-left:8px" title="Meta only measures in-store revenue for a branch when that branch own custom conversion fires. Off = branches with no measurement show a dash. On = network Meta offline value is spread across branches by revenue share and badged allocated."><input type="checkbox" id="alloc" onchange="setAlloc(this.checked)"/> allocate Meta offline (modelled)</label><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
 <div class="banner" id="bn2"></div><div class="grid" id="g2"></div></div>
 <div id="plC" class="hide"><div class="banner" id="bn3"></div><div class="grid" id="g3"></div></div>
 <div id="pnC" class="hide"><div class="banner" id="bn4"></div><div class="grid" id="g4"></div></div>
@@ -1672,7 +1672,7 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
  if(window.BNCGRID){
   const BL=O.bl||{};const FN=O.fin||{};const AD=O.ad||{};const BM=O.bmeta||{};
   window.BNCGM=window.BNCGM||'rev';const GM=window.BNCGM;
-  const GMS={rev:'Revenue (daily)',ads:'From Meta ads (daily, attributed)',nrev:'New-customer revenue (monthly)',rrev:'Returning revenue (monthly)',nc:'New customers (monthly)',rc:'Returning customers (monthly)'};
+  const GMS={rev:'Revenue (daily)',ads:'From Meta ads (daily, attributed)',nrev:'New-customer revenue (monthly)',rrev:'Returning revenue (monthly)',nc:'New customers (monthly)',rc:'Returning customers (monthly)',walk:'Unregistered / walk-ins (monthly)'};
   const gchips=Object.keys(GMS).map(k=>'<span class="chip" style="'+(k===GM?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCGM=\''+k+'\';rOff()">'+GMS[k]+'</span>').join(' ');
   const daily=(GM==='rev'||GM==='ads');const names=Object.keys(O.pos||{}).sort();
   let cells=[],labs=[],sub='';
@@ -1691,15 +1691,16 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
    labs=(function(){const o2=[];let d=new Date(ST.s+'T00:00:00Z');const e=new Date(ST.e+'T00:00:00Z');while(d<=e){o2.push(d.toISOString().slice(5,10));d=new Date(d.getTime()+864e5);}return o2;})();
    sub='Solid = this window &middot; dashed grey = compare window ('+(ST.cmp==='off'?'off':pw[0]+' &rarr; '+pw[1])+') &middot; number = window total, % vs compare. '+(GM==='rev'?'ONLINE = Shopify net daily; branches = POS journal income (daily feed from '+BL.start+').':'Meta-attributed value at the selected attribution ('+(((O.attr||{}).labels||{})[(ST.att&&ST.att.meta)||ST.at]||((ST.att&&ST.att.meta)||ST.at))+', scaled '+Math.round(afo()*100)+'%): ONLINE = website conversion value (Meta+Google+TikTok); branches = Meta in-store attributed value from the CAPI feed.');
   }else{
-   const key={nrev:'nrev',rrev:'rrev',nc:'nc',rc:'rc'}[GM];const okey={nrev:'nrev',rrev:'rrev',nc:'nord',rc:'rord'}[GM];
+   const key={nrev:'nrev',rrev:'rrev',nc:'nc',rc:'rc',walk:'walk'}[GM];const okey={nrev:'nrev',rrev:'rrev',nc:'nord',rc:'rord',walk:'walk'}[GM];
+   const wk=(n,mm)=>{try{return ((BWALK[n]||{})[mm]||[0])[0]||0;}catch(e){return 0;}};
    const t2=(O.today||'').slice(0,7);let mons=Object.keys(B[names[0]]||{}).sort().filter(m=>m<=t2);const m0=(ST.s||'').slice(0,7),m1=(ST.e||'').slice(0,7)||t2;const mr=mons.filter(m=>(!m0||m>=m0)&&m<=m1);mons=mr.length>=6?mr:mons.filter(m=>m<=m1).slice(-6);
    const ly=m=>(+m.slice(0,4)-1)+m.slice(4);
-   const scopes=[['ONLINE',m=>((O.nr||{})[m]||{})[okey]]].concat(names.map(n=>[n,m=>((B[n]||{})[m]||{})[key]]));
+   const scopes=[['ONLINE',m=>GM==='walk'?0:((O.nr||{})[m]||{})[okey]]].concat(names.map(n=>[n,m=>GM==='walk'?wk(n,m):((B[n]||{})[m]||{})[key]]));
    cells=scopes.map(s2=>{const cur=mons.map(m=>{const v=s2[1](m);return v==null?null:v;}),prv=mons.map(m=>{const v=s2[1](ly(m));return v==null?null:v;});const tot=cur.reduce((x,v)=>x+(v||0),0),pt=prv.reduce((x,v)=>x+(v||0),0);return {n:s2[0],cur:cur,prv:prv,tot:tot,d:pt?tot/pt-1:null};});
    labs=mons.map(m=>m.slice(2)+(m===t2?' MTD':''));
-   sub='Monthly, the months inside the date filter (min 6) &middot; dashed grey = the same months LAST YEAR &middot; number = total over those months, % YoY. Last point is MTD.';
+   sub='Monthly &mdash; <b>'+mons[0]+' → '+mons[mons.length-1]+'</b> (the months your date filter touches; a minimum of 6 is kept so a trend is readable) &middot; dashed grey = the same months LAST YEAR &middot; number = total over those months, % YoY. Last point is MTD.';
   }
-  const money=(GM==='nc'||GM==='rc')?v=>Math.round(v).toLocaleString():v=>'E£ '+Math.round(v).toLocaleString();
+  const money=(GM==='nc'||GM==='rc'||GM==='walk')?v=>Math.round(v).toLocaleString():v=>'E£ '+Math.round(v).toLocaleString();
   const html2=cells.map((c2,i)=>'<div style="background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:8px 10px 6px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">'+c2.n+'</b><span style="font-size:11px;font-weight:800">'+money(c2.tot)+(c2.d!=null?' <span style="color:'+(c2.d>=0?'#12a06e':'#e23a63')+'">'+(c2.d>=0?'+':'')+Math.round(c2.d*100)+'%</span>':'')+'</span></div><div style="position:relative;height:96px"><canvas id="bgr'+i+'"></canvas></div></div>').join('');
   pnlCard(g,'odoo','Each branch, its own graph &mdash; '+GMS[GM]+(daily?' &middot; '+ST.s+' &rarr; '+ST.e:''),sub,
    '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:800;color:#8a93a6">METRIC</span> '+gchips+' <span style="width:1px;height:16px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">OTHER VIEWS</span> '+chips+'</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'+html2+'</div>');
@@ -1736,30 +1737,56 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
  const tF=FN.start?new Date(FN.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
  const tA=AD.start?new Date(AD.start+'T00:00:00Z').getTime():null;const ixA=d=>Math.round((new Date(d+'T00:00:00Z')-tA)/864e5);
  const S=(arr,a,b,nn)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min(nn-1,b);i++)t+=arr?(arr[i]||0):0;return t;};
- const revOf=(n,a,b)=>n==='ONLINE'?(tF?(S(FN.rev,ixF(a),ixF(b),FN.n)-S(FN.refund,ixF(a),ixF(b),FN.n))*1000:0):S(BL.b[n],ix(a),ix(b),BL.n);
  const mfo=afo(),mfm=af('meta'),mfg=af('google'),mft=af('tt');
+ const revOf=(n,a,b)=>n==='ONLINE'?(tF?(S(FN.rev,ixF(a),ixF(b),FN.n)-S(FN.refund,ixF(a),ixF(b),FN.n))*1000:0):S(BL.b[n],ix(a),ix(b),BL.n);
  const adsOf=(n,a,b)=>!tA?0:(n==='ONLINE'?S(AD.mecomrev,ixA(a),ixA(b),AD.n)*mfm+S(AD.gecomrev,ixA(a),ixA(b),AD.n)*mfg+S(AD.ttValue,ixA(a),ixA(b),AD.n)*mft:S((BM[n]||{}).v,ixA(a),ixA(b),AD.n)*mfo);
- const m=(ST.e||'').slice(0,7),mly=(+m.slice(0,4)-1)+m.slice(4);const isMTD=m===(O.today||'').slice(0,7);
- const elapsed=isMTD?Math.max(1,+(O.today||'').slice(8,10)):1;const dimM=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();const pf=isMTD?dimM/elapsed:1;
- const mo=(n,mm)=>{if(n==='ONLINE'){const r=(O.nr||{})[mm]||{};return {nc:r.nord||0,rc:r.rord||0,nrev:r.nrev||0,rrev:r.rrev||0};}
-  if(n==='ALL STORES'){const o2={nc:0,rc:0,nrev:0,rrev:0};names.forEach(x=>{const r=(B[x]||{})[mm]||{};o2.nc+=r.nc||0;o2.rc+=r.rc||0;o2.nrev+=r.nrev||0;o2.rrev+=r.rrev||0;});return o2;}
-  const r=(B[n]||{})[mm]||{};return {nc:r.nc||0,rc:r.rc||0,nrev:r.nrev||0,rrev:r.rrev||0};};
+ // ---- monthly block: the month of the range end, vs the PRIOR month and vs the same month LAST YEAR ----
+ const m=(ST.e||'').slice(0,7);const pm=(function(){const d=new Date(m+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()-1);return d.toISOString().slice(0,7);})();
+ const lyM=(+m.slice(0,4)-1)+m.slice(4);const isMTD=m===(O.today||'').slice(0,7);
+ const elapsed=Math.max(1,+(ST.e||'').slice(8,10)),dimM=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();const pf=isMTD?dimM/elapsed:1;
+ const walkOf=(n,mm)=>{try{return ((BWALK[n]||{})[mm]||[0])[0]||0;}catch(e){return 0;}};
+ const mo=(n,mm)=>{if(n==='ONLINE'){const r=(O.nr||{})[mm]||{};return {nc:r.nord||0,rc:r.rord||0,nrev:r.nrev||0,rrev:r.rrev||0,wk:0};}
+  if(n==='ALL STORES'){const o2={nc:0,rc:0,nrev:0,rrev:0,wk:0};names.forEach(x=>{const r=(B[x]||{})[mm]||{};o2.nc+=r.nc||0;o2.rc+=r.rc||0;o2.nrev+=r.nrev||0;o2.rrev+=r.rrev||0;o2.wk+=walkOf(x,mm);});return o2;}
+  const r=(B[n]||{})[mm]||{};return {nc:r.nc||0,rc:r.rc||0,nrev:r.nrev||0,rrev:r.rrev||0,wk:walkOf(n,mm)};};
  const scopes=['ONLINE'].concat(names).concat(['ALL STORES']);
  const rows=scopes.map(n=>{const all=n==='ALL STORES';const f=(fn,a,b)=>all?names.reduce((s2,x)=>s2+fn(x,a,b),0):fn(n,a,b);
-  return {n:n,rv:f(revOf,ST.s,ST.e),rp:f(revOf,pw[0],pw[1]),av:f(adsOf,ST.s,ST.e),ap:f(adsOf,pw[0],pw[1]),c:mo(n,m),l:mo(n,mly)};});
- const pc=(c,p)=>p?((c/p-1)*100):null;const fp=v=>v==null?'<span style="color:#8a93a6">—</span>':'<span style="font-weight:800;color:'+(v>=0?'#12a06e':'#e23a63')+'">'+(v>=0?'▲ +':'▼ −')+Math.abs(v).toFixed(0)+'%</span>';const M=v=>'E£ '+Math.round(v).toLocaleString();
- const tr=r=>'<tr'+(r.n==='ALL STORES'?' style="background:#f8f9fc;font-weight:800"':'')+'><td style="text-align:left;font-weight:800">'+r.n+'</td><td>'+M(r.rv)+'</td><td>'+fp(pc(r.rv,r.rp))+'</td><td>'+M(r.av)+'</td><td>'+fp(pc(r.av,r.ap))+'</td><td style="color:'+((r.rv&&r.av/r.rv>1)?'#b8860b;font-weight:800':'#8a93a6')+'" title="'+((r.rv&&r.av/r.rv>1)?'Meta claims more value than this scope sold in the window — over-attribution at this window; switch the Meta selector to Incremental for the defensible number':'share of revenue that Meta attributes to its ads')+'">'+(r.rv?Math.round(r.av/r.rv*100):0)+'%'+((r.rv&&r.av/r.rv>1)?' ⚠':'')+'</td><td>'+r.c.nc.toLocaleString()+'</td><td>'+fp(pc(r.c.nc*pf,r.l.nc))+'</td><td>'+r.c.rc.toLocaleString()+'</td><td>'+fp(pc(r.c.rc*pf,r.l.rc))+'</td><td>'+M(r.c.nrev)+'</td><td>'+fp(pc(r.c.nrev*pf,r.l.nrev))+'</td><td>'+M(r.c.rrev)+'</td><td>'+fp(pc(r.c.rrev*pf,r.l.rrev))+'</td></tr>';
- pnlCard(g,'odoo','Branch scoreboard &mdash; '+ST.s+' &rarr; '+ST.e+' vs '+pw[0]+' &rarr; '+pw[1]+' &middot; customers: '+m+(isMTD?' (MTD)':'')+' vs '+mly,
-  'Left block follows the date filter AND the attribution selector (Meta in-store: '+(((O.attr||{}).labels||{})[(ST.att&&ST.att.meta)||ST.at]||((ST.att&&ST.att.meta)||ST.at))+' · scaled by '+Math.round(afo()*100)+'%): daily POS revenue and Meta in-store attributed value (ONLINE = Shopify net and website conversion value at the selected Meta/Google/TikTok windows). Right block is monthly because new/returning customers come from the monthly customer crawl: the month of the range end vs the same month last year. Everything below explains these rows.',
-  '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th></th><th colspan="5" style="text-align:center;background:#eef0f5">SELECTED PERIOD</th><th colspan="8" style="text-align:center;background:#f3efff">MONTH '+m+(isMTD?' MTD (day '+elapsed+' of '+dimM+') — YoY = PACE vs full '+mly:' vs '+mly)+'</th></tr><tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>From Meta ads</th><th>vs prev</th><th>ads share</th><th>New cust'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>Returning'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>NC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>RC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th></tr>'+rows.map(tr).join('')+'</table></div>');}
-function secOff(g){const mk=(t,s2)=>{const d=document.createElement('div');d.className='card sechd';d.innerHTML='<div class="sh1">'+t+'</div><div class="sh2">'+s2+'</div>';return d;};const before=(txt,el2)=>{const a=[...g.children].find(c=>!c.classList.contains('sechd')&&(c.querySelector('.ct')||{}).innerText&&c.querySelector('.ct').innerText.indexOf(txt)>=0);if(a)g.insertBefore(el2,a);};
- before('Branch scoreboard',mk('THE NUMBERS','Every branch and online, this period vs previous — everything below explains these rows.'));before('New customers by branch',mk('CUSTOMERS','Who is new, who came back, per branch — and each branch on its own graph.'));before('Branch Breakeven',mk('ECONOMICS','Breakeven, rent, payroll, OpEx and what each branch actually clears.'));}
+  return {n:n,rv:f(revOf,ST.s,ST.e),rp:f(revOf,pw[0],pw[1]),av:f(adsOf,ST.s,ST.e),ap:f(adsOf,pw[0],pw[1]),c:mo(n,m),p:mo(n,pm),l:mo(n,lyM)};});
+ const pc=(c,p2)=>p2?((c/p2-1)*100):null;
+ const fp=v=>v==null?'<span style="color:#c9ccd6">—</span>':'<span style="font-weight:800;color:'+(v>=0?'#12a06e':'#e23a63')+'">'+(v>=0?'▲+':'▼−')+Math.abs(v).toFixed(0)+'%</span>';
+ const M=v=>'E£ '+Math.round(v).toLocaleString();const NUM=v=>Math.round(v).toLocaleString();
+ const two=(cur,prv,f,gu)=>'<td>'+f(cur)+'</td><td>'+fp(pc(gu===0?prv:cur*(f===NUM||f===M?pf:1),gu===0?cur:prv))+'</td>';
+ const tr=r=>{const aov=(rev,cnt)=>cnt?M(rev/cnt):'—';
+  return '<tr'+(r.n==='ALL STORES'?' style="background:#f8f9fc;font-weight:800"':'')+'><td style="text-align:left;font-weight:800">'+r.n+'</td>'
+  +'<td>'+M(r.rv)+'</td><td>'+fp(pc(r.rv,r.rp))+'</td>'
+  +'<td style="border-left:1px solid #e6e9f0">'+M(r.av)+'</td><td>'+fp(pc(r.av,r.ap))+'</td>'
+  +'<td style="color:'+((r.rv&&r.av/r.rv>1)?'#b8860b;font-weight:800':'#8a93a6')+'" title="'+((r.rv&&r.av/r.rv>1)?'Meta claims more than this scope sold — over-attribution at this window; switch Meta to Incremental':'share of revenue Meta attributes to its ads')+'">'+(r.rv?Math.round(r.av/r.rv*100):0)+'%'+((r.rv&&r.av/r.rv>1)?' ⚠':'')+'</td>'
+  +'<td style="border-left:1px solid #e6e9f0">'+NUM(r.c.nc)+'</td><td>'+fp(pc(r.c.nc*pf,r.p.nc))+'</td><td>'+fp(pc(r.c.nc*pf,r.l.nc))+'</td>'
+  +'<td>'+NUM(r.c.rc)+'</td><td>'+fp(pc(r.c.rc*pf,r.p.rc))+'</td><td>'+fp(pc(r.c.rc*pf,r.l.rc))+'</td>'
+  +'<td style="border-left:1px solid #e6e9f0">'+M(r.c.nrev)+'</td><td>'+fp(pc(r.c.nrev*pf,r.p.nrev))+'</td>'
+  +'<td>'+M(r.c.rrev)+'</td><td>'+fp(pc(r.c.rrev*pf,r.p.rrev))+'</td>'
+  +'<td style="border-left:1px solid #e6e9f0">'+aov(r.c.nrev,r.c.nc)+'</td><td>'+aov(r.c.rrev,r.c.rc)+'</td>'
+  +'<td style="border-left:1px solid #e6e9f0">'+NUM(r.c.wk)+'</td></tr>';};
+ pnlCard(g,'odoo','Branch scoreboard &mdash; period '+ST.s+' → '+ST.e+' vs '+pw[0]+' → '+pw[1],
+  'PERIOD block (daily feeds) follows the filter and the attribution selector: POS revenue and Meta-attributed value. CUSTOMER block is MONTHLY — per-branch new/returning come from the monthly POS customer crawl, so they cannot follow a 7-day window: it shows '+m+(isMTD?' month-to-date (day '+elapsed+' of '+dimM+', % = PACE)':'')+' vs prior month '+pm+' and vs '+lyM+'. AOV = that month&rsquo;s revenue ÷ its customers.',
+  '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right">'
+  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+m+(isMTD?' MTD':'')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+m+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+m+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
+  +'<tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>Attributed</th><th>vs prev</th><th>share</th>'
+  +'<th>New</th><th>vs '+pm.slice(5)+'</th><th>vs LY</th><th>Returning</th><th>vs '+pm.slice(5)+'</th><th>vs LY</th>'
+  +'<th>NC revenue</th><th>vs '+pm.slice(5)+'</th><th>RC revenue</th><th>vs '+pm.slice(5)+'</th>'
+  +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
+  +rows.map(tr).join('')+'</table></div>');}
+
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
- const N=+document.getElementById('bw').value||30;const wf=N/30.44;
- const s30=live?[Math.max(0,O.bl.n-N),O.bl.n-1]:null,p30=live?[Math.max(0,O.bl.n-2*N),Math.max(0,O.bl.n-N-1)]:null;
- let mvN=0,mpN=0;for(let i=Math.max(0,O.ad.n-N);i<O.ad.n;i++){mvN+=O.ad.instoreMeta[i]||0;mpN+=O.ad.metaOfflinePur?O.ad.metaOfflinePur[i]||0:0;}
+ // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
+ const _bw=cmpWr(ST.s,ST.e);const N=Math.max(1,span(ST.s,ST.e));const wf=N/30.44;
+ const _bi=d=>Math.round((new Date(d+'T00:00:00Z')-new Date(O.bl.start+'T00:00:00Z'))/864e5);
+ const _ai=d=>Math.round((new Date(d+'T00:00:00Z')-new Date(O.ad.start+'T00:00:00Z'))/864e5);
+ const _clB=r=>[Math.max(0,Math.min(r[0],O.bl.n-1)),Math.max(0,Math.min(r[1],O.bl.n-1))];
+ const s30=live?_clB([_bi(ST.s),_bi(ST.e)]):null,p30=live?_clB([_bi(_bw[0]),_bi(_bw[1])]):null;
+ window.__BWIN=[ST.s,ST.e,_bw[0],_bw[1]];
+ let mvN=0,mpN=0;for(let i=Math.max(0,_ai(ST.s));i<=Math.min(O.ad.n-1,_ai(ST.e));i++){mvN+=O.ad.instoreMeta[i]||0;mpN+=O.ad.metaOfflinePur?O.ad.metaOfflinePur[i]||0:0;}
  const B=FF.branches.map(b=>{const lv=live?bSum(b.name,s30):0,pv=live?bSum(b.name,p30):0;
   const r=ov[b.name+'_rev']!=null?ov[b.name+'_rev']:(lv||b.revEst);
   const rn=ov[b.name+'_rent']!=null?ov[b.name+'_rent']:b.rentEst,op=ov[b.name+'_opex']!=null?ov[b.name+'_opex']:b.opexEst;
@@ -1781,7 +1808,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   const REAL=_rv!=null&&(_rv>0||_rp>0||_rn>0);
   const mval=REAL?Math.round(_rv*afo()):(ALLOC?metaShare:null);
   el.innerHTML=`<div class="chead" style="padding-right:0"><div><div class="ct" style="padding-left:0">${b.name} <span class="bg b-live">live</span></div><div class="cs">Daily POS journal income (REAL) · ${REAL?'Meta in-store figures are this branch OWN custom conversion &mdash; a real per-branch measurement.':(ALLOC?'Meta custom conversion returned nothing for this window, so the Meta line is a revenue-weighted ALLOCATION you switched on. It is a model, not a measurement.':'Meta custom conversion returned nothing for this window. Allocation is off, so no Meta in-store number is shown rather than an invented one.')}</div></div>
-   <div class="kpis brk" style="flex:1 0 100%;justify-content:flex-start;gap:14px 22px;padding:8px 0 2px;border-top:1px solid #f1f3f8;margin-top:6px;flex-wrap:wrap"><div class="kpi" style="text-align:left"><div class="l">Revenue ${N}d${Q('branch')}</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t}</div></div>
+   <div class="kpis brk" style="flex:1 0 100%;justify-content:flex-start;gap:14px 22px;padding:8px 0 2px;border-top:1px solid #f1f3f8;margin-top:6px;flex-wrap:wrap"><div class="kpi" style="text-align:left"><div class="l">Revenue ${ST.s.slice(5)} → ${ST.e.slice(5)}${Q('branch')}</div><div class="v">${fC(b.liveRev)}</div><div class="d ${d.cls}">${d.t.replace('vs prev','vs '+window.__BWIN[2].slice(5)+' → '+window.__BWIN[3].slice(5))}</div></div>
    <div class="kpi"><div class="l">Meta in-store value ${REAL?'<span class="bg b-live">REAL</span>':(ALLOC?'<span class="bg b-est">allocated</span>':'<span class="bg b-est">not measured</span>')}${INFO(METAPROOF)}${Q('bmeta')}</div><div class="v">${mval==null?'&mdash;':fC(mval)}</div><div class="d ft">${REAL?'Meta attribution for this branch &rarr; '+(b.liveRev?(mval/b.liveRev*100).toFixed(1):0)+'% of this branch revenue':(ALLOC?(share*100).toFixed(1)+'% of network revenue &rarr; '+(mv&&b.liveRev?(metaShare/b.liveRev*100).toFixed(1):0)+'% of this branch (ALLOCATED, not measured)':'no branch-level custom conversion fired &mdash; tick &ldquo;allocate Meta offline&rdquo; above to model it')}</div></div>
    ${REAL?`<div class="kpi"><div class="l">In-store purchases <span class="bg b-live">REAL</span>${Q('bmeta')}</div><div class="v">${Math.round(_rp).toLocaleString()}</div><div class="d ft">${_rp?'avg basket '+fC(_rv/_rp):'no attributed purchases'}</div></div>
    <div class="kpi"><div class="l">New customers <span class="bg b-live">REAL</span>${Q('bmeta')}</div><div class="v">${Math.round(_rn).toLocaleString()}</div><div class="d ft">${_rp?(_rn/_rp*100).toFixed(0)+'% of attributed purchases were first-timers':'&mdash;'}</div></div>`:''}
@@ -5541,9 +5568,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260823T181735Z';
+const BUILD='20260824T134733Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260823T181735Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T134733Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
