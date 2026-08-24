@@ -93,7 +93,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -938,7 +938,7 @@ const TABGROUPS=[
  ['Online',[['on','Shopify'],['why','Why'],['pn','Shopify P&L'],['vz','Charts'],['iq','Insights'],['tr','Traffic Routing']]],
  ['Branches',[['off','Offline/Branches'],['rp','Retail P&L']]],
  ['Consumer',[['cp','Customer Portfolio'],['co','Cohorts'],['rt','Retention'],['lt','LTGP : CAC'],['cj','Journeys']]],
- ['Ads & Media',[['me','Media Efficiency'],['mi','Paid Insights'],['ao','Ads \u2192 Stores'],['mb','Creative Benchmarks'],['bg','Launches & Budgets'],['ab','\u2691 Advisory'],['si','\ud83d\udd0d Search Advisor'],['tk','TikTok']]],
+ ['Ads & Media',[['me','Media Efficiency'],['mi','Paid Insights'],['ce','Campaigns'],['ao','Ads \u2192 Stores'],['mb','Creative Benchmarks'],['bg','Launches & Budgets'],['ab','\u2691 Advisory'],['si','\ud83d\udd0d Search Advisor'],['tk','TikTok']]],
  ['Finance & Ops',[['pl','Plan'],['cs','Costs & Payroll'],['vl','Vendors & Products']]],
  ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]]
 ];
@@ -949,7 +949,7 @@ function renderTabs(){const gr=document.getElementById('tgroups'),tr=document.ge
  gr.innerHTML=TABGROUPS.map(function(g,i){return '<div class="tgrp'+(i===TABGRP?' on':'')+'" onclick="selGroup('+i+')">'+g[0]+'</div>';}).join('');
  tr.innerHTML=TABGROUPS[TABGRP][1].map(function(x){return '<div class="tab'+(x[0]===TAB?' on':'')+'" onclick="tab(\''+x[0]+'\')">'+x[1]+'</div>';}).join('');}
 function selGroup(i){TABGRP=i;const tabs=TABGROUPS[i][1];if(tabs.some(function(x){return x[0]===TAB;}))renderTabs();else tab(tabs[0][0]);}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ab')return rAB();if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp')rCP();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ab')return rAB();if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -957,7 +957,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
+const TBT=[['off','offC'],['ce','ceC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -5568,13 +5568,75 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260824T134733Z';
+const BUILD='20260824T141013Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T134733Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T141013Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
 window.WHYW=window.WHYW||'7';
+/* ================= CAMPAIGN EXPLORER — campaign / ad set / ad, any window, WoW deltas ============ */
+window.CELV=window.CELV||'campaign';window.CESORT=window.CESORT||'sp';window.CEQ=window.CEQ||'';window.CELEG=window.CELEG||'both';
+function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28');g.innerHTML='';
+ const A=O.mads||[],W=O.madsW;
+ document.getElementById('bn28').innerHTML='&#8635; <b>CAMPAIGNS</b> — every campaign, ad set and ad on the window YOU pick, with the change against the compare window. Meta per-ad daily feed'+(W?' ('+W.start+' → '+aD2(W,W.n-1)+')':'')+'; revenue legs scale with the attribution selector. Reach is summed daily reach (Meta dedupes within a day, not across days) — read CPMR as a directional cost, CPM as exact.';
+ if(!A.length||!W){pnlCard(g,'meta','Campaigns','Per-ad daily feed arrives on the next sync.','');return;}
+ const t0=new Date(W.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ const pw=cmpWr(ST.s,ST.e);
+ const R1=[Math.max(0,ix(ST.s)),Math.min(W.n-1,ix(ST.e))],R0=[Math.max(0,ix(pw[0])),Math.min(W.n-1,ix(pw[1]))];
+ const inW=R1[1]>=R1[0],cmpOK=R0[1]>=R0[0]&&ST.cmp!=='off';
+ if(!inW){pnlCard(g,'meta','Campaigns','Your window is outside the per-ad feed ('+W.start+' → '+aD2(W,W.n-1)+'). Pick a range inside it.','');return;}
+ const mf=af('meta'),mo=afo();
+ const LV=window.CELV,key=a=>LV==='campaign'?(a.cid||a.cmp||'?'):LV==='adset'?(a.asid||a.as||'?'):a.id;
+ const nameOf=a=>LV==='campaign'?(a.cmp||'(no campaign)'):LV==='adset'?(a.as||'(no ad set)'):(a.n||'(no name)');
+ const agg=(r)=>{const G={};A.forEach(a=>{if(!a.d)return;const k=key(a);const x=G[k]||(G[k]={n:nameOf(a),id:k,acct:a.acct,cmp:a.cmp,sp:0,im:0,oc:0,rc:0,pu:0,op:0,pv:0,fv:0,vv:0,nc:0,ncv:0,ads:0});
+   let touched=false;
+   for(let i=r[0];i<=r[1];i++){const sp=(a.d.sp||[])[i]||0;x.sp+=sp;x.im+=(a.d.im||[])[i]||0;x.oc+=(a.d.oc||[])[i]||0;x.rc+=(a.d.rch||[])[i]||0;x.pu+=(a.d.pu||[])[i]||0;x.op+=(a.d.op||[])[i]||0;x.pv+=(a.d.pv||[])[i]||0;x.fv+=(a.d.fv||[])[i]||0;x.vv+=(a.d.vv||[])[i]||0;x.nc+=(a.d.nc||[])[i]||0;x.ncv+=(a.d.ncv||[])[i]||0;if(sp>0)touched=true;}
+   if(touched)x.ads++;});
+  const LG=window.CELEG;
+  Object.values(G).forEach(x=>{const on=x.pv*mf,off=x.fv*mo;x.rev=LG==='online'?on:LG==='instore'?off:on+off;
+   const pur=LG==='online'?x.pu:LG==='instore'?x.op:(x.pu+x.op);x.purch=pur;
+   x.roas=x.sp?x.rev/x.sp:null;x.ctr=x.im?x.oc/x.im*100:null;x.cpc=x.oc?x.sp/x.oc:null;x.cpm=x.im?x.sp/x.im*1000:null;x.cpmr=x.rc?x.sp/x.rc*1000:null;
+   x.cvr=x.oc?pur/x.oc*100:null;x.aov=pur?x.rev/pur:null;x.cpp=pur?x.sp/pur:null;x.hook=x.im?x.vv/x.im*100:null;});
+  return G;};
+ const G1=agg(R1),G0=cmpOK?agg(R0):{};
+ let rows=Object.values(G1).filter(x=>x.sp>0);
+ if(window.CEQ)rows=rows.filter(x=>String(x.n).toLowerCase().indexOf(window.CEQ.toLowerCase())>=0);
+ const SK={sp:['Spend',x=>x.sp],rev:['Revenue',x=>x.rev],roas:['ROAS',x=>x.roas||0],cpp:['CPP (cheapest first)',x=>-(x.cpp||1e9)],cvr:['CVR',x=>x.cvr||0],ctr:['Outbound CTR',x=>x.ctr||0],cpmr:['CPMR (cheapest first)',x=>-(x.cpmr||1e9)]};
+ const sk=SK[window.CESORT]?window.CESORT:'sp';rows.sort((a,b)=>SK[sk][1](b)-SK[sk][1](a));
+ const M=v=>v==null?'—':'E£ '+Math.round(v).toLocaleString();const N=v=>v==null?'—':Math.round(v).toLocaleString();
+ const P=(v,d2)=>v==null?'—':v.toFixed(d2==null?2:d2)+'%';const X=v=>v==null?'—':v.toFixed(2)+'x';
+ const dl3=(c,p2,gu)=>{if(!cmpOK||c==null||p2==null||!p2||!isFinite(c)||!isFinite(p2))return '';const pc=(c/p2-1)*100;if(!isFinite(pc))return '';
+  const good=(pc>=0)===!!gu;return '<div style="font-size:9.5px;font-weight:800;color:'+(Math.abs(pc)<1?'#9aa3b5':(good?'#12a06e':'#e23a63'))+'">'+(pc>=0?'▲+':'▼−')+Math.abs(pc).toFixed(0)+'%</div>';};
+ const cell=(v,f,prev,gu)=>'<td>'+f(v)+dl3(v,prev,gu)+'</td>';
+ const body=rows.slice(0,120).map(x=>{const o2=G0[x.id]||{};
+  return '<tr><td style="text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis" title="'+String(x.n).replace(/"/g,'&quot;')+'"><b>'+String(x.n).replace(/</g,'&lt;').slice(0,52)+'</b>'
+   +(LV!=='ad'&&x.ads?'<div style="font-size:9.5px;color:#8a93a6">'+x.ads+' ad'+(x.ads>1?'s':'')+' delivering'+(x.acct?' · '+x.acct:'')+'</div>':(x.cmp?'<div style="font-size:9.5px;color:#8a93a6">'+String(x.cmp).slice(0,40)+'</div>':''))+'</td>'
+   +cell(x.sp,M,o2.sp,0)+cell(x.rev,M,o2.rev,1)+cell(x.roas,X,o2.roas,1)
+   +cell(x.rc,N,o2.rc,1)+cell(x.im,N,o2.im,1)+cell(x.cpm,M,o2.cpm,0)+cell(x.cpmr,M,o2.cpmr,0)
+   +cell(x.oc,N,o2.oc,1)+cell(x.ctr,P,o2.ctr,1)+cell(x.cpc,M,o2.cpc,0)
+   +cell(x.purch,N,o2.purch,1)+cell(x.cvr,P,o2.cvr,1)+cell(x.aov,M,o2.aov,1)+cell(x.cpp,M,o2.cpp,0)
+   +cell(x.hook,P,o2.hook,1)+'</tr>';}).join('');
+ const T=(k,l)=>'<span class="chip" style="'+(LV===k?'background:#0f172a;color:#fff;border-color:#0f172a':'')+'" onclick="window.CELV=\''+k+'\';rCE()">'+l+'</span>';
+ const LEGC=(k,l)=>'<span class="chip" style="'+(window.CELEG===k?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.CELEG=\''+k+'\';rCE()">'+l+'</span>';
+ const ATC=function(){var cur=(ST.att&&ST.att.meta)||ST.at;var opts=(O.attr.order||[]).filter(function(k){return (O.attr.meta||{})[k]!=null;});
+  var nm={"default":"Default (live)","7dc":"7-day click","1dc":"1-day click","incr":"Incremental"};
+  return opts.map(function(k){var on=cur===k;return '<span class="chip" style="'+(on?'background:#0f172a;color:#fff;border-color:#0f172a':'')+'" onclick="attrSet(&quot;meta&quot;,&quot;'+k+'&quot;)">'+(nm[k]||k)+' \u00b7 '+Math.round(((O.attr.meta||{})[k]||1)*100)+'%</span>';}).join('');};
+ const tot=rows.reduce((t,x)=>({sp:t.sp+x.sp,rev:t.rev+x.rev,pu:t.pu+(x.purch||0),im:t.im+x.im,oc:t.oc+x.oc}),{sp:0,rev:0,pu:0,im:0,oc:0});
+ const ctrl='<div style="margin:0 0 8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+  +'<span style="font-size:10px;font-weight:800;color:#8a93a6">LEVEL</span>'+T('campaign','Campaign')+T('adset','Ad set')+T('ad','Ad')
+  +'<span style="width:1px;height:16px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">REVENUE</span>'  +LEGC('both','Online + in-store')+LEGC('online','Online only')+LEGC('instore','In-store only')  +'<span style="width:1px;height:16px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">ATTRIBUTION</span>'+ATC()  +'<span style="width:1px;height:16px;background:#e3e7ef;margin:0 4px"></span><span style="font-size:10px;font-weight:800;color:#8a93a6">SORT</span>'
+  +'<select onchange="window.CESORT=this.value;rCE()">'+Object.keys(SK).map(k=>'<option value="'+k+'"'+(k===sk?' selected':'')+'>'+SK[k][0]+'</option>').join('')+'</select>'
+  +' <input placeholder="filter by name…" value="'+String(window.CEQ).replace(/"/g,'&quot;')+'" style="width:180px" onchange="window.CEQ=this.value;rCE()">'
+  +'<span style="font-size:10.5px;color:#8a93a6;margin-left:auto">'+rows.length+' '+LV+(rows.length===1?'':'s')+' with spend · totals: '+M(tot.sp)+' spend → '+M(tot.rev)+' revenue · '+(tot.sp?(tot.rev/tot.sp).toFixed(2):'0')+'x</span></div>';
+ pnlCard(g,'meta','Campaigns — '+ST.s+' → '+ST.e+(cmpOK?' vs '+pw[0]+' → '+pw[1]:' (no comparison)'),
+  'Every number is computed on YOUR window from the per-ad daily feed; the small green/red figure under each is the change vs the compare window. Green always means better for that metric — cheaper CPC/CPM/CPMR/CPP is green, higher ROAS/CTR/CVR/AOV is green. Showing <b>'+(window.CELEG==='online'?'ONLINE only (website value × '+Math.round(mf*100)+'%)':window.CELEG==='instore'?'IN-STORE only (Meta offline CAPI value × '+Math.round(mo*100)+'%)':'ONLINE + IN-STORE (website × '+Math.round(mf*100)+'% + in-store × '+Math.round(mo*100)+'%)')+'</b> — purchases, CVR, AOV and CPP follow the same leg.',
+  ctrl+'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right;min-width:1250px"><tr>'
+  +'<th style="text-align:left">'+(LV==='campaign'?'Campaign':LV==='adset'?'Ad set':'Ad')+'</th>'
+  +'<th>Spend</th><th>Revenue</th><th>ROAS</th><th>Reach</th><th>Impr.</th><th>CPM</th><th>CPMR</th><th>Clicks</th><th>Out. CTR</th><th>CPC</th><th>Purch.</th><th>CVR</th><th>AOV</th><th>CPP</th><th>Hook</th></tr>'
+  +body+'</table></div>');
+}
+
 function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27');g.innerHTML='';
  const Y=O.why||{};const W=(Y.win||{})[window.WHYW];
  document.getElementById('bn27').innerHTML='<b>WHY</b> — each number broken into the parts that moved it, down to vendors, products and stock. Shopify order lines from Odoo (confirmed orders, shipping line excluded), refreshed every sync'+(Y.pulled?' (pulled '+Y.pulled+')':'')+'.';
@@ -5968,6 +6030,29 @@ function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19')
   +'<div class="pwarn" style="margin-top:10px"><b>How to use this for the next OurKids brief:</b> offer-first banners, price-anchor and sale-announcement hooks, and product-image-with-text assets are the scale patterns in the data; unboxing, Post-it, meme and quiz formats are the high-hit-rate test patterns for Fashion &amp; Apparel. These are BFCM-window associations, not guarantees &mdash; test them, judge them on the Launches tab by profit after ad spend.</div>';
  pnlCard(g,'ins','What to test next — Motion’s format / hook / asset leaderboards','Straight from the report. Hit rate = how often a format produced a winner; spend use = whether it earns more spend than its usage share.',lb);
 }
+function conclCard(g,title,lines,note){if(!lines||!lines.length)return;
+ const el=document.createElement('div');el.className='card full';el.dataset.a='odoo';
+ el.innerHTML='<div class="chead"><div><div class="ct">'+title+'</div><div class="cs">Computed from the table below — not written by hand. Re-reads every sync.</div></div></div>'
+  +'<div style="padding:2px 14px 12px">'+lines.map(l=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><span style="min-width:8px;height:8px;border-radius:50%;background:'+(l[0]||'#5a5bf0')+';margin-top:6px"></span><span>'+l[1]+'</span></div>').join('')+(note?'<div class="rtNote" style="padding-top:6px">'+note+'</div>':'')+'</div>';
+ g.appendChild(el);}
+function scopeVerdicts(){const out=[];const BS=O.bstat||{};const names=Object.keys(BS);
+ const M=v=>'E£ '+Math.round(v).toLocaleString();
+ if(names.length){
+  const byL=names.slice().sort((a,b)=>(BS[b].ltgp||0)-(BS[a].ltgp||0));
+  const byR=names.slice().sort((a,b)=>(BS[b].repeatRate||0)-(BS[a].repeatRate||0));
+  const byO=names.slice().sort((a,b)=>(BS[b].ordPerCust||0)-(BS[a].ordPerCust||0));
+  const bl=byL[0],wl=byL[byL.length-1];const avg=names.reduce((t,n)=>t+(BS[n].ltgp||0),0)/names.length;
+  out.push(['#12a06e','<b>'+bl+' customers are worth the most</b> — '+M(BS[bl].ltgp)+' lifetime gross profit each, '+Math.round((BS[bl].ltgp/avg-1)*100)+'% above the '+M(avg)+' branch average. <b>'+wl+'</b> is the weakest at '+M(BS[wl].ltgp)+' ('+Math.round((1-BS[wl].ltgp/avg)*100)+'% below).']);
+  out.push(['#5a5bf0','<b>'+byR[0]+' keeps customers best</b> — '+BS[byR[0]].repeatRate.toFixed(1)+'% ever come back vs '+BS[byR[byR.length-1]].repeatRate.toFixed(1)+'% at '+byR[byR.length-1]+'. Repeat rate is what drives the LTGP gap: '+byO[0]+' gets '+BS[byO[0]].ordPerCust.toFixed(2)+' orders per customer, '+byO[byO.length-1]+' only '+BS[byO[byO.length-1]].ordPerCust.toFixed(2)+'.']);
+  const gap=(BS[bl].ltgp-BS[wl].ltgp)*(BS[wl].cust||0);
+  if(gap>0)out.push(['#b8860b','<b>What the gap is worth:</b> if '+wl+' retained like '+bl+', its '+Math.round(BS[wl].cust).toLocaleString()+' customers would carry '+M(gap)+' more lifetime gross profit. That is the size of the retention prize at one branch.']);
+ }
+ if(typeof RT_LT!=='undefined'&&typeof LT_SCOPES==='function'){
+  const sc=LT_SCOPES().filter(x=>RT_LT[x]&&ltCac(x).cac);
+  if(sc.length){const r=sc.map(x=>({s:x,r:RT_LT[x].cur[3]/ltCac(x).cac})).sort((a,b)=>b.r-a.r);
+   out.push(['#3a9bff','<b>Against what they cost:</b> '+r[0].s+' returns '+r[0].r.toFixed(2)+'× its acquisition cost by day 365, '+r[r.length-1].s+' only '+r[r.length-1].r.toFixed(2)+'×. Anything under 3× is thin; under 1× you are buying customers at a loss.']);}
+ }
+ return out;}
 function rCO(){if(TAB!=='co')return;
  if(!O.cube||!Object.keys((O.cube.scopes)||{}).length){dCh();const g=document.getElementById('g18');g.innerHTML='';
   rCOfallback();document.getElementById('bn18').innerHTML+=' <b style="color:#b8860b">The full month-by-month grid (retention, total value, vendor/category slices, lift filter) computes on the next heavy sync &mdash; queued automatically.</b>';return;}
@@ -6085,6 +6170,9 @@ function rCO(){if(TAB!=='co')return;
   +(B?'<b>Comparison:</b> green = '+aName+' beats '+bName+' at the same cohort age, red = loses'+(CMPV==='both'?'; the small grey number under each cell is '+bName+'&rsquo;s value':CMPV==='diff'?'; cells show '+aName+' minus '+bName:'; hover any cell for both values')+'. ':'Blue depth = value within this grid. ')
   +(dropped?'<b>'+dropped+' cohort'+(dropped>1?'s':'')+' hidden</b> by the M1-retention filter.':'')+'</div>';
  pnlCard(g,'odoo','Cohort grid &mdash; '+aName+(B?' vs '+bName:'')+' &middot; '+mets[MET],(VIEW==='c'?'Cumulative':'Monthly')+' cells &middot; real Odoo order history, deterministic customer joins.',ctl+h+note);}
+function rCOconcl(){try{const g=document.getElementById('g18');if(!g)return;const L=scopeVerdicts();
+ const C=(typeof RT_COH!=='undefined'&&RT_COH)?RT_COH:null;
+ conclCard(g,'What the cohorts actually say',L,'Lifetime gross profit per customer and repeat rate come from the real Odoo per-customer order history (POS + Shopify), returns excluded. Branch names refer to where the customer FIRST bought.');}catch(e){}}
 function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
  const S=_cohScopes();const keys=Object.keys(S);
