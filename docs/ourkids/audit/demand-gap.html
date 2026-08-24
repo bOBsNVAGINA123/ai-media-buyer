@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Our Kids — The Demand Gap, August 2026</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-0:#f6f5f2; --surface-1:#fcfcfb; --surface-2:#f0efec;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#7a7975;
+  --line:#e3e2de; --grid:#eceae6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#008300; --warn:#eda100; --crit:#c0322f;
+  --seq1:#cde2fb; --seq2:#9ec5f4; --seq3:#5598e7; --seq4:#2a78d6; --seq5:#1c5cab;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+    --line:#33332f; --grid:#2a2a28;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+    --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+  --line:#33332f; --grid:#2a2a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+  --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);
+ font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1220px;margin:0 auto;padding:28px 20px 72px}
+header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--text-secondary);font-size:14px;margin:0}
+.tbtn{background:var(--surface-1);border:1px solid var(--line);color:var(--text-secondary);
+ border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer}
+.tbtn:hover{color:var(--text-primary)}
+.note{background:var(--surface-2);border-left:3px solid var(--warn);padding:11px 14px;border-radius:0 8px 8px 0;
+ font-size:13.5px;color:var(--text-secondary);margin:18px 0 26px}
+h2.sec{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);
+ margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:12px}
+.tile{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+.tile .lab{font-size:12px;color:var(--text-muted);margin-bottom:7px;letter-spacing:.01em}
+.tile .val{font-size:27px;font-weight:640;letter-spacing:-.025em;line-height:1.05}
+.tile .val small{font-size:14px;font-weight:500;color:var(--text-secondary);margin-left:2px}
+.tile .dlt{font-size:12.5px;margin-top:6px;color:var(--text-secondary)}
+.dn{color:var(--crit);font-weight:600} .up{color:var(--good);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px}
+.card h3{font-size:15px;margin:0 0 3px;font-weight:620;letter-spacing:-.01em}
+.card .cap{font-size:12.5px;color:var(--text-muted);margin:0 0 14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-bottom:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+svg{display:block;width:100%;overflow:visible}
+.gl{stroke:var(--grid);stroke-width:1}
+.ax{fill:var(--text-muted);font-size:11px}
+.dl{fill:var(--text-primary);font-size:11px;font-weight:600}
+.dl2{fill:var(--text-secondary);font-size:10.5px}
+.hit{fill:transparent;cursor:pointer}
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--surface-1);
+ border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12.5px;
+ box-shadow:0 6px 22px rgba(0,0,0,.14);z-index:99;min-width:132px;color:var(--text-primary)}
+#tip b{display:block;margin-bottom:5px;font-size:12.5px}
+#tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--text-secondary)}
+#tip .r i{font-style:normal;color:var(--text-primary);font-variant-numeric:tabular-nums}
+details{margin-top:12px;border-top:1px solid var(--line);padding-top:9px}
+summary{font-size:12px;color:var(--text-muted);cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:9px}
+th,td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text-muted);font-weight:600}
+.find{background:var(--surface-1);border:1px solid var(--line);border-left:3px solid var(--s2);
+ border-radius:0 12px 12px 0;padding:15px 17px;margin-bottom:11px}
+.find h4{margin:0 0 5px;font-size:14.5px;font-weight:640}
+.find p{margin:0;font-size:13.5px;color:var(--text-secondary)}
+.find.good{border-left-color:var(--good)}
+.find .tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--text-muted)}
+</style>
+
+</head>
+<body>
+<div id="tip"></div>
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>The Demand Gap</h1>
+    <p class="sub">Our Kids &middot; the demand we already own, already pay for, and do not convert &mdash; 16,643 Google search terms, 399,679 on-site searches and 1.03M product views, 30 days to 24 Aug 2026</p>
+  </div>
+  <button class="tbtn" id="themeBtn">Dark mode</button>
+</header>
+
+<div class="note"><b>What this deck is, and what it reverses.</b> The obvious next move for a retailer with a 14% online share is to buy more traffic or open more categories. This deck says do neither yet. Every measurable pocket of demand in this business is <b>already reaching us</b> &mdash; through Google, through Meta, and through 399,679 searches a month on our own site &mdash; and we already carry live range against almost all of it. The problem is not that we cannot find customers. It is that we lose them after they arrive: to sold-out pages, to a cart that leaks 85%, to a search box that cannot read Arabic, and to a price cliff at 1,200 EGP. <b>Fixing capture is worth more than any new category, and it costs no capital.</b> Where range genuinely is thin &mdash; car seats, strollers, footwear &mdash; the last section shows how to widen it on consignment, which is a model this business already runs at a third of its revenue.</div>
+
+<h2 class="sec">The case in eight numbers</h2>
+<div class="tiles">
+  <div class="tile"><div class="lab">Online revenue available</div><div class="val up">8.28<small>M/mo</small></div><div class="dlt">from demand we already have &middot; ceiling case</div></div>
+  <div class="tile"><div class="lab">Gross profit available</div><div class="val up">24.0<small>M/yr</small></div><div class="dlt">no new inventory, no new channel</div></div>
+  <div class="tile"><div class="lab">Near-certain part</div><div class="val up">1.62<small>M/mo</small></div><div class="dlt">just from not selling sold-out pages</div></div>
+  <div class="tile"><div class="lab">Carts that never reach checkout</div><div class="val dn">85<small>%</small></div><div class="dlt">110,878 carts &rarr; 16,803 checkouts &rarr; 5,649 orders</div></div>
+  <div class="tile"><div class="lab">Non-brand search spend with zero orders</div><div class="val dn">74<small>%</small></div><div class="dlt">46,637 EGP, 20,365 clicks, 15,975 terms</div></div>
+  <div class="tile"><div class="lab">Live SKUs against unserved demand</div><div class="val">3,478</div><div class="dlt">we already carry range in every theme but one</div></div>
+  <div class="tile"><div class="lab">Consignment share of in-store revenue</div><div class="val">33<small>%</small></div><div class="dlt">the zero-capital lever we already operate</div></div>
+  <div class="tile"><div class="lab">Consignment gross margin</div><div class="val">19<small>%</small></div><div class="dlt">against 27% owned &mdash; 8 points for zero cash and zero risk</div></div>
+</div>
+
+<h2 class="sec">Demand against capture</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>Every theme where demand arrives and does not convert</h3>
+    <p class="cap">Google impressions of demand in 30 days against our on-site conversion in the same theme. Orange is below the 1.10% site average.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s1)"></i>Google impressions (000s)</span><span><i class="sw" style="background:var(--s2)"></i>On-site conversion, %</span></div>
+    <svg id="c-dem" viewBox="0 0 620 420"></svg>
+    <details><summary>Show data table</summary><table id="t-dem"></table></details>
+  </div>
+  <div class="card">
+    <h3>What each theme is worth if we capture it</h3>
+    <p class="cap">Monthly online revenue available, split into the three things that cause the loss. EGP millions.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s2)"></i>Lost to sold-out pages</span><span><i class="sw" style="background:var(--s1)"></i>Lost in the cart</span><span><i class="sw" style="background:var(--s3)"></i>Lost in paid search</span></div>
+    <svg id="c-prize" viewBox="0 0 620 420"></svg>
+    <details><summary>Show data table</summary><table id="t-prize"></table></details>
+  </div>
+  <div class="card">
+    <h3>Three scenarios, not one forecast</h3>
+    <p class="cap">EGP millions of online revenue per month. Each step is arithmetic on a measured gap, and each is independently achievable.</p>
+    <svg id="c-scen" viewBox="0 0 620 320"></svg>
+    <details><summary>How each step is sized</summary><p style="font-size:12.5px;color:var(--text-secondary);margin:8px 0 0"><b>Sold-out pages:</b> 191,350 views on zero-stock SKUs &times; each subcategory's own conversion and average order value. <b>Cart&rarr;checkout:</b> today 15.2% of carts reach checkout against a 30% norm for this basket size; the two steps split that gap in half so the middle case stands on its own. <b>Paid search:</b> bringing each theme's click-to-conversion up to the 1.30% account average on today's click volume, at today's average order value. Nothing here assumes more traffic, more budget or more stock.</p></details>
+  </div>
+  <div class="card">
+    <h3>The cart is the single biggest leak, at every price</h3>
+    <p class="cap">Add-to-cart rate against conversion by price band. The gap between the two bars is the cart leak, and it widens as basket value rises.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s1)"></i>Add-to-cart rate</span><span><i class="sw" style="background:var(--s2)"></i>Conversion</span></div>
+    <svg id="c-band" viewBox="0 0 620 280"></svg>
+  </div>
+</div>
+
+<h2 class="sec">Why we lose it &mdash; five mechanisms, all fixable</h2>
+<div class="find"><span class="tag">Mechanism 1 &middot; 1.62M EGP a month</span><h4>We sell shelves we know are empty</h4><p>607 products with 191,350 views have zero sellable stock. In Backpacks and school sets it is 37.8% of all views; in ride-ons 20.6%; in swim 17.9%. The worst offenders are our own brands &mdash; Glossy Bird and Smiggle sets at 2,200&ndash;4,300 EGP &mdash; and we are actively bidding on their names in Google while their pages say sold out. A daily feed rule that pulls zero-stock SKUs out of Shopping, PMax and collection pages fixes this in a sprint.</p></div>
+<div class="find"><span class="tag">Mechanism 2 &middot; 6.54M EGP a month</span><h4>Eighty-five percent of carts never reach the checkout</h4><p>110,878 add-to-carts produced 16,803 checkouts. Add-to-cart rate is healthy at 10.7% of views &mdash; customers want the product. The loss is entirely in one step, on mobile, where 98.6% of Egyptian traffic sits. Until someone instruments that step we are guessing between delivery cost, payment method, login friction and shipping-time disclosure. It is the most valuable unknown in the company.</p></div>
+<div class="find"><span class="tag">Mechanism 3 &middot; the price cliff</span><h4>Conversion collapses above 1,200 EGP and 55% of revenue lives there</h4><p>Under 200 EGP converts at 4.45%; over 2,500 EGP at 0.26%. The add-to-cart rate holds up far better than conversion does, which means the objection is not the product &mdash; it is what happens after the cart at that price. Instalments, cash-on-delivery clarity and delivery cost shown before the cart are the levers, not discounting.</p></div>
+<div class="find"><span class="tag">Mechanism 4 &middot; language</span><h4>Our search box does not speak the language our customers search in</h4><p>&ldquo;&#1604;&#1575;&#1606;&#1588; &#1576;&#1608;&#1603;&#1587;&rdquo; returns nothing, and 237 sessions a month type it. So does &ldquo;stainless steel box&rdquo; &mdash; 2,710 sessions &mdash; while the Smash and Sistema stainless boxes are among our best-selling products. /search is the most-visited page on the site with 399,679 views, ahead of the homepage. A synonym file and Arabic normalisation is a week of work against the single highest-traffic page we own.</p></div>
+<div class="find"><span class="tag">Mechanism 5 &middot; range depth</span><h4>Only two themes are genuinely thin, and both are high-basket</h4><p>Car seats and strollers: 117 live SKUs against 82,655 impressions of demand, an 8,445 EGP basket and the highest profit per view in the range at 3.28 EGP. Kids footwear: 484 live SKUs against 25,763 impressions and 738 on-site searches a month, converting at 0.58%. Everywhere else we already carry live range &mdash; 714 live SKUs in feeding, 591 in stationery, 448 in swim. Depth is not the constraint. These two are the exception, and neither needs to be bought.</p></div>
+
+<h2 class="sec">Where range really is thin, buy nothing</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>Consignment is already a third of this business</h3>
+    <p class="cap">Consignment share of category revenue against category gross margin. Toys already runs two thirds consigned.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s1)"></i>Consignment share of revenue, %</span><span><i class="sw" style="background:var(--s2)"></i>Category gross margin, %</span></div>
+    <svg id="c-cons" viewBox="0 0 620 320"></svg>
+  </div>
+  <div class="card">
+    <h3>The three ways to enter, side by side</h3>
+    <p class="cap">On a 100 EGP sale, and on the cash it takes to get there.</p>
+    <table id="t-model" style="margin-top:4px"></table>
+    <p style="font-size:12.5px;color:var(--text-muted);margin:12px 0 0">Owned stock earns most per sale and is the only model that ties up cash and carries markdown risk. Consignment earns 8 points less and costs nothing. Agency &mdash; the vendor ships, we take a fee &mdash; earns least and is the only model that lets us list a category before we have decided to be in it.</p>
+  </div>
+</div>
+
+<div class="find good"><span class="tag">Car seats &amp; strollers</span><h4>Widen on consignment before committing a pound of stock</h4><p>82,655 impressions of demand a month, 0.50% conversion, 117 live SKUs, 8,445 EGP average basket, 3.28 EGP of gross profit per view &mdash; the highest in the range. We already stock Joie and Chicco and already run a Joie shopping campaign that converted 9.9 times in 30 days on 8,092 EGP. Add depth on consignment terms with the same vendors, build the comparison, safety and fitting content the category needs, and offer in-store fitting booked online. If it works, buy it. If it does not, we return it.</p></div>
+<div class="find good"><span class="tag">Kids footwear</span><h4>The one genuine category gap, and it belongs in the branches first</h4><p>&ldquo;school shoes&rdquo;, &ldquo;&#1603;&#1608;&#1578;&#1588;&#1610; &#1575;&#1591;&#1601;&#1575;&#1604;&rdquo; and &ldquo;&#1589;&#1606;&#1575;&#1583;&#1604; &#1575;&#1591;&#1601;&#1575;&#1604;&rdquo; show 25,763 Google impressions and 738 on-site searches a month against 484 live SKUs converting at 0.58%. Footwear is a fit-and-return category, which is exactly what seven branches are for. Test it consigned in two doors alongside the school range, list what sells, and let the in-store return route carry the risk that kills footwear e-commerce elsewhere.</p></div>
+
+<h2 class="sec">The two things that can kill this</h2>
+<div class="find"><span class="tag">Risk 1</span><h4>Stock accuracy is the whole plan</h4><p>Everything here &mdash; listing the gap, stopping sold-out traffic, consigned depth &mdash; assumes Shopify knows what is on the shelf. Today 607 live products show zero stock and still take 191,350 views, which means the signal exists and nothing acts on it. If we publish 4,854 more SKUs on top of an inventory feed nobody trusts, we will convert a merchandising problem into a customer-service one. Fix the feed rule first, in the same sprint, not after.</p></div>
+<div class="find"><span class="tag">Risk 2</span><h4>Consignment margin discipline</h4><p>Consignment runs 19% gross margin against 27% owned. At a third of revenue that is already costing roughly 2.7 points of blended margin, and it is invisible because nobody reports it. Widening consignment without a floor on terms trades cash efficiency for margin we cannot afford to keep giving away. Set a minimum consigned margin by category before the next vendor conversation, and report consigned versus owned margin monthly.</p></div>
+
+<h2 class="sec">The action plan</h2>
+<div class="find good"><span class="tag">Sprint 1 &middot; worth 1.62M EGP a month</span><h4>Stop paying to send people to empty shelves</h4><p>Daily rule: any SKU with zero sellable stock leaves Shopping, PMax and the collection pages, and its inbound ad traffic redirects to the nearest in-stock sibling. Restock or delist the 607. Owner: e-commerce ops + performance. Measure: sold-out view share from 20.5% to under 10%.</p></div>
+<div class="find good"><span class="tag">Sprint 1&ndash;3 &middot; worth up to 6.54M EGP a month</span><h4>Instrument the cart, then fix the one step that loses 85%</h4><p>Full mobile funnel instrumentation on cart and checkout, then work the top three drop reasons. This is the largest number in the deck and the least understood. Owner: e-commerce. Measure: cart&rarr;checkout from 15.2% to 22% by day 45 and 30% by day 90.</p></div>
+<div class="find good"><span class="tag">Week 1 &middot; cheapest fix in the deck</span><h4>Teach the search box Arabic and synonyms</h4><p>Arabic normalisation, a synonym file covering &ldquo;box / lunch box / &#1604;&#1575;&#1606;&#1588; &#1576;&#1608;&#1603;&#1587;&rdquo;, &ldquo;flask / bottle / &#1601;&#1604;&#1575;&#1587;&#1603;&rdquo;, &ldquo;mofakera / mofkera&rdquo;, and a zero-results report that goes to merchandising weekly. Owner: e-commerce. Measure: zero-result searches below 5% of site searches.</p></div>
+<div class="find good"><span class="tag">Weeks 4&ndash;12 &middot; zero capital</span><h4>Widen car seats, strollers and footwear on consignment</h4><p>Same vendors, consignment terms, agreed margin floor. Build the comparison and fitting content, book in-store fitting from the product page. Owner: buying + e-commerce. Measure: car-seat and stroller conversion from 0.15% to 0.6%, footwear from 0.58% to 1.0%.</p></div>
+
+<h2 class="sec">What I need from you</h2>
+<div class="find"><h4>Four decisions</h4><p>
+<b>1. Do we agree that capture comes before category?</b> This deck argues against opening anything new until the cart and the stock feed are fixed. If we would rather grow range, say so now, because it changes every priority below.<br><br>
+<b>2. Who owns the cart investigation, and by when?</b> 6.54M EGP a month sits behind one unmeasured step. I want a named owner and a date, not a backlog ticket.<br><br>
+<b>3. Do we set a consigned margin floor?</b> Consignment is 33% of revenue at 19% margin and nobody reports it separately. I want a floor by category and a monthly consigned-versus-owned margin line.<br><br>
+<b>4. Do we commit to the car seat and stroller category properly, or stop bidding on it?</b> Today we spend 4,529 EGP a month on stroller and car-seat search for 7.2 conversions. Either it gets the range, content and fitting service it needs, or we stop buying the traffic. Half-in is the most expensive option on the table.</p></div>
+
+<footer>Our Kids &mdash; The Demand Gap &middot; built 24 Aug 2026. Google Ads customer 2892178564: 16,643 search terms with more than 20 impressions, 25 Jul&ndash;23 Aug 2026, plus PMax search-category insights. GA4 property 297783390 filtered to Egypt: 1.03M product views, 110,878 add-to-carts, 399,679 site searches. Shopify Admin bulk export: 37,681 products, 14,795 live. Odoo: category revenue, gross profit and consignment split. Prize sizing is arithmetic on measured gaps at today's traffic, average order values and margin rates. All figures EGP.</footer>
+</div>
+<script>
+const D={"demand": [{"k": "School bags", "impr": 522923, "clicks": 6560, "cost": 16575, "gcvr": 1.12, "roas": 10.1, "views": 308931, "cvr": 0.48, "gppv": 2.29, "rev": 2960085, "aov": 2011, "oos": 37.8, "liveSkus": 773, "odooSkus": null, "siteSearch": 11189, "prizePaid": 23746, "prizeAvail": 1127215, "prizeFunnel": 2882188, "prizeTotal": 4033149, "gpRate": 23.9, "prizeGpYr": 11567071}, {"k": "Lunch boxes", "impr": 181127, "clicks": 3714, "cost": 6717, "gcvr": 1.78, "roas": 13.3, "views": 188969, "cvr": 1.27, "gppv": 1.74, "rev": 1375027, "aov": 571, "oos": 12.4, "liveSkus": 384, "odooSkus": null, "siteSearch": 6264, "prizePaid": 0, "prizeAvail": 169923, "prizeFunnel": 1338842, "prizeTotal": 1508765, "gpRate": 23.9, "prizeGpYr": 4327138}, {"k": "Car seats & strollers", "impr": 82655, "clicks": 1444, "cost": 4529, "gcvr": 0.5, "roas": 5.3, "views": 17979, "cvr": 0.15, "gppv": 3.28, "rev": 228020, "aov": 8445, "oos": 8.4, "liveSkus": 117, "odooSkus": 678, "siteSearch": 302, "prizePaid": 97557, "prizeAvail": 19131, "prizeFunnel": 222019, "prizeTotal": 338707, "gpRate": 25.9, "prizeGpYr": 1052701}, {"k": "Baby feeding", "impr": 64798, "clicks": 1053, "cost": 2168, "gcvr": 2.99, "roas": 18.2, "views": 14506, "cvr": 1.14, "gppv": 1.98, "rev": 111029, "aov": 673, "oos": 11.7, "liveSkus": 714, "odooSkus": 1322, "siteSearch": 834, "prizePaid": 0, "prizeAvail": 13021, "prizeFunnel": 108107, "prizeTotal": 121128, "gpRate": 25.9, "prizeGpYr": 376466}, {"k": "Toys", "impr": 60100, "clicks": 943, "cost": 2012, "gcvr": 1.24, "roas": 4.4, "views": 25210, "cvr": 3.54, "gppv": 1.27, "rev": 129946, "aov": 146, "oos": 7.8, "liveSkus": 238, "odooSkus": null, "siteSearch": 1645, "prizePaid": 83, "prizeAvail": 10163, "prizeFunnel": 126526, "prizeTotal": 136772, "gpRate": 24.7, "prizeGpYr": 405392}, {"k": "Bikes, scooters & ride-ons", "impr": 38170, "clicks": 640, "cost": 1294, "gcvr": 1.25, "roas": 21.7, "views": 9322, "cvr": 0.29, "gppv": 2.66, "rev": 100414, "aov": 3719, "oos": 20.6, "liveSkus": 216, "odooSkus": 1190, "siteSearch": 0, "prizePaid": 1190, "prizeAvail": 20711, "prizeFunnel": 97772, "prizeTotal": 119673, "gpRate": 24.7, "prizeGpYr": 354711}, {"k": "Kids footwear", "impr": 25763, "clicks": 533, "cost": 1055, "gcvr": 0.84, "roas": 3.7, "views": 32571, "cvr": 0.58, "gppv": 0.68, "rev": 94878, "aov": 502, "oos": 3.1, "liveSkus": 484, "odooSkus": 993, "siteSearch": 738, "prizePaid": 1231, "prizeAvail": 2940, "prizeFunnel": 92381, "prizeTotal": 96552, "gpRate": 23.2, "prizeGpYr": 268801}, {"k": "Swim & beach", "impr": 18651, "clicks": 322, "cost": 878, "gcvr": 3.84, "roas": 16.1, "views": 30716, "cvr": 1.13, "gppv": 2.72, "rev": 313392, "aov": 906, "oos": 17.9, "liveSkus": 448, "odooSkus": 1220, "siteSearch": 482, "prizePaid": 0, "prizeAvail": 56289, "prizeFunnel": 305145, "prizeTotal": 361434, "gpRate": 26.7, "prizeGpYr": 1158035}, {"k": "Stationery", "impr": 16476, "clicks": 374, "cost": 768, "gcvr": 2.5, "roas": 13.1, "views": 37497, "cvr": 3.68, "gppv": 1.07, "rev": 168033, "aov": 122, "oos": 10.3, "liveSkus": 591, "odooSkus": 1340, "siteSearch": 2455, "prizePaid": 0, "prizeAvail": 17340, "prizeFunnel": 163611, "prizeTotal": 180951, "gpRate": 23.9, "prizeGpYr": 518967}, {"k": "Kids clothing", "impr": 11653, "clicks": 180, "cost": 381, "gcvr": 0.56, "roas": 1.5, "views": 0, "cvr": 0, "gppv": 0, "rev": 0, "aov": 0, "oos": 0, "liveSkus": null, "odooSkus": null, "siteSearch": 2943, "prizePaid": 0, "prizeAvail": 0, "prizeFunnel": 0, "prizeTotal": 0, "gpRate": 23.2, "prizeGpYr": 0}, {"k": "Bath, care & diapering", "impr": 10799, "clicks": 255, "cost": 451, "gcvr": 0.63, "roas": 2.8, "views": 16081, "cvr": 1.18, "gppv": 1.41, "rev": 87325, "aov": 462, "oos": 15.9, "liveSkus": 273, "odooSkus": 599, "siteSearch": 278, "prizePaid": 789, "prizeAvail": 13939, "prizeFunnel": 85027, "prizeTotal": 99755, "gpRate": 25.9, "prizeGpYr": 310039}, {"k": "Party & gifting", "impr": 4784, "clicks": 69, "cost": 130, "gcvr": 3.87, "roas": 23.3, "views": 1980, "cvr": 0.3, "gppv": 0.92, "rev": 4855, "aov": 809, "oos": 0.0, "liveSkus": 235, "odooSkus": 1655, "siteSearch": 0, "prizePaid": 0, "prizeAvail": 0, "prizeFunnel": 4727, "prizeTotal": 4727, "gpRate": 37.7, "prizeGpYr": 21385}, {"k": "Water bottles & flasks", "impr": 0, "clicks": 0, "cost": 0, "gcvr": 0, "roas": 0, "views": 140404, "cvr": 1.13, "gppv": 1.94, "rev": 1141354, "aov": 717, "oos": 14.8, "liveSkus": 395, "odooSkus": null, "siteSearch": 4273, "prizePaid": 0, "prizeAvail": 168360, "prizeFunnel": 1111318, "prizeTotal": 1279678, "gpRate": 23.9, "prizeGpYr": 3670117}], "themes": [{"theme": "Other / unclassified", "terms": 7504, "impr": 624668, "clicks": 9264, "cost": 20210, "conv": 157.8, "val": 239102, "cpc": 2.18, "cvr": 1.7, "roas": 11.8}, {"theme": "School bags", "terms": 2764, "impr": 522923, "clicks": 6560, "cost": 16575, "conv": 73.5, "val": 167730, "cpc": 2.53, "cvr": 1.12, "roas": 10.1}, {"theme": "Competitor brands", "terms": 716, "impr": 219278, "clicks": 1943, "cost": 4553, "conv": 31.6, "val": 58492, "cpc": 2.34, "cvr": 1.62, "roas": 12.8}, {"theme": "Lunch boxes & bottles", "terms": 1378, "impr": 181127, "clicks": 3714, "cost": 6717, "conv": 66.2, "val": 89219, "cpc": 1.81, "cvr": 1.78, "roas": 13.3}, {"theme": "Brand (Our Kids)", "terms": 172, "impr": 112699, "clicks": 25713, "cost": 21257, "conv": 498.9, "val": 928175, "cpc": 0.83, "cvr": 1.94, "roas": 43.7}, {"theme": "Car seats & strollers", "terms": 671, "impr": 82655, "clicks": 1444, "cost": 4529, "conv": 7.2, "val": 24200, "cpc": 3.14, "cvr": 0.5, "roas": 5.3}, {"theme": "Baby feeding", "terms": 639, "impr": 64798, "clicks": 1053, "cost": 2168, "conv": 31.5, "val": 39464, "cpc": 2.06, "cvr": 2.99, "roas": 18.2}, {"theme": "Toys", "terms": 955, "impr": 60100, "clicks": 943, "cost": 2012, "conv": 11.7, "val": 8855, "cpc": 2.13, "cvr": 1.24, "roas": 4.4}, {"theme": "Bikes & scooters", "terms": 309, "impr": 38170, "clicks": 640, "cost": 1294, "conv": 8.0, "val": 28142, "cpc": 2.02, "cvr": 1.25, "roas": 21.7}, {"theme": "Kids footwear", "terms": 397, "impr": 25763, "clicks": 533, "cost": 1055, "conv": 4.5, "val": 3869, "cpc": 1.98, "cvr": 0.84, "roas": 3.7}, {"theme": "Nursery & furniture", "terms": 230, "impr": 20216, "clicks": 381, "cost": 1123, "conv": 7.6, "val": 11292, "cpc": 2.95, "cvr": 1.99, "roas": 10.1}, {"theme": "Swimwear & summer", "terms": 272, "impr": 18651, "clicks": 322, "cost": 878, "conv": 12.4, "val": 14139, "cpc": 2.73, "cvr": 3.84, "roas": 16.1}, {"theme": "Stationery", "terms": 225, "impr": 16476, "clicks": 374, "cost": 768, "conv": 9.4, "val": 10033, "cpc": 2.05, "cvr": 2.5, "roas": 13.1}, {"theme": "Kids clothing", "terms": 176, "impr": 11653, "clicks": 180, "cost": 381, "conv": 1.0, "val": 579, "cpc": 2.12, "cvr": 0.56, "roas": 1.5}, {"theme": "Diapering & bath", "terms": 132, "impr": 10799, "clicks": 255, "cost": 451, "conv": 1.6, "val": 1245, "cpc": 1.77, "cvr": 0.63, "roas": 2.8}, {"theme": "Party & gifting", "terms": 103, "impr": 4784, "clicks": 69, "cost": 130, "conv": 2.7, "val": 3029, "cpc": 1.88, "cvr": 3.87, "roas": 23.3}], "brands": {"owned": [{"brand": "smiggle", "terms": 698, "impr": 138351, "clicks": 1326, "cost": 2984, "conv": 23.8, "val": 51564, "cvr": 1.79, "roas": 17.3}, {"brand": "3M", "terms": 122, "impr": 67881, "clicks": 915, "cost": 1931, "conv": 16.7, "val": 47549, "cvr": 1.82, "roas": 24.6}, {"brand": "Glossy Bird", "terms": 88, "impr": 88139, "clicks": 899, "cost": 2274, "conv": 6.9, "val": 15689, "cvr": 0.77, "roas": 6.9}, {"brand": "BZ", "terms": 233, "impr": 174023, "clicks": 2243, "cost": 4102, "conv": 21.3, "val": 47151, "cvr": 0.95, "roas": 11.5}, {"brand": "Sistema", "terms": 260, "impr": 57003, "clicks": 1069, "cost": 1777, "conv": 14.5, "val": 22083, "cvr": 1.36, "roas": 12.4}, {"brand": "Tank", "terms": 26, "impr": 5591, "clicks": 93, "cost": 147, "conv": 2.4, "val": 2556, "cvr": 2.62, "roas": 17.4}, {"brand": "Cubs", "terms": 117, "impr": 35972, "clicks": 305, "cost": 676, "conv": 3.3, "val": 4754, "cvr": 1.08, "roas": 7.0}, {"brand": "Smash", "terms": 14, "impr": 5087, "clicks": 160, "cost": 352, "conv": 1.3, "val": 1951, "cvr": 0.83, "roas": 5.5}, {"brand": "M Design", "terms": 36, "impr": 14719, "clicks": 216, "cost": 302, "conv": 2.3, "val": 1551, "cvr": 1.08, "roas": 5.1}, {"brand": "Lock n Lock", "terms": 32, "impr": 5980, "clicks": 163, "cost": 258, "conv": 3.0, "val": 7584, "cvr": 1.87, "roas": 29.4}], "rival": [{"brand": "Hedeya", "terms": 76, "impr": 31150, "clicks": 142, "cost": 436, "conv": 3.2, "val": 7426, "cvr": 2.25, "roas": 17.0}, {"brand": "Bingo", "terms": 41, "impr": 5714, "clicks": 92, "cost": 249, "conv": 1.5, "val": 594, "cvr": 1.66, "roas": 2.4}, {"brand": "Mumzworld", "terms": 7, "impr": 400, "clicks": 3, "cost": 3, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Babyshop", "terms": 28, "impr": 2768, "clicks": 17, "cost": 45, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Toys R Us", "terms": 5, "impr": 668, "clicks": 5, "cost": 10, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Jansport", "terms": 79, "impr": 11361, "clicks": 139, "cost": 471, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Owala", "terms": 21, "impr": 2454, "clicks": 14, "cost": 26, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Kidilo", "terms": 79, "impr": 9050, "clicks": 118, "cost": 302, "conv": 1.0, "val": 1214, "cvr": 0.85, "roas": 4.0}, {"brand": "Migo", "terms": 15, "impr": 1292, "clicks": 13, "cost": 34, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}, {"brand": "Nahdet Misr", "terms": 1, "impr": 42, "clicks": 0, "cost": 0, "conv": 0.0, "val": 0, "cvr": 0, "roas": 0}, {"brand": "City Club/Other", "terms": 14, "impr": 1341, "clicks": 13, "cost": 17, "conv": 0.0, "val": 0, "cvr": 0.0, "roas": 0.0}]}, "subs": [{"k": "Backpacks & school sets", "skus": 773, "views": 308931, "viewShare": 32.2, "atcRate": 7.18, "cvr": 0.48, "rev": 2960085, "revShare": 39.8, "gppv": 2.29, "aov": 2011, "oosPct": 37.8, "oosSkus": 248, "gpRate": 23.9, "gp": 707460}, {"k": "Lunch boxes", "skus": 384, "views": 188969, "viewShare": 19.7, "atcRate": 10.7, "cvr": 1.27, "rev": 1375027, "revShare": 18.5, "gppv": 1.74, "aov": 571, "oosPct": 12.4, "oosSkus": 56, "gpRate": 23.9, "gp": 328631}, {"k": "Water bottles & flasks", "skus": 395, "views": 140404, "viewShare": 14.6, "atcRate": 8.71, "cvr": 1.13, "rev": 1141354, "revShare": 15.3, "gppv": 1.94, "aov": 717, "oosPct": 14.8, "oosSkus": 57, "gpRate": 23.9, "gp": 272784}, {"k": "Unclassified", "skus": 640, "views": 80212, "viewShare": 8.4, "atcRate": 9.78, "cvr": 1.34, "rev": 471158, "revShare": 6.3, "gppv": 1.44, "aov": 439, "oosPct": 8.0, "oosSkus": 51, "gpRate": 24.6, "gp": 115905}, {"k": "Swim & summer", "skus": 187, "views": 30716, "viewShare": 3.2, "atcRate": 5.84, "cvr": 1.13, "rev": 313392, "revShare": 4.2, "gppv": 2.72, "aov": 906, "oosPct": 17.9, "oosSkus": 29, "gpRate": 26.7, "gp": 83676}, {"k": "Nursery & sleep", "skus": 484, "views": 54603, "viewShare": 5.7, "atcRate": 5.82, "cvr": 0.98, "rev": 255289, "revShare": 3.4, "gppv": 1.21, "aov": 479, "oosPct": 7.0, "oosSkus": 39, "gpRate": 25.9, "gp": 66120}, {"k": "Strollers & car seats", "skus": 82, "views": 17979, "viewShare": 1.9, "atcRate": 1.92, "cvr": 0.15, "rev": 228020, "revShare": 3.1, "gppv": 3.28, "aov": 8445, "oosPct": 8.4, "oosSkus": 12, "gpRate": 25.9, "gp": 59057}, {"k": "Stationery & pencil cases", "skus": 214, "views": 37497, "viewShare": 3.9, "atcRate": 27.6, "cvr": 3.68, "rev": 168033, "revShare": 2.3, "gppv": 1.07, "aov": 122, "oosPct": 10.3, "oosSkus": 26, "gpRate": 23.9, "gp": 40160}, {"k": "Toys & games", "skus": 238, "views": 25210, "viewShare": 2.6, "atcRate": 16.94, "cvr": 3.54, "rev": 129946, "revShare": 1.7, "gppv": 1.27, "aov": 146, "oosPct": 7.8, "oosSkus": 22, "gpRate": 24.7, "gp": 32097}, {"k": "Feeding & pacifiers", "skus": 109, "views": 14506, "viewShare": 1.5, "atcRate": 7.52, "cvr": 1.14, "rev": 111029, "revShare": 1.5, "gppv": 1.98, "aov": 673, "oosPct": 11.7, "oosSkus": 14, "gpRate": 25.9, "gp": 28757}, {"k": "Bikes, scooters & ride-ons", "skus": 74, "views": 9322, "viewShare": 1.0, "atcRate": 2.57, "cvr": 0.29, "rev": 100414, "revShare": 1.3, "gppv": 2.66, "aov": 3719, "oosPct": 20.6, "oosSkus": 16, "gpRate": 24.7, "gp": 24802}, {"k": "Clothing & footwear", "skus": 286, "views": 32571, "viewShare": 3.4, "atcRate": 4.25, "cvr": 0.58, "rev": 94878, "revShare": 1.3, "gppv": 0.68, "aov": 502, "oosPct": 3.1, "oosSkus": 14, "gpRate": 23.2, "gp": 22012}, {"k": "Bath, care & diapering", "skus": 123, "views": 16081, "viewShare": 1.7, "atcRate": 10.59, "cvr": 1.18, "rev": 87325, "revShare": 1.2, "gppv": 1.41, "aov": 462, "oosPct": 15.9, "oosSkus": 23, "gpRate": 25.9, "gp": 22617}, {"k": "Party & gifting", "skus": 11, "views": 1980, "viewShare": 0.2, "atcRate": 3.89, "cvr": 0.3, "rev": 4855, "revShare": 0.1, "gppv": 0.92, "aov": 809, "oosPct": 0.0, "oosSkus": 0, "gpRate": 37.7, "gp": 1830}], "bands": [{"k": "<200", "skus": 427, "views": 65171, "cvr": 4.45, "atcRate": 26.92, "revShare": 3.1, "rev": 232645}, {"k": "200–400", "skus": 711, "views": 134070, "cvr": 1.27, "atcRate": 10.61, "revShare": 6.8, "rev": 505232}, {"k": "400–700", "skus": 877, "views": 193355, "cvr": 1.28, "atcRate": 10.09, "revShare": 17.9, "rev": 1331987}, {"k": "700–1.2k", "skus": 694, "views": 161689, "cvr": 0.85, "atcRate": 7.19, "revShare": 17.1, "rev": 1268909}, {"k": "1.2k–2.5k", "skus": 821, "views": 265835, "cvr": 0.56, "atcRate": 6.98, "revShare": 35.5, "rev": 2641314}, {"k": "2.5k+", "skus": 469, "views": 138800, "cvr": 0.26, "atcRate": 3.92, "revShare": 19.6, "rev": 1460717}], "scen": [{"k": "Today", "v": 9.51, "type": "base"}, {"k": "Stop selling sold-out pages", "v": 1.62, "type": "add"}, {"k": "Cart→checkout 15%→22%", "v": 3.27, "type": "add"}, {"k": "Cart→checkout 22%→30%", "v": 3.27, "type": "add"}, {"k": "Capture paid demand at account average", "v": 0.12, "type": "add"}, {"k": "Ceiling", "v": 17.79, "type": "total"}], "cons": [{"k": "Toys", "cons": 67, "gp": 24.7}, {"k": "Summer", "cons": 40, "gp": 26.7}, {"k": "Baby Essentials", "cons": 33, "gp": 25.9}, {"k": "Adults", "cons": 32, "gp": 23.8}, {"k": "Party", "cons": 25, "gp": 37.7}, {"k": "School", "cons": 18, "gp": 23.9}, {"k": "Clothing", "cons": 17, "gp": 23.2}, {"k": "Various", "cons": 10, "gp": 24.6}]};
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const tip=document.getElementById('tip');
+function showTip(ev,title,rows){
+ tip.innerHTML='<b>'+title+'</b>'+rows.map(r=>'<div class="r"><span>'+r[0]+'</span><i>'+r[1]+'</i></div>').join('');
+ tip.style.opacity=1;
+ const w=tip.offsetWidth,h=tip.offsetHeight;
+ let x=ev.clientX+14,y=ev.clientY-h-10;
+ if(x+w>innerWidth-8)x=ev.clientX-w-14; if(y<8)y=ev.clientY+16;
+ tip.style.left=x+'px';tip.style.top=y+'px';
+}
+const hideTip=()=>tip.style.opacity=0;
+const attach=(node,title,rows)=>{node.addEventListener('mousemove',e=>showTip(e,title,rows));node.addEventListener('mouseleave',hideTip);};
+const mo=m=>{const[y,x]=m.split('-');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+x-1]+" '"+y.slice(2);};
+const f1=v=>v.toFixed(1), f2=v=>v.toFixed(2), f0=v=>v.toFixed(0), fi=v=>Math.round(v).toLocaleString('en-US');
+function wrapLabel(s,text,cx,y,maxw){
+  const words=(text+'').split(' ');const lines=[];let cur='';
+  const cpl=Math.max(Math.floor(maxw/5.4),8);
+  words.forEach(w=>{if((cur+' '+w).trim().length>cpl){lines.push(cur.trim());cur=w;}else cur+=' '+w;});
+  if(cur.trim())lines.push(cur.trim());
+  lines.slice(0,3).forEach((ln,i)=>{const t=el('text',{x:cx,y:y+i*11,class:'ax','text-anchor':'middle'});t.textContent=ln;s.appendChild(t);});
+}
+/* stacked vertical bars over a month series */
+function stacked(id,d,layers,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||290,L=46,R=12,T=26,B=44;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,bw=pw/d.length*0.62,step=pw/d.length;
+ for(let k=0;k<=opts.ticks;k++){const v=max*k/opts.ticks,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ d.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2, rr=opts.rrKey&&r[opts.rrKey];
+  let acc=0;
+  layers.forEach((ly,j)=>{
+   const v=ly.get(r),h=Math.max(v/max*ph,0.5);
+   s.appendChild(el('rect',{x,y:T+ph-acc-h,width:bw,height:h,fill:ly.color,rx:j===layers.length-1?3:0,opacity:rr?0.6:1}));
+   acc+=h;});
+  const t=el('text',{x:x+bw/2,y:H-B+15,class:'ax','text-anchor':'middle'});t.textContent=mo(r.m);s.appendChild(t);
+  if(rr){const t2=el('text',{x:x+bw/2,y:H-B+27,class:'ax','text-anchor':'middle',fill:'var(--warn)'});t2.textContent='RR';s.appendChild(t2);}
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,mo(r.m)+(rr?' (run-rated)':''),opts.rows(r));s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* multi-series line over a month array */
+function lineChart(id,d,series,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||290,L=48,R=54,T=26,B=38;
+ const pw=W-L-R,ph=H-T-B,n=d.length,max=opts.max,min=opts.min||0;
+ const X=i=>L+pw*i/(n-1), Y=v=>T+ph-(v-min)/(max-min)*ph;
+ for(let k=0;k<=opts.ticks;k++){const v=min+(max-min)*k/opts.ticks,y=Y(v);
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ series.forEach(se=>{
+  s.appendChild(el('polyline',{points:d.map((r,i)=>X(i)+','+Y(se.get(r))).join(' '),fill:'none',stroke:se.color,
+   'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','stroke-dasharray':se.dash||'none'}));
+  s.appendChild(el('circle',{cx:X(0),cy:Y(se.get(d[0])),r:4,fill:se.color,stroke:'var(--surface-1)','stroke-width':2}));
+  s.appendChild(el('circle',{cx:X(n-1),cy:Y(se.get(d[n-1])),r:4.5,fill:se.color,stroke:'var(--surface-1)','stroke-width':2}));
+  const t=el('text',{x:X(n-1)+9,y:Y(se.get(d[n-1]))+4,class:'dl'});t.textContent=opts.fmt(se.get(d[n-1]));s.appendChild(t);});
+ d.forEach((r,i)=>{const t=el('text',{x:X(i),y:H-B+16,class:'ax','text-anchor':'middle'});
+  if(i%2===0||i===n-1)t.textContent=mo(r.m);s.appendChild(t);});
+ const cross=el('line',{x1:0,x2:0,y1:T,y2:T+ph,stroke:'var(--text-muted)','stroke-width':1,opacity:0});s.appendChild(cross);
+ d.forEach((r,i)=>{const hit=el('rect',{x:X(i)-pw/(n-1)/2,y:T,width:pw/(n-1),height:ph,class:'hit'});
+  hit.addEventListener('mousemove',e=>{cross.setAttribute('x1',X(i));cross.setAttribute('x2',X(i));cross.setAttribute('opacity',.35);
+   showTip(e,mo(r.m),series.map(se=>[se.name,opts.fmt(se.get(r))]));});
+  hit.addEventListener('mouseleave',()=>{cross.setAttribute('opacity',0);hideTip();});s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* simple vertical bars from [{k,v,color,rows}] */
+function barChart(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||260,L=opts.L||52,R=14,T=26,B=opts.B||46;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,step=pw/rows.length,bw=Math.min(step*0.56,74);
+ for(let k=0;k<=4;k++){const v=max*k/4,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ rows.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2,h=Math.max(r.v/max*ph,2);
+  s.appendChild(el('rect',{x,y:T+ph-h,width:bw,height:h,fill:r.color||'var(--s1)',rx:4}));
+  const t=el('text',{x:x+bw/2,y:T+ph-h-8,class:'dl','text-anchor':'middle'});t.textContent=opts.fmt(r.v);s.appendChild(t);
+  wrapLabel(s,r.k,x+bw/2,H-B+16,step+8);
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,r.k,r.rows||[[opts.name||'Value',opts.fmt(r.v)]]);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* grouped horizontal pairs from [{k,a,b,note,rows}] */
+function grouped(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H,L=opts.L||150,R=54,T=18;
+ const n=rows.length,bh=opts.bh||11,gap=5,rowH=(H-T-18)/n,max=opts.max;
+ rows.forEach((r,i)=>{
+  const y=T+i*rowH;
+  [[r.a,'var(--s1)'],[r.b,'var(--s2)']].forEach((p,j)=>{
+   const w=Math.max(p[0]/max*(W-L-R),1.5),yy=y+j*(bh+gap);
+   s.appendChild(el('rect',{x:L,y:yy,width:w,height:bh,fill:p[1],rx:3}));
+   const t=el('text',{x:L+w+7,y:yy+bh-1.5,class:'dl2'});t.textContent=(opts.vfmt||f1)(p[0])+(opts.suffix||'%');s.appendChild(t);});
+  const lb=el('text',{x:L-10,y:y+bh+2,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  if(r.note){const t=el('text',{x:L-10,y:y+bh+15,class:'ax','text-anchor':'end'});t.textContent=r.note;s.appendChild(t);}
+  const hit=el('rect',{x:0,y,width:W,height:rowH,class:'hit'});attach(hit,r.k,r.rows);s.appendChild(hit);});
+}
+/* horizontal ranked bars from [{k,v,note,rows,color}] */
+function hbar(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H,L=opts.L||170,R=opts.R||58,T=14;
+ const n=rows.length,rowH=(H-T-10)/n,bh=Math.min(rowH-8,20),max=opts.max||Math.max(...rows.map(r=>r.v));
+ rows.forEach((r,i)=>{
+  const y=T+i*rowH,w=Math.max(r.v/max*(W-L-R),2);
+  s.appendChild(el('rect',{x:L,y,width:w,height:bh,fill:r.color||'var(--s1)',rx:3}));
+  const v=el('text',{x:L+w+8,y:y+bh-2,class:'dl'});v.textContent=opts.fmt(r.v);s.appendChild(v);
+  const lb=el('text',{x:L-10,y:y+bh-2,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  if(r.note){const t=el('text',{x:L-10,y:y+bh+10,class:'ax','text-anchor':'end'});t.textContent=r.note;s.appendChild(t);}
+  const hit=el('rect',{x:0,y:y-3,width:W,height:rowH,class:'hit'});attach(hit,r.k,r.rows||[[opts.name||'Value',opts.fmt(r.v)]]);s.appendChild(hit);});
+}
+/* horizontal funnel from [{k,v}] */
+function funnel(id,d,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||270,L=opts.L||150,R=112,T=20;
+ const max=d[0].v,bh=opts.bh||34,gap=opts.gap||22;
+ const ramp=['var(--seq3)','var(--seq4)','var(--seq5)','var(--seq5)'];
+ d.forEach((r,i)=>{
+  const y=T+i*(bh+gap),w=Math.max(r.v/max*(W-L-R),3);
+  s.appendChild(el('rect',{x:L,y,width:w,height:bh,fill:r.bad?'var(--s2)':ramp[Math.min(i,3)],rx:4}));
+  const lb=el('text',{x:L-10,y:y+bh/2+4,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  const vl=el('text',{x:L+w+10,y:y+bh/2+4,class:'dl'});vl.textContent=fi(r.v);s.appendChild(vl);
+  if(i>0){const pct=r.v/d[i-1].v*100,cy=y-gap/2+2;
+   const t=el('text',{x:L+6,y:cy+4,class:'dl2',fill:r.bad?'var(--crit)':'var(--text-secondary)'});
+   t.textContent='↓ '+f1(pct)+'% of previous step'+(r.tag?' — '+r.tag:'');s.appendChild(t);}
+  const hit=el('rect',{x:L,y,width:W-L-R,height:bh,class:'hit'});
+  attach(hit,r.k,[['Count',fi(r.v)],['% of top of funnel',f2(r.v/max*100)+'%']]);s.appendChild(hit);});
+ if(opts.foot){const t=el('text',{x:L,y:H-10,class:'dl2'});t.textContent=opts.foot;s.appendChild(t);}
+}
+/* scatter from [{k,x,y,r,rows}] */
+function scatter(id,pts,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||330,L=56,R=26,T=22,B=46;
+ const pw=W-L-R,ph=H-T-B;
+ const X=v=>L+(v-opts.xmin)/(opts.xmax-opts.xmin)*pw, Y=v=>T+ph-(v-opts.ymin)/(opts.ymax-opts.ymin)*ph;
+ for(let k=0;k<=4;k++){const v=opts.ymin+(opts.ymax-opts.ymin)*k/4,y=Y(v);
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.yfmt(v);s.appendChild(t);}
+ for(let k=0;k<=4;k++){const v=opts.xmin+(opts.xmax-opts.xmin)*k/4,x=X(v);
+  s.appendChild(el('line',{x1:x,x2:x,y1:T,y2:T+ph,class:'gl'}));
+  const t=el('text',{x,y:H-B+16,class:'ax','text-anchor':'middle'});t.textContent=opts.xfmt(v);s.appendChild(t);}
+ if(opts.vline!==undefined){const x=X(opts.vline);s.appendChild(el('line',{x1:x,x2:x,y1:T,y2:T+ph,stroke:'var(--text-muted)','stroke-dasharray':'4 4','stroke-width':1,opacity:.6}));}
+ if(opts.hline!==undefined){const y=Y(opts.hline);s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'var(--text-muted)','stroke-dasharray':'4 4','stroke-width':1,opacity:.6}));}
+ pts.forEach(p=>{
+  const cx=X(Math.min(Math.max(p.x,opts.xmin),opts.xmax)),cy=Y(Math.min(Math.max(p.y,opts.ymin),opts.ymax));
+  s.appendChild(el('circle',{cx,cy,r:p.r||7,fill:p.color||'var(--s1)',opacity:.82,stroke:'var(--surface-1)','stroke-width':1.5}));
+  const t=el('text',{x:cx+(p.r||7)+5,y:cy+4,class:'dl2'});t.textContent=p.k;s.appendChild(t);
+  const hit=el('circle',{cx,cy,r:(p.r||7)+8,class:'hit'});attach(hit,p.k,p.rows);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:13,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+ if(opts.xlab){const t=el('text',{x:W-R,y:H-6,class:'dl2','text-anchor':'end'});t.textContent=opts.xlab;s.appendChild(t);}
+}
+/* waterfall from [{k,v,type}] */
+function bridge(id,d,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||310,L=44,R=14,T=30,B=66;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,step=pw/d.length,bw=step*0.56;
+ for(let k=0;k<=5;k++){const v=max*k/5,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=f0(v);s.appendChild(t);}
+ let run=0;
+ d.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2;let y0,y1,fill,lbl;
+  if(r.type==='base'){y0=0;y1=r.v;run=r.v;fill='var(--s1)';lbl=f1(r.v);}
+  else if(r.type==='add'){y0=run;y1=run+r.v;run+=r.v;fill='var(--s3)';lbl='+'+f2(r.v);}
+  else{y0=0;y1=r.v;fill='var(--s2)';lbl=f1(r.v);}
+  const yTop=T+ph-y1/max*ph,h=Math.max((y1-y0)/max*ph,2);
+  s.appendChild(el('rect',{x,y:yTop,width:bw,height:h,fill,rx:3}));
+  if(r.type==='add'&&i>0)s.appendChild(el('line',{x1:x-(step-bw),x2:x,y1:T+ph-y0/max*ph,y2:T+ph-y0/max*ph,stroke:'var(--text-muted)','stroke-width':1,opacity:.4}));
+  const t=el('text',{x:x+bw/2,y:yTop-8,class:'dl','text-anchor':'middle'});t.textContent=lbl;s.appendChild(t);
+  wrapLabel(s,r.k,x+bw/2,H-B+15,step+8);
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,r.k,[[r.type==='add'?'Monthly uplift':'Monthly revenue','EGP '+f2(r.v)+'M'],['Annualised','EGP '+f1(r.v*12)+'M']]);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:16,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* table helper */
+function tbl(id,head,rows){
+ document.getElementById(id).innerHTML='<thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+
+  rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody>';
+}
+/* theme */
+(function(){
+ const btn=document.getElementById('themeBtn');if(!btn)return;
+ const isDark=()=>document.documentElement.getAttribute('data-theme')==='dark'||
+  (!document.documentElement.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);
+ const sync=()=>btn.textContent=isDark()?'Light mode':'Dark mode';
+ btn.addEventListener('click',()=>{document.documentElement.setAttribute('data-theme',isDark()?'light':'dark');sync();});
+ sync();
+})();
+
+const dm=D.demand.filter(x=>x.impr>0||x.views>0);
+/* demand vs capture */
+(function(){
+ grouped('c-dem',dm.map(x=>({k:x.k.length>24?x.k.slice(0,23)+'…':x.k,a:x.impr/1000,b:x.cvr,
+   note:x.liveSkus?fi(x.liveSkus)+' live SKUs':'',
+   rows:[['Google impressions 30d',fi(x.impr)],['Google clicks',fi(x.clicks)],['Google spend','EGP '+fi(x.cost)],
+         ['Google click-to-order',f2(x.gcvr)+'%'],['On-site product views',fi(x.views)],
+         ['On-site conversion',f2(x.cvr)+'%'],['Gross profit per view',f2(x.gppv)+' EGP'],
+         ['Average order value','EGP '+fi(x.aov)],['Views on sold-out pages',f1(x.oos)+'%'],
+         ['Live SKUs on the site',x.liveSkus?fi(x.liveSkus):'—'],['On-site searches 30d',fi(x.siteSearch)]]})),
+  {H:420,max:540,vfmt:f1,suffix:''});
+ tbl('t-dem',['Demand theme','Google impr','Clicks','Spend','Google CVR','Site views','Site CVR','GPPV','AOV','Sold-out views','Live SKUs'],
+   D.demand.map(x=>[x.k,fi(x.impr),fi(x.clicks),fi(x.cost),f2(x.gcvr)+'%',fi(x.views),f2(x.cvr)+'%',f2(x.gppv),fi(x.aov),f1(x.oos)+'%',x.liveSkus?fi(x.liveSkus):'&mdash;']));
+})();
+/* prize stack */
+(function(){
+ const p=D.demand.filter(x=>x.prizeTotal>50000).sort((a,b)=>b.prizeTotal-a.prizeTotal);
+ const s=document.getElementById('c-prize'),W=620,H=420,L=170,R=76,T=16;
+ const max=Math.max(...p.map(x=>x.prizeTotal))/1e6,rowH=(H-T-14)/p.length,bh=Math.min(rowH-10,20);
+ for(let k=0;k<=4;k++){const v=max*k/4,x=L+(W-L-R)*k/4;
+  s.appendChild(el('line',{x1:x,x2:x,y1:T,y2:T+rowH*p.length,class:'gl'}));
+  const t=el('text',{x,y:H-2,class:'ax','text-anchor':'middle'});t.textContent=f1(v)+'M';s.appendChild(t);}
+ p.forEach((x,i)=>{
+  const y=T+i*rowH;let acc=0;
+  [[x.prizeAvail,'var(--s2)'],[x.prizeFunnel,'var(--s1)'],[x.prizePaid,'var(--s3)']].forEach(seg=>{
+   const w=seg[0]/1e6/max*(W-L-R);
+   if(w>0.4)s.appendChild(el('rect',{x:L+acc,y,width:w,height:bh,fill:seg[1],rx:2}));
+   acc+=w;});
+  const v=el('text',{x:L+acc+8,y:y+bh-2,class:'dl'});v.textContent=f2(x.prizeTotal/1e6)+'M';s.appendChild(v);
+  const lb=el('text',{x:L-10,y:y+bh-2,class:'dl','text-anchor':'end'});lb.textContent=x.k.length>24?x.k.slice(0,23)+'…':x.k;s.appendChild(lb);
+  const hit=el('rect',{x:0,y:y-3,width:W,height:rowH,class:'hit'});
+  attach(hit,x.k,[['Lost to sold-out pages','EGP '+fi(x.prizeAvail)],['Lost in the cart','EGP '+fi(x.prizeFunnel)],
+    ['Lost in paid search','EGP '+fi(x.prizePaid)],['Total available per month','EGP '+fi(x.prizeTotal)],
+    ['Gross profit available per year','EGP '+fi(x.prizeGpYr)],['Category margin',f1(x.gpRate)+'%']]);
+  s.appendChild(hit);});
+ tbl('t-prize',['Theme','Sold-out pages','Cart leak','Paid search','Total /mo','Gross profit /yr'],
+   D.demand.filter(x=>x.prizeTotal>0).sort((a,b)=>b.prizeTotal-a.prizeTotal)
+     .map(x=>[x.k,fi(x.prizeAvail),fi(x.prizeFunnel),fi(x.prizePaid),fi(x.prizeTotal),fi(x.prizeGpYr)]));
+})();
+bridge('c-scen',D.scen,{max:20,H:320,ylab:'EGP millions of online revenue per month'});
+grouped('c-band',D.bands.map(b=>({k:b.k,a:b.atcRate,b:b.cvr,note:f1(b.revShare)+'% of revenue',
+  rows:[['Add-to-cart rate',f2(b.atcRate)+'%'],['Conversion',f2(b.cvr)+'%'],['Cart-to-order',f1(b.cvr/b.atcRate*100)+'%'],['Share of online revenue',f1(b.revShare)+'%']]})),
+ {H:280,max:28,L:110});
+grouped('c-cons',D.cons.map(x=>({k:x.k,a:x.cons,b:x.gp,note:'',
+  rows:[['Consignment share of revenue',f0(x.cons)+'%'],['Category gross margin',f1(x.gp)+'%']]})),
+ {H:320,max:70});
+tbl('t-model',['On a 100 EGP sale','Owned stock','Consignment','Agency'],
+ [['Gross profit','27 EGP','19 EGP','10–12 EGP'],
+  ['Cash tied up','Full cost, 60–90 days','None','None'],
+  ['Markdown risk','Ours','Vendor&rsquo;s','Vendor&rsquo;s'],
+  ['Returns risk','Ours','Shared','Vendor&rsquo;s'],
+  ['Time to first listing','8–12 weeks','2–3 weeks','Days'],
+  ['Share of business today','67%','33%','0%'],
+  ['Right for','Proven winners','Testing depth','Testing a category']]);
+</script>
+
+</body>
+</html>
