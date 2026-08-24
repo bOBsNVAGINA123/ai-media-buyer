@@ -1769,10 +1769,10 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
  pnlCard(g,'odoo','Branch scoreboard &mdash; period '+ST.s+' → '+ST.e+' vs '+pw[0]+' → '+pw[1],
   'PERIOD block (daily feeds) follows the filter and the attribution selector: POS revenue and Meta-attributed value. CUSTOMER block is MONTHLY — per-branch new/returning come from the monthly POS customer crawl, so they cannot follow a 7-day window: it shows '+m+(isMTD?' month-to-date (day '+elapsed+' of '+dimM+', % = PACE)':'')+' vs prior month '+pm+' and vs '+lyM+'. AOV = that month&rsquo;s revenue ÷ its customers.',
   '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right">'
-  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+m+(isMTD?' MTD':'')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+m+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+m+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
+  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+(window.__BDLIVE?ST.s.slice(5)+'→'+ST.e.slice(5):m+(isMTD?' MTD':''))+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+(window.__BDLIVE?'same window':m)+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+(window.__BDLIVE?'same window':m)+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
   +'<tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>Attributed</th><th>vs prev</th><th>share</th>'
-  +'<th>New</th><th>vs '+pm.slice(5)+'</th><th>vs LY</th><th>Returning</th><th>vs '+pm.slice(5)+'</th><th>vs LY</th>'
-  +'<th>NC revenue</th><th>vs '+pm.slice(5)+'</th><th>RC revenue</th><th>vs '+pm.slice(5)+'</th>'
+  +'<th>New</th><th>vs prev</th><th>vs LY</th><th>Returning</th><th>vs prev</th><th>vs LY</th>'
+  +'<th>NC revenue</th><th>vs prev</th><th>RC revenue</th><th>vs prev</th>'
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
   +rows.map(tr).join('')+'</table></div>');}
 
@@ -5568,9 +5568,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260824T141013Z';
+const BUILD='20260824T142431Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T141013Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T142431Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
