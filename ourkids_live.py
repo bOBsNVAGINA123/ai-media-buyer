@@ -368,6 +368,38 @@ def _catname(c):
     return p[-1] if p else ""
 
 
+VBANDS = [0, 500, 1000, 2500, 5000, 10000, 25000, 50000]
+def _bands(agg, ocnt):
+    """Same absolute spend brackets for every scope, so Smouha's E£5k customers are compared
+    with Dokki's E£5k customers — not with 'whatever its own top 10% happens to be'."""
+    out = [{"lo": VBANDS[i], "hi": (VBANDS[i + 1] if i + 1 < len(VBANDS) else None),
+            "c": 0, "o": 0, "r": 0.0, "g": 0.0, "q": 0.0, "rep": 0} for i in range(len(VBANDS))]
+    for p, a in agg.items():
+        r = a[0]
+        i = 0
+        for k in range(len(VBANDS) - 1, -1, -1):
+            if r >= VBANDS[k]: i = k; break
+        b = out[i]; b["c"] += 1; b["r"] += r; b["g"] += a[1]; b["q"] += a[2]
+        oc = ocnt.get(p, 0); b["o"] += oc
+        if oc >= 2: b["rep"] += 1
+    for b in out:
+        b["r"] = round(b["r"]); b["g"] = round(b["g"]); b["q"] = round(b["q"])
+    return out
+
+def _wagg(rows, cutoff):
+    """Re-aggregate the SAME receipts inside a window, so the portfolio can follow the date filter."""
+    DA2 = {}; DOC2 = {}; SEEN = {}
+    for pid, d, br, mg, oid, rv, qy in rows:
+        if cutoff and d < cutoff: continue
+        for sc in (br, "ALL STORES"):
+            a = DA2.setdefault(sc, {}).get(pid)
+            if a is None: a = DA2[sc][pid] = [0.0, 0.0, 0.0, 0.0, d, d, 0.0, 0.0]
+            a[0] += rv; a[1] += mg; a[2] += qy
+            if oid and (pid, oid) not in SEEN.setdefault(sc, set()):
+                SEEN[sc].add((pid, oid))
+                _d = DOC2.setdefault(sc, {}); _d[pid] = _d.get(pid, 0) + 1
+    return DA2, DOC2
+
 def _decile(agg, ocnt, attrs=None):
     """agg: pid -> [rev, gp, qty, negrev, first_d, last_d, gross_retail, disc]. ocnt: pid -> orders.
     attrs: pid -> {"cat": {name: rev}, "ven": {name: rev}} -- optional, powers the per-decile
@@ -1557,6 +1589,14 @@ def pull_pos_customers():
                     _dsc = DOC.setdefault(sc, {})
                     _dsc[pid] = _dsc.get(pid, 0) + 1
         XTRA["dec"] = {sc: _decile(DA[sc], DOC.get(sc, {}), PATTR) for sc in DA}
+        # comparable brackets: identical value bands for every scope, lifetime and per window
+        _bw = {"life": {sc: _bands(DA[sc], DOC.get(sc, {})) for sc in DA}}
+        for _wd in (365, 180, 90, 30):
+            _cut = (END - datetime.timedelta(days=_wd - 1)).isoformat()
+            _da2, _doc2 = _wagg(rows, _cut)
+            _bw[str(_wd)] = {sc: _bands(_da2[sc], _doc2.get(sc, {})) for sc in _da2}
+        XTRA["decB"] = {"bands": VBANDS, "win": _bw, "asOf": END.isoformat()}
+        log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
         XTRA["posagg"] = {p: (a[0], a[1]) for p, a in DA.get("ALL STORES", {}).items()}
         XTRA["vcs"] = VCS
         pdates = {}
@@ -3896,7 +3936,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.18 (assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.19 (comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -4151,7 +4191,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "why": safe(pull_why) or prev.get("why") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
