@@ -3951,8 +3951,47 @@ function rFind(g,M,SH,A,names){try{
    Free shipping is not free -- it is this table with the top line set to zero. */
 /* v6.5 ---------------------------------------------------------------- DECILES / REACH / LAG / SORT */
 function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
+
+/* ====== COMPARABLE BRACKETS: same absolute spend bands for every scope, window-aware ====== */
+window.CBA=window.CBA||'ALL STORES';window.CBB=window.CBB||'';
+function cbWin(){const d=Math.max(1,span(ST.s,ST.e));const opts=[[30,'30'],[90,'90'],[180,'180'],[365,'365']];
+ let best=null;opts.forEach(o=>{const diff=Math.abs(o[0]-d);if(best==null||diff<best[1])best=[o[1],diff,o[0]];});
+ return (d>400||!best)?['life',0]:[best[0],best[2]];}
+function cbCard(g){const DB=O.decB;if(!DB||!DB.win)return;
+ const W=cbWin(),wk=W[0],WD=DB.win[wk]||DB.win.life;if(!WD)return;
+ const scopes=Object.keys(WD).sort();if(!scopes.length)return;
+ const A=window.CBA&&WD[window.CBA]?window.CBA:scopes[0];const Bs=window.CBB&&WD[window.CBB]?window.CBB:'';
+ const RA=WD[A],RB=Bs?WD[Bs]:null;
+ const M=v=>'E£ '+Math.round(v).toLocaleString();const N=v=>Math.round(v).toLocaleString();
+ const lab=b=>b.hi==null?('E£ '+(b.lo/1000)+'k+'):(b.lo>=1000?'E£ '+(b.lo/1000)+'k':'E£ '+b.lo)+' – '+(b.hi>=1000?'E£ '+(b.hi/1000)+'k':'E£ '+b.hi);
+ const totA=RA.reduce((t,b)=>({c:t.c+b.c,r:t.r+b.r,g:t.g+b.g}),{c:0,r:0,g:0});
+ const totB=RB?RB.reduce((t,b)=>({c:t.c+b.c,r:t.r+b.r,g:t.g+b.g}),{c:0,r:0,g:0}):null;
+ const sel=(id,val,cur,blank)=>'<select onchange="window.'+id+'=this.value;rCP();">'+(blank?'<option value="">— none —</option>':'')+scopes.map(x=>'<option value="'+x+'"'+(x===cur?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+ const row=b=>{const i=RA.indexOf(b);const b2=RB?RB[i]:null;
+  const shA=totA.c?b.c/totA.c*100:0,shB=(b2&&totB.c)?b2.c/totB.c*100:null;
+  const rvA=totA.r?b.r/totA.r*100:0,rvB=(b2&&totB.r)?b2.r/totB.r*100:null;
+  const acvA=b.c?b.r/b.c:0,acvB=(b2&&b2.c)?b2.r/b2.c:null;
+  const repA=b.c?b.rep/b.c*100:0,repB=(b2&&b2.c)?b2.rep/b2.c*100:null;
+  const dd=(a,b3)=>b3==null?'':'<span style="font-size:9.5px;font-weight:800;color:'+(a>=b3?'#12a06e':'#e23a63')+'"> '+(a>=b3?'▲':'▼')+Math.abs(a-b3).toFixed(a<10?1:0)+(Math.abs(a)<100?'pp':'')+'</span>';
+  return '<tr><td style="text-align:left;font-weight:700">'+lab(b)+'</td>'
+   +'<td>'+N(b.c)+'</td><td>'+shA.toFixed(1)+'%</td><td>'+M(b.r)+'</td><td>'+rvA.toFixed(1)+'%</td><td>'+M(acvA)+'</td><td>'+repA.toFixed(0)+'%</td>'
+   +(RB?'<td style="border-left:1px solid #e6e9f0">'+N(b2?b2.c:0)+'</td><td>'+(shB==null?'—':shB.toFixed(1)+'%'+dd(shA,shB))+'</td><td>'+M(b2?b2.r:0)+'</td><td>'+(rvB==null?'—':rvB.toFixed(1)+'%')+'</td><td>'+(acvB==null?'—':M(acvB))+'</td><td>'+(repB==null?'—':repB.toFixed(0)+'%')+'</td>':'')
+   +'</tr>';};
+ const hi=(function(){if(!RB)return '';let best=null;RA.forEach((b,i)=>{const b2=RB[i];if(!b2||!totA.c||!totB.c)return;const d=b.c/totA.c-b2.c/totB.c;if(best==null||Math.abs(d)>Math.abs(best.d))best={d:d,b:b};});
+  if(!best)return '';const who=best.d>0?A:Bs,other=best.d>0?Bs:A;
+  return '<div class="rtNote" style="padding-top:8px"><b>Read:</b> the biggest structural difference is the <b>'+lab(best.b)+'</b> bracket — '+who+' has '+(Math.abs(best.d)*100).toFixed(1)+' points more of its customers there than '+other+'. Same brackets on both sides, so this is a real mix difference, not a ranking artefact.</div>';})();
+ pnlCard(g,'odoo','Comparable brackets — identical spend bands on both sides'+(wk==='life'?' · lifetime':' · last '+wk+' days'),
+  'The decile table above cuts EACH scope into its own ten groups, so its D1 is not the other scope&rsquo;s D1. This table puts every scope on the SAME absolute spend bands, so the comparison is like-for-like. It follows your date filter: '+(wk==='life'?'your range is over a year, so this shows lifetime':'your range is '+Math.max(1,span(ST.s,ST.e))+' days, so this shows the '+wk+'-day window')+' (data as of '+(DB.asOf||'')+').',
+  '<div style="margin:0 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:800;color:#8a93a6">SCOPE A</span>'+sel('CBA',null,A,false)
+  +'<span style="font-size:10px;font-weight:800;color:#8a93a6">COMPARE WITH</span>'+sel('CBB',null,Bs,true)
+  +'<span style="font-size:10.5px;color:#8a93a6;margin-left:auto">'+A+': '+N(totA.c)+' customers · '+M(totA.r)+(totB?' &nbsp;|&nbsp; '+Bs+': '+N(totB.c)+' customers · '+M(totB.r):'')+'</span></div>'
+  +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right"><tr><th></th><th colspan="6" style="text-align:center;background:#eef0f5">'+A+'</th>'+(RB?'<th colspan="6" style="text-align:center;background:#f3efff">'+Bs+'</th>':'')+'</tr>'
+  +'<tr><th style="text-align:left">Spend bracket</th><th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>'
+  +(RB?'<th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>':'')+'</tr>'
+  +RA.map(row).join('')+'</table></div>'+hi);}
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
  document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. MATURITY: deciles are LIFETIME sums, so recently-acquired customers sit in low deciles until their cohort matures &mdash; that is age, not weakness; the age-fair view is <b>Branch cohort quality (SAME-AGE)</b> on the Retail P&amp;L tab. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
+ try{cbCard(g);}catch(e){}
  rDec(g,ST.decSc||'ALL STORES','decSc');
  rDec(g,ST.decScB||'Shopify','decScB');
  qsweep('g15');}
@@ -5568,9 +5607,9 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260824T142431Z';
+const BUILD='20260824T165303Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T142431Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260824T165303Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
