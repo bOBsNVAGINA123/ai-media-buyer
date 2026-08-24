@@ -6485,7 +6485,106 @@ function rAU() {
     [['Meta', c.ms], ['Google', c.gs], ['TikTok', c.ts]].map(x =>
       auBar(x[0], c.spend ? x[1] / c.spend * 100 : 0, 'E£ ' + auK(x[1]), auP(c.spend ? x[1] / c.spend * 100 : null))).join('') + '</div>');
 
+  h += auSec('Conversion &amp; collections') + auCvrBlocks();
+  h += auSec('What is working — protect it') + auGood(c);
+  h += auSec('The gaps — and what each one is worth') + auGaps(c);
+  h += auSec('The action plan') + auActions(c);
+  h += auAsk(auDecisions(c));
   g.innerHTML = h;
+}
+
+/* ---- the argument, generated from the live window ---- */
+function auGood(c) {
+  const out = [], M = auRoute();
+  const b = auBranch(ST.s, ST.e);
+  if (c.branch > c.orev) out.push(auFind('E£ ' + auK(c.branch) + ' · ' + auP(100 - c.onShare) + ' of revenue',
+    'Retail execution is the strongest thing in the company',
+    'The branches did <b>E£ ' + auK(c.branch) + '</b> in this window at a <b>' + auP(b.rev ? b.gp / b.rev * 100 : null) +
+    '</b> gross margin, against E£ ' + auK(c.orev) + ' online. Whatever the store teams are doing works, and nothing in this audit should be allowed to disturb it.', true));
+  if (c.mer && c.mer > 3) out.push(auFind(auX(c.mer) + ' online MER',
+    'Media is not yet upside-down on a revenue basis',
+    'Every pound of media returned <b>' + auX(c.mer) + '</b> of online revenue, <b>' + auX(c.merNet) +
+    '</b> after refunds. The problem this audit raises is margin, not top line — see the gap below.', true));
+  if (M) { const T = auByType(M), home = T.find(x => x.type === 'Homepage');
+    const site = T.reduce((a, x) => a + x.orders, 0) / (T.reduce((a, x) => a + x.sessions, 0) || 1);
+    if (home && home.cvr > site * 1.3) out.push(auFind((home.cvr / site).toFixed(1) + '× the site average',
+      'The homepage converts far better than anything we point ads at',
+      'Homepage traffic converts at <b>' + (home.cvr * 100).toFixed(2) + '%</b> against a site average of ' +
+      (site * 100).toFixed(2) + '%, on ' + auK(home.sessions) + ' sessions. The people who arrive at the front door already know what they want — the collections we buy traffic into are where it goes wrong.', true)); }
+  if (!out.length) out.push(auFind('', 'Nothing in this window clears the bar', 'On the selected range no metric is far enough ahead of trend to call out as a strength. Widen the range.', true));
+  return out.join('');
+}
+function auGaps(c) {
+  const out = [], M = auRoute();
+  const A = O.audit || {};
+  if (c.mediaOfGp != null && c.mediaOfGp > 55) {
+    const burn = c.spend - c.rOgp;
+    out.push(auFind('E£ ' + auK(c.spend) + ' spent to make E£ ' + auK(c.rOgp),
+      'Media is eating ' + auP(c.mediaOfGp, 0) + ' of the gross profit it generates',
+      'Online gross profit in the ad-covered days was <b>E£ ' + auK(c.rOgp) + '</b> against <b>E£ ' + auK(c.spend) +
+      '</b> of media. ' + (burn > 0 ? 'That is <b>E£ ' + auK(burn) + ' more spent than made</b>, before packing, delivery, payment fees or the ' + auP(c.retOn) + ' refund rate.' :
+      'It leaves E£ ' + auK(-burn) + ' before packing, delivery, payment fees and the ' + auP(c.retOn) + ' refund rate.') +
+      ' On a standalone basis the site is not paying for its own traffic; it is only defensible if that media is also filling the shops, and that has never been measured.'));
+  }
+  if (c.atc && c.chk / c.atc < 0.5) out.push(auFind('E£ ' + auK(Math.max(0, c.atc * 0.5 - c.chk) * (c.chk ? c.oord / c.chk : 0) * (c.aov || 0)) + ' in this window',
+    auP(100 - (c.chk / c.atc * 100), 0) + ' of add-to-carts never reach the checkout',
+    '<b>' + auK(c.atc) + '</b> carts produced <b>' + auK(c.chk) + '</b> checkouts and <b>' + auK(c.oord) +
+    '</b> orders. Add-to-cart rate is ' + auP(c.sess ? c.atc / c.sess * 100 : null) + ' — people want the product. The loss is one step, on mobile, and nobody has instrumented it.'));
+  if (c.retOn != null && c.retOn > 8) out.push(auFind('E£ ' + auK(c.oref) + ' returned',
+    'Online refunds are running at ' + auP(c.retOn),
+    'Refunds and exchanges took <b>E£ ' + auK(c.oref) + '</b> out of E£ ' + auK(c.orev) +
+    ' of online revenue in this window. It is not in any margin number the team looks at daily, and on a channel whose whole gross profit is E£ ' + auK(c.ogp) + ' it is the difference between a contribution and a hole.'));
+  if (M) { const cols = M.groups.filter(p => p.type === 'Collection' && p.sessions >= 300);
+    const T = auByType(M), site = T.reduce((a, x) => a + x.orders, 0) / (T.reduce((a, x) => a + x.sessions, 0) || 1);
+    const bad = cols.filter(p => p.cvr < site * 0.6), w = bad.reduce((a, b) => a + b.sessions, 0);
+    if (bad.length) out.push(auFind(auK(w) + ' sessions',
+      bad.length + ' collections take real traffic and convert below ' + (site * 60).toFixed(2) + '%',
+      'Led by <b>' + bad.slice(0, 3).map(x => x.name + ' (' + (x.cvr * 100).toFixed(2) + '%)').join(', ') +
+      '</b>. These are the pages paid traffic lands on. Every pound pointed at them is buying a bounce, and the collections table above names all of them.')); }
+  if (A.listing && A.listing['30']) { const L = A.listing['30'].state, gap = L.UNPUB[1] + L.ABSENT[1], tot = gap + L.LIVE[1];
+    out.push(auFind('E£ ' + auK(gap) + ' a month',
+      auP(tot ? gap / tot * 100 : 0) + ' of what the shops sell has no live product page',
+      '<b>' + (L.UNPUB[0] + L.ABSENT[0]).toLocaleString() + '</b> SKUs, of which <b>' + L.UNPUB[0].toLocaleString() +
+      '</b> already exist in Shopify and were simply never published. Full ranking on the Listing Gap tab.')); }
+  if (A.vendors) { const v = A.vendors.filter(x => x.gmroi != null && x.gmroi < 1 && x.own > 1e6).sort((a, b) => b.own - a.own);
+    if (v.length) out.push(auFind('E£ ' + auK(v.reduce((a, x) => a + x.own, 0)) + ' of stock',
+      v.length + ' vendors hold more than a million pounds of stock and return under 1.0×',
+      'Worst is <b>' + v[0].v + '</b> at ' + auX(v[0].gmroi) + ' on E£ ' + auK(v[0].own) + ' of owned stock' +
+      (v[0].r90 ? ', which still took in <b>E£ ' + auK(v[0].r90) + '</b> of goods in the last 90 days' : '') +
+      '. Full table and the next-dollar call on the Vendor Capital tab.')); }
+  return out.join('') || auFind('', 'No gap clears the threshold on this range', 'Widen the range or check that the sync is current.');
+}
+function auActions(c) {
+  const out = [], A = O.audit || {}, M = auRoute();
+  if (A.listing && A.listing['30']) out.push(auPlan('Week 1 · no capital',
+    'Publish the range we already own and already sell',
+    'Push the ACTIVE-but-unpublished Shopify products live, newest arrivals first. Owner: e-commerce merchandising. Measure: listing coverage by in-store revenue, on the Listing Gap tab.'));
+  if (c.atc && c.chk / c.atc < 0.5) out.push(auPlan('Weeks 1–6',
+    'Instrument the cart and fix the step that loses ' + auP(100 - c.chk / c.atc * 100, 0),
+    'Full mobile funnel instrumentation on cart and checkout, then work the top three drop reasons. Owner: e-commerce. Measure: cart→checkout, on this tab, against today’s ' + auP(c.atc ? c.chk / c.atc * 100 : null) + '.'));
+  if (M) out.push(auPlan('Weeks 2–4',
+    'Re-point spend off the collections that cannot convert it',
+    'Move budget from the FIX BEFORE SENDING collections onto the SEND TRAFFIC HERE ones, and fix the weak pages before pointing anything new at them. Owner: performance + merchandising. Measure: collection CVR spread, table above.'));
+  if (c.mediaOfGp != null && c.mediaOfGp > 55) out.push(auPlan('Weeks 4–8',
+    'Prove or disprove the offline halo with a geo-holdout',
+    'Meta is ' + auP(c.spend ? c.ms / c.spend * 100 : null) + ' of media and is judged here on online gross profit alone. Four weeks, two matched governorates dark, measure total revenue including in-store. Owner: performance + finance.'));
+  if (A.vendors) out.push(auPlan('This buying cycle',
+    'Put GMROI on the order form',
+    'Release the cash sitting above three months of cover in the sub-1.0× vendors and redeploy it into the starved high-GMROI ones. Owner: buying. Measure: the release/deploy figures on the Vendor Capital tab.'));
+  return out.join('');
+}
+function auDecisions(c) {
+  const A = O.audit || {}, d = [];
+  if (A.listing) d.push(['Do we publish everything we stock, by default?',
+    'Today the default is not to, and it costs about ' + auP(A.listing['30'] ? (A.listing['30'].state.UNPUB[1] + A.listing['30'].state.ABSENT[1]) / (A.listing['30'].state.UNPUB[1] + A.listing['30'].state.ABSENT[1] + A.listing['30'].state.LIVE[1]) * 100 : 0) +
+    ' of in-store revenue in online sales we never get. The only real objection is stock accuracy, which is a settings question, not a strategy one.']);
+  d.push(['Which number does the e-commerce team get judged on?',
+    'I want it to be <b>GPPV net of returns</b>, not revenue and not ROAS. Revenue rewards buying traffic; ROAS rewards buying our own brand name back.']);
+  if (c.mediaOfGp != null && c.mediaOfGp > 55) d.push(['Do we run the geo-holdout?',
+    'It costs four weeks of slightly lower spend in two governorates. Without it we are defending E£ ' + auK(c.ms) + ' of Meta spend in this window on faith.']);
+  d.push(['Who owns the reconciliation?',
+    'Odoo, Shopify and GA4 disagree on what a sale is. One person, two weeks, one agreed definition — before the next budget is set on numbers we cannot defend.']);
+  return d;
 }
 
 /* ======================================================== av — VENDOR CAPITAL */
@@ -6565,6 +6664,43 @@ function rAV() {
   h += auCard('Every vendor', 'Top 200 by trailing-twelve-month revenue. Receipt column follows the snapshot chips.', '',
     '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
     hd.map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+
+  /* ---- the argument ---- */
+  const bad = own.filter(x => x.gmroi < 1).sort((a, b) => b.own - a.own);
+  const star = own.filter(x => x.gmroi >= 2.5 && x.cover != null && x.cover < 2.5).sort((a, b) => b.gmroi - a.gmroi);
+  const buying = own.filter(x => x.gmroi < 1.2 && x[rk] > 0).sort((a, b) => b[rk] - a[rk]);
+  const consR = V.filter(x => x.model === 'Consignment').reduce((a, x) => a + x.rev, 0);
+  h += auSec('What the vendor book is telling us');
+  if (bad.length) h += auFind('E£ ' + auK(bad.reduce((a, x) => a + x.own, 0)) + ' of stock',
+    bad.length + ' vendors return less than a pound of gross profit per pound of stock',
+    'Largest is <b>' + bad[0].v + '</b> — E£ ' + auK(bad[0].own) + ' of owned stock at <b>' + auX(bad[0].gmroi) +
+    '</b> on a ' + auP(bad[0].gm) + ' margin and ' + (bad[0].cover != null ? bad[0].cover.toFixed(1) + ' months of cover' : 'no cover reading') +
+    '. Its last delivery was ' + (bad[0].last || 'never') + (bad[0].days != null ? ' (' + bad[0].days + ' days ago)' : '') + '.');
+  if (buying.length) h += auFind('E£ ' + auK(buying[0][rk]) + ' received in ' + AUW + ' days',
+    'We are still buying hardest into stock that does not return',
+    '<b>' + buying[0].v + '</b> took in E£ ' + auK(buying[0][rk]) + ' over the last ' + AUW + ' days while returning ' +
+    auX(buying[0].gmroi) + (buying[0].idx ? ', which is <b>' + auX(buying[0].idx) + ' its fair share</b> of its category’s intake measured against the gross profit it produces' : '') +
+    '. The intake index column ranks every vendor on that test.');
+  if (star.length) h += auFind('E£ ' + auK(star.reduce((a, x) => a + x.dep, 0)) + ' of headroom',
+    'The vendors that do return are running on fumes', star.slice(0, 5).map(x => '<b>' + x.v + '</b> ' + auX(x.gmroi) +
+    ' on ' + (x.cover != null ? x.cover.toFixed(1) : '—') + ' months').join(', ') +
+    '. Bringing this group to 2.5 months of cover is where the released cash should go.', true);
+  if (consR) h += auFind('E£ ' + auK(consR) + ' a year on zero capital',
+    'A fifth of revenue already comes from vendors we finance nothing for',
+    V.filter(x => x.model === 'Consignment').length + ' consignment vendors turn over E£ ' + auK(consR) +
+    ' with no owned stock against them. Lower margin, but they consume none of the E£ ' + auK(inv.own) + ' of working capital the owned vendors do.', true);
+  h += auSec('The action plan');
+  h += auPlan('This buying cycle', 'Release ' + 'E£ ' + auK(rel) + ' and redeploy E£ ' + auK(dep),
+    'Stop the reorders on everything marked STOP BUYING and OVER-BOUGHT, and move the freed cash into the BUY MORE list. Net E£ ' + auK(rel - dep) +
+    ' back in the business, and gross profit rises because the money moves from a sub-1× return to a 3×–11× one. Owner: buying.');
+  h += auPlan('Before the next order', 'Put GMROI, months of cover and the intake index on the order form',
+    'None of these three numbers exists at the moment the order is placed, which is why the biggest cash commitments are not the best returns. Owner: buying + finance.');
+  h += auPlan('Monthly', 'Report consigned versus owned margin separately',
+    'Consignment is a fifth of revenue at a materially lower margin and nobody reports it apart. Set a minimum consigned margin by category before the next vendor conversation. Owner: finance.');
+  h += auAsk([
+    ['Do we stop the reorders on the sub-1.0× vendors?', 'That is E£ ' + auK(rel) + ' of cash. It needs one decision and one owner, and it will be unpopular with the vendors concerned.'],
+    ['Do we set a consigned margin floor?', 'Consignment is E£ ' + auK(consR) + ' of revenue at a lower margin, invisible in the current reporting.'],
+    ['Who signs off a purchase order against GMROI?', 'Today nobody sees the number when the order is placed. I want it on the form and a name against the exception.']]);
   g.innerHTML = h;
 }
 
@@ -6632,6 +6768,41 @@ function rAG() {
       '<td>' + x.a + '</td><td>' + x.q + '</td><td>' + auK(x.r) + '</td><td>' + auK(x.g) + '</td>' +
       '<td style="color:' + (x.s > 0 ? '#12a06e' : '#e23a63') + ';font-weight:700">' + x.s + '</td><td>' + auK(x.sv) + '</td></tr>').join('') +
     '</tbody></table></div>');
+
+  const newA = gaps.filter(x => x.a <= 120), stockVal = inStock.reduce((a, x) => a + x.sv, 0);
+  const worstCat = cats.length ? cats[0] : null;
+  h += auSec('What the gap is telling us');
+  h += auFind('E£ ' + auK(gapRev) + ' per ' + AUW + ' days',
+    auP(100 - cov) + ' of what the branches sell has no live product page',
+    '<b>' + gapSk.toLocaleString() + '</b> SKUs. Not a long tail — they average E£ ' +
+    auK(gapSk ? gapRev / gapSk : 0) + ' each over the window.');
+  h += auFind(st.UNPUB[0].toLocaleString() + ' SKUs · E£ ' + auK(st.UNPUB[1]),
+    'Most of the gap is already built in Shopify and was never published',
+    'They have a barcode, a title and a price. Somebody made them and nobody pressed publish. That is ' +
+    auP(tot ? st.UNPUB[1] / tot * 100 : 0) + ' of in-store revenue sitting behind a single toggle.');
+  if (worstCat) h += auFind(auP(worstCat.pct) + ' coverage',
+    worstCat.k + ' is the worst-covered category',
+    '<b>' + worstCat.c.gapSkus.toLocaleString() + '</b> ' + worstCat.k + ' SKUs doing E£ ' + auK(worstCat.c.gap) +
+    ' in the shops are not on the site, with E£ ' + auK(worstCat.c.gapStock) + ' of stock behind them.');
+  if (newA.length) h += auFind(newA.length.toLocaleString() + ' SKUs',
+    'The newer the stock, the less likely it is to be online',
+    'Every one of these was first stocked in the last 120 days and has never gone live. Buying is landing range faster than merchandising is publishing it, and the newest range is the range with the most demand behind it.');
+  if (inStock.length) h += auFind('E£ ' + auK(stockVal) + ' of stock',
+    inStock.length.toLocaleString() + ' of them are sitting in a warehouse right now',
+    'In stock, sellable, unlisted. Listing them costs a merchandiser’s time and nothing else.', true);
+  h += auSec('The plan, by wave');
+  h += auPlan('Week 1 · zero capital', 'Publish the in-stock new arrivals',
+    'Highest revenue, freshest demand, stock on the shelf, most already built in Shopify. Owner: e-commerce merchandising.');
+  h += auPlan('Weeks 2–4', 'Publish the rest of the in-stock range',
+    'Older range, still selling, still in stock. Batch by category, worst-covered first. Owner: e-commerce merchandising.');
+  h += auPlan('Weeks 2–6', 'Reorder and list the sold-out new range',
+    'These are proven sellers with no stock left — a buying job, not a merchandising one. List on arrival, not six weeks later. Owner: buying.');
+  h += auPlan('Ongoing · the rule that stops it recurring', 'No goods-received line closes without a Shopify record',
+    'A weekly exception report to the same person every Monday. Owner: buying + IT.');
+  h += auAsk([
+    ['Do we publish everything we stock, by default?', 'Today the default is not to. I want it reversed: everything we buy goes online unless someone gives a reason.'],
+    ['Who owns publish-on-arrival, and do they have the headcount?', st.ABSENT[0].toLocaleString() + ' of these SKUs need photography and copy from scratch. I would rather be told it is one person and a quarter than be told yes and watch it not happen.'],
+    ['Do we fix the stock feed before publishing more?', 'Publishing on top of an inventory feed nobody trusts converts a merchandising problem into a customer-service one.']]);
   g.innerHTML = h;
 }
 
@@ -6685,7 +6856,168 @@ function rAQ() {
   h += auCard('Demand that converts and is starved', 'Non-brand terms with the best return in the window. Small spend, high return — the obvious place for the next media pound.',
     '', '<div style="padding:4px 14px 12px">' + win.map(x => auBar((x.t || '').slice(0, 34), x.roas / mw * 100,
       auX(x.roas), 'E£ ' + auK(x.sp) + ' spent · CVR ' + auP(x.cvr, 2), '#12a06e')).join('') + '</div>');
+
+  /* ---- category economics, from the audit block ---- */
+  const A = O.audit || {}, CS = A.catSales || {}, CI = A.catIntake || {}, wk2 = String(AUW);
+  const cats = Object.keys(CS).filter(k => k && k !== '?' && ((CS[k][wk2] || [])[0] || 0) > 10000).map(k => {
+    const v = CS[k][wk2] || [0, 0, 0, 0], lc = (A.listing && A.listing[wk2] && A.listing[wk2].cat[k]) || null;
+    const rev = v[0] + v[2], gp = v[1] + v[3];
+    return { k: k, inRev: v[0], inGp: v[1], onRev: v[2], onGp: v[3], rev: rev, gp: gp,
+             gm: rev ? gp / rev * 100 : 0, onShare: rev ? v[2] / rev * 100 : 0,
+             intake: (CI[k] || {})[wk2] || 0,
+             listed: lc && lc.rev ? (1 - lc.gap / lc.rev) * 100 : null,
+             gapRev: lc ? lc.gap : 0 };
+  }).sort((a, b) => b.rev - a.rev);
+  if (cats.length) {
+    const tR = cats.reduce((a, x) => a + x.rev, 0), tI = cats.reduce((a, x) => a + x.intake, 0) || 1;
+    h += auSec('Category economics');
+    h += auCard('What each category sells, earns, and gets bought',
+      'Last ' + AUW + ' days. <b>Intake</b> is goods received at cost in the same window — the share column is what that category took of all buying. Where intake share runs far ahead of gross-profit share, the buying is pointed the wrong way.',
+      auKpi('Categories trading', cats.length) +
+      auKpi('Biggest by revenue', cats[0].k, 'E£ ' + auK(cats[0].rev) + ' · ' + auP(cats[0].rev / tR * 100)) +
+      auKpi('Biggest by intake', (cats.slice().sort((a, b) => b.intake - a.intake)[0] || {}).k || '—',
+        'E£ ' + auK((cats.slice().sort((a, b) => b.intake - a.intake)[0] || {}).intake || 0)) +
+      auKpi('Total received', 'E£ ' + auK(tI)),
+      '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
+      ['Category', 'In-store rev', 'Online rev', 'Online %', 'Gross profit', 'GM%', 'Share of GP', 'Received', 'Share of intake', 'Intake vs GP', 'Listed %']
+        .map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' +
+      cats.map(x => { const gpS = cats.reduce((a, y) => a + y.gp, 0), gs = gpS ? x.gp / gpS * 100 : 0,
+          is = x.intake / tI * 100, idx = gs > 0.5 ? is / gs : null;
+        return '<tr><td style="text-align:left;font-weight:700">' + x.k + '</td>' +
+          '<td>' + auK(x.inRev) + '</td><td>' + auK(x.onRev) + '</td><td>' + auP(x.onShare) + '</td>' +
+          '<td>' + auK(x.gp) + '</td><td>' + auP(x.gm) + '</td><td>' + auP(gs) + '</td>' +
+          '<td>' + auK(x.intake) + '</td><td>' + auP(is) + '</td>' +
+          '<td style="font-weight:800;color:' + (idx > 1.4 ? '#e23a63' : idx != null && idx < 0.7 ? '#12a06e' : '#0F172A') + '">' +
+          (idx != null ? auX(idx) : '—') + '</td>' +
+          '<td>' + (x.listed != null ? auP(x.listed) : '—') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>');
+    const over = cats.filter(x => { const gpS = cats.reduce((a, y) => a + y.gp, 0); const gs = gpS ? x.gp / gpS * 100 : 0;
+      return gs > 0.5 && (x.intake / tI * 100) / gs > 1.4; }).sort((a, b) => b.intake - a.intake);
+    h += auSec('What the demand and the buying are telling us');
+    if (over.length) h += auFind('E£ ' + auK(over[0].intake) + ' received in ' + AUW + ' days',
+      over[0].k + ' is taking more of the buying than it earns of the profit',
+      'It took <b>' + auP(over[0].intake / tI * 100) + '</b> of everything received while producing ' +
+      auP(cats.reduce((a, y) => a + y.gp, 0) ? over[0].gp / cats.reduce((a, y) => a + y.gp, 0) * 100 : 0) +
+      ' of gross profit, on a ' + auP(over[0].gm) + ' margin and ' + auP(over[0].onShare) + ' online penetration.');
+    const thin = cats.filter(x => x.onShare < 8 && x.rev > 200000).sort((a, b) => b.rev - a.rev);
+    if (thin.length) h += auFind('E£ ' + auK(thin[0].rev) + ' a window',
+      thin[0].k + ' barely exists online',
+      'Only <b>' + auP(thin[0].onShare) + '</b> of it sells online' + (thin[0].listed != null ?
+      ', and it is ' + auP(thin[0].listed) + ' listed — so this is a merchandising and traffic problem, not a listing one' : '') + '.');
+  }
+  h += auSec('The plan');
+  h += auPlan('Sprint 1', 'Stop paying for terms that produced nothing',
+    'E£ ' + auK(sum(zero, 'sp')) + ' went to ' + zero.length.toLocaleString() +
+    ' non-brand terms with zero orders. Where those are our own brands the cause is stock or the product page, not the keyword — fix the page, do not negate the term. Owner: performance + merchandising.');
+  h += auPlan('Sprint 1–3', 'Fund the terms that convert',
+    'The starved list above returns well on small spend. Move budget onto it before adding any new category. Owner: performance.');
+  h += auPlan('Weeks 2–8', 'Fix the cart before buying more traffic',
+    auP(c.atc ? (1 - c.chk / c.atc) * 100 : null) + ' of carts never reach checkout. Buying more demand into that is buying a bigger leak. Owner: e-commerce.');
+  h += auAsk([
+    ['Do we agree capture comes before category?', 'This tab argues against opening anything new until the cart and the stock feed are fixed. If we would rather grow range, say so now — it changes every priority.'],
+    ['Who owns the cart investigation, and by when?', 'It is the single largest unmeasured number in the business. I want a named owner and a date, not a backlog ticket.'],
+    ['Do we keep bidding on categories we half-serve?', 'Half-in is the most expensive option: we pay for the click and lose it on the page. Either the range and content get built, or we stop buying the traffic.']]);
   g.innerHTML = h;
+}
+
+/* ===================== deck furniture — findings, plans, decisions ==========
+   The standalone decks were not KPI strips; they were an argument. These helpers
+   rebuild that structure inside the dashboard: a finding carries what it is worth,
+   the plan carries an owner and a measure, and the decisions are the things only
+   the founders can answer. Every number in them is computed from the live window,
+   so the prose cannot go stale the way a pasted deck does. */
+function auSec(t) {
+  return '<div class="card full" style="padding:0;border:none;background:none;box-shadow:none;margin:14px 0 2px">' +
+    '<div style="font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:#8a93a6;font-weight:800;' +
+    'padding-bottom:7px;border-bottom:1px solid #e3e6ee">' + t + '</div></div>';
+}
+function auFind(tag, head, body, good) {
+  const c = good ? '#12a06e' : '#f0883e';
+  return '<div class="card full" style="border-left:3px solid ' + c + ';border-radius:0 12px 12px 0;padding:14px 17px">' +
+    (tag ? '<div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:' + c +
+      ';font-weight:800;margin-bottom:4px">' + tag + '</div>' : '') +
+    '<div style="font-size:14.5px;font-weight:800;margin-bottom:5px;line-height:1.3">' + head + '</div>' +
+    '<div style="font-size:13px;color:#4a5266;line-height:1.55">' + body + '</div></div>';
+}
+function auPlan(when, head, body) {
+  return '<div class="card full" style="border-left:3px solid #5b6ee1;border-radius:0 12px 12px 0;padding:14px 17px">' +
+    '<div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#5b6ee1;font-weight:800;margin-bottom:4px">' + when + '</div>' +
+    '<div style="font-size:14.5px;font-weight:800;margin-bottom:5px">' + head + '</div>' +
+    '<div style="font-size:13px;color:#4a5266;line-height:1.55">' + body + '</div></div>';
+}
+function auAsk(items) {
+  return '<div class="card full" style="border-left:3px solid #0F172A;border-radius:0 12px 12px 0;padding:15px 17px">' +
+    '<div style="font-size:14.5px;font-weight:800;margin-bottom:8px">What I need from you</div>' +
+    '<div style="font-size:13px;color:#4a5266;line-height:1.6">' +
+    items.map((x, i) => '<b>' + (i + 1) + '. ' + x[0] + '</b> ' + x[1]).join('<br><br>') + '</div></div>';
+}
+const auArrow = (v, f) => v == null ? '<span style="color:#9aa3b5">new</span>' :
+  Math.abs(v) < 1e-9 ? '<span style="color:#9aa3b5">flat</span>' :
+  '<span style="color:' + (v > 0 ? '#12a06e' : '#e23a63') + ';font-weight:800">' + (v > 0 ? '▲' : '▼') + ' ' + f(Math.abs(v)) + '</span>';
+
+/* ---- landing-page CVR, reusing the Traffic Routing model so the two tabs agree ---- */
+function auRoute() {
+  try { const M = trModel(); if (!M) return null; return M; } catch (e) { return null; }
+}
+function auByType(M) {
+  const t = {};
+  M.pages.forEach(p => { const a = t[p.type] || (t[p.type] = { type: p.type, sessions: 0, atcW: 0, chkW: 0, orders: 0, pSessions: 0, pOrders: 0, n: 0 });
+    a.sessions += p.sessions; a.atcW += p.atcW; a.chkW += p.chkW; a.orders += p.orders;
+    a.pSessions += p.pSessions; a.pOrders += p.pOrders; a.n++; });
+  return Object.keys(t).map(k => trFin(t[k])).filter(x => x.sessions > 200).sort((a, b) => b.sessions - a.sessions);
+}
+
+/* ---- the CVR comparison + collections league table, shared by au and aq ---- */
+function auCvrBlocks() {
+  const M = auRoute();
+  if (!M) return '<div class="card full" style="padding:14px 17px;font-size:13px;color:#8a93a6">Landing-page CVR is not in this sync yet — it arrives with the Shopify routing pull.</div>';
+  const C = M.C, days = C.days || 14, site = C.keptSess ? 0 : 0;
+  const T = auByType(M), tot = T.reduce((a, b) => a + b.sessions, 0) || 1;
+  const site_cvr = T.reduce((a, b) => a + b.orders, 0) / tot;
+  const pf = v => (v * 100).toFixed(2) + '%';
+  const pp = v => (v * 100).toFixed(2) + 'pp';
+
+  /* 1. CVR by landing-page type, vs the window before */
+  let h = auCard('Conversion by where the visit lands',
+    'Last ' + days + ' days against the ' + days + ' before it. Site average is ' + pf(site_cvr) +
+    '. A page type below that average is being subsidised by the ones above it.',
+    T.slice(0, 5).map(x => auKpi(x.type, pf(x.cvr), auK(x.sessions) + ' sessions · ' + auArrow(x.dCvr, pp))).join(''),
+    '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
+    ['Landing page type', 'Pages', 'Sessions', 'Share', 'Session→cart', 'Cart→checkout', 'Checkout→order', 'CVR', 'vs prev', 'Orders', 'Sessions Δ']
+      .map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' +
+    T.map(x => '<tr><td style="text-align:left;font-weight:700">' + x.type + '</td><td>' + x.n + '</td>' +
+      '<td>' + auK(x.sessions) + '</td><td>' + auP(x.sessions / tot * 100) + '</td>' +
+      '<td>' + pf(x.atc) + '</td><td>' + pf(x.atc2chk) + '</td><td>' + pf(x.chk2buy) + '</td>' +
+      '<td style="font-weight:800;color:' + (x.cvr >= site_cvr ? '#12a06e' : '#e23a63') + '">' + pf(x.cvr) + '</td>' +
+      '<td>' + auArrow(x.dCvr, pp) + '</td><td>' + auK(x.orders) + '</td><td>' + auArrow(x.dSessP, v => (v * 100).toFixed(0) + '%') + '</td></tr>').join('') +
+    '</tbody></table></div>');
+
+  /* 2. collections league table */
+  const cols = M.groups.filter(p => p.type === 'Collection' && p.sessions >= 300).sort((a, b) => b.sessions - a.sessions);
+  const send = cols.filter(p => p.cvr >= site_cvr * 1.15);
+  const fix = cols.filter(p => p.cvr < site_cvr * 0.6);
+  const wasted = fix.reduce((a, b) => a + b.sessions, 0);
+  h += auCard('The collections, ranked on what they do with the traffic',
+    cols.length + ' collections above 300 sessions in ' + days + ' days. <b>' + fix.length + '</b> of them take ' +
+    auK(wasted) + ' sessions and convert below ' + pf(site_cvr * 0.6) + ' — that is the traffic to move, and the pages to fix before moving any more onto them.',
+    auKpi('Collections ranked', cols.length) +
+    auKpi('Send traffic here', send.length, 'converting 15%+ above site') +
+    auKpi('Fix before sending', fix.length, 'converting 40%+ below site') +
+    auKpi('Sessions on the weak ones', auK(wasted), auP(cols.reduce((a, b) => a + b.sessions, 0) ? wasted / cols.reduce((a, b) => a + b.sessions, 0) * 100 : 0) + ' of collection traffic'),
+    '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
+    ['Collection', 'Sessions', 'Sessions Δ', 'Session→cart', 'Cart→checkout', 'CVR', 'vs prev', 'Orders', 'Verdict']
+      .map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' +
+    cols.slice(0, 40).map(x => {
+      const v = x.cvr >= site_cvr * 1.15 ? ['SEND TRAFFIC HERE', '#12a06e'] :
+                x.cvr < site_cvr * 0.6 ? ['FIX BEFORE SENDING', '#e23a63'] : ['HOLD', '#8a93a6'];
+      return '<tr><td style="text-align:left;font-weight:600">' + x.name + '</td><td>' + auK(x.sessions) + '</td>' +
+        '<td>' + auArrow(x.dSessP, y => (y * 100).toFixed(0) + '%') + '</td>' +
+        '<td>' + pf(x.atc) + '</td><td>' + pf(x.atc2chk) + '</td>' +
+        '<td style="font-weight:800;color:' + v[1] + '">' + pf(x.cvr) + '</td>' +
+        '<td>' + auArrow(x.dCvr, pp) + '</td><td>' + x.orders + '</td>' +
+        '<td style="color:' + v[1] + ';font-weight:700">' + v[0] + '</td></tr>';
+    }).join('') + '</tbody></table></div>');
+  return h;
 }
 
 </script>
