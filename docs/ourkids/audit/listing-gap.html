@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Our Kids — The Listing Gap, August 2026</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-0:#f6f5f2; --surface-1:#fcfcfb; --surface-2:#f0efec;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#7a7975;
+  --line:#e3e2de; --grid:#eceae6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#008300; --warn:#eda100; --crit:#c0322f;
+  --seq1:#cde2fb; --seq2:#9ec5f4; --seq3:#5598e7; --seq4:#2a78d6; --seq5:#1c5cab;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+    --line:#33332f; --grid:#2a2a28;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+    --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242423;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+  --line:#33332f; --grid:#2a2a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3ea34a; --warn:#c98500; --crit:#e66767;
+  --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);
+ font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1220px;margin:0 auto;padding:28px 20px 72px}
+header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--text-secondary);font-size:14px;margin:0}
+.tbtn{background:var(--surface-1);border:1px solid var(--line);color:var(--text-secondary);
+ border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer}
+.tbtn:hover{color:var(--text-primary)}
+.note{background:var(--surface-2);border-left:3px solid var(--warn);padding:11px 14px;border-radius:0 8px 8px 0;
+ font-size:13.5px;color:var(--text-secondary);margin:18px 0 26px}
+h2.sec{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);
+ margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:12px}
+.tile{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+.tile .lab{font-size:12px;color:var(--text-muted);margin-bottom:7px;letter-spacing:.01em}
+.tile .val{font-size:27px;font-weight:640;letter-spacing:-.025em;line-height:1.05}
+.tile .val small{font-size:14px;font-weight:500;color:var(--text-secondary);margin-left:2px}
+.tile .dlt{font-size:12.5px;margin-top:6px;color:var(--text-secondary)}
+.dn{color:var(--crit);font-weight:600} .up{color:var(--good);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px}
+.card h3{font-size:15px;margin:0 0 3px;font-weight:620;letter-spacing:-.01em}
+.card .cap{font-size:12.5px;color:var(--text-muted);margin:0 0 14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-bottom:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+svg{display:block;width:100%;overflow:visible}
+.gl{stroke:var(--grid);stroke-width:1}
+.ax{fill:var(--text-muted);font-size:11px}
+.dl{fill:var(--text-primary);font-size:11px;font-weight:600}
+.dl2{fill:var(--text-secondary);font-size:10.5px}
+.hit{fill:transparent;cursor:pointer}
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--surface-1);
+ border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12.5px;
+ box-shadow:0 6px 22px rgba(0,0,0,.14);z-index:99;min-width:132px;color:var(--text-primary)}
+#tip b{display:block;margin-bottom:5px;font-size:12.5px}
+#tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--text-secondary)}
+#tip .r i{font-style:normal;color:var(--text-primary);font-variant-numeric:tabular-nums}
+details{margin-top:12px;border-top:1px solid var(--line);padding-top:9px}
+summary{font-size:12px;color:var(--text-muted);cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:9px}
+th,td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text-muted);font-weight:600}
+.find{background:var(--surface-1);border:1px solid var(--line);border-left:3px solid var(--s2);
+ border-radius:0 12px 12px 0;padding:15px 17px;margin-bottom:11px}
+.find h4{margin:0 0 5px;font-size:14.5px;font-weight:640}
+.find p{margin:0;font-size:13.5px;color:var(--text-secondary)}
+.find.good{border-left-color:var(--good)}
+.find .tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--text-muted)}
+</style>
+
+</head>
+<body>
+<div id="tip"></div>
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>The Listing Gap</h1>
+    <p class="sub">Our Kids &middot; what the seven shops sell that the website cannot &middot; 18,756 trading SKUs matched barcode-to-barcode against 71,944 Shopify variants &middot; 30 days to 24 Aug 2026</p>
+  </div>
+  <button class="tbtn" id="themeBtn">Dark mode</button>
+</header>
+
+<div class="note"><b>The method, so you can argue with it.</b> Every product that sold in a branch in the last 30 days was pulled from Odoo with its barcode, its category, its stock on hand, its cost, and the date it first entered the system. Every one of the 37,681 products and 71,944 variants in Shopify was pulled by barcode and SKU with its status and publication date. The two were joined on barcode &mdash; not on name &mdash; and each in-store SKU was labelled <b>live</b>, <b>in Shopify but never published</b>, or <b>not in Shopify at all</b>. The <b>prize</b> figure assumes an unlisted SKU, once listed, earns online at the same rate as an already-listed SKU of the same business: <b>23.6 EGP online for every 100 EGP it earns in store</b>, which is the measured ratio for the 13,902 SKUs that are already live. Full SKU-level file exported alongside this deck.</div>
+
+<h2 class="sec">The prize</h2>
+<div class="tiles">
+  <div class="tile"><div class="lab">In-store revenue not buyable online</div><div class="val dn">13.1<small>M EGP</small></div><div class="dlt">per 30 days &middot; 25.7% of everything the shops sell</div></div>
+  <div class="tile"><div class="lab">SKUs in the gap</div><div class="val">4,854</div><div class="dlt">of 18,756 trading SKUs &middot; 25.9% of the range</div></div>
+  <div class="tile"><div class="lab">Online revenue available</div><div class="val up">3.10<small>M/mo</small></div><div class="dlt">37.2M a year at the measured online:offline ratio</div></div>
+  <div class="tile"><div class="lab">Gross profit available</div><div class="val up">10.0<small>M/yr</small></div><div class="dlt">against a total company gross profit of 134M</div></div>
+  <div class="tile"><div class="lab">Listable today, zero capital</div><div class="val up">2,611<small> SKUs</small></div><div class="dlt">already in stock &middot; 6.97M EGP of it sitting in the warehouses</div></div>
+  <div class="tile"><div class="lab">New arrivals never listed</div><div class="val dn">1,960</div><div class="dlt">first stocked in the last 120 days &middot; 9.4M EGP/30d in store</div></div>
+  <div class="tile"><div class="lab">Worst-covered category</div><div class="val dn">67.4<small>%</small></div><div class="dlt">School &mdash; during back-to-school</div></div>
+  <div class="tile"><div class="lab">Views hitting sold-out pages</div><div class="val dn">191k</div><div class="dlt">607 products &middot; 20.5% of all product views</div></div>
+</div>
+
+<h2 class="sec">Insight 01 &mdash; a quarter of the shop is invisible online</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>Where the 51.2M EGP the shops sold actually lives</h3>
+    <p class="cap">Trailing-30-day in-store revenue by the Shopify status of the SKU that earned it.</p>
+    <svg id="c-state" viewBox="0 0 620 260"></svg>
+    <details><summary>Show data table</summary><table id="t-state"></table></details>
+  </div>
+  <div class="card">
+    <h3>Listing coverage by category</h3>
+    <p class="cap">Share of each category's in-store revenue whose SKU is live on the website. Orange is below the 74.3% company average.</p>
+    <svg id="c-cov" viewBox="0 0 620 380"></svg>
+    <details><summary>Show data table</summary><table id="t-cov"></table></details>
+  </div>
+</div>
+
+<h2 class="sec">Insight 02 &mdash; the gap is newest where it hurts most</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>The four waves, and what each is worth</h3>
+    <p class="cap">Waves 1 and 2 need nothing but a merchandiser. Waves 3 and 4 need a purchase order first.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s1)"></i>In-store revenue, 30d, EGP M</span><span><i class="sw" style="background:var(--s2)"></i>Online revenue available per month, EGP M</span></div>
+    <svg id="c-wave" viewBox="0 0 620 300"></svg>
+    <details><summary>Show data table</summary><table id="t-wave"></table></details>
+  </div>
+  <div class="card">
+    <h3>Newly arrived stock is the least likely to be listed</h3>
+    <p class="cap">1,960 SKUs first stocked within 120 days have never gone live, and they are already doing 9.41M EGP a month in the branches. The buying team is landing range faster than the site is publishing it.</p>
+    <svg id="c-age" viewBox="0 0 620 260"></svg>
+  </div>
+</div>
+
+<h2 class="sec">Insight 03 &mdash; the priority list</h2>
+<div class="grid2" style="grid-template-columns:1fr">
+  <div class="card">
+    <h3>The top 30 SKUs to list, ranked</h3>
+    <p class="cap">Ranked by 30-day in-store gross profit, weighted up 35% for arrivals under 120 days old and down 75% where there is no stock to sell. Every one of these is a product our customers are already buying, from us, today.</p>
+    <svg id="c-top" viewBox="0 0 620 700"></svg>
+    <details open><summary>Full ranked list &mdash; top 60 (complete 4,854-SKU file exported alongside this deck)</summary><table id="t-top"></table></details>
+  </div>
+</div>
+
+<h2 class="sec">Insight 04 &mdash; the site loses demand it already has</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>One in five product views lands on something sold out</h3>
+    <p class="cap">Share of views on zero-stock SKUs, by subcategory. This is separate from the listing gap: these products <em>are</em> listed, they just have nothing behind them.</p>
+    <svg id="c-oos" viewBox="0 0 620 340"></svg>
+  </div>
+  <div class="card">
+    <h3>Our own search box turns customers away</h3>
+    <p class="cap">Searches made on ourkids-eg.com in 30 days that return nothing useful. /search is the most-visited page on the site &mdash; 399,679 views, ahead of the homepage.</p>
+    <svg id="c-search" viewBox="0 0 620 340"></svg>
+  </div>
+</div>
+
+<h2 class="sec">The twelve findings</h2>
+<div class="find"><span class="tag">13.1M EGP a month</span><h4>25.7% of what the branches sell has no live product page</h4><p>4,854 of 18,756 trading SKUs. Not a long tail: these SKUs did 13.1M EGP in 30 days, an average of 2,700 EGP each, and they include eleven of the twenty best-selling school sets in the company.</p></div>
+<div class="find"><span class="tag">2,138 SKUs &middot; 8.75M EGP</span><h4>Half the gap is products that are already in Shopify and were never published</h4><p>They exist, they have a barcode, a title and a price. Somebody built them and nobody pressed publish. That is 17.1% of in-store revenue behind a single toggle.</p></div>
+<div class="find"><span class="tag">School, in August</span><h4>The worst-covered category is the one in season</h4><p>School listing coverage is 67.4% by revenue. 714 school SKUs doing 6.63M EGP a month in the shops are not on the site &mdash; in the single month of the year when school demand is guaranteed, and while we spend 16,575 EGP on Google searches for school bags.</p></div>
+<div class="find"><span class="tag">1,960 SKUs &middot; 9.4M EGP/30d</span><h4>The newer the stock, the less likely it is to be online</h4><p>Every SKU first stocked in the last 120 days that has never gone live. The buying team is landing range faster than merchandising can publish it, and the newest range is the range with the most demand behind it.</p></div>
+<div class="find"><span class="tag">6.97M EGP of stock</span><h4>2,611 of these SKUs are sitting in a warehouse right now</h4><p>In stock, sellable, unlisted. Listing them costs a merchandiser's time and nothing else, and it is worth 1.49M EGP a month of online revenue.</p></div>
+<div class="find"><span class="tag">Party 63.7% &middot; Toys 63.9%</span><h4>Party and Toys are the two structurally worst-listed categories</h4><p>Both sit around 64% coverage. Party also has the worst GMROI in the business at 0.65&times; and the highest gross margin at 37.7% &mdash; a high-margin category we are neither stocking well nor selling online.</p></div>
+<div class="find"><span class="tag">2,642 SKUs</span><h4>A tenth of the gap has never been created in Shopify at all</h4><p>4.33M EGP a month of in-store revenue from products that have no Shopify record of any kind. These need photography and copy, not a toggle &mdash; which is why they need to be scheduled, not just approved.</p></div>
+<div class="find"><span class="tag">607 products &middot; 191,350 views</span><h4>Listing is only half the problem &mdash; a fifth of views hit sold-out pages</h4><p>37.8% of school-bag views and 20.6% of ride-on views land on products with zero sellable stock, led by our own Glossy Bird and Smiggle sets at 2,200&ndash;4,300 EGP. We are paying to send people to shelves we know are empty.</p></div>
+<div class="find"><span class="tag">2,710 sessions</span><h4>&ldquo;stainless steel box&rdquo; returns nothing, and it is our best-selling product</h4><p>The Smash and Sistema stainless steel snack boxes are among the highest-revenue SKUs on the site. The search box cannot find them because the titles say &ldquo;Snack Box&rdquo; and the customer types &ldquo;box&rdquo;. This is a synonym file, not a project.</p></div>
+<div class="find"><span class="tag">Arabic</span><h4>The site search does not work in Arabic, and 40% of our paid demand is Arabic</h4><p>&ldquo;&#1604;&#1575;&#1606;&#1588; &#1576;&#1608;&#1603;&#1587;&rdquo; returns nothing. Arabic terms make up a large share of every Google demand theme in this business &mdash; &#1588;&#1606;&#1591; &#1605;&#1583;&#1575;&#1585;&#1587;, &#1605;&#1575;&#1610;&#1608;&#1607; &#1575;&#1591;&#1601;&#1575;&#1604;, &#1603;&#1608;&#1578;&#1588;&#1610; &#1575;&#1591;&#1601;&#1575;&#1604; &mdash; and every one of them lands on a search box that only speaks English.</p></div>
+<div class="find"><span class="tag">444 + 294 sessions</span><h4>&ldquo;school shoes&rdquo; and &ldquo;shoes&rdquo; are asked for on our own site and answered thinly</h4><p>Footwear shows 25,763 Google impressions and 738 on-site searches a month against 93 live products. Kids' footwear is the clearest genuine range gap in the business, and it is a category the branches could test on consignment before a single box is bought.</p></div>
+<div class="find good"><span class="tag">Zero capital</span><h4>None of this requires buying anything</h4><p>Waves 1 and 2 are stock we already own. Waves 3 and 4 are reorders of proven sellers, not bets. The entire 10.0M EGP a year of gross profit in this deck comes from selling what we already sell, to people who are already on our website, asking for it by name.</p></div>
+
+<h2 class="sec">The plan, by wave</h2>
+<div class="find good"><span class="tag">Week 1 &middot; 1,053 SKUs &middot; 3.2M EGP GP a year</span><h4>Wave 1 &mdash; publish the new arrivals that are already in stock</h4><p>Highest revenue, freshest demand, stock on the shelf, and 3.92M EGP of inventory currently doing nothing online. Most are already built in Shopify and need publishing, not creating. Owner: e-commerce merchandising. Done by end of week 1.</p></div>
+<div class="find good"><span class="tag">Weeks 2&ndash;4 &middot; 1,558 SKUs &middot; 1.6M EGP GP a year</span><h4>Wave 2 &mdash; publish the rest of the in-stock range</h4><p>Older range, still selling, still in stock. Lower revenue each but 3.05M EGP of inventory attached. Batch by category, School first. Owner: e-commerce merchandising.</p></div>
+<div class="find good"><span class="tag">Weeks 2&ndash;6 &middot; 907 SKUs &middot; 4.0M EGP GP a year</span><h4>Wave 3 &mdash; reorder and list the new range that has sold out</h4><p>The biggest single prize in the deck and the one that needs the buying team. These are products under 120 days old that sold 5.17M EGP in 30 days and have no stock left. Reorder, then list on arrival, not six weeks later. Owner: buying + merchandising.</p></div>
+<div class="find good"><span class="tag">Ongoing</span><h4>Wave 4 and the standing rule &mdash; nothing enters stock without a listing</h4><p>The remaining 1,336 older SKUs are a judgement call, category by category. The rule that stops this recurring is not a wave: <b>no goods-received line closes in Odoo until the SKU has a Shopify record</b>, and a weekly exception report goes to the same person every Monday. Owner: buying + IT.</p></div>
+
+<h2 class="sec">What I need from you</h2>
+<div class="find"><h4>Three decisions</h4><p>
+<b>1. Do we publish everything we stock, by default?</b> Today the default is not to. I want the default reversed: everything we buy goes online unless someone gives a reason. The only real objection is stock accuracy, and that is a settings question, not a strategy one.<br><br>
+<b>2. Who owns publish-on-arrival, and do they have the headcount?</b> 4,854 SKUs is real work &mdash; 2,642 of them need photography and copy from scratch. I would rather be told the number is one person and it will take a quarter than be told yes and watch it not happen.<br><br>
+<b>3. Do we fix search and stock signals before we spend another pound on traffic?</b> A fifth of the views we already pay for land on sold-out pages, and our own search box cannot find our best-selling product or read Arabic. Buying more traffic before fixing that is buying a bigger leak.</p></div>
+
+<footer>Our Kids &mdash; The Listing Gap &middot; built 24 Aug 2026. Odoo: report.pos.order product-level revenue and margin, 30 days to 24 Aug 2026, joined to product.product for barcode, category, stock on hand, cost and create_date. Shopify: Admin API bulk export, 37,681 products and 71,944 variants, joined on barcode and SKU. GA4 property 297783390, Egypt only. Prize sizing uses the measured 23.6% online:in-store revenue ratio of already-listed SKUs and a 27% online gross margin. All figures EGP.</footer>
+</div>
+<script>
+const D={"waves": [{"k": "Wave 1 — in stock, new arrival", "skus": 1053, "rev": 4244029, "gp": 1092182, "stock": 3916993, "prize": 1001591, "prizeGpYr": 3245154}, {"k": "Wave 2 — in stock, existing range", "skus": 1558, "rev": 2059887, "gp": 510917, "stock": 3050697, "prize": 486133, "prizeGpYr": 1575072}, {"k": "Wave 3 — needs reorder, new range", "skus": 907, "rev": 5168144, "gp": 1243333, "stock": -3268, "prize": 1219682, "prizeGpYr": 3951770}, {"k": "Wave 4 — needs reorder, older range", "skus": 1336, "rev": 1674412, "gp": 419544, "stock": -9215, "prize": 395161, "prizeGpYr": 1280323}], "top": [{"name": "طقم عربه طفل ميوز Toffee", "cat": "Various", "rev": 191241, "gp": 50941, "qty": 12, "stock": 5, "stockVal": 48880, "age": 123, "state": "NOT_IN_SHOPIFY", "bc": "5056080624068"}, {"name": "GB5596TB Backpack + lunch bag + pencil case 17''", "cat": "School", "rev": 74100, "gp": 19500, "qty": 19, "stock": 2, "stockVal": 4789, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295831099"}, {"name": "GB5631-1 SCHOOL BAG", "cat": "School", "rev": 61200, "gp": 16105, "qty": 18, "stock": 1, "stockVal": 2088, "age": 47, "state": "ACTIVE_UNPUBLISHED", "bc": "1066247418099"}, {"name": "35457 SMASH علبه حفظ طعام غطاء فوشيا استانلس3 خانه 1.3 لتر", "cat": "School", "rev": 61838, "gp": 15667, "qty": 35, "stock": 1, "stockVal": 1102, "age": 26, "state": "NOT_IN_SHOPIFY", "bc": "9325448246836"}, {"name": "085/2025 دريفت كار شحن مساعدين", "cat": "Toys (Consignment)", "rev": 95675, "gp": 14588, "qty": 9, "stock": 3, "stockVal": 23112, "age": 102, "state": "NOT_IN_SHOPIFY", "bc": "8364217982762"}, {"name": "GB5605 SCHOOL BAG", "cat": "School", "rev": 54400, "gp": 14316, "qty": 16, "stock": 1, "stockVal": 2088, "age": 47, "state": "ACTIVE_UNPUBLISHED", "bc": "1066247441099"}, {"name": "Tank BTL move 550ml cotton candy G.box", "cat": "Various", "rev": 63036, "gp": 13601, "qty": 84, "stock": 65, "stockVal": 32343, "age": 83, "state": "ACTIVE_UNPUBLISHED", "bc": "6223003247638"}, {"name": " 005 Backpack + Pencil Case + Lunch Bag 16 Inch", "cat": "School", "rev": 51840, "gp": 12974, "qty": 26, "stock": 1, "stockVal": 1250, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1063674874099"}, {"name": "573373 Backpack Minecraft on Design 17 Inch", "cat": "School", "rev": 55447, "gp": 12388, "qty": 25, "stock": 9, "stockVal": 13050, "age": 5, "state": "ACTIVE_UNPUBLISHED", "bc": "1066671725099"}, {"name": "T996 17-inch Backpack - Black - Astronaut Mars", "cat": "School", "rev": 66872, "gp": 11469, "qty": 33, "stock": 3, "stockVal": 4290, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1052885708099"}, {"name": "Tank BTL Move 550ml Sky Blue", "cat": "School", "rev": 68942, "gp": 15188, "qty": 91, "stock": 60, "stockVal": 29860, "age": 369, "state": "ACTIVE_UNPUBLISHED", "bc": "6223003247652"}, {"name": "[1053123630099] Lunch Box 1.65L - Turquoise", "cat": "School", "rev": 81576, "gp": 14821, "qty": 125, "stock": 1, "stockVal": 454, "age": 751, "state": "ACTIVE_UNPUBLISHED", "bc": "1053123630099"}, {"name": " 005 Backpack + Pencil Case + Lunch Bag 16 Inch", "cat": "School", "rev": 43740, "gp": 10868, "qty": 22, "stock": 1, "stockVal": 1250, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1063674873099"}, {"name": "[1053123629099] Lunch Box 1.65L - Blue", "cat": "School", "rev": 80652, "gp": 14464, "qty": 124, "stock": 5, "stockVal": 2270, "age": 751, "state": "ACTIVE_UNPUBLISHED", "bc": "1053123629099"}, {"name": "[1053123631099] Lunch Box 1.65L - Fuchsia", "cat": "School", "rev": 77789, "gp": 13768, "qty": 120, "stock": 1, "stockVal": 454, "age": 751, "state": "ACTIVE_UNPUBLISHED", "bc": "1053123631099"}, {"name": "T996 17-inch Backpack - Gray - Spider", "cat": "School", "rev": 55420, "gp": 10004, "qty": 27, "stock": 1, "stockVal": 1430, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1052885723099"}, {"name": "29269 I-GROW 2 PROi-Size grey", "cat": "Baby Essentials (Consignment)", "rev": 59250, "gp": 9974, "qty": 4, "stock": 4, "stockVal": 42000, "age": 83, "state": "NOT_IN_SHOPIFY", "bc": "5902533929269"}, {"name": " 004 Backpack + Pencil Case + Lunch Bag 18 Inch", "cat": "School", "rev": 37800, "gp": 9758, "qty": 18, "stock": 4, "stockVal": 5200, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1063674852099"}, {"name": "07959  SMASH علبه حفظ طعام 1.8 لتر استانلس روز", "cat": "School", "rev": 38036, "gp": 9694, "qty": 30, "stock": 3, "stockVal": 2367, "age": 26, "state": "ACTIVE_UNPUBLISHED", "bc": "9325448243811"}, {"name": "401 Lunch Bag + Pencil Case - Aqua - Stitch", "cat": "School", "rev": 56244, "gp": 9317, "qty": 58, "stock": 4, "stockVal": 2760, "age": 34, "state": "ACTIVE_UNPUBLISHED", "bc": "1052898362099"}, {"name": "31381 ستور علبة سلاطة  مربعة  بلاستيك  1810 مللي  MINECRAF", "cat": "Various", "rev": 30116, "gp": 8990, "qty": 34, "stock": 2, "stockVal": 1025, "age": 20, "state": "ACTIVE_UNPUBLISHED", "bc": "8412497313815"}, {"name": "GB5693T SCHOOL BAG", "cat": "School", "rev": 33600, "gp": 8842, "qty": 8, "stock": 1, "stockVal": 2579, "age": 47, "state": "ACTIVE_UNPUBLISHED", "bc": "1066247423099"}, {"name": "H15102-Stainless Steel Water Bottle", "cat": "School", "rev": 24090, "gp": 8482, "qty": 22, "stock": 1, "stockVal": 575, "age": 109, "state": "ACTIVE_UNPUBLISHED", "bc": "1060154148099"}, {"name": "31781 ستور علبة سلاطة  مربعة  بلاستيك  1810 مللي  STITCH", "cat": "Various", "rev": 28229, "gp": 8359, "qty": 32, "stock": 2, "stockVal": 1025, "age": 20, "state": "ACTIVE_UNPUBLISHED", "bc": "8412497317813"}, {"name": "2681 لانش بوكس ستانلس Truck لبني*ازرق مقسم 750ML", "cat": "School", "rev": 23597, "gp": 8068, "qty": 30, "stock": 1, "stockVal": 421, "age": 50, "state": "ACTIVE_UNPUBLISHED", "bc": "4002125506099"}, {"name": "SMASH 07961 علبه حفظ طعام 1.8 لتر استالس ازرق", "cat": "School", "rev": 30712, "gp": 8003, "qty": 24, "stock": 1, "stockVal": 789, "age": 26, "state": "ACTIVE_UNPUBLISHED", "bc": "9325448243835"}, {"name": "16/18 Trolley - Navy", "cat": "School", "rev": 50149, "gp": 7990, "qty": 60, "stock": 8, "stockVal": 4800, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1052885786099"}, {"name": "29252 I-GROW 2 PROi-Size black", "cat": "Baby Essentials (Consignment)", "rev": 45000, "gp": 7974, "qty": 3, "stock": 2, "stockVal": 21000, "age": 83, "state": "NOT_IN_SHOPIFY", "bc": "5902533929252"}, {"name": "133-P-R Backpack 17 SMIGGLE  Purple", "cat": "School", "rev": 35234, "gp": 7707, "qty": 16, "stock": 1, "stockVal": 1450, "age": 13, "state": "ACTIVE_UNPUBLISHED", "bc": "1068989290099"}, {"name": "2681 لانش بوكس ستانلس Dinosaur Space كحلي*اورانج مقسم 750M", "cat": "School", "rev": 21597, "gp": 7577, "qty": 27, "stock": 1, "stockVal": 421, "age": 50, "state": "ACTIVE_UNPUBLISHED", "bc": "4002125504099"}, {"name": "123-FOOTBALL Trolley Backpack TBG SMIGGLE  Black * Gold", "cat": "School", "rev": 39132, "gp": 7377, "qty": 11, "stock": 4, "stockVal": 9800, "age": 13, "state": "NOT_IN_SHOPIFY", "bc": "1068989280099"}, {"name": "07962 SMASH علبه حفظ طعام 1.8 لتر استالس لبنى", "cat": "School", "rev": 29041, "gp": 7327, "qty": 23, "stock": 1, "stockVal": 789, "age": 26, "state": "ACTIVE_UNPUBLISHED", "bc": "9325448243842"}, {"name": "07960 SMASH علبه حفظ طعام 1.8 لتر موف استانلس", "cat": "School", "rev": 26985, "gp": 7101, "qty": 21, "stock": 4, "stockVal": 3156, "age": 26, "state": "ACTIVE_UNPUBLISHED", "bc": "9325448243828"}, {"name": "عربة طاول فوزتركي - Raven", "cat": "Baby Essentials", "rev": 26455, "gp": 6962, "qty": 1, "stock": 3, "stockVal": 48733, "age": 76, "state": "NOT_IN_SHOPIFY", "bc": "5056080623887"}, {"name": " 07 Backpack + Pencil Case + Lunch Bag 16 Inch", "cat": "School", "rev": 26746, "gp": 6961, "qty": 15, "stock": 1, "stockVal": 1100, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1063674895099"}, {"name": "468653 Backpack Football Design 17 Inch", "cat": "School", "rev": 30997, "gp": 6890, "qty": 14, "stock": 8, "stockVal": 11600, "age": 5, "state": "ACTIVE_UNPUBLISHED", "bc": "1066671722099"}, {"name": "PB-7002 بى ريدى  شنطة    ظهر  16\" 3 سوستة  P-T BOY", "cat": "School", "rev": 22728, "gp": 6829, "qty": 10, "stock": 2, "stockVal": 2622, "age": 20, "state": "ACTIVE_UNPUBLISHED", "bc": "6222026217512"}, {"name": "GB5460TB Backpack + lunch bag + pencil case 17''", "cat": "School", "rev": 101400, "gp": 26684, "qty": 26, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295826099"}, {"name": "[10678-6530] Kidilo Baby Stroller 6530 - Black", "cat": "Baby Essentials", "rev": 32350, "gp": 8978, "qty": 4, "stock": 1, "stockVal": 4850, "age": 371, "state": "NOT_IN_SHOPIFY", "bc": "1067850334099"}, {"name": "GB5458TB Backpack + lunch bag + pencil case 18''", "cat": "School", "rev": 99875, "gp": 26283, "qty": 25, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295825099"}, {"name": "[6223001580256] Afridi AA Pen Batteries Card 4pcs", "cat": "Toys", "rev": 25766, "gp": 8773, "qty": 247, "stock": 88, "stockVal": 4927, "age": 751, "state": "NOT_IN_SHOPIFY", "bc": "6223001580256"}, {"name": "24-006 Trolley bag + pencil case", "cat": "School", "rev": 25480, "gp": 6251, "qty": 7, "stock": 7, "stockVal": 16100, "age": 45, "state": "NOT_IN_SHOPIFY", "bc": "1063674906099"}, {"name": "T995 -16-inch Backpack - Aqua - Stitch", "cat": "School", "rev": 38950, "gp": 6237, "qty": 21, "stock": 2, "stockVal": 2660, "age": 34, "state": "ACTIVE_UNPUBLISHED", "bc": "1052898263099"}, {"name": " K7 High chair Umbrella", "cat": "Baby Essentials", "rev": 29070, "gp": 8147, "qty": 6, "stock": 4, "stockVal": 11053, "age": 361, "state": "NOT_IN_SHOPIFY", "bc": "1068575927099"}, {"name": "MI-9010 بى ريدى لانش باج  طويل+ جراب زمزمية 14\"   MINE CRA", "cat": "School", "rev": 19485, "gp": 5982, "qty": 15, "stock": 3, "stockVal": 2222, "age": 20, "state": "ACTIVE_UNPUBLISHED", "bc": "6222026217895"}, {"name": "24-009 Trolley bag + pencil case", "cat": "School", "rev": 25116, "gp": 5932, "qty": 7, "stock": 5, "stockVal": 11500, "age": 45, "state": "NOT_IN_SHOPIFY", "bc": "1063674916099"}, {"name": "GB5483TB Backpack + lunch bag + pencil case 17''", "cat": "School", "rev": 89700, "gp": 23605, "qty": 23, "stock": 0, "stockVal": 0, "age": 55, "state": "NOT_IN_SHOPIFY", "bc": "1066295828099"}, {"name": "GB5481TB Backpack + lunch bag + pencil case 17''", "cat": "School", "rev": 85800, "gp": 22579, "qty": 22, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295827099"}, {"name": "tank bottle stainless steel  cold 650ml orange", "cat": "Various", "rev": 35264, "gp": 7543, "qty": 47, "stock": 29, "stockVal": 14432, "age": 433, "state": "ACTIVE_UNPUBLISHED", "bc": "6223003243784"}, {"name": "5001-Backpack 18inch + waterproof Lunch Bag +Pencil Case", "cat": "School (Consignment)", "rev": 32700, "gp": 5584, "qty": 11, "stock": 2, "stockVal": 4200, "age": 44, "state": "ACTIVE_UNPUBLISHED", "bc": "2075354718099"}, {"name": "494 ميدالية مائية", "cat": "Various", "rev": 10246, "gp": 5568, "qty": 90, "stock": 126, "stockVal": 4788, "age": 28, "state": "NOT_IN_SHOPIFY", "bc": "4000185679099"}, {"name": "129 كرسى طعام امبريلا Mastela-17Pro رمادى ", "cat": "Baby Essentials", "rev": 17775, "gp": 5461, "qty": 3, "stock": 2, "stockVal": 7700, "age": 39, "state": "NOT_IN_SHOPIFY", "bc": "1068575823099"}, {"name": "41685-Insulated Food Container 1.25L - Fuchsia", "cat": "Various", "rev": 40819, "gp": 7280, "qty": 68, "stock": 7, "stockVal": 2937, "age": 751, "state": "ACTIVE_UNPUBLISHED", "bc": "1053158481099"}, {"name": "GB5447TB Backpack + lunch bag + pencil case 16\"", "cat": "School", "rev": 81600, "gp": 21474, "qty": 24, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295840099"}, {"name": "GB5457TB Backpack + lunch bag + pencil case 18''", "cat": "School", "rev": 79900, "gp": 21026, "qty": 20, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295838099"}, {"name": "A11 Trolley bag + pencil case+ Lunch Bag", "cat": "School", "rev": 21942, "gp": 5247, "qty": 7, "stock": 1, "stockVal": 2000, "age": 45, "state": "ACTIVE_UNPUBLISHED", "bc": "1063674921099"}, {"name": "GB5446TB SCHOOL BAG", "cat": "School", "rev": 79200, "gp": 20842, "qty": 22, "stock": 0, "stockVal": 0, "age": 47, "state": "ACTIVE_UNPUBLISHED", "bc": "1066247422099"}, {"name": "GB5482TB Backpack + lunch bag + pencil case 17''", "cat": "School", "rev": 79347, "gp": 20787, "qty": 20, "stock": 0, "stockVal": 0, "age": 55, "state": "ACTIVE_UNPUBLISHED", "bc": "1066295830099"}, {"name": "129 كرسى طعام امبريلا Mastela-17Pro اسود ", "cat": "Baby Essentials", "rev": 17775, "gp": 5106, "qty": 3, "stock": 6, "stockVal": 21327, "age": 39, "state": "NOT_IN_SHOPIFY", "bc": "1068575821099"}, {"name": "5004-Backpack 18inch + waterproof Lunch Bag +Pencil Case", "cat": "School (Consignment)", "rev": 29700, "gp": 5053, "qty": 10, "stock": 3, "stockVal": 6300, "age": 44, "state": "ACTIVE_UNPUBLISHED", "bc": "2075354721099"}], "lgcat": [{"cat": "School", "rev": 17343117, "listed_pct": 61.8, "skus": 1659, "gap_skus": 714, "gap_rev": 6625022, "gap_stock": 690081}, {"cat": "Clothing", "rev": 9215014, "listed_pct": 89.2, "skus": 7269, "gap_skus": 1306, "gap_rev": 992885, "gap_stock": 2527870}, {"cat": "Various", "rev": 4651242, "listed_pct": 77.5, "skus": 1211, "gap_skus": 599, "gap_rev": 1045223, "gap_stock": 787159}, {"cat": "Toys (Consignment)", "rev": 4393585, "listed_pct": 64.4, "skus": 2619, "gap_skus": 824, "gap_rev": 1564028, "gap_stock": 911339}, {"cat": "School (Consignment)", "rev": 4057169, "listed_pct": 91.3, "skus": 500, "gap_skus": 90, "gap_rev": 352177, "gap_stock": 343549}, {"cat": "Baby Essentials", "rev": 4024807, "listed_pct": 78.6, "skus": 709, "gap_skus": 192, "gap_rev": 861512, "gap_stock": 468059}, {"cat": "Toys", "rev": 2212900, "listed_pct": 62.8, "skus": 1042, "gap_skus": 466, "gap_rev": 823997, "gap_stock": 340317}, {"cat": "Clothing (Consignment)", "rev": 2035290, "listed_pct": 95.6, "skus": 1716, "gap_skus": 102, "gap_rev": 89216, "gap_stock": 212137}, {"cat": "Baby Essentials (Consignment)", "rev": 1877966, "listed_pct": 73.5, "skus": 791, "gap_skus": 143, "gap_rev": 498013, "gap_stock": 338332}, {"cat": "Various (Consignment)", "rev": 537896, "listed_pct": 75.1, "skus": 530, "gap_skus": 152, "gap_rev": 134131, "gap_stock": 151707}, {"cat": "Summer", "rev": 444485, "listed_pct": 82.8, "skus": 222, "gap_skus": 56, "gap_rev": 76342, "gap_stock": 70360}, {"cat": "Summer (Consignment)", "rev": 288623, "listed_pct": 94.2, "skus": 205, "gap_skus": 12, "gap_rev": 16686, "gap_stock": 2709}, {"cat": "Party", "rev": 37366, "listed_pct": 48.2, "skus": 127, "gap_skus": 107, "gap_rev": 19352, "gap_stock": 61160}, {"cat": "Adults", "rev": 36256, "listed_pct": 61.2, "skus": 27, "gap_skus": 11, "gap_rev": 14084, "gap_stock": 3390}, {"cat": "Services", "rev": 32679, "listed_pct": 0.0, "skus": 17, "gap_skus": 17, "gap_rev": 32679, "gap_stock": 45824}, {"cat": "Adults (Consignment)", "rev": 17082, "listed_pct": 99.0, "skus": 5, "gap_skus": 1, "gap_rev": 170, "gap_stock": -119}, {"cat": "Party (Consignment)", "rev": 16660, "listed_pct": 98.5, "skus": 48, "gap_skus": 4, "gap_rev": 256, "gap_stock": 1334}, {"cat": "All", "rev": 1680, "listed_pct": 58.3, "skus": 13, "gap_skus": 12, "gap_rev": 700, "gap_stock": 0}, {"cat": "Discounts", "rev": 0, "listed_pct": 0, "skus": 46, "gap_skus": 46, "gap_rev": 0, "gap_stock": 0}], "cats": [{"k": "School", "orev": 4771555, "ogp": 1286381, "frev": 21383213, "fgp": 4966837, "rev": 26154768, "gp": 6253218, "gpPct": 23.9, "views": 674635, "atc": 70142, "pur": 7682, "cvr": 1.14, "gppv": 1.91, "inv": 8002759, "gmroi": 9.51, "listedPct": 67.4, "gapRev": 6977199, "gapSkus": 804, "gapStock": 1033630, "consPct": 18.4, "onlineShare": 18.2}, {"k": "Clothing", "orev": 1683452, "ogp": 464273, "frev": 11244284, "fgp": 2541155, "rev": 12927736, "gp": 3005428, "gpPct": 23.2, "views": 180934, "atc": 18388, "pur": 3372, "cvr": 1.86, "gppv": 2.57, "inv": 38513540, "gmroi": 0.95, "listedPct": 90.4, "gapRev": 1082101, "gapSkus": 1408, "gapStock": 2740007, "consPct": 17.1, "onlineShare": 13.0}, {"k": "Toys", "orev": 583475, "ogp": 162194, "frev": 6606485, "fgp": 1611077, "rev": 7189960, "gp": 1773271, "gpPct": 24.7, "views": 109847, "atc": 7101, "pur": 964, "cvr": 0.88, "gppv": 1.48, "inv": 5231992, "gmroi": 4.12, "listedPct": 63.9, "gapRev": 2388025, "gapSkus": 1290, "gapStock": 1251656, "consPct": 66.8, "onlineShare": 8.1}, {"k": "Baby Essentials", "orev": 806570, "ogp": 227835, "frev": 5902563, "fgp": 1509701, "rev": 6709133, "gp": 1737536, "gpPct": 25.9, "views": 145887, "atc": 12215, "pur": 1779, "cvr": 1.22, "gppv": 1.56, "inv": 4016875, "gmroi": 5.26, "listedPct": 77.0, "gapRev": 1359525, "gapSkus": 335, "gapStock": 806391, "consPct": 33.2, "onlineShare": 12.0}, {"k": "Various", "orev": 1045090, "ogp": 275172, "frev": 5186588, "fgp": 1259434, "rev": 6231678, "gp": 1534606, "gpPct": 24.6, "views": 41323, "atc": 6217, "pur": 1158, "cvr": 2.8, "gppv": 6.66, "inv": 9492411, "gmroi": 1.97, "listedPct": 77.3, "gapRev": 1179354, "gapSkus": 751, "gapStock": 938866, "consPct": 9.5, "onlineShare": 16.8}, {"k": "Summer", "orev": 81746, "ogp": 24163, "frev": 733108, "fgp": 193428, "rev": 814854, "gp": 217591, "gpPct": 26.7, "views": 15102, "atc": 1726, "pur": 253, "cvr": 1.68, "gppv": 1.6, "inv": 366714, "gmroi": 7.22, "listedPct": 87.3, "gapRev": 93028, "gapSkus": 68, "gapStock": 73069, "consPct": 40.4, "onlineShare": 10.0}, {"k": "Party", "orev": 13219, "ogp": 5459, "frev": 54026, "fgp": 19919, "rev": 67245, "gp": 25378, "gpPct": 37.7, "views": 2666, "atc": 174, "pur": 29, "cvr": 1.09, "gppv": 2.05, "inv": 477294, "gmroi": 0.65, "listedPct": 63.7, "gapRev": 19608, "gapSkus": 111, "gapStock": 62494, "consPct": 24.8, "onlineShare": 19.7}, {"k": "Adults", "orev": 3787, "ogp": 1007, "frev": 53338, "fgp": 12577, "rev": 57125, "gp": 13584, "gpPct": 23.8, "views": 0, "atc": 0, "pur": 0, "cvr": null, "gppv": null, "inv": 65132, "gmroi": 2.54, "listedPct": 73.3, "gapRev": 14254, "gapSkus": 12, "gapStock": 3271, "consPct": 31.9, "onlineShare": 6.6}], "subs": [{"k": "Backpacks & school sets", "skus": 773, "views": 308931, "viewShare": 32.2, "atcRate": 7.18, "cvr": 0.48, "rev": 2960085, "revShare": 39.8, "gppv": 2.29, "aov": 2011, "oosPct": 37.8, "oosSkus": 248, "gpRate": 23.9, "gp": 707460}, {"k": "Lunch boxes", "skus": 384, "views": 188969, "viewShare": 19.7, "atcRate": 10.7, "cvr": 1.27, "rev": 1375027, "revShare": 18.5, "gppv": 1.74, "aov": 571, "oosPct": 12.4, "oosSkus": 56, "gpRate": 23.9, "gp": 328631}, {"k": "Water bottles & flasks", "skus": 395, "views": 140404, "viewShare": 14.6, "atcRate": 8.71, "cvr": 1.13, "rev": 1141354, "revShare": 15.3, "gppv": 1.94, "aov": 717, "oosPct": 14.8, "oosSkus": 57, "gpRate": 23.9, "gp": 272784}, {"k": "Unclassified", "skus": 640, "views": 80212, "viewShare": 8.4, "atcRate": 9.78, "cvr": 1.34, "rev": 471158, "revShare": 6.3, "gppv": 1.44, "aov": 439, "oosPct": 8.0, "oosSkus": 51, "gpRate": 24.6, "gp": 115905}, {"k": "Swim & summer", "skus": 187, "views": 30716, "viewShare": 3.2, "atcRate": 5.84, "cvr": 1.13, "rev": 313392, "revShare": 4.2, "gppv": 2.72, "aov": 906, "oosPct": 17.9, "oosSkus": 29, "gpRate": 26.7, "gp": 83676}, {"k": "Nursery & sleep", "skus": 484, "views": 54603, "viewShare": 5.7, "atcRate": 5.82, "cvr": 0.98, "rev": 255289, "revShare": 3.4, "gppv": 1.21, "aov": 479, "oosPct": 7.0, "oosSkus": 39, "gpRate": 25.9, "gp": 66120}, {"k": "Strollers & car seats", "skus": 82, "views": 17979, "viewShare": 1.9, "atcRate": 1.92, "cvr": 0.15, "rev": 228020, "revShare": 3.1, "gppv": 3.28, "aov": 8445, "oosPct": 8.4, "oosSkus": 12, "gpRate": 25.9, "gp": 59057}, {"k": "Stationery & pencil cases", "skus": 214, "views": 37497, "viewShare": 3.9, "atcRate": 27.6, "cvr": 3.68, "rev": 168033, "revShare": 2.3, "gppv": 1.07, "aov": 122, "oosPct": 10.3, "oosSkus": 26, "gpRate": 23.9, "gp": 40160}, {"k": "Toys & games", "skus": 238, "views": 25210, "viewShare": 2.6, "atcRate": 16.94, "cvr": 3.54, "rev": 129946, "revShare": 1.7, "gppv": 1.27, "aov": 146, "oosPct": 7.8, "oosSkus": 22, "gpRate": 24.7, "gp": 32097}, {"k": "Feeding & pacifiers", "skus": 109, "views": 14506, "viewShare": 1.5, "atcRate": 7.52, "cvr": 1.14, "rev": 111029, "revShare": 1.5, "gppv": 1.98, "aov": 673, "oosPct": 11.7, "oosSkus": 14, "gpRate": 25.9, "gp": 28757}, {"k": "Bikes, scooters & ride-ons", "skus": 74, "views": 9322, "viewShare": 1.0, "atcRate": 2.57, "cvr": 0.29, "rev": 100414, "revShare": 1.3, "gppv": 2.66, "aov": 3719, "oosPct": 20.6, "oosSkus": 16, "gpRate": 24.7, "gp": 24802}, {"k": "Clothing & footwear", "skus": 286, "views": 32571, "viewShare": 3.4, "atcRate": 4.25, "cvr": 0.58, "rev": 94878, "revShare": 1.3, "gppv": 0.68, "aov": 502, "oosPct": 3.1, "oosSkus": 14, "gpRate": 23.2, "gp": 22012}, {"k": "Bath, care & diapering", "skus": 123, "views": 16081, "viewShare": 1.7, "atcRate": 10.59, "cvr": 1.18, "rev": 87325, "revShare": 1.2, "gppv": 1.41, "aov": 462, "oosPct": 15.9, "oosSkus": 23, "gpRate": 25.9, "gp": 22617}, {"k": "Party & gifting", "skus": 11, "views": 1980, "viewShare": 0.2, "atcRate": 3.89, "cvr": 0.3, "rev": 4855, "revShare": 0.1, "gppv": 0.92, "aov": 809, "oosPct": 0.0, "oosSkus": 0, "gpRate": 37.7, "gp": 1830}], "search": [{"term": "smiggle", "sessions": 3535, "live": 47, "cat": 271, "verdict": "LIVE"}, {"term": "stainless steel box", "sessions": 2710, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "bz-school", "sessions": 2105, "live": 162, "cat": 302, "verdict": "LIVE"}, {"term": "sistema", "sessions": 2085, "live": 85, "cat": 220, "verdict": "LIVE"}, {"term": "tshirt sale", "sessions": 2078, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "tank", "sessions": 1964, "live": 58, "cat": 120, "verdict": "LIVE"}, {"term": "lunch box", "sessions": 1441, "live": 139, "cat": 261, "verdict": "LIVE"}, {"term": "3m", "sessions": 1273, "live": 163, "cat": 520, "verdict": "LIVE"}, {"term": "bz", "sessions": 1193, "live": 162, "cat": 411, "verdict": "LIVE"}, {"term": "glossy bird", "sessions": 1021, "live": 29, "cat": 184, "verdict": "LIVE"}, {"term": "sonic", "sessions": 1017, "live": 51, "cat": 211, "verdict": "LIVE"}, {"term": "m design", "sessions": 894, "live": 104, "cat": 133, "verdict": "LIVE"}, {"term": "cubs", "sessions": 788, "live": 428, "cat": 1439, "verdict": "LIVE"}, {"term": "lunch bag", "sessions": 768, "live": 229, "cat": 813, "verdict": "LIVE"}, {"term": "bottle", "sessions": 697, "live": 499, "cat": 1220, "verdict": "LIVE"}, {"term": "pajama sale", "sessions": 638, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "pencil case", "sessions": 604, "live": 362, "cat": 1162, "verdict": "LIVE"}, {"term": "banana", "sessions": 585, "live": 53, "cat": 111, "verdict": "LIVE"}, {"term": "b.z.", "sessions": 546, "live": 6, "cat": 730, "verdict": "LIVE"}, {"term": "mofkera", "sessions": 529, "live": 13, "cat": 16, "verdict": "LIVE"}, {"term": "nahdet miser", "sessions": 498, "live": 51, "cat": 75, "verdict": "LIVE"}, {"term": "flask", "sessions": 486, "live": 0, "cat": 8, "verdict": "IN CATALOGUE, NOT LIVE"}, {"term": "stor", "sessions": 480, "live": 527, "cat": 949, "verdict": "LIVE"}, {"term": "smash", "sessions": 469, "live": 7, "cat": 41, "verdict": "LIVE"}, {"term": "thermos", "sessions": 445, "live": 13, "cat": 46, "verdict": "LIVE"}, {"term": "school shoes", "sessions": 444, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "mofakera", "sessions": 432, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "migo", "sessions": 412, "live": 109, "cat": 364, "verdict": "LIVE"}, {"term": "lock n' lock", "sessions": 406, "live": 11, "cat": 14, "verdict": "LIVE"}, {"term": "panini", "sessions": 405, "live": 30, "cat": 44, "verdict": "LIVE"}, {"term": "andalusia", "sessions": 392, "live": 42, "cat": 74, "verdict": "LIVE"}, {"term": "bag", "sessions": 388, "live": 597, "cat": 2282, "verdict": "LIVE"}, {"term": "minecraft", "sessions": 378, "live": 37, "cat": 67, "verdict": "LIVE"}, {"term": "oko", "sessions": 374, "live": 2603, "cat": 8303, "verdict": "LIVE"}, {"term": "water bottle", "sessions": 369, "live": 188, "cat": 457, "verdict": "LIVE"}, {"term": "tokyo", "sessions": 356, "live": 244, "cat": 483, "verdict": "LIVE"}, {"term": "bags", "sessions": 354, "live": 14, "cat": 57, "verdict": "LIVE"}, {"term": "kidilo", "sessions": 350, "live": 13, "cat": 138, "verdict": "LIVE"}, {"term": "lunch box stainless", "sessions": 323, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "sistema lunch box", "sessions": 316, "live": 3, "cat": 11, "verdict": "THIN ONLINE"}, {"term": "owala", "sessions": 312, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "philips avent", "sessions": 310, "live": 41, "cat": 72, "verdict": "LIVE"}, {"term": "stroller", "sessions": 302, "live": 57, "cat": 201, "verdict": "LIVE"}, {"term": "jansport", "sessions": 297, "live": 42, "cat": 150, "verdict": "LIVE"}, {"term": "paw patrol", "sessions": 295, "live": 137, "cat": 403, "verdict": "LIVE"}, {"term": "shoes", "sessions": 294, "live": 93, "cat": 144, "verdict": "LIVE"}, {"term": "tommee tippee", "sessions": 292, "live": 175, "cat": 233, "verdict": "LIVE"}, {"term": "al sayad", "sessions": 291, "live": 172, "cat": 296, "verdict": "LIVE"}, {"term": "stitch", "sessions": 291, "live": 320, "cat": 787, "verdict": "LIVE"}, {"term": "potty", "sessions": 278, "live": 37, "cat": 153, "verdict": "LIVE"}, {"term": "squishy", "sessions": 276, "live": 40, "cat": 90, "verdict": "LIVE"}, {"term": "school bag", "sessions": 266, "live": 10, "cat": 31, "verdict": "LIVE"}, {"term": "swim robe", "sessions": 255, "live": 66, "cat": 119, "verdict": "LIVE"}, {"term": "playmore", "sessions": 254, "live": 366, "cat": 663, "verdict": "LIVE"}, {"term": "sonic backpack", "sessions": 252, "live": 4, "cat": 11, "verdict": "THIN ONLINE"}, {"term": "لانش بوكس", "sessions": 237, "live": 0, "cat": 0, "verdict": "NO RANGE"}, {"term": "bibs", "sessions": 232, "live": 108, "cat": 282, "verdict": "LIVE"}, {"term": "chicco", "sessions": 228, "live": 84, "cat": 142, "verdict": "LIVE"}, {"term": "swimsuit", "sessions": 227, "live": 66, "cat": 126, "verdict": "LIVE"}, {"term": "junior", "sessions": 227, "live": 325, "cat": 1258, "verdict": "LIVE"}], "age": [{"k": "0–30 days", "v": 2.15, "skus": 284, "rev": 2151949, "stock": 850467}, {"k": "31–60", "v": 5.66, "skus": 753, "rev": 5662901, "stock": 942336}, {"k": "61–120", "v": 1.6, "skus": 923, "rev": 1597323, "stock": 2120923}, {"k": "121–365", "v": 1.65, "skus": 1146, "rev": 1650405, "stock": 1095350}, {"k": "over a year", "v": 2.08, "skus": 1748, "rev": 2083895, "stock": 1946132}], "state": [{"k": "Live on the site", "n": 13902, "rev": 38077345, "gp": 8880468, "color": "var(--s1)"}, {"k": "In Shopify, never published", "n": 2138, "rev": 8752256, "gp": 2042589, "color": "var(--s2)"}, {"k": "Not in Shopify at all", "n": 2642, "rev": 4330967, "gp": 1209638, "color": "var(--crit)"}, {"k": "Draft / archived / no barcode", "n": 74, "rev": 63249, "gp": 13749, "color": "var(--text-muted)"}]};
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const tip=document.getElementById('tip');
+function showTip(ev,title,rows){
+ tip.innerHTML='<b>'+title+'</b>'+rows.map(r=>'<div class="r"><span>'+r[0]+'</span><i>'+r[1]+'</i></div>').join('');
+ tip.style.opacity=1;
+ const w=tip.offsetWidth,h=tip.offsetHeight;
+ let x=ev.clientX+14,y=ev.clientY-h-10;
+ if(x+w>innerWidth-8)x=ev.clientX-w-14; if(y<8)y=ev.clientY+16;
+ tip.style.left=x+'px';tip.style.top=y+'px';
+}
+const hideTip=()=>tip.style.opacity=0;
+const attach=(node,title,rows)=>{node.addEventListener('mousemove',e=>showTip(e,title,rows));node.addEventListener('mouseleave',hideTip);};
+const mo=m=>{const[y,x]=m.split('-');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+x-1]+" '"+y.slice(2);};
+const f1=v=>v.toFixed(1), f2=v=>v.toFixed(2), f0=v=>v.toFixed(0), fi=v=>Math.round(v).toLocaleString('en-US');
+function wrapLabel(s,text,cx,y,maxw){
+  const words=(text+'').split(' ');const lines=[];let cur='';
+  const cpl=Math.max(Math.floor(maxw/5.4),8);
+  words.forEach(w=>{if((cur+' '+w).trim().length>cpl){lines.push(cur.trim());cur=w;}else cur+=' '+w;});
+  if(cur.trim())lines.push(cur.trim());
+  lines.slice(0,3).forEach((ln,i)=>{const t=el('text',{x:cx,y:y+i*11,class:'ax','text-anchor':'middle'});t.textContent=ln;s.appendChild(t);});
+}
+/* stacked vertical bars over a month series */
+function stacked(id,d,layers,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||290,L=46,R=12,T=26,B=44;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,bw=pw/d.length*0.62,step=pw/d.length;
+ for(let k=0;k<=opts.ticks;k++){const v=max*k/opts.ticks,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ d.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2, rr=opts.rrKey&&r[opts.rrKey];
+  let acc=0;
+  layers.forEach((ly,j)=>{
+   const v=ly.get(r),h=Math.max(v/max*ph,0.5);
+   s.appendChild(el('rect',{x,y:T+ph-acc-h,width:bw,height:h,fill:ly.color,rx:j===layers.length-1?3:0,opacity:rr?0.6:1}));
+   acc+=h;});
+  const t=el('text',{x:x+bw/2,y:H-B+15,class:'ax','text-anchor':'middle'});t.textContent=mo(r.m);s.appendChild(t);
+  if(rr){const t2=el('text',{x:x+bw/2,y:H-B+27,class:'ax','text-anchor':'middle',fill:'var(--warn)'});t2.textContent='RR';s.appendChild(t2);}
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,mo(r.m)+(rr?' (run-rated)':''),opts.rows(r));s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* multi-series line over a month array */
+function lineChart(id,d,series,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||290,L=48,R=54,T=26,B=38;
+ const pw=W-L-R,ph=H-T-B,n=d.length,max=opts.max,min=opts.min||0;
+ const X=i=>L+pw*i/(n-1), Y=v=>T+ph-(v-min)/(max-min)*ph;
+ for(let k=0;k<=opts.ticks;k++){const v=min+(max-min)*k/opts.ticks,y=Y(v);
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ series.forEach(se=>{
+  s.appendChild(el('polyline',{points:d.map((r,i)=>X(i)+','+Y(se.get(r))).join(' '),fill:'none',stroke:se.color,
+   'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round','stroke-dasharray':se.dash||'none'}));
+  s.appendChild(el('circle',{cx:X(0),cy:Y(se.get(d[0])),r:4,fill:se.color,stroke:'var(--surface-1)','stroke-width':2}));
+  s.appendChild(el('circle',{cx:X(n-1),cy:Y(se.get(d[n-1])),r:4.5,fill:se.color,stroke:'var(--surface-1)','stroke-width':2}));
+  const t=el('text',{x:X(n-1)+9,y:Y(se.get(d[n-1]))+4,class:'dl'});t.textContent=opts.fmt(se.get(d[n-1]));s.appendChild(t);});
+ d.forEach((r,i)=>{const t=el('text',{x:X(i),y:H-B+16,class:'ax','text-anchor':'middle'});
+  if(i%2===0||i===n-1)t.textContent=mo(r.m);s.appendChild(t);});
+ const cross=el('line',{x1:0,x2:0,y1:T,y2:T+ph,stroke:'var(--text-muted)','stroke-width':1,opacity:0});s.appendChild(cross);
+ d.forEach((r,i)=>{const hit=el('rect',{x:X(i)-pw/(n-1)/2,y:T,width:pw/(n-1),height:ph,class:'hit'});
+  hit.addEventListener('mousemove',e=>{cross.setAttribute('x1',X(i));cross.setAttribute('x2',X(i));cross.setAttribute('opacity',.35);
+   showTip(e,mo(r.m),series.map(se=>[se.name,opts.fmt(se.get(r))]));});
+  hit.addEventListener('mouseleave',()=>{cross.setAttribute('opacity',0);hideTip();});s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* simple vertical bars from [{k,v,color,rows}] */
+function barChart(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||260,L=opts.L||52,R=14,T=26,B=opts.B||46;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,step=pw/rows.length,bw=Math.min(step*0.56,74);
+ for(let k=0;k<=4;k++){const v=max*k/4,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.fmt(v);s.appendChild(t);}
+ rows.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2,h=Math.max(r.v/max*ph,2);
+  s.appendChild(el('rect',{x,y:T+ph-h,width:bw,height:h,fill:r.color||'var(--s1)',rx:4}));
+  const t=el('text',{x:x+bw/2,y:T+ph-h-8,class:'dl','text-anchor':'middle'});t.textContent=opts.fmt(r.v);s.appendChild(t);
+  wrapLabel(s,r.k,x+bw/2,H-B+16,step+8);
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,r.k,r.rows||[[opts.name||'Value',opts.fmt(r.v)]]);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:14,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* grouped horizontal pairs from [{k,a,b,note,rows}] */
+function grouped(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H,L=opts.L||150,R=54,T=18;
+ const n=rows.length,bh=opts.bh||11,gap=5,rowH=(H-T-18)/n,max=opts.max;
+ rows.forEach((r,i)=>{
+  const y=T+i*rowH;
+  [[r.a,'var(--s1)'],[r.b,'var(--s2)']].forEach((p,j)=>{
+   const w=Math.max(p[0]/max*(W-L-R),1.5),yy=y+j*(bh+gap);
+   s.appendChild(el('rect',{x:L,y:yy,width:w,height:bh,fill:p[1],rx:3}));
+   const t=el('text',{x:L+w+7,y:yy+bh-1.5,class:'dl2'});t.textContent=(opts.vfmt||f1)(p[0])+(opts.suffix||'%');s.appendChild(t);});
+  const lb=el('text',{x:L-10,y:y+bh+2,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  if(r.note){const t=el('text',{x:L-10,y:y+bh+15,class:'ax','text-anchor':'end'});t.textContent=r.note;s.appendChild(t);}
+  const hit=el('rect',{x:0,y,width:W,height:rowH,class:'hit'});attach(hit,r.k,r.rows);s.appendChild(hit);});
+}
+/* horizontal ranked bars from [{k,v,note,rows,color}] */
+function hbar(id,rows,opts){
+ const s=document.getElementById(id),W=620,H=opts.H,L=opts.L||170,R=opts.R||58,T=14;
+ const n=rows.length,rowH=(H-T-10)/n,bh=Math.min(rowH-8,20),max=opts.max||Math.max(...rows.map(r=>r.v));
+ rows.forEach((r,i)=>{
+  const y=T+i*rowH,w=Math.max(r.v/max*(W-L-R),2);
+  s.appendChild(el('rect',{x:L,y,width:w,height:bh,fill:r.color||'var(--s1)',rx:3}));
+  const v=el('text',{x:L+w+8,y:y+bh-2,class:'dl'});v.textContent=opts.fmt(r.v);s.appendChild(v);
+  const lb=el('text',{x:L-10,y:y+bh-2,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  if(r.note){const t=el('text',{x:L-10,y:y+bh+10,class:'ax','text-anchor':'end'});t.textContent=r.note;s.appendChild(t);}
+  const hit=el('rect',{x:0,y:y-3,width:W,height:rowH,class:'hit'});attach(hit,r.k,r.rows||[[opts.name||'Value',opts.fmt(r.v)]]);s.appendChild(hit);});
+}
+/* horizontal funnel from [{k,v}] */
+function funnel(id,d,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||270,L=opts.L||150,R=112,T=20;
+ const max=d[0].v,bh=opts.bh||34,gap=opts.gap||22;
+ const ramp=['var(--seq3)','var(--seq4)','var(--seq5)','var(--seq5)'];
+ d.forEach((r,i)=>{
+  const y=T+i*(bh+gap),w=Math.max(r.v/max*(W-L-R),3);
+  s.appendChild(el('rect',{x:L,y,width:w,height:bh,fill:r.bad?'var(--s2)':ramp[Math.min(i,3)],rx:4}));
+  const lb=el('text',{x:L-10,y:y+bh/2+4,class:'dl','text-anchor':'end'});lb.textContent=r.k;s.appendChild(lb);
+  const vl=el('text',{x:L+w+10,y:y+bh/2+4,class:'dl'});vl.textContent=fi(r.v);s.appendChild(vl);
+  if(i>0){const pct=r.v/d[i-1].v*100,cy=y-gap/2+2;
+   const t=el('text',{x:L+6,y:cy+4,class:'dl2',fill:r.bad?'var(--crit)':'var(--text-secondary)'});
+   t.textContent='↓ '+f1(pct)+'% of previous step'+(r.tag?' — '+r.tag:'');s.appendChild(t);}
+  const hit=el('rect',{x:L,y,width:W-L-R,height:bh,class:'hit'});
+  attach(hit,r.k,[['Count',fi(r.v)],['% of top of funnel',f2(r.v/max*100)+'%']]);s.appendChild(hit);});
+ if(opts.foot){const t=el('text',{x:L,y:H-10,class:'dl2'});t.textContent=opts.foot;s.appendChild(t);}
+}
+/* scatter from [{k,x,y,r,rows}] */
+function scatter(id,pts,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||330,L=56,R=26,T=22,B=46;
+ const pw=W-L-R,ph=H-T-B;
+ const X=v=>L+(v-opts.xmin)/(opts.xmax-opts.xmin)*pw, Y=v=>T+ph-(v-opts.ymin)/(opts.ymax-opts.ymin)*ph;
+ for(let k=0;k<=4;k++){const v=opts.ymin+(opts.ymax-opts.ymin)*k/4,y=Y(v);
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=opts.yfmt(v);s.appendChild(t);}
+ for(let k=0;k<=4;k++){const v=opts.xmin+(opts.xmax-opts.xmin)*k/4,x=X(v);
+  s.appendChild(el('line',{x1:x,x2:x,y1:T,y2:T+ph,class:'gl'}));
+  const t=el('text',{x,y:H-B+16,class:'ax','text-anchor':'middle'});t.textContent=opts.xfmt(v);s.appendChild(t);}
+ if(opts.vline!==undefined){const x=X(opts.vline);s.appendChild(el('line',{x1:x,x2:x,y1:T,y2:T+ph,stroke:'var(--text-muted)','stroke-dasharray':'4 4','stroke-width':1,opacity:.6}));}
+ if(opts.hline!==undefined){const y=Y(opts.hline);s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'var(--text-muted)','stroke-dasharray':'4 4','stroke-width':1,opacity:.6}));}
+ pts.forEach(p=>{
+  const cx=X(Math.min(Math.max(p.x,opts.xmin),opts.xmax)),cy=Y(Math.min(Math.max(p.y,opts.ymin),opts.ymax));
+  s.appendChild(el('circle',{cx,cy,r:p.r||7,fill:p.color||'var(--s1)',opacity:.82,stroke:'var(--surface-1)','stroke-width':1.5}));
+  const t=el('text',{x:cx+(p.r||7)+5,y:cy+4,class:'dl2'});t.textContent=p.k;s.appendChild(t);
+  const hit=el('circle',{cx,cy,r:(p.r||7)+8,class:'hit'});attach(hit,p.k,p.rows);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:13,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+ if(opts.xlab){const t=el('text',{x:W-R,y:H-6,class:'dl2','text-anchor':'end'});t.textContent=opts.xlab;s.appendChild(t);}
+}
+/* waterfall from [{k,v,type}] */
+function bridge(id,d,opts){
+ const s=document.getElementById(id),W=620,H=opts.H||310,L=44,R=14,T=30,B=66;
+ const pw=W-L-R,ph=H-T-B,max=opts.max,step=pw/d.length,bw=step*0.56;
+ for(let k=0;k<=5;k++){const v=max*k/5,y=T+ph-v/max*ph;
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y,y2:y,class:'gl'}));
+  const t=el('text',{x:L-8,y:y+4,class:'ax','text-anchor':'end'});t.textContent=f0(v);s.appendChild(t);}
+ let run=0;
+ d.forEach((r,i)=>{
+  const x=L+step*i+(step-bw)/2;let y0,y1,fill,lbl;
+  if(r.type==='base'){y0=0;y1=r.v;run=r.v;fill='var(--s1)';lbl=f1(r.v);}
+  else if(r.type==='add'){y0=run;y1=run+r.v;run+=r.v;fill='var(--s3)';lbl='+'+f2(r.v);}
+  else{y0=0;y1=r.v;fill='var(--s2)';lbl=f1(r.v);}
+  const yTop=T+ph-y1/max*ph,h=Math.max((y1-y0)/max*ph,2);
+  s.appendChild(el('rect',{x,y:yTop,width:bw,height:h,fill,rx:3}));
+  if(r.type==='add'&&i>0)s.appendChild(el('line',{x1:x-(step-bw),x2:x,y1:T+ph-y0/max*ph,y2:T+ph-y0/max*ph,stroke:'var(--text-muted)','stroke-width':1,opacity:.4}));
+  const t=el('text',{x:x+bw/2,y:yTop-8,class:'dl','text-anchor':'middle'});t.textContent=lbl;s.appendChild(t);
+  wrapLabel(s,r.k,x+bw/2,H-B+15,step+8);
+  const hit=el('rect',{x:L+step*i,y:T,width:step,height:ph,class:'hit'});
+  attach(hit,r.k,[[r.type==='add'?'Monthly uplift':'Monthly revenue','EGP '+f2(r.v)+'M'],['Annualised','EGP '+f1(r.v*12)+'M']]);s.appendChild(hit);});
+ if(opts.ylab){const t=el('text',{x:L,y:16,class:'dl2'});t.textContent=opts.ylab;s.appendChild(t);}
+}
+/* table helper */
+function tbl(id,head,rows){
+ document.getElementById(id).innerHTML='<thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+
+  rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody>';
+}
+/* theme */
+(function(){
+ const btn=document.getElementById('themeBtn');if(!btn)return;
+ const isDark=()=>document.documentElement.getAttribute('data-theme')==='dark'||
+  (!document.documentElement.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);
+ const sync=()=>btn.textContent=isDark()?'Light mode':'Dark mode';
+ btn.addEventListener('click',()=>{document.documentElement.setAttribute('data-theme',isDark()?'light':'dark');sync();});
+ sync();
+})();
+
+/* state of in-store revenue */
+(function(){
+ const tot=D.state.reduce((a,b)=>a+b.rev,0);
+ barChart('c-state',D.state.map(x=>({k:x.k,v:x.rev/1e6,color:x.color,
+   rows:[['In-store revenue 30d','EGP '+fi(x.rev)],['Share of in-store revenue',f1(x.rev/tot*100)+'%'],
+         ['Gross profit 30d','EGP '+fi(x.gp)],['SKUs',fi(x.n)]]})),
+  {max:40,H:260,B:56,fmt:v=>f1(v),ylab:'EGP millions of in-store revenue, 30 days'});
+ tbl('t-state',['Shopify status','SKUs','In-store revenue 30d','Share','Gross profit 30d'],
+   D.state.map(x=>[x.k,fi(x.n),fi(x.rev),f1(x.rev/tot*100)+'%',fi(x.gp)]));
+})();
+/* coverage by category */
+(function(){
+ const c=D.lgcat.filter(x=>x.rev>30000&&x.cat!=='Services'&&x.cat!=='Discounts'&&x.cat!=='All').sort((a,b)=>a.listed_pct-b.listed_pct);
+ hbar('c-cov',c.map(x=>({k:x.cat.length>26?x.cat.slice(0,25)+'…':x.cat,v:x.listed_pct,
+   color:x.listed_pct<74.3?'var(--s2)':'var(--s1)',
+   note:fi(x.gap_skus)+' SKUs unlisted · '+fi(x.gap_rev)+' EGP',
+   rows:[['Listed % of in-store revenue',f1(x.listed_pct)+'%'],['In-store revenue 30d','EGP '+fi(x.rev)],
+         ['Unlisted revenue 30d','EGP '+fi(x.gap_rev)],['Unlisted SKUs',fi(x.gap_skus)],
+         ['Stock at cost on unlisted','EGP '+fi(x.gap_stock)]]})),
+  {H:380,max:100,fmt:v=>f1(v)+'%',L:190});
+ tbl('t-cov',['Category','In-store rev 30d','Listed %','Trading SKUs','Unlisted SKUs','Unlisted revenue','Stock at cost'],
+   D.lgcat.filter(x=>x.rev>0).map(x=>[x.cat,fi(x.rev),f1(x.listed_pct)+'%',fi(x.skus),fi(x.gap_skus),fi(x.gap_rev),fi(x.gap_stock)]));
+})();
+/* waves */
+(function(){
+ grouped('c-wave',D.waves.map(x=>({k:x.k.split(' — ')[0]+' · '+x.k.split(' — ')[1],a:x.rev/1e6,b:x.prize/1e6,
+   note:fi(x.skus)+' SKUs',
+   rows:[['SKUs',fi(x.skus)],['In-store revenue 30d','EGP '+fi(x.rev)],['In-store gross profit 30d','EGP '+fi(x.gp)],
+         ['Stock at cost','EGP '+fi(x.stock)],['Online revenue available / month','EGP '+fi(x.prize)],
+         ['Online gross profit available / year','EGP '+fi(x.prizeGpYr)]]})),
+  {H:300,max:6,vfmt:f2,suffix:'M',L:200});
+ tbl('t-wave',['Wave','SKUs','In-store rev 30d','Stock at cost','Online rev available /mo','Online GP available /yr'],
+   D.waves.map(x=>[x.k,fi(x.skus),fi(x.rev),fi(x.stock),fi(x.prize),fi(x.prizeGpYr)]));
+})();
+/* age */
+(function(){
+ barChart('c-age',D.age.map(x=>({k:x.k,v:x.v,color:x.k==='31–60'||x.k==='0–30 days'?'var(--s2)':'var(--s1)',
+   rows:[['Unlisted in-store revenue 30d','EGP '+fi(x.rev)],['Unlisted SKUs',fi(x.skus)],['Stock at cost','EGP '+fi(x.stock)]]})),
+  {max:6,H:260,B:44,fmt:v=>f2(v),ylab:'EGP millions of unlisted in-store revenue, 30 days',name:'Unlisted revenue'});
+})();
+/* top SKUs */
+(function(){
+ const t=D.top.slice(0,30);
+ hbar('c-top',t.map(x=>({k:x.name.length>30?x.name.slice(0,29)+'…':x.name,v:x.rev,
+   color:x.stock>0?'var(--s1)':'var(--s2)',
+   note:x.cat+' · '+(x.stock>0?fi(x.stock)+' in stock':'no stock')+' · '+x.age+'d old',
+   rows:[['In-store revenue 30d','EGP '+fi(x.rev)],['In-store gross profit 30d','EGP '+fi(x.gp)],
+         ['Units sold 30d',fi(x.qty)],['Stock on hand',fi(x.stock)],['Stock at cost','EGP '+fi(x.stockVal)],
+         ['Days since first stocked',fi(x.age)],['Shopify status',x.state],['Barcode',x.bc]]})),
+  {H:700,fmt:v=>fi(v),L:210,R:74});
+ tbl('t-top',['#','Product','Category','Shopify status','Age (days)','Units 30d','In-store rev 30d','GP 30d','Stock','Stock at cost'],
+   D.top.map((x,i)=>[i+1,x.name,x.cat,x.state,fi(x.age),fi(x.qty),fi(x.rev),fi(x.gp),fi(x.stock),fi(x.stockVal)]));
+})();
+/* out of stock */
+hbar('c-oos',D.subs.filter(x=>x.k!=='Unclassified'&&x.views>1500).sort((a,b)=>b.oosPct-a.oosPct).slice(0,10)
+  .map(x=>({k:x.k.length>26?x.k.slice(0,25)+'…':x.k,v:x.oosPct,color:x.oosPct>15?'var(--s2)':'var(--s1)',
+    note:fi(x.oosSkus)+' sold-out SKUs · '+fi(x.views)+' views',
+    rows:[['Views on sold-out SKUs',f1(x.oosPct)+'%'],['Total views',fi(x.views)],['Sold-out SKUs',fi(x.oosSkus)],['Conversion',f2(x.cvr)+'%']]})),
+ {H:340,max:42,fmt:v=>f1(v)+'%',L:190});
+/* site search */
+(function(){
+ const f=D.search.filter(x=>x.verdict!=='LIVE').sort((a,b)=>b.sessions-a.sessions).slice(0,12);
+ hbar('c-search',f.map(x=>({k:x.term.length>24?x.term.slice(0,23)+'…':x.term,v:x.sessions,
+   color:x.verdict==='NO RANGE'?'var(--s2)':'var(--warn)',
+   note:x.verdict==='NO RANGE'?'nothing returned':(x.verdict==='THIN ONLINE'?'only '+x.live+' live SKUs':x.cat+' in catalogue, none live'),
+   rows:[['Sessions searching this',fi(x.sessions)],['Live matching products',fi(x.live)],['Products in the catalogue',fi(x.cat)],['Verdict',x.verdict]]})),
+  {H:340,fmt:v=>fi(v),L:190,R:66});
+})();
+</script>
+
+</body>
+</html>
