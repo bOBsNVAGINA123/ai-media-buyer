@@ -1398,7 +1398,7 @@ def anon_partner_ids():
 def pull_pos_customers():
     """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
-    bnr = {}; bstat = {}; bun = {}
+    bnr = {}; bstat = {}; bun = {}; bnrd = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
     VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
@@ -1473,22 +1473,23 @@ def pull_pos_customers():
         for pid, d, br, mg, oid, rv, qy in rows:
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
+            cd = bnrd.setdefault(br, {}).setdefault(d, {"nc": 0, "rc": 0, "nrev": 0, "rrev": 0, "nord": 0, "rord": 0})
             isNew = pid not in newSeen and first[pid][0] == d and first[pid][1] == br
-            if isNew: newSeen.add(pid); c["nc"] += 1
+            if isNew: newSeen.add(pid); c["nc"] += 1; cd["nc"] += 1
             newOrd = oid and (pid, oid, "b") not in ordSeen
             if newOrd: ordSeen.add((pid, oid, "b"))
             # v6.5: revenue and order counts split by FIRST-DAY (a customer's whole first-day basket
             # is new-customer money, not just its first line -- ng/rg kept as-is for continuity)
             isFD = first[pid][0] == d and first[pid][1] == br
-            if isFD: c["nrev"] = c.get("nrev", 0) + round(rv)
-            else: c["rrev"] = c.get("rrev", 0) + round(rv)
+            if isFD: c["nrev"] = c.get("nrev", 0) + round(rv); cd["nrev"] += round(rv)
+            else: c["rrev"] = c.get("rrev", 0) + round(rv); cd["rrev"] += round(rv)
             if newOrd:
-                if isFD: c["nord"] = c.get("nord", 0) + 1
-                else: c["rord"] = c.get("rord", 0) + 1
+                if isFD: c["nord"] = c.get("nord", 0) + 1; cd["nord"] += 1
+                else: c["rord"] = c.get("rord", 0) + 1; cd["rord"] += 1
             if isNew: c["ng"] += round(mg)
             else:
                 if newOrd:
-                    c["rc"] += 1
+                    c["rc"] += 1; cd["rc"] += 1
                     if ordNet.get((pid, oid), 0) > 0: c["rcx"] = c.get("rcx", 0) + 1
                 c["rg"] += round(mg)
         # branch cohorts: LTGP per customer acquired at each branch, by cohort month
@@ -1724,6 +1725,20 @@ def pull_pos_customers():
             ":: cat slices", len(CUBE["cat"]))
         log("deciles", {sc: len(v) for sc, v in XTRA["dec"].items()}, "lag gaps", sum(lagH))
         bun = {b: {m: len(v) for m, v in ms.items()} for b, ms in bun.items()}
+        # daily per-branch new/returning, packed as arrays so any window can be summed on the client
+        _d0 = END - datetime.timedelta(days=399); _n = (END - _d0).days + 1
+        bnrDaily = {}
+        for _br, _days in bnrd.items():
+            _z = {k: [0] * _n for k in ("nc", "rc", "nrev", "rrev", "nord", "rord")}
+            for _ds, _v in _days.items():
+                try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
+                except Exception: continue
+                if 0 <= _i < _n:
+                    for k in _z: _z[k][_i] += _v.get(k, 0)
+            bnrDaily[_br] = _z
+        bnrDaily["_w"] = {"start": _d0.isoformat(), "n": _n}
+        globals()["_BNRD"] = bnrDaily
+        log("branch daily NR", len(bnrDaily) - 1, "branches x", _n, "days")
         log("pos customers", len(first), "branches", list(bstat.keys()),
             "unregistered receipts", sum(sum(v.values()) for v in bun.values()))
         return bnr, bstat, bcoh, bun
@@ -2102,9 +2117,16 @@ def pull_google_attr():
     # v9.2: the ASSETS inside each PMax asset group. Google exposes NO per-asset
     # conversion metrics here -- only its own performance label -- so that is what we show.
     out["assets"] = []
-    for r in q("SELECT campaign.name, asset_group.name, asset_group_asset.field_type, "
-               "asset_group_asset.performance_label, asset.type, asset.name, asset.text_asset.text "
-               "FROM asset_group_asset WHERE asset_group_asset.status = 'ENABLED'"):
+    _arows = []
+    for _sel in ("campaign.name, asset_group.name, asset_group_asset.field_type, "
+                 "asset_group_asset.performance_label, asset.type, asset.name, asset.text_asset.text",
+                 # v9.7.18: v22 dropped performance_label (UNRECOGNIZED_FIELD, verified live)
+                 "campaign.name, asset_group.name, asset_group_asset.field_type, "
+                 "asset.type, asset.name, asset.text_asset.text",
+                 "campaign.name, asset_group.name, asset_group_asset.field_type, asset.type, asset.name"):
+        _arows = q("SELECT %s FROM asset_group_asset WHERE asset_group_asset.status = 'ENABLED'" % _sel)
+        if _arows: break
+    for r in _arows:
         a3 = r.get("asset", {}); ga = r.get("assetGroupAsset", {})
         txt = ((a3.get("textAsset") or {}).get("text") or a3.get("name") or "")[:80]
         out["assets"].append({"cmp": (r.get("campaign", {}).get("name") or "")[:50],
@@ -3874,7 +3896,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.17 (WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.18 (assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -4120,7 +4142,7 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
