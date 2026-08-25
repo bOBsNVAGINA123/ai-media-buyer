@@ -1596,6 +1596,33 @@ def pull_pos_customers():
             _da2, _doc2 = _wagg(rows, _cut)
             _bw[str(_wd)] = {sc: _bands(_da2[sc], _doc2.get(sc, {})) for sc in _da2}
         XTRA["decB"] = {"bands": VBANDS, "win": _bw, "asOf": END.isoformat()}
+        # ---- LIVE acquisition-hook brands: who a customer's FIRST EVER purchase came from,
+        # and what those customers turned out to be worth. Replaces the baked RT_D1 snapshot,
+        # so brands like Joie or Multicom appear the moment they acquire anyone.
+        try:
+            _all = [p for p in first if p in ltg]
+            _srt = sorted(_all, key=lambda p: -ltg.get(p, 0))
+            _d1 = set(_srt[:max(1, len(_srt) // 10)])
+            _base = (sum(ltg.get(p, 0) for p in _all) / len(_all)) if _all else 0
+            _hv = {}
+            for p in _all:
+                for _v in (PFV.get(p) or ()):
+                    e = _hv.setdefault(_v, {"n": 0, "g": [], "d1": 0})
+                    e["n"] += 1; e["g"].append(ltg.get(p, 0))
+                    if p in _d1: e["d1"] += 1
+            _out = []
+            for _v, e in _hv.items():
+                if e["n"] < 25: continue
+                g = sorted(e["g"]); md = g[len(g) // 2]
+                _out.append({"v": _v, "nm": (VNM.get(_v) or _v)[:40], "n": e["n"],
+                             "ltgp": round(md), "mean": round(sum(g) / len(g)),
+                             "d1": round(e["d1"] / e["n"] * 100, 1),
+                             "lift": round((e["d1"] / e["n"]) / 0.1, 2) if e["n"] else 0})
+            _out.sort(key=lambda x: -x["ltgp"])
+            XTRA["hookV"] = {"rows": _out[:40], "base": round(_base), "asOf": END.isoformat(), "minN": 25}
+            log("acquisition-hook brands", len(_out), "brands >=25 first-time buyers")
+        except Exception as _e:
+            log("hook brands fail", str(_e)[:120])
         log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
         XTRA["posagg"] = {p: (a[0], a[1]) for p, a in DA.get("ALL STORES", {}).items()}
         XTRA["vcs"] = VCS
@@ -3934,337 +3961,9 @@ def pull_salaries():
     return out
 
 
-AUDIT_WINDOWS = (7, 30, 90, 365)
-PSEUDO = [23, 24, 88727, 226155]          # shipping / discount pseudo-products
-
-
-# --------------------------------------------------------------------- shopify
-def _audit_shopify_live(shopify_bulk):
-    """{barcode: True} for every barcode with at least one ACTIVE+published product.
-
-    shopify_bulk(query) -> list of JSONL rows; injected so this stays testable."""
-    rows = shopify_bulk("""
-    { products { edges { node {
-        id status publishedAt
-        variants { edges { node { sku barcode } } } } } } }""")
-    prods, live = {}, {}
-    kids = {}
-    for o in rows:
-        # Bulk JSONL mixes parent and child rows. Variant rows only carry the fields the
-        # query asked for -- this one does not ask for the variant id -- so `id` is absent
-        # on them and must never be indexed directly. A child is anything with __parentId.
-        oid = o.get("id") or ""
-        if oid.startswith("gid://shopify/Product/"):
-            prods[oid] = o
-        elif o.get("__parentId"):
-            kids.setdefault(o["__parentId"], []).append(o)
-    for pid, node in prods.items():
-        ok = node.get("status") == "ACTIVE" and node.get("publishedAt")
-        for v in kids.get(pid, []):
-            for k in {(v.get("sku") or "").strip(), (v.get("barcode") or "").strip()}:
-                if k:
-                    live[k] = live.get(k, False) or bool(ok)
-    return live
-
-
-# ----------------------------------------------------------------------- odoo
-def _audit_products(oexec):
-    """Every active product with the fields the audit joins on."""
-    F = ["barcode", "default_code", "categ_id", "related_vendor_id",
-         "qty_available", "standard_price", "name", "create_date"]
-    out, off = {}, 0
-    while True:
-        r = oexec("product.product", "search_read", [[["active", "=", True]]],
-                  {"fields": F, "limit": 2000, "offset": off, "order": "id"})
-        if not r:
-            break
-        for p in r:
-            out[p["id"]] = p
-        off += len(r)
-        if len(r) < 2000:
-            break
-    return out
-
-
-def _audit_sales(ogroup, since):
-    """Per-product in-store and online revenue/GP since `since`."""
-    off = {r["product_id"][0]: r for r in ogroup(
-        "report.pos.order", [["date", ">=", since + " 00:00:00"]],
-        ["price_total", "margin", "product_qty"], ["product_id"]) if r.get("product_id")}
-    on = {r["product_id"][0]: r for r in ogroup(
-        "sale.order.line",
-        [["order_id.state", "in", ["sale", "done"]],
-         ["order_id.team_id.name", "=", "Shopify"], ["display_type", "=", False],
-         ["product_id", "not in", PSEUDO], ["create_date", ">=", since + " 00:00:00"]],
-        ["price_subtotal", "margin", "product_uom_qty"], ["product_id"]) if r.get("product_id")}
-    return off, on
-
-
-def _audit_receipts(oexec, since):
-    """Goods booked in from a supplier location. picking_code is not SQL-queryable and
-       picking-type names are inconsistent, so the source location's usage is the only
-       reliable definition of 'this arrived from a vendor'."""
-    dom = [["state", "=", "done"], ["date", ">=", since + " 00:00:00"],
-           ["location_id.usage", "=", "supplier"]]
-    out, off = [], 0
-    while True:
-        r = oexec("stock.move", "search_read", [dom],
-                  {"fields": ["product_id", "product_qty", "price_unit", "date"],
-                   "limit": 5000, "offset": off, "order": "id"})
-        if not r:
-            break
-        out += r
-        off += len(r)
-        if len(r) < 5000:
-            break
-    return out
-
-
-# ------------------------------------------------------------------ the block
-def build_audit(oexec, ogroup, shopify_bulk, today, log=lambda *a: None):
-    today = today if isinstance(today, datetime.date) else datetime.date.fromisoformat(today)
-    d365 = (today - datetime.timedelta(days=365)).isoformat()
-
-    live = _audit_shopify_live(shopify_bulk)
-    log("audit :: shopify barcodes", len(live))
-    prods = _audit_products(oexec)
-    log("audit :: odoo products", len(prods))
-    recs = _audit_receipts(oexec, d365)
-    log("audit :: receipt lines", len(recs))
-
-    def vname(p):
-        v = p.get("related_vendor_id")
-        return (v[1] if isinstance(v, list) else str(v)) if v else "(no vendor)"
-
-    def cname(p):
-        c = p.get("categ_id")
-        return (c[1] if isinstance(c, list) else "?") if c else "?"
-
-    # ---- stock snapshot, split owned vs consigned -------------------------
-    inv = {}
-    for pid, p in prods.items():
-        q, c = p.get("qty_available") or 0, p.get("standard_price") or 0
-        if q <= 0:
-            continue
-        cat = cname(p)
-        a = inv.setdefault(vname(p), {"own": 0.0, "cons": 0.0, "units": 0.0, "skus": 0})
-        a["cons" if "Consignment" in cat else "own"] += q * c
-        a["units"] += q
-        a["skus"] += 1
-
-    # ---- receipts by vendor and by category, per window -------------------
-    vrec, crec = {}, {}
-    last = {}
-    for r in recs:
-        if not r.get("product_id"):
-            continue
-        p = prods.get(r["product_id"][0])
-        if not p:
-            continue
-        val = (r.get("product_qty") or 0) * (r.get("price_unit") or 0)
-        d = datetime.date.fromisoformat(r["date"][:10])
-        age = (today - d).days
-        v, cat = vname(p), cname(p).replace(" (Consignment)", "")
-        if v not in last or d > last[v]:
-            last[v] = d
-        for w in AUDIT_WINDOWS:
-            if age <= w:
-                vrec.setdefault(v, {}).setdefault(str(w), 0.0)
-                vrec[v][str(w)] += val
-                crec.setdefault(cat, {}).setdefault(str(w), 0.0)
-                crec[cat][str(w)] += val
-
-    # ---- sales + listing coverage, per window -----------------------------
-    listing, vsale, csale, vgp = {}, {}, {}, {}
-    off365 = {}
-    gaps = []
-    for w in AUDIT_WINDOWS:
-        since = (today - datetime.timedelta(days=w)).isoformat()
-        off, on = _audit_sales(ogroup, since)
-        if w == 365:
-            off365 = off
-        st = {"LIVE": [0, 0.0, 0.0], "UNPUB": [0, 0.0, 0.0], "ABSENT": [0, 0.0, 0.0]}
-        cov = {}
-        for pid, r in off.items():
-            p = prods.get(pid)
-            if not p:
-                continue
-            bc = (p.get("barcode") or p.get("default_code") or "").strip()
-            k = "LIVE" if live.get(bc) else ("UNPUB" if bc in live else "ABSENT")
-            st[k][0] += 1
-            st[k][1] += r["price_total"]
-            st[k][2] += r["margin"]
-            cat = cname(p).replace(" (Consignment)", "")
-            c = cov.setdefault(cat, {"rev": 0.0, "gap": 0.0, "skus": 0, "gapSkus": 0, "gapStock": 0.0})
-            c["rev"] += r["price_total"]
-            c["skus"] += 1
-            if k != "LIVE":
-                c["gap"] += r["price_total"]
-                c["gapSkus"] += 1
-                c["gapStock"] += (p.get("qty_available") or 0) * (p.get("standard_price") or 0)
-            v = vsale.setdefault(vname(p), {}).setdefault(str(w), [0.0, 0.0, 0.0])
-            v[0] += r["price_total"]; v[1] += r["margin"]
-            if k != "LIVE":
-                v[2] += r["price_total"]
-            cc = csale.setdefault(cat, {}).setdefault(str(w), [0.0, 0.0, 0.0, 0.0])
-            cc[0] += r["price_total"]; cc[1] += r["margin"]
-        for pid, r in on.items():
-            p = prods.get(pid)
-            if not p:
-                continue
-            cat = cname(p).replace(" (Consignment)", "")
-            cc = csale.setdefault(cat, {}).setdefault(str(w), [0.0, 0.0, 0.0, 0.0])
-            cc[2] += r["price_subtotal"]; cc[3] += r["margin"]
-            v = vsale.setdefault(vname(p), {}).setdefault(str(w), [0.0, 0.0, 0.0])
-            v[0] += r["price_subtotal"]; v[1] += r["margin"]
-        listing[str(w)] = {"state": {k: [v[0], round(v[1]), round(v[2])] for k, v in st.items()},
-                           "cat": {k: {kk: round(vv) for kk, vv in v.items()} for k, v in cov.items()}}
-        if w == 30:                                   # the priority list is a 30-day read
-            for pid, r in sorted(off.items(), key=lambda x: -x[1]["margin"]):
-                p = prods.get(pid)
-                if not p:
-                    continue
-                bc = (p.get("barcode") or p.get("default_code") or "").strip()
-                if live.get(bc):
-                    continue
-                try:
-                    age = (today - datetime.date.fromisoformat(str(p.get("create_date"))[:10])).days
-                except Exception:
-                    age = 9999
-                stock = p.get("qty_available") or 0
-                gaps.append({"n": (p.get("name") or "")[:58], "b": bc,
-                             "c": cname(p), "v": vname(p),
-                             "r": round(r["price_total"]), "g": round(r["margin"]),
-                             "q": round(r["product_qty"]), "s": round(stock),
-                             "sv": round(stock * (p.get("standard_price") or 0)),
-                             "a": age, "st": "UNPUB" if bc in live else "ABSENT"})
-
-    gaps.sort(key=lambda x: -(x["g"] * (1.35 if x["a"] <= 120 else 1.0) * (1 if x["s"] > 0 else .25)))
-
-    # ---- vendor <-> category mix, for the intake index --------------------
-    # Built from the 365-day pass above, so no extra round trip.
-    vcat, catgp = {}, {}
-    for pid, r in (off365 or {}).items():
-        p = prods.get(pid)
-        if not p:
-            continue
-        cat = cname(p).replace(" (Consignment)", "")
-        v = vname(p)
-        vcat.setdefault(v, {}).setdefault(cat, 0.0)
-        vcat[v][cat] += r["price_total"]
-        catgp[cat] = catgp.get(cat, 0.0) + r["margin"]
-        vgp.setdefault(v, {}).setdefault(cat, 0.0)
-        vgp[v][cat] += r["margin"]
-
-    # ---- vendor rows -------------------------------------------------------
-    vendors = []
-    for v, iv in inv.items():
-        s365 = (vsale.get(v) or {}).get("365") or [0, 0, 0]
-        rev, gp = s365[0], s365[1]
-        own = iv["own"]
-        cogsMo = (rev - gp) / 12 if rev > gp else 0
-        gmroi = round(gp / own, 2) if own > 50000 else None
-        cover = round(own / cogsMo, 1) if own > 50000 and cogsMo else None
-        gm = round(gp / rev * 100, 1) if rev else 0
-        rr = vrec.get(v) or {}
-        lastd = last.get(v)
-        days = (today - lastd).days if lastd else None
-        mix = vcat.get(v) or {}
-        cat = max(mix, key=mix.get) if mix else "?"
-        ci = (crec.get(cat) or {}).get("90", 0)
-        share = (rr.get("90", 0) / ci) if ci else 0
-        gshare = ((vgp.get(v) or {}).get(cat, 0) / catgp[cat]) if catgp.get(cat) else 0
-        idx = round(share / gshare, 2) if gshare > 0.001 and share > 0 else None
-        model = "Consignment" if own < 50000 and rev > 200000 else "Owned stock"
-        if model == "Consignment":
-            verdict = "WIDEN \u2014 no capital at risk" if gm >= 20 else "RENEGOTIATE MARGIN"
-        elif gmroi is None:
-            verdict = "TOO SMALL TO RANK"
-        elif gmroi < 1.0 or (cover and cover > 6):
-            verdict = "STOP BUYING \u2014 work the stock down"
-        elif gmroi >= 2.5 and cover and cover < 2.5:
-            verdict = "BUY MORE \u2014 starved"
-        elif gm < 20:
-            verdict = "FIX MARGIN BEFORE REORDERING"
-        elif gmroi < 2.0 and idx and idx > 1.4:
-            verdict = "OVER-BOUGHT vs category \u2014 pause"
-        else:
-            verdict = "HOLD"
-        rel = round(max(0, own - cogsMo * 3)) if verdict.startswith(("STOP", "OVER")) else 0
-        dep = round(max(0, cogsMo * 2.5 - own)) if verdict.startswith("BUY MORE") else 0
-        vendors.append({"v": v, "cat": cat, "model": model, "verdict": verdict,
-                        "own": round(own), "cons": round(iv["cons"]),
-                        "units": round(iv["units"]), "skus": iv["skus"],
-                        "rev": round(rev), "gp": round(gp), "gm": gm,
-                        "gmroi": gmroi, "cover": cover, "idx": idx,
-                        "last": lastd.isoformat() if lastd else None, "days": days,
-                        "r7": round(rr.get("7", 0)), "r30": round(rr.get("30", 0)),
-                        "r90": round(rr.get("90", 0)), "r365": round(rr.get("365", 0)),
-                        "gapRev": round(s365[2]), "rel": rel, "dep": dep})
-    vendors.sort(key=lambda x: -x["rev"])
-
-    return {"pulled": today.isoformat(), "windows": list(AUDIT_WINDOWS),
-            "listing": listing, "gaps": gaps[:400], "gapsN": len(gaps),
-            "vendors": vendors[:400],
-            "catIntake": {k: {kk: round(vv) for kk, vv in v.items()} for k, v in crec.items()},
-            "catSales": {k: {kk: [round(x) for x in vv] for kk, vv in v.items()} for k, v in csale.items()},
-            "invTotal": {"own": round(sum(i["own"] for i in inv.values())),
-                         "cons": round(sum(i["cons"] for i in inv.values()))}}
-
-
-# ============================================================ COMMERCIAL AUDIT
-# Feeds the four Audit tabs. Everything with a daily series (revenue, sessions,
-# spend) is summed in the browser so those tabs obey the range bar; this block only
-# produces the per-SKU joins no daily series can carry -- the Shopify-vs-Odoo listing
-# gap, vendor GMROI, and goods-received recency. ~4-5 minutes of the sync budget.
-
-def _audit_bulk(query):
-    """Run a Shopify bulk operation and return its JSONL rows. The whole catalogue is
-       70k+ variants -- paging the GraphQL API would take hundreds of calls, a bulk op
-       takes one and a poll."""
-    store = os.environ.get("SHOPIFY_STORE", "").strip()
-    tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
-    if not store or not tok:
-        log("audit :: SHOPIFY_STORE/SHOPIFY_TOKEN missing -- listing gap skipped")
-        return []
-    host = store if "." in store else store + ".myshopify.com"
-    ver = (_shopify_versions(host, tok) or ["2025-07"])[0]
-    url = "https://%s/admin/api/%s/graphql.json" % (host, ver)
-    hd = {"X-Shopify-Access-Token": tok}
-    mut = ('mutation { bulkOperationRunQuery(query: """%s""") '
-           '{ bulkOperation { id status } userErrors { field message } } }' % query)
-    d = http_json(url, {"query": mut}, hd)
-    errs = (((d or {}).get("data") or {}).get("bulkOperationRunQuery") or {}).get("userErrors") or []
-    if errs:
-        log("audit :: bulk op refused", json.dumps(errs)[:200]); return []
-    for _ in range(60):
-        time.sleep(5)
-        q = http_json(url, {"query": "{ currentBulkOperation { status url errorCode objectCount } }"}, hd)
-        cur = (((q or {}).get("data") or {}).get("currentBulkOperation") or {})
-        if cur.get("status") == "COMPLETED":
-            if not cur.get("url"):
-                log("audit :: bulk op completed with no file (empty catalogue?)"); return []
-            raw = urllib.request.urlopen(cur["url"], timeout=180).read().decode("utf-8")
-            rows = [json.loads(x) for x in raw.split("\n") if x.strip()]
-            log("audit :: bulk op returned", len(rows), "rows")
-            return rows
-        if cur.get("status") in ("FAILED", "CANCELED", "EXPIRED"):
-            log("audit :: bulk op", cur.get("status"), cur.get("errorCode")); return []
-    log("audit :: bulk op still running after 5 minutes -- giving up this cycle")
-    return []
-
-
-def pull_audit():
-    XTRA["audit"] = build_audit(oexec, ogroup, _audit_bulk, today, log)
-    a = XTRA["audit"]
-    log("audit :: vendors", len(a.get("vendors") or []), "gap SKUs", a.get("gapsN"),
-        "owned stock", (a.get("invTotal") or {}).get("own"))
-    return a
-
-
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.19 (comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.20 (LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -4519,13 +4218,12 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "why": safe(pull_why) or prev.get("why") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
               "cvr": XTRA.get("cvr") or prev.get("cvr") or {},
-              "audit": (safe(pull_audit) or prev.get("audit") or {}),
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
