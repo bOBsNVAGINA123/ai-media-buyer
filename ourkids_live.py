@@ -3950,10 +3950,14 @@ def _audit_shopify_live(shopify_bulk):
     prods, live = {}, {}
     kids = {}
     for o in rows:
-        if o["id"].startswith("gid://shopify/Product/"):
-            prods[o["id"]] = o
-        else:
-            kids.setdefault(o.get("__parentId"), []).append(o)
+        # Bulk JSONL mixes parent and child rows. Variant rows only carry the fields the
+        # query asked for -- this one does not ask for the variant id -- so `id` is absent
+        # on them and must never be indexed directly. A child is anything with __parentId.
+        oid = o.get("id") or ""
+        if oid.startswith("gid://shopify/Product/"):
+            prods[oid] = o
+        elif o.get("__parentId"):
+            kids.setdefault(o["__parentId"], []).append(o)
     for pid, node in prods.items():
         ok = node.get("status") == "ACTIVE" and node.get("publishedAt")
         for v in kids.get(pid, []):
