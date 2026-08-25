@@ -1,0 +1,68 @@
+name: Audit Tabs Guard
+
+# docs/ourkids/index.html is edited by several sessions at once. Three times in two days a
+# session pushed it from a stale working copy and silently deleted the four Audit tabs.
+# Rather than restore them by hand each time, this re-applies the hooks after every push.
+# tools/audit_install.py is idempotent and only ADDS -- it never removes anyone else's work,
+# so a session that clobbers the tabs keeps its own changes and gets the tabs back.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/ourkids/index.html"
+      - "docs/ourkids/audit_tabs.js"
+      - "tools/audit_install.py"
+      - ".github/workflows/audit-guard.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ourkids-audit-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Re-apply the Audit tab hooks
+        id: fix
+        run: python3 tools/audit_install.py | tee "$RUNNER_TEMP/r.txt"
+
+      # Never commit a file that does not parse. The first version of the installer ate the
+      # ]; that closes TABGROUPS and every substring check still passed, so the gate is a
+      # real parse of both the inline block and the tab file.
+      - name: Syntax gate
+        run: |
+          python3 - <<'PY'
+          s = open("docs/ourkids/index.html", encoding="utf-8").read()
+          i = s.rindex("<script>"); j = s.index("</script>", i)
+          open("/tmp/inline.js", "w", encoding="utf-8").write(s[i+8:j])
+          PY
+          node --check /tmp/inline.js
+          node --check docs/ourkids/audit_tabs.js
+          echo "both parse"
+
+      - name: Commit if the tabs had been removed
+        run: |
+          if grep -q UNCHANGED "$RUNNER_TEMP/r.txt"; then echo "tabs intact, nothing to do"; exit 0; fi
+          git config user.name  "ourkids-audit-guard"
+          git config user.email "bot@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git add docs/ourkids/index.html
+            if git diff --cached --quiet; then echo "nothing staged"; exit 0; fi
+            git commit -q -m "guard: re-apply the Audit tab hooks after they were removed by a concurrent push"
+            if git push origin HEAD:main --quiet; then echo "restored on attempt $i"; exit 0; fi
+            git fetch origin main --quiet || true
+            git checkout -f -B main origin/main --quiet || true
+            python3 tools/audit_install.py || exit 1
+          done
+          echo "::warning title=Audit tabs not restored::five attempts lost the push race"
