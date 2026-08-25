@@ -1,0 +1,71 @@
+name: Commercial Audit
+
+# Writes docs/ourkids/audit.json -- the per-SKU joins behind the four Audit tabs.
+# Deliberately separate from the OurKids Live Dashboard workflow: that job rewrites
+# data.js wholesale, so anything merged into it by another session is lost. This owns
+# one output file that nothing else writes, which is why it survives.
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"      # every 6h at :41 -- off :00 (GitHub drops those) and off the :23 dashboard slot
+  push:
+    branches: [main]
+    paths:
+      - "tools/audit_collect.py"
+      - ".github/workflows/audit.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ourkids-audit
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build audit.json
+        env:
+          ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:      ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:   ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY:  ${{ secrets.ODOO_APIKEY }}
+          SHOPIFY_STORE:       ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:       ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+        run: python tools/audit_collect.py
+
+      # Always commit: audit_status.json carries the reason even when the build failed,
+      # and a failed build leaves the last good audit.json in place rather than blanking it.
+      # Always commit: audit_status.json carries the reason even when the build failed, and a
+      # failed build leaves the last good audit.json in place rather than blanking it.
+      # The outputs are stashed OUTSIDE the repo first, because the re-sync below does a hard
+      # checkout that would otherwise delete the very files we just generated.
+      - name: Commit
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cp -f docs/ourkids/audit.json        "$RUNNER_TEMP/out/" 2>/dev/null || true
+          cp -f docs/ourkids/audit_status.json "$RUNNER_TEMP/out/" 2>/dev/null || true
+          git config user.name  "ourkids-audit"
+          git config user.email "bot@users.noreply.github.com"
+          for i in 1 2 3 4 5 6; do
+            git fetch origin main --quiet || true
+            git checkout -f -B main origin/main --quiet || { sleep $((i*5)); continue; }
+            cp -f "$RUNNER_TEMP/out/audit.json"        docs/ourkids/audit.json        2>/dev/null || true
+            cp -f "$RUNNER_TEMP/out/audit_status.json" docs/ourkids/audit_status.json 2>/dev/null || true
+            git add docs/ourkids/audit.json docs/ourkids/audit_status.json || true
+            if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+            git commit -q -m "audit: refresh audit.json $(date -u +'%Y-%m-%d %H:%M UTC')"
+            if git push origin HEAD:main --quiet; then echo "pushed on attempt $i"; exit 0; fi
+            echo "attempt $i lost the race, re-syncing"
+          done
+          echo "::warning title=audit.json not committed::six attempts lost the push race"
