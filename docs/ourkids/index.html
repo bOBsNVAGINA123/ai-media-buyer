@@ -1218,6 +1218,13 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1,nfP=o.gross[1]?1-o.ref[1]/o.gross[1]:1;
   o.onp=[o.gp[0]*nf-sp-ep,spc!=null?o.gp[1]*nfP-spc-epP:null];
   o.atc=[aAvg('atcRatio',ra),rc?aAvg('atcRatio',rc):null];o.cko=[aAvg('checkoutRatio',ra),rc?aAvg('checkoutRatio',rc):null];o.cvr=[aAvg('cvr',ra),rc?aAvg('cvr',rc):null];}
+ /* Everything above is only computed when the range overlaps the ad panel. Cards that read
+    those keys are marked ad:1 and their BODY is swapped for a notice, but the card sorter and
+    the expand view call k(o) regardless, so a range starting before the ad data (pre-2025-08)
+    threw on o.onp[0] and took the whole Overview tab down. Default the ad-derived keys the
+    card specs actually index into. */
+ ('onp amer ncaov rcaov bcpp atc cko cvr ncrev rcrev msp gsp tsp sp nc rcn mroas groas '
+  +'troas totRoas cpp sess instore offv').split(' ').forEach(function(k){if(!o[k])o[k]=[null,null];});
  return o;}
 function fSeriesR(k,s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const m=SHOPMAP[k],A=(m&&O.shop&&O.shop[m])?O.shop[m]:O.fin[k];const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push((A[i]||0)*(SC[k]||1));}return{L,d};}
 function fNetR(s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push(((O.fin.rev[i]||0)-(O.fin.refund[i]||0))*1000);}return{L,d};}
@@ -1380,6 +1387,10 @@ function cards(){CARDS=[
    blended ROAS, spend, CAC) -> WHY (per-platform CPP, LTGP) -> WHO (customers, channels) */
 const _abFront=['ins','kv','rev','np','gp','gpp','mer','broas','sp','cac','cppx','ltg','tr','is','ch','ord','nvr','olyoy'];CARDS.sort((a,b)=>((_abFront.indexOf(a.id)+1||99)-(_abFront.indexOf(b.id)+1||99)));if(!(O.fin&&O.fin.cxsv))CARDS=CARDS.filter(c=>c.id!=='cx');ST.ord=CARDS.map(c=>c.id);}
 function kCompact(v,fmt,f){if(fmt==='cur'||fmt==='n'){const a=Math.abs(v);if(a>=1e6)return (fmt==='cur'?'E£ ':'')+(v/1e6).toFixed(2).replace(/\.?0+$/,'')+'M';if(a>=1e5)return (fmt==='cur'?'E£ ':'')+Math.round(v/1e3).toLocaleString()+'k';}return f(v);}
+/* A range outside the ad panel leaves ad-derived keys unset. Cards that need them already
+   swap their body for a notice, but their KPI header and expand view still call k(o) and a
+   single missing key used to throw and blank the whole tab. */
+function kSafe(c,o){try{return c.k(o)||[];}catch(e){return [];}}
 function kH(l,src){return l.map(k=>{const d=dl(k[1],k[2],k[4]!==0),f=FM[k[3]]||fI;const has=k[1]!=null&&isFinite(k[1]);const parts=String(d.t).split(' vs ');return `<div class="kpi"><div class="l">${k[0]}${QF(k[0],src)}</div><div class="v" title="${has?f(k[1]):''}">${has?kCompact(k[1],k[3],f):'—'}</div><div class="d ${d.cls}" title="${parts[1]?'vs '+parts[1]:''}">${parts[0]}${k[2]!=null&&isFinite(k[2])?`<span class="pv">prev ${kCompact(k[2],k[3],f)}${parts[1]?' · '+parts[1].replace(/^prev\s*/,''):''}</span>`:''}</div></div>`;}).join('');}
 
 function draw(cv,cfg,big,cid){
@@ -1459,15 +1470,15 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  try{ovCard(g);}catch(e){}
  try{paceCard(g);}catch(e){}
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
- if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;const k=c.k(o)[0];if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
+ if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;let k;try{k=c.k(o)[0];}catch(e){return -1e9;}if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
  ord.forEach(id=>{const _pl=PREVLBL;(function(o){const c=by(id),el=document.createElement('div');el.className='card'+(c.full?' full':'');if(c.a)el.dataset.a=c.a;el.dataset.id=id;const na=c.ad&&!o.ad;let b;
   if(c.ins)b=insHTML(o);
   else if(na)b='<div class="cv" style="display:flex;align-items:center;justify-content:center;color:#7c869c;font-size:12px">No ad data in this range · ads cover '+O.aw[0]+' → '+O.aw[1]+'</div>';
   else if(c.chan){const t=Object.values(o.ch).reduce((a,x)=>a+Math.max(0,x),0)||1;
    b='<div class="chan">'+Object.keys(o.ch).map(n=>{const v=o.ch[n],vp=o.chP[n],d=dl(v,vp,1);return `<div class="r"><div class="n">${n}</div><div class="t"><div class="f" style="width:${Math.max(0,v/t*100).toFixed(1)}%;background:${CHC[n]||C.blue}"></div></div><div class="vl" style="${v<0?'color:#e23a63':''}">E£ ${Math.round(v).toLocaleString()} <span class="${d.cls}" style="font-size:10px">${d.t.replace(' vs prev','')}</span></div></div>`;}).join('')+'</div>';}
   else if(c.html)b=c.html(o);
-  else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(c.k(o),c.src)+'</div>';
-  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(c.k(o),c.src)}</div></div>${b}${(DCS[id]&&!na)?DCS[id](o):''}`;
+  else if(c.c)b='<div class="cv"><canvas></canvas></div><div class="lgd"></div>';else b='<div class="kgrid">'+kH(kSafe(c,o),c.src)+'</div>';
+  el.innerHTML=`<span class="drag" draggable="true">⋮⋮</span><span class="xp" title="Expand">⤢</span><div class="chead"><div><div class="ct">${c.t}${c.a&&c.a!=='ins'?`<span class="bg b-${c.a}">${c.a}</span>`:''}<span class="info" data-t="${(O.src[c.src]||'').replace(/"/g,'&quot;')}">i</span></div><div class="cs">${c.cs}</div>${cwBar(id)}</div><div class="kpis">${b&&b.indexOf('kgrid')>0?'':kH(kSafe(c,o),c.src)}</div></div>${b}${(DCS[id]&&!na)?DCS[id](o):''}`;
   g.appendChild(el);
   el.querySelector('.xp').onclick=()=>expand(c,o);
   if(c.mount&&!na)setTimeout(()=>{try{c.mount(el,o);}catch(e){}},0);
@@ -1759,7 +1770,7 @@ function expand(c,o){
  if(c.ins)body=insHTML(o);
  else if(c.chan){const t=Object.values(o.ch).reduce((a,x)=>a+Math.max(0,x),0)||1;body='<table class="bt"><tr><th>Channel</th><th>This period</th><th>Previous</th><th>Change</th><th>Share</th></tr>'+Object.keys(o.ch).map(n=>{const d=dl(o.ch[n],o.chP[n]);return `<tr><td>${n}</td><td>${fC(o.ch[n])}</td><td>${fC(o.chP[n])}</td><td class="${d.cls}">${d.t}</td><td>${(o.ch[n]/t*100).toFixed(1)}%</td></tr>`;}).join('')+'</table>';}
  else if(c.c)body='<div style="position:relative;height:55vh"><canvas id="mcv"></canvas></div>';
- else body='<table class="bt"><tr><th>Metric</th><th>This period</th><th>Previous</th></tr>'+c.k(o).map(k=>{const f=FM[k[3]]||fI;return `<tr><td>${k[0]}${QF(k[0],c.src)}</td><td>${k[1]==null?'—':f(k[1])}</td><td>${k[2]==null?'—':f(k[2])}</td></tr>`;}).join('')+'</table>';
+ else body='<table class="bt"><tr><th>Metric</th><th>This period</th><th>Previous</th></tr>'+kSafe(c,o).map(k=>{const f=FM[k[3]]||fI;return `<tr><td>${k[0]}${QF(k[0],c.src)}</td><td>${k[1]==null?'—':f(k[1])}</td><td>${k[2]==null?'—':f(k[2])}</td></tr>`;}).join('')+'</table>';
  w.innerHTML=`<div class="modal" onclick="if(event.target===this)this.parentNode.innerHTML=''"><div class="mbox"><span class="mx" onclick="document.getElementById('mwrap').innerHTML=''">✕</span><div class="ct" style="margin-bottom:2px">${c.t}</div><div class="cs" style="margin-bottom:12px">${ST.s} → ${ST.e} · ${(O.src[c.src]||'')}</div>${body}</div></div>`;
  if(c.c&&!c.chan&&!c.ins)draw(document.getElementById('mcv'),c.c(o),1,c.id);}
 function wDrag(g){let dg=null;g.querySelectorAll('.card').forEach(card=>{const h=card.querySelector('.drag');if(!h)return;h.addEventListener('dragstart',()=>{dg=card.dataset.id;card.classList.add('drg');});h.addEventListener('dragend',()=>{card.classList.remove('drg');dg=null;});card.addEventListener('dragover',e=>e.preventDefault());card.addEventListener('drop',e=>{e.preventDefault();if(!dg||dg===card.dataset.id)return;const o2=ST.ord,f=o2.indexOf(dg),t=o2.indexOf(card.dataset.id);o2.splice(f,1);o2.splice(t,0,dg);document.getElementById('so').value='def';rOn();});});}
@@ -5027,6 +5038,15 @@ function rShip2(g,mons,T,F,SH){
   {n:'Recovery, % of the courier bill customers cover',f:m=>s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:F.PCT,sh:1},
   null,
   {n:'COST OF FREE DELIVERY (allocated)',f:m=>s2free(m)?-s2free(m):null,fmt:SIG,sh:1,b:1,gd:-1,tt:'Courier bill x free-order share. The price of the offer, in pounds.'},
+  /* The table counted returned ORDERS and their lost revenue but never what the return itself
+     costs. A return is a second shipment with its own fee, and the outbound leg that carried it
+     was already paid for and earned nothing -- both legs belong here, month by month, next to
+     the free-delivery line. Straight from Bosta's own shipment records. */
+  null,
+  {n:'Return legs billed by the courier',f:m=>bRetLegs(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Return to Origin plus Customer Return Pickup shipments created that month, counted by Bosta.'},
+  {n:'  paid on the return leg',f:m=>bRetLegCost(m)?-bRetLegCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Return legs x the sampled fee for that shipment type.'},
+  {n:'  outbound leg that earned nothing',f:m=>bRetLegs(m)?-bRetLegs(m)*bFee('Send'):null,fmt:SIG,sh:1,gd:-1,tt:'You had already paid to send each of those parcels before it came back.'},
+  {n:'COST OF RETURNED ORDERS (both legs)',f:m=>{const v=bRetTotal(m);return v?-v:null;},fmt:SIG,sh:1,b:1,gd:-1,tt:'What returns cost you in courier fees alone. The lost product margin is a separate line above.'},
   {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
   {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
   {n:'Net delivery per confirmed order',f:m=>s2('conf',m)?(s2('col',m)-s2('cost',m))/s2('conf',m):null,fmt:SIG,sh:1},
@@ -5154,6 +5174,15 @@ function s2h(m){return S2f()&&S2If()[m]!=null;}
    type -- the same model that reconciles to 1.08 against twelve settled months. Posted always
    wins; the model only fills a silence. s2src() says which one a month is using so no card
    can present a model as an invoice. */
+/* Return economics per month, straight from the courier's own shipment records. Returns null
+   for months outside the pulled window so the table prints an em dash rather than a zero. */
+function bFee(t){const B=window.O&&O.bosta;return (B&&B.fees&&B.fees[t]&&B.fees[t].mean)||0;}
+function bRetLegs(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
+ const bt=B.months[m].byType||{};return (bt['Return to Origin']||0)+(bt['Customer Return Pickup']||0);}
+function bRetLegCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
+ const bt=B.months[m].byType||{};
+ return (bt['Return to Origin']||0)*bFee('Return to Origin')+(bt['Customer Return Pickup']||0)*bFee('Customer Return Pickup');}
+function bRetTotal(m){return bRetLegCost(m)+bRetLegs(m)*bFee('Send');}
 function bostaCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
  const bt=B.months[m].byType||{},F=B.fees||{};
  return Object.keys(bt).reduce((a,t)=>a+(bt[t]||0)*(((F[t]||{}).mean)||0),0);}
@@ -6450,7 +6479,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-182146';
+const BUILD='20260828-183753';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
