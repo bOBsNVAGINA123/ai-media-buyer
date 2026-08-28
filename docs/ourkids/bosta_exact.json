@@ -1,0 +1,68 @@
+{
+ "2026-08": {
+  "byType": {
+   "Customer Return Pickup": {
+    "n": 196,
+    "total": 15074,
+    "mean": 76.91,
+    "median": 71.0,
+    "min": 71.0,
+    "max": 126.0,
+    "ofN": 196,
+    "complete": true
+   },
+   "Return to Origin": {
+    "n": 669,
+    "total": 39868,
+    "mean": 59.59,
+    "median": 54.0,
+    "min": 51.0,
+    "max": 184.97,
+    "ofN": 666,
+    "complete": true
+   },
+   "Cash Collection": {
+    "n": 1,
+    "total": 51,
+    "mean": 51.0,
+    "median": 51.0,
+    "min": 51.0,
+    "max": 51.0,
+    "ofN": 1,
+    "complete": true
+   },
+   "Exchange": {
+    "n": 197,
+    "total": 16448,
+    "mean": 83.49,
+    "median": 79.0,
+    "min": 76.0,
+    "max": 131.0,
+    "ofN": 197,
+    "complete": true
+   },
+   "Send": {
+    "n": 637,
+    "total": 43369,
+    "mean": 68.08,
+    "median": 64.0,
+    "min": 61.0,
+    "max": 141.82,
+    "ofN": 5176,
+    "complete": false
+   }
+  },
+  "complete": [
+   "Customer Return Pickup",
+   "Return to Origin",
+   "Cash Collection",
+   "Exchange"
+  ],
+  "partial": [
+   "Send"
+  ],
+  "pricedN": 1700,
+  "ofN": 6236,
+  "total": null
+ }
+}
