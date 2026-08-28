@@ -93,7 +93,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="auC" class="hide"><div class="banner" id="bn_au"></div><div class="grid" id="g_au"></div></div><div id="avC" class="hide"><div class="banner" id="bn_av"></div><div class="grid" id="g_av"></div></div><div id="agC" class="hide"><div class="banner" id="bn_ag"></div><div class="grid" id="g_ag"></div></div><div id="aqC" class="hide"><div class="banner" id="bn_aq"></div><div class="grid" id="g_aq"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -115,6 +115,7 @@ function setAlloc(v){ALLOC=!!v;RDR();}
 /* v6.2 which branch the customer-mix bars are showing. '__all' = network. */
 let CMB='__all';
 function setCmb(v){CMB=v;RDR();}
+const DPRX=Math.min(2,window.devicePixelRatio||1);
 let O,FF,ch=[],TAB='on',IO=null,ST={s:null,e:null,at:'default',att:{meta:'default',google:'default',tt:'default'},cmp:'prev',ord:null,pm0:null,pm1:null,pcust:'nc'};
 /* v6.2 fK. Inside a 248px small-multiple panel a full "E£ 3,175,246" is 88px wide, so four
    of them on a 20-point line physically cannot avoid each other. fK prints the same number
@@ -950,8 +951,7 @@ const TABGROUPS=[
  ['Consumer',[['cp','Customer Portfolio'],['co','Cohorts'],['rt','Retention'],['lt','LTGP : CAC'],['cj','Journeys']]],
  ['Ads & Media',[['me','Media Efficiency'],['mi','Paid Insights'],['ce','Campaigns'],['ic','Incrementality'],['ao','Ads \u2192 Stores'],['mb','Creative Benchmarks'],['bg','Launches & Budgets'],['ab','\u2691 Advisory'],['si','\ud83d\udd0d Search Advisor'],['tk','TikTok']]],
  ['Finance & Ops',[['pl','Plan'],['cs','Costs & Payroll'],['vl','Vendors & Products']]],
- ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]]
 ];
 let TABGRP=0;
 function grpOf(t){for(let i=0;i<TABGROUPS.length;i++){if(TABGROUPS[i][1].some(x=>x[0]===t))return i;}return 0;}
@@ -973,8 +973,9 @@ function grainNote(t){try{
  if(!gid)return;const old=gid.querySelector('.grainN');if(old)old.remove();
  let msg='';
  if(MONTHTABS[t]){const a=(ST.s||'').slice(0,7),b=(ST.e||'').slice(0,7);
-  msg='<b>This tab is monthly.</b> Your range '+ST.s+' → '+ST.e+' is read as '+(a===b?('the month <b>'+a+'</b>'):('months <b>'+a+' → '+b+'</b>'))+
-   ' — the ledger behind it only exists per month, so moving dates <i>inside</i> one month will not change these numbers. Cross a month boundary and it moves.';}
+  msg='<b>This tab is monthly.</b> The ledger behind it only exists per month, so moving dates <i>inside</i> one month will not change these numbers.'
+   +(ST.pmAuto?(' Your range '+ST.s+' → '+ST.e+' covers a single month, and one point is not a chart — so these panels are showing <b>'+ST.pm0+' → '+ST.pm1+'</b>, the 12 months ending on the month you picked. Pick a range spanning 2+ months to control it directly.')
+     :(' Your range '+ST.s+' → '+ST.e+' is read as months <b>'+ST.pm0+' → '+ST.pm1+'</b>.'));}
  else if(FIXEDTABS[t]){
   msg='<b>This tab does not follow the date filter.</b> It reads '+FIXEDTABS[t]+'.';}
  else if(COHORTTABS[t]){
@@ -983,7 +984,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -991,7 +992,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -1042,7 +1043,12 @@ function syncBars(){
 let _ALLM=null;
 function _allM(){if(_ALLM)return _ALLM;const a=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);if(a[a.length-1]!==m)a.push(m);}return _ALLM=a;}
 function monEnd(m){let y=+m.slice(0,4),mo=+m.slice(5,7);mo++;if(mo>12){mo=1;y++;}const nf=y+'-'+String(mo).padStart(2,'0')+'-01';const d=addD(nf,-1);return d>O.aw[1]?O.aw[1]:d;}
-function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);ST.pm0=c(ST.s.slice(0,7));ST.pm1=c(ST.e.slice(0,7));}
+function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);ST.pm0=c(ST.s.slice(0,7));ST.pm1=c(ST.e.slice(0,7));
+ /* A range that lands inside one month gave the monthly tabs a single data point: 39 panels on
+    the Charts tab drew one dot and no line, which is not a chart. Widen backwards to a readable
+    trail ending on the month you picked, and flag it so the notice can say what it did. */
+ const i1=A.indexOf(ST.pm1);let i0=A.indexOf(ST.pm0);ST.pmAuto=0;
+ if(i1>=0&&i1-i0<2){const w=A[Math.max(0,i1-11)];if(w!==ST.pm0){ST.pm0=w;ST.pmAuto=1;}}}
 function markPre(){const last=lastD();document.querySelectorAll('.chip[onclick^="pre("]').forEach(ch2=>{const m=ch2.getAttribute('onclick').match(/pre\('([^']+)'\)/);if(!m)return;const p=m[1];let on=false;
  if(p==='mtd')on=ST.s===last.slice(0,8)+'01'&&ST.e===last;else if(p==='ytd')on=ST.s===last.slice(0,4)+'-01-01'&&ST.e===last;else if(+p>=9999)on=ST.s===(O.fin&&O.fin.start);else on=ST.e===last&&ST.s===addD(last,-(+p-1));
  ch2.style.background=on?'#0f172a':'';ch2.style.color=on?'#fff':'';ch2.style.borderColor=on?'#0f172a':'';});}
@@ -1307,7 +1313,7 @@ function draw(cv,cfg,big,cid){
   if(Object.keys(annMap).length){const pts=L.map((_,j)=>annMap[j]?sets[0].d[j]:null);
    ds.push({label:'Annotations',data:pts,showLine:false,pointRadius:6,pointHoverRadius:8,pointStyle:'triangle',pointBackgroundColor:L.map((_,j)=>annMap[j]?ANNC[annMap[j][0].k]:C.grey),borderColor:'transparent'});}}
  const _fmt=(FM[cfg.tip]||fI);const LV={id:'lv',afterDatasetsDraw:cc=>{const x=cc.ctx;x.save();x.font='700 9.5px Inter,sans-serif';cc.data.datasets.forEach((d,i)=>{if(!d.label||/^0?\d-\d/.test(d.label))return;const mt=cc.getDatasetMeta(i);if(mt.hidden)return;let p=null,v=null;for(let j=mt.data.length-1;j>=0;j--){if(mt.data[j]&&d.data[j]!=null){p=mt.data[j];v=d.data[j];break;}}if(!p)return;x.fillStyle=d.borderColor||'#333';x.fillText(_fmt(v),Math.min(p.x+4,cc.chartArea.right-46),Math.max(p.y-4,cc.chartArea.top+8));});x.restore();}};
- const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},plugins:[LV],options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
+ const c=new Chart(cv,{type:'line',data:{labels:L,datasets:ds},plugins:[LV],options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,normalized:true,interaction:{mode:'index',intersect:0},
   plugins:{legend:{display:false},tooltip:{filter:x=>x.dataset.label==='Annotations'||(x.parsed.y!=null&&x.parsed.y!==0),callbacks:{label:x=>x.dataset.label==='Annotations'?null:x.dataset.label+': '+(FM[cfg.tip]||fI)(x.parsed.y)+((x.dataset._cl&&x.dataset._cl[x.dataIndex])?' ('+x.dataset._cl[x.dataIndex]+')':''),
    afterBody:items=>{if(!items.length)return[];const i=items[0].dataIndex;let out=[];if(annMap[i])annMap[i].forEach(a=>out.push('▲ '+a.t));if(cfg.bd&&ixMap)out=out.concat(cfg.bd(origIdxFin(i,ixMap)));return out;}}}},
   scales:Object.assign({x:{grid:{display:0},ticks:{maxTicksLimit:big?12:6,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:big?8:5,color:'#0F172A',font:{size:12},callback:v=>(FM[cfg.tip]||fI)(v)}}},hasY2?{y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:big?8:5,color:'#c9834a',font:{size:10},callback:v=>(FM[cfg.tip]||fI)(v)}}}:{})}});
@@ -1553,20 +1559,19 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const col=v=>v==null?'#8a93a6':(v>=0?'#12a06e':'#e23a63');
   const el=document.createElement('div');el.className='card full';el.dataset.a='odoo';
   el.innerHTML='<div class="chead"><div><div class="ct">New vs returning customers over time — online<span class="bg b-odoo">odoo</span></div>'
-   +'<div class="cs">Follows the date filter ('+mons[0]+' &rarr; '+mons[mons.length-1]+', min 6 months). Monthly count of Shopify orders from NEW customers (first ever order) vs RETURNING, with <b>ad spend as grey bars</b> (right axis) so you can see whether new customers move when spend moves. YoY = same calendar month last year, so seasonality cancels out. Last point is MTD. Per-branch versions live on the Branches tab.</div></div>'
+   +'<div class="cs">Follows the date filter ('+mons[0]+' &rarr; '+mons[mons.length-1]+', min 6 months). Monthly count of Shopify orders from NEW customers (first ever order) vs RETURNING, with <b>ad spend on its own panel above</b>, sharing the same months. Spend is money and customers are a count, so they never share a scale &mdash; a shared axis would set the crossing point arbitrarily and could invent a link that is not there. Compare the <i>shapes</i>: if the spend bars step up and the NEW line does not follow, the extra spend did not buy customers. YoY = same calendar month last year, so seasonality cancels out. Last point is MTD. Per-branch versions live on the Branches tab.</div></div>'
    +'<div class="kpis"><div class="kpi"><div class="l">NC '+lastFull.m+'</div><div class="v">'+lastFull.nc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yN)+'">'+fmt(yN)+' YoY</span></div></div>'
    +'<div class="kpi"><div class="l">RC '+lastFull.m+'</div><div class="v">'+lastFull.rc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yR)+'">'+fmt(yR)+' YoY</span></div></div>'
    +'<div class="kpi"><div class="l">NC trend (3mo vs prior 3)</div><div class="v" style="color:'+col(trN)+'">'+fmt(trN)+'</div></div></div></div>'
-   +'<div style="position:relative;height:240px;padding:0 12px 4px"><canvas id="nrcT"></canvas></div>'
+   +'<div id="nrcT" style="padding:0 12px 4px"></div>'
    +'<div class="rtNote" style="padding:0 12px 10px">Verdict: new-customer acquisition is <b style="color:'+col(yN)+'">'+(yN==null?'unmeasured':(yN>=0.05?'GROWING':(yN<=-0.05?'SHRINKING':'FLAT')))+'</b> vs last year'+(yN!=null?' ('+fmt(yN)+' in '+lastFull.m+')':'')+'; returning base '+(yR==null?'—':(yR>=0.05?'growing':(yR<=-0.05?'shrinking':'flat'))+' ('+fmt(yR)+')')+'. Counts are orders by customer type from Odoo (Shopify channel), the same nrev/rrev split the P&amp;L uses.</div>'+(function(){const lm=lastFull.m;const yr=lm.slice(0,4);const ms2=Object.keys(NR).filter(x=>x.slice(0,4)===yr&&x<=lm);const ly2=ms2.map(x=>String(+yr-1)+x.slice(4));const S2=(a,k)=>a.reduce((t,x)=>t+((NR[x]||{})[k]||0),0);const nc1=S2(ms2,'nord'),nc0=S2(ly2,'nord'),rv1=S2(ms2,'nrev'),rv0=S2(ly2,'nrev');if(!nc0)return '';const pcv=(a,b)=>((a/b-1)*100).toFixed(0);return '<div class="rtNote" style="padding:0 12px 10px"><b>Year so far ('+yr+'-01 → '+lm+'):</b> new customers <b style="color:'+(nc1>=nc0?'#12a06e':'#e23a63')+'">'+nc1.toLocaleString()+' vs '+nc0.toLocaleString()+' ('+(nc1>=nc0?'+':'')+pcv(nc1,nc0)+'%)</b> · NC revenue <b style="color:'+(rv1>=rv0?'#12a06e':'#e23a63')+'">E£ '+Math.round(rv1/1e6)+'M vs E£ '+Math.round(rv0/1e6)+'M ('+(rv1>=rv0?'+':'')+pcv(rv1,rv0)+'%)</b> — read the monthly dip against this.</div>';})();
   const _anc3=document.getElementById('gpcacT');const _ac3=_anc3?_anc3.closest('.card'):null;_ac3?_ac3.insertAdjacentElement('afterend',el):g.appendChild(el);
-  ch.push(new Chart(document.getElementById('nrcT'),{data:{labels:rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),datasets:[
-   {type:'line',label:'NEW customers',data:rows.map(r=>r.nc),borderColor:'#5a5bf0',backgroundColor:'#5a5bf018',fill:true,borderWidth:2.5,pointRadius:2,tension:.3,yAxisID:'y'},
-   {type:'line',label:'RETURNING customers',data:rows.map(r=>r.rc),borderColor:'#12a06e',borderWidth:2,pointRadius:2,tension:.3,yAxisID:'y'},
-   {type:'bar',label:'Ad spend (E£, right)',data:rows.map(r=>r.sp),backgroundColor:'#c3c9d63d',borderWidth:0,barPercentage:.55,yAxisID:'y2',order:10}]},
-   options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
-    plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+(c2.parsed.y!=null?Math.round(c2.parsed.y).toLocaleString():'no ad data')}}},
-    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}},y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}}}}}));
+  splitPanel('nrcT',rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),
+   {type:'bar',h:96,fmt:v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k',
+    sets:[{label:'Ad spend',data:rows.map(r=>r.sp),backgroundColor:'#9aa3b5',borderWidth:0,barPercentage:.6}]},
+   {type:'line',h:190,fmt:v=>Math.round(v).toLocaleString(),sets:[
+    {label:'NEW customers',data:rows.map(r=>r.nc),borderColor:'#5a5bf0',backgroundColor:'#5a5bf018',fill:true,borderWidth:2.5,pointRadius:2,tension:.3},
+    {label:'RETURNING customers',data:rows.map(r=>r.rc),borderColor:'#12a06e',borderWidth:2,pointRadius:2,tension:.3}]});
  })();
  // ---- WEEKLY AUDIT SCOREBOARD: week vs last week, plus month-vs-LY and year-vs-LY on every row ----
  (function(){const o2=calc();if(!o2)return;const pw=cmpWr(ST.s,ST.e);
@@ -1791,17 +1796,45 @@ function offOnChart(g){const A=O.ad,BM=O.bmeta||{};if(!A||!A.start)return;
  const sSp=spend.reduce((a,b)=>a+b,0),sSt=store.reduce((a,b)=>a+b,0),sOn=online.reduce((a,b)=>a+b,0);
  const M=v=>'E£ '+Math.round(v).toLocaleString();
  pnlCard(g,'meta','What Meta spend does ONLINE vs IN-STORE, day by day',
-  'One picture of the split: grey bars are what you spent on Meta that day, the blue line is the website value Meta credits and the green line is the value it credits to the shops (offline CAPI), both at your attribution setting. Over this window '+M(sSp)+' of spend sat against '+M(sOn)+' online and <b>'+M(sSt)+' in-store</b> — in-store is '+(sOn?(sSt/sOn).toFixed(1):'—')+'× the online leg, which is why judging Meta on website ROAS alone understates it.',
-  '<div style="position:relative;height:260px"><canvas id="ooC"></canvas></div>');
- ch.push(new Chart(document.getElementById('ooC'),{data:{labels:lab,datasets:[
-  {type:'bar',label:'Meta spend',data:spend,backgroundColor:'#c3c9d64d',borderWidth:0,yAxisID:'y2',order:9},
-  {type:'line',label:'In-store value (Meta CAPI)',data:store,borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:0,tension:.3,yAxisID:'y'},
-  {type:'line',label:'Website value (Meta)',data:online,borderColor:'#3a9bff',borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y'}]},
-  options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
-   plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': E£ '+Math.round(c2.parsed.y).toLocaleString()}}},
-   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:10,font:{size:9}}},
-    y:{grid:{color:'#eef0f5'},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}},
-    y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>Math.round(v/1000)+'k'}}}}}));}
+  'Two panels, one shared calendar: the top panel is what you spent on Meta that day, the bottom is the value Meta credits &mdash; blue for the website, green for the shops (offline CAPI) &mdash; both at your attribution setting. Spend and value are kept on separate panels on purpose: spend peaks near E&pound;73k a day and in-store value near E&pound;2.9M, so drawing them on one chart means stretching spend about 40&times; until it appears to track revenue whether or not it does. Over this window '+M(sSp)+' of spend sat against '+M(sOn)+' online and <b>'+M(sSt)+' in-store</b> — in-store is '+(sOn?(sSt/sOn).toFixed(1):'—')+'× the online leg, which is why judging Meta on website ROAS alone understates it.',
+  '<div id="ooC"></div>');
+ const EM=v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k';
+ splitPanel('ooC',lab,
+  {type:'bar',h:104,fmt:EM,sets:[{label:'Meta spend',data:spend,backgroundColor:'#9aa3b5',borderWidth:0}]},
+  {type:'line',h:196,fmt:EM,sets:[
+   {label:'In-store value (Meta CAPI)',data:store,borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:0,tension:.3},
+   {label:'Website value (Meta)',data:online,borderColor:'#3a9bff',borderWidth:2,pointRadius:0,tension:.3}]});}
+/* v9.10 SHARED-X SPLIT PANELS -- replaces every dual-axis chart in this tool.
+   A right-hand y-scale is chosen so two curves overlap; that choice is arbitrary, so the chart
+   manufactures a relationship the data may not have. Worst case here was Meta spend (peak E£73k)
+   drawn against in-store value (peak E£2.9M) -- both money, 40x apart, both stretched to full
+   height, so spend "tracked" store revenue by construction. Two panels over one shared x-axis
+   keep every series on a scale that means something and still let the eye compare shapes.
+   The panels are aligned by pinning both y-axes to the same width. */
+function splitPanel(elId,labels,top,bot){
+ const mk=(id,spec,showX)=>({type:spec.type||'line',data:{labels,datasets:spec.sets},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,
+   interaction:{mode:'index',intersect:false},
+   plugins:{legend:{display:spec.sets.length>1,labels:{boxWidth:12,font:{size:10}}},
+    tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+spec.fmt(c2.parsed.y)}}},
+   scales:{x:{stacked:!!spec.stacked,grid:{display:false},ticks:{display:showX,maxTicksLimit:10,font:{size:9}}},
+    /* A single-series panel needs no legend box -- it costs ~28px of a 90px panel and says what
+       the axis title already says. The name moves onto the axis instead. */
+    y:{stacked:!!spec.stacked,beginAtZero:true,grid:{color:'#eef0f5'},afterFit(sc){sc.width=62;},
+       title:spec.sets.length>1?undefined:{display:true,text:spec.sets[0].label,font:{size:9,weight:'700'},color:'#5a637a'},
+       ticks:{font:{size:9},maxTicksLimit:4,callback:v=>spec.fmt(v)}}}}});
+ const host=document.getElementById(elId);if(!host)return;
+ host.innerHTML='<div style="position:relative;height:'+(top.h||120)+'px"><canvas id="'+elId+'_t"></canvas></div>'
+  +'<div style="position:relative;height:'+(bot.h||190)+'px;margin-top:2px"><canvas id="'+elId+'_b"></canvas></div>';
+ const A=new Chart(document.getElementById(elId+'_t'),mk(elId+'_t',top,false));
+ const B=new Chart(document.getElementById(elId+'_b'),mk(elId+'_b',bot,true));
+ /* Pinning the y-axes to one width lines up the left edge, but the bottom panel also reserves
+    room for its last x-label to overhang, so its plot ended up to 28px narrower -- enough to
+    shift the two panels out of register and defeat the whole point of a shared calendar.
+    Pad the wider one by the difference so both plot areas span exactly the same x. */
+ const d=A.chartArea.right-B.chartArea.right;
+ if(Math.abs(d)>0.5){const w=d>0?A:B;w.options.layout={padding:{right:Math.abs(d)}};w.update();}
+ ch.push(A);ch.push(B);}
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
@@ -1927,7 +1960,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
     const rd=REAL?bmDay(b.name,'v',ai):null;
     if(rd!=null){me.push(rd*afo());continue;}
     if(!ALLOC){me.push(null);continue;}let td2=0;Object.keys(O.bl.b).forEach(nn=>td2+=O.bl.b[nn][i]||0);const iv=(ai>=0&&ai<O.ad.n)?(O.ad.instoreMeta[ai]||0)*afo():0;me.push(td2?iv*(O.bl.b[b.name][i]||0)/td2:0);}const dm=dec(sr.L,me,120);
-   const cc=new Chart(el.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'Revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:0,fill:true,backgroundColor:C.indigo+'22'},{label:REAL?'Meta in-store value (real)':(ALLOC?'Meta value ALLOCATED (modelled)':'Meta in-store (not measured)'),data:dm.d,borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:.3}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:6,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}}}}});ch.push(cc);});});
+   const cc=new Chart(el.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'Revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:0,fill:true,backgroundColor:C.indigo+'22'},{label:REAL?'Meta in-store value (real)':(ALLOC?'Meta value ALLOCATED (modelled)':'Meta in-store (not measured)'),data:dm.d,borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:.3}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,normalized:true,plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:6,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}}}}});ch.push(cc);});});
   const el2=document.createElement('div');el2.className='card full';el2.dataset.a='meta';
   const r=[Math.max(0,O.bl.n-60),O.bl.n-1];
   const totD=[],Lb=[];for(let i=r[0];i<=r[1];i++){let t2=0;Object.keys(O.bl.b).forEach(n=>t2+=O.bl.b[n][i]||0);totD.push(t2);Lb.push(bD(i));}
@@ -1937,7 +1970,7 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   el2.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Online → Offline Impact ${Q('instoreMeta')}<span class="bg b-meta">meta × pos</span></div><div class="cs">Daily Meta spend against total in-store revenue (all 7 branches, real POS journals). Correlation r = <b>${rr.toFixed(2)}</b> — ${Math.abs(rr)<0.2?'weak':Math.abs(rr)<0.5?'moderate':'strong'} ${rr>=0?'positive':'negative'} relationship. Meta reports ${fC(mv)} of in-store value (${mp.toFixed(1)}% of branch revenue) on ${FF.attr.labels[ST.at]}.</div></div></div><div class="cv" style="height:200px"><canvas></canvas></div><div class="lgd"><span class="lg"><i class="sw" style="background:${C.indigo}"></i>In-store revenue</span><span class="lg"><i class="sw" style="background:${C.blue}"></i>Meta spend (right axis)</span><span class="lg"><i class="sw" style="background:${C.orange}"></i>Meta-attributed in-store (right axis)</span></div>`;
   g.appendChild(el2);
   lazyDraw(el2,()=>{const dd=dec(Lb.map(x=>x.slice(5)),totD,150),ds2=dec(Lb.map(x=>x.slice(5)),spD.map(v=>v==null?0:v),150);
-   const cc=new Chart(el2.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'In-store revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:0,fill:true,backgroundColor:C.indigo+'18',yAxisID:'y'},{label:'Meta spend',data:ds2.d,borderColor:C.blue,borderWidth:2,pointRadius:0,tension:0,yAxisID:'y2'},{label:'Meta-attributed in-store',data:(function(){const a=[];for(let i=r[0];i<=r[1];i++){const ai=Math.round((Date.parse(bD(i))-Date.parse(O.ad.start))/864e5);a.push((ai>=0&&ai<O.ad.n)?(O.ad.instoreMeta[ai]||0)*afo():0);}return dec(Lb.map(x=>x.slice(5)),a,150).d;})(),borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:0,yAxisID:'y2'}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:8,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}},y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}}}}});ch.push(cc);});}
+   const cc=new Chart(el2.querySelector('canvas'),{type:'line',data:{labels:dd.L,datasets:[{label:'In-store revenue',data:dd.d,borderColor:C.indigo,borderWidth:2.2,pointRadius:0,tension:0,fill:true,backgroundColor:C.indigo+'18',yAxisID:'y'},{label:'Meta spend',data:ds2.d,borderColor:C.blue,borderWidth:2,pointRadius:0,tension:0,yAxisID:'y2'},{label:'Meta-attributed in-store',data:(function(){const a=[];for(let i=r[0];i<=r[1];i++){const ai=Math.round((Date.parse(bD(i))-Date.parse(O.ad.start))/864e5);a.push((ai>=0&&ai<O.ad.n)?(O.ad.instoreMeta[ai]||0)*afo():0);}return dec(Lb.map(x=>x.slice(5)),a,150).d;})(),borderColor:C.orange,borderWidth:1.8,pointRadius:0,tension:0,yAxisID:'y2'}]},options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,normalized:true,interaction:{mode:'index',intersect:0},plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fC(x.parsed.y)}}},scales:{x:{grid:{display:0},ticks:{maxTicksLimit:8,color:'#0F172A',font:{size:12}}},y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}},y2:{position:'right',grid:{display:0},ticks:{maxTicksLimit:5,color:'#0F172A',font:{size:12},callback:v=>fC(v)}}}}});ch.push(cc);});}
  (function(){const co=FF.company;const dn2=30.44;const onGp=fSum('gp',addD(O.aw[1],-29),O.aw[1]);let onSp=0;for(let i=Math.max(0,O.ad.n-30);i<O.ad.n;i++)onSp+=O.ad.spend[i]||0;
   const ref30=fSum('refund',addD(O.aw[1],-29),O.aw[1]),gr30=fSum('rev',addD(O.aw[1],-29),O.aw[1]);
   const brC=B.reduce((a,b2)=>a+b2.pf,0)/wf;const onC=onGp*(gr30?1-ref30/gr30:1)-onSp-(co.ecomPayroll||372076);
@@ -2370,7 +2403,7 @@ function vzLineCard(g,a,t,cs2,labels,dsets,kind){
  const cv=g.lastChild.querySelector('canvas');
  const F=kind==='pct'?(v=>(+v).toFixed(1)+'%'):(kind==='n'?fI:fC);
  const c=new Chart(cv,{type:'line',data:{labels:labels,datasets:dsets.map(d=>Object.assign({borderWidth:2.2,pointRadius:2.5,pointHoverRadius:5,tension:0,spanGaps:true,fill:!!d.f,backgroundColor:d.f?d.borderColor+'18':'transparent'},d))},
-  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,interaction:{mode:'index',intersect:false},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
    plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': '+F(x.parsed.y)}}},
    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,color:'#0F172A',font:{size:11}}},y:{grid:{color:'#eef0f5'},ticks:{color:'#0F172A',font:{size:11},callback:v=>kind==='pct'?Math.round(v)+'%':(kind==='n'?fI(v):fK(v))}}}}});
  ch.push(c);return c;}
@@ -2465,7 +2498,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='ce')return rCE(),void grainNote(t);if(t==='ic')return rIC(),void grainNote(t);if(t==='why')return rWHY(),void grainNote(t);if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ce')return rCE(),void grainNote(t);if(t==='ic')return rIC(),void grainNote(t);if(t==='why')return rWHY(),void grainNote(t);if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -2578,7 +2611,7 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
    {label:'average branch',data:bk,borderColor:'#cbd2e0',borderWidth:1.2,borderDash:[4,3],pointRadius:0,tension:0,fill:false,spanGaps:true},
    {label:x.n,data:x.d,borderColor:x.c,backgroundColor:x.c+'1f',borderWidth:2.4,
     pointRadius:(q)=>pick.has(q.dataIndex)?2.6:0,pointBackgroundColor:x.c,pointHoverRadius:5,tension:0,fill:true,spanGaps:true}]},
-   options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,interaction:{mode:'index',intersect:false},
+   options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:q=>q.dataset.label+': '+F(q.parsed.y)}}},
     scales:{x:{grid:{display:0},ticks:{maxTicksLimit:4,color:'#0F172A',font:{size:10}}},
      y:{min:ymn<0?ymn*1.12:0,max:ymx*1.16,grid:{color:'#f1f3f8'},ticks:{maxTicksLimit:3,color:'#0F172A',font:{size:10},callback:v=>SF(v)}}}}});
@@ -2621,7 +2654,7 @@ function SORTON(){ if(window.__sorton)return; window.__sorton=1;
 }
 function buildVZ(cv,labels,datasets,fmt,opt){
  return new Chart(cv,{type:opt.type||'line',data:{labels,datasets:datasets.map(d=>({label:d.l,data:d.d,type:d.t||undefined,showLine:d.t==='line'?true:undefined,borderColor:d.c,backgroundColor:(opt.type==='bar'?d.c+'cc':d.c+'22'),borderWidth:d.w||2,pointRadius:d.pr!=null?d.pr:(opt.type==='scatter'?6:2),pointHoverRadius:7,tension:0,fill:(d.f==='zero'?{target:'origin',above:'rgba(18,160,110,.13)',below:'rgba(226,58,99,.15)'}:!!d.f),borderDash:d.dash?[5,4]:[],yAxisID:d.y2?'y2':'y',spanGaps:true,pointBackgroundColor:d.pc||d.c,_cl:d.cl||null}))},
-  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,interaction:{mode:'index',intersect:false},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
   plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:14,font:{size:11}}},tooltip:{filter:x=>x.parsed.y!=null,callbacks:{label:x=>(x.raw&&x.raw.n?x.raw.n+': ':x.dataset.label+': ')+(fmt||fC)(x.parsed.y!=null?x.parsed.y:0)+(x.raw&&x.raw.xl?' | '+x.raw.xl:'')+((x.dataset._cl&&x.dataset._cl[x.dataIndex])?' ('+x.dataset._cl[x.dataIndex]+')':'')}}},
   scales:Object.assign({x:{stacked:!!opt.stacked,grid:{display:0},ticks:{maxTicksLimit:14,color:'#0F172A',font:{size:12}},type:opt.type==='scatter'?'linear':'category',title:opt.xt?{display:true,text:opt.xt,font:{size:10}}:undefined},y:{stacked:!!opt.stacked,grid:{color:'#eef0f5'},ticks:{color:'#0F172A',font:{size:12},callback:v=>(fmt||fC)(v)},title:opt.yt?{display:true,text:opt.yt,font:{size:10}}:undefined}},datasets.some(d=>d.y2)?{y2:{position:'right',grid:{display:0},ticks:{color:'#c9834a',font:{size:10},callback:v=>(fmt||fC)(v)}}}:{}),plugins:[]},plugins:((opt.type||'line')==='line'?[DLBL]:(opt.vlbl?[VLBLf(fmt||fC)]:[]))});
 }
@@ -3735,12 +3768,14 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    {stacked:1,type:'bar',cmt:[['#c9834a','<b>Free delivery has cost E&pound;'+money2(tf)+' over these '+Lp.length+' months</b> &mdash; '+(tk?(tf/tk*100).toFixed(0):0)+'% of the entire courier bill. That is the price of the offer, and it is a marketing line, not a logistics line.'],
      ['#5a5bf0','<b>The dashed blue line is what you collected.</b> Where it sits below the top of the green bar, even your paying customers are not covering their own delivery.']]});
 
-  vzCard(g,'Who pays for delivery &mdash; free vs paid orders'+INFO('Every confirmed order in the month, split by whether a paid shipping line was attached to it. The purple line is the free share as a percentage, on the right-hand axis.'),
-   'Order counts, not money. The purple line is the free-delivery share of confirmed orders.',Ls.map(lab),
-   [{l:'Shipped free',c:'#c9834a',d:ser('freeN',Ls)},
-    {l:'Customer paid delivery',c:'#12a06e',d:ser('paidN',Ls)},
-    {l:'Free share, %',c:'#8b5cf6',t:'line',w:2.6,pr:0,y2:1,d:Ls.map(m=>s2('conf',m)?s2('freeN',m)/s2('conf',m)*100:null)}],null,
-   {stacked:1,type:'bar',cmt:[['#8b5cf6','<b>The free share swings between roughly a third and three quarters of all orders.</b> It is the single biggest lever on the net delivery line &mdash; bigger than negotiating the courier rate &mdash; because the courier charges the same either way.']]});
+  pnlCard(g,'ins','Who pays for delivery &mdash; free vs paid orders'+INFO('Every confirmed order in the month, split by whether a paid shipping line was attached to it. The top panel is that split as a percentage; the bottom panel is the order counts it came from.'),
+   'Order counts, not money. The free share sits on its own panel because a percentage and a count cannot honestly share one vertical scale.',
+   '<div id="freeShareC"></div><div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#8b5cf6"></span><span><b>The free share swings between roughly a third and three quarters of all orders.</b> It is the single biggest lever on the net delivery line &mdash; bigger than negotiating the courier rate &mdash; because the courier charges the same either way.</span></div></div>');
+  splitPanel('freeShareC',Ls.map(lab),
+   {type:'line',h:92,fmt:v=>Math.round(v)+'%',sets:[{label:'Free share of confirmed orders',data:Ls.map(m=>s2('conf',m)?s2('freeN',m)/s2('conf',m)*100:null),borderColor:'#8b5cf6',backgroundColor:'#8b5cf618',fill:true,borderWidth:2.6,pointRadius:0,tension:.3,spanGaps:true}]},
+   {type:'bar',h:190,stacked:1,fmt:v=>Math.round(v).toLocaleString(),sets:[
+    {label:'Shipped free',data:ser('freeN',Ls),backgroundColor:'#c9834a',borderWidth:0},
+    {label:'Customer paid delivery',data:ser('paidN',Ls),backgroundColor:'#12a06e',borderWidth:0}]});
 
   vzCard(g,'What happened to every order &mdash; delivered, returned, cancelled'+INFO('Green = confirmed and kept. Purple = confirmed, delivered, then returned. Grey = cancelled before it ever shipped. A cancellation costs no courier money; a return costs the delivery leg AND the pickup leg.'),
    'Order outcomes by the month the order was placed. Returns before '+S2f().retFrom+' were booked as cancellations, so the purple band only becomes real from there.',Ls.map(lab),
@@ -4596,7 +4631,7 @@ function rPE(g){
    {label:'Ad spend',data:pick(dsRaw.sp),borderColor:'#3a9bff',borderWidth:1.8,pointRadius:0,tension:.25},
    {label:'NET PROFIT',data:pick(dsRaw.pr),borderWidth:2.6,pointRadius:0,tension:.25,
     segment:{borderColor:c=>((c.p0.parsed.y+c.p1.parsed.y)/2<0?'#e23a63':'#12b886')},borderColor:'#12b886'}]},
-   options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:1.3,normalized:true,interaction:{mode:'index',intersect:0},
+   options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,normalized:true,interaction:{mode:'index',intersect:0},
     plugins:{legend:{display:true},tooltip:{callbacks:{label:x=>x.dataset.label+': E£ '+money(x.parsed.y)}}},
     scales:{x:{grid:{display:0},ticks:{maxTicksLimit:12,color:'#0F172A',font:{size:11}}},
      y:{grid:{color:'#eef0f5'},ticks:{maxTicksLimit:7,color:'#0F172A',font:{size:11},callback:v=>'E£'+(Math.abs(v)>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1e3)+'k')}}}}}));},60);
@@ -5748,7 +5783,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-142856';
+const BUILD='20260828-145109';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -6530,5 +6565,4 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
 window.rCO=rCO;window.coSel=coSel;
 window.rCJ=rCJ;window.rBG=rBG;window.cjS=cjS;window.aoLv=aoLv;window.aoAc=aoAc;window.aD2=aD2;
 </script>
-<script src="audit_tabs.js"></script>
 </body></html>
