@@ -5216,13 +5216,19 @@ function bRefCost(m){const n=bRefN(m);return n?n*(bFee('Customer Return Pickup')
 function bRetLegs(m){return bFailN(m)+bRefN(m);}
 function bRetTotal(m){return bFailCost(m)+bRefCost(m);}
 function bostaCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
- const bt=B.months[m].byType||{},F=B.fees||{};
+ /* If every parcel in the month has been priced from the courier's own record, that sum is the
+    actual bill and beats any count x mean. Otherwise fall back to the modelled figure. */
+ const mm=B.months[m];
+ if(mm.exactTotal)return mm.exactTotal;
+ const bt=mm.byType||{},F=B.fees||{};
  return Object.keys(bt).reduce((a,t)=>a+(bt[t]||0)*(((F[t]||{}).mean)||0),0);}
+function bostaExact(m){const B=window.O&&O.bosta;const mm=B&&B.months&&B.months[m];return !!(mm&&mm.exactTotal);}
 /* A modelled month prices the parcels the courier has actually been given. Orders confirmed
    late in the month have not been handed over yet, so per-ORDER rates on that month run light
    and must be shown as provisional, never as a cost that fell. */
-function s2prov(m){return s2src(m)==='bosta';}
+function s2prov(m){return s2src(m)==='bosta';}  /* exact months are NOT provisional */
 function s2src(m){if(!s2h(m))return 'none';
+ if(bostaExact(m)&&!(S2f()['cost']||[])[S2If()[m]])return 'bosta-exact';
  const a=S2f()['cost'];const posted=(a&&a[S2If()[m]])||0;
  if(posted>0)return 'ledger';
  return bostaCost(m)>0?'bosta':'none';}
@@ -6511,7 +6517,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-191059';
+const BUILD='20260828-201203';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
