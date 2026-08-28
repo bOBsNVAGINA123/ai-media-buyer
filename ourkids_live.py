@@ -4282,21 +4282,22 @@ def build():
         shop["ncrev"][_d] = round(_c["nrev"]); shop["rcrev"][_d] = round(_c["rrev"])
     if _nrdOK: log("new/returning from Odoo customer actuals, days", _nrdOK)
     pos = safe(pull_pos_branches) or {}
-    # heavy months only on a full crawl; otherwise refresh the last two and keep the rest
-    # 13 months on a forced/first crawl (~9 min of paging), otherwise refresh the last two
-    _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
-    bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
-    if prev.get("bosta", {}).get("months"):
-        merged = dict(prev["bosta"]["months"]); merged.update(bosta.get("months") or {})
-        bosta["months"] = merged
-        bosta.setdefault("fees", prev["bosta"].get("fees") or {})
-
     onu = safe(pull_online_units) or {}
     prev = {}
     try:
         pd0 = open(os.path.join(DOCS, "data.js")).read()
         prev = json.loads(pd0[pd0.index("window.O=") + 9: pd0.index(";\nwindow.F=")])
     except Exception: pass
+
+    # Bosta needs prev in hand, so it runs after the previous payload is parsed. A full
+    # 13-month crawl is ~9 minutes of paging, so it only happens on a forced crawl or the
+    # first time; otherwise the last two months are refreshed and merged over what is stored.
+    _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
+    bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
+    if (prev.get("bosta") or {}).get("months"):
+        merged = dict(prev["bosta"]["months"]); merged.update(bosta.get("months") or {})
+        bosta["months"] = merged
+        bosta.setdefault("fees", prev["bosta"].get("fees") or {})
     # v7.1 RESILIENCE: a broken source must NEVER zero the chart. If a Shopify day came back
     # empty (fetch gap or an API change like the ShopifyQL rename) but the previous payload
     # had it, carry the last-known values forward instead of writing a cliff of zeros.
