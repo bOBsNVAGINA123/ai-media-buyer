@@ -7,7 +7,7 @@ name: Commercial Audit
 
 on:
   schedule:
-    - cron: "41 */6 * * *"      # every 6h at :41 -- off :00 (GitHub drops those) and off the :23 dashboard slot
+    - cron: "17 */4 * * *"      # every 4h at :17 -- off :00 (GitHub drops those) and off the dashboard's :23. Every-6h drifted into 12h gaps.
   push:
     branches: [main]
     paths:
