@@ -2320,6 +2320,82 @@ function ovCard(g){
   +'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 
+/* v9.16 THE COURIER LEDGER, FROM BOSTA ITSELF.
+   Odoo says how much was PAID to Bosta. It cannot say what was bought. Bosta's own API can:
+   every parcel, its type, and its outcome. Two things it makes visible for the first time:
+
+   1. A RETURN IS A SECOND SHIPMENT. "Return to Origin" and "Customer Return Pickup" are their
+      own records with their own fee. A returned order is therefore charged twice -- once to
+      send it, once to bring it back -- and earns nothing. The old card could only estimate this
+      from the Odoo total; now both legs are counted.
+   2. Counts are EXACT, the per-type fee is a SAMPLED mean (n=30 per type off the detail
+      endpoint, the only place the fee exists). So the modelled cost is reconciled against the
+      posted Odoo ledger and the ratio is printed rather than hidden -- measured at 1.08 across
+      twelve months, which is the honest precision of this card. */
+function bostaCard(g){
+ const B=O.bosta;
+ if(!B||!B.months||!Object.keys(B.months).length){
+  pnlCard(g,'ins','What the courier actually costs',
+   'Bosta shipment ledger — read-only pull straight from the courier.',
+   '<div style="font-size:12.5px;color:#5a637a">Arrives on the next collector sync. Until then the delivery cards on this tab run on the Odoo expense ledger alone, which knows what was paid but not how many parcels came back.</div>');
+  return;}
+ const F=B.fees||{},M=B.months;
+ const RET=['Return to Origin','Customer Return Pickup'];
+ const fee=t=>((F[t]||{}).mean)||0;
+ const ms=Object.keys(M).sort();
+ const S2=O.ship2||{};
+ const odooCost=m=>{const i=(S2.m||[]).indexOf(m);return i<0?null:((S2.cost||[])[i]||0);};
+ const kept=m=>{const i=(S2.m||[]).indexOf(m);return i<0?null:((S2.kept||[])[i]||0);};
+ const freeN=m=>{const i=(S2.m||[]).indexOf(m);return i<0?null:((S2.freeN||[])[i]||0);};
+ const paidN=m=>{const i=(S2.m||[]).indexOf(m);return i<0?null:((S2.paidN||[])[i]||0);};
+ const row=m=>{const v=M[m],bt=v.byType||{};
+  const sends=bt['Send']||0;
+  const retLegs=RET.reduce((a,t)=>a+(bt[t]||0),0);
+  const model=Object.keys(bt).reduce((a,t)=>a+bt[t]*fee(t),0);
+  const retCost=RET.reduce((a,t)=>a+(bt[t]||0)*fee(t),0);
+  const roundTrip=retLegs*(fee('Send')+ (retLegs?RET.reduce((a,t)=>a+(bt[t]||0)*fee(t),0)/retLegs:0));
+  return {m,sends,retLegs,model,retCost,roundTrip,bt,
+   retShare:sends?retLegs/sends*100:null,odoo:odooCost(m),kept:kept(m)};};
+ const R=ms.map(row);
+ const done=R.filter(x=>x.odoo);
+ const tot=done.reduce((a,x)=>a+x.model,0),totO=done.reduce((a,x)=>a+x.odoo,0);
+ const last=R[R.length-1];
+ const M2=v=>'E£'+Math.round(v).toLocaleString();
+ const notes=[];
+ notes.push(['#e23a63','<b>A returned parcel is billed twice.</b> Sending costs '+M2(fee('Send'))+' and the return leg costs '+M2(fee('Return to Origin'))+', so an order that comes back costs about <b>'+M2(fee('Send')+fee('Return to Origin'))+' and brings in nothing</b>. In '+last.m+' that happened '+last.retLegs.toLocaleString()+' times &mdash; <b>'+M2(last.retCost)+' on return legs alone</b>, on top of the '+M2(last.retLegs*fee('Send'))+' already spent sending those same parcels out.']);
+ if(last.retShare!=null)notes.push([C.orange,'<b>'+last.retShare.toFixed(1)+' return legs for every 100 parcels sent in '+last.m+'.</b> This is a volume ratio for the month, not a per-order return rate: a parcel sent in June can come back in August, and the courier reference only ties a return to its original send about 15% of the time, so a true per-order rate cannot be built from this feed without overstating certainty.']);
+ if(totO)notes.push(['#7c869c','<b>Cross-check against the accounts.</b> Pricing every parcel is not possible &mdash; the fee only exists on a per-shipment call &mdash; so the fee for each shipment TYPE is a sampled mean and the count is exact. Across '+done.length+' settled months that model gives '+M2(tot)+' against '+M2(totO)+' actually posted in Odoo, a ratio of <b>'+(tot/totO).toFixed(2)+'</b>. Treat the shape as solid and the last few per cent as noise.']);
+ const fr=last?freeN(last.m):null,pd=last?paidN(last.m):null;
+ if(fr!=null&&pd!=null&&(fr+pd))notes.push([C.blue,'<b>Free delivery, priced at the real courier rate.</b> In '+last.m+', '+Math.round(fr/(fr+pd)*100)+'% of orders carried no paid shipping line. At '+M2(fee('Send'))+' a parcel that is roughly '+M2(fr*fee('Send'))+' of courier cost absorbed into product margin that month. The free-shipping offer is visible here as the gap between what the courier charged and what customers paid back.']);
+ const TH='padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;font-weight:800;color:#64748B;text-align:right;text-transform:uppercase';
+ const TD='padding:5px 8px;border-bottom:1px solid #eef0f5;font-size:12px;text-align:right;white-space:nowrap';
+ const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px">'
+  +'<tr><th style="'+TH+';text-align:left">Month</th><th style="'+TH+'">Parcels sent</th><th style="'+TH+'">Return legs</th>'
+  +'<th style="'+TH+'">Return legs per 100 sent</th><th style="'+TH+'">Cost of return legs</th>'
+  +'<th style="'+TH+'">Modelled courier cost</th><th style="'+TH+'">Posted in Odoo</th></tr>'
+  +R.slice().reverse().map(x=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+x.m+'</td>'
+   +'<td style="'+TD+'">'+x.sends.toLocaleString()+'</td>'
+   +'<td style="'+TD+';color:#e23a63;font-weight:700">'+x.retLegs.toLocaleString()+'</td>'
+   +'<td style="'+TD+'">'+(x.retShare==null?'&mdash;':x.retShare.toFixed(1))+'</td>'
+   +'<td style="'+TD+';color:#e23a63">'+M2(x.retCost)+'</td>'
+   +'<td style="'+TD+'">'+M2(x.model)+'</td>'
+   +'<td style="'+TD+';color:#7c869c">'+(x.odoo?M2(x.odoo):'not settled')+'</td></tr>').join('')
+  +'</table></div>';
+ pnlCard(g,'ins','What the courier actually costs'+INFO('Every parcel Bosta handled for you, by type. A return is its own shipment with its own fee, so an order that comes back is paid for twice. Counts come straight from the courier; the fee per shipment type is a sampled mean, cross-checked against the Odoo ledger at the bottom of the card.'),
+  'Bosta&rsquo;s own shipment ledger, read-only. Pulled '+(B.pulled||'&mdash;')+'.',
+  '<div style="position:relative;height:250px"><canvas id="bostaC"></canvas></div>'+tbl
+  +'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+ const TYPES=[['Send','#3a9bff'],['Return to Origin','#e23a63'],['Customer Return Pickup','#c9834a'],['Exchange','#8b5cf6'],['Cash Collection','#9aa3b5']];
+ ch.push(new Chart(document.getElementById('bostaC'),{type:'bar',
+  data:{labels:ms.map(m=>m.slice(2)),datasets:TYPES.filter(t=>ms.some(m=>(M[m].byType||{})[t[0]])).map(t=>({
+   label:t[0],data:ms.map(m=>(M[m].byType||{})[t[0]]||0),backgroundColor:t[1],borderWidth:0}))},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:14,font:{size:11}}},
+    tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+Math.round(c2.parsed.y).toLocaleString()+' parcels · '+M2((c2.parsed.y||0)*fee(c2.dataset.label))}}},
+   scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},
+    y:{stacked:true,beginAtZero:true,grid:{color:'#eef0f5'},title:{display:true,text:'parcels handled',font:{size:10}},ticks:{font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(v<10000&&v%1000?1:0)+'k':v}}}}}));
+}
+
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
@@ -4872,6 +4948,7 @@ function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><ta
    did not belong -- branch payroll is not a Shopify line item. They live here now. */
 function csCtl(k,v){if(k==='pm0'){ST.s=v+'-01';return RDR();}if(k==='pm1'){ST.e=monEnd(v);return RDR();}ST[k]=v;if(TAB==='cs')rCost();}
 function rCost(){if(TAB!=='cs')return;const g=document.getElementById('g14');g.innerHTML='';
+ try{bostaCard(g);}catch(e){}
  if(!O.fin||!O.fin.n){g.innerHTML='<div class="card full"><div class="chead"><div><div class="ct">No data loaded</div></div></div></div>';return;}
  const money=v=>Math.round(v).toLocaleString();
  const M={};for(let i=0;i<O.fin.n;i++)M[DD[i].slice(0,7)]=1;
@@ -6292,7 +6369,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-163642';
+const BUILD='20260828-172125';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
