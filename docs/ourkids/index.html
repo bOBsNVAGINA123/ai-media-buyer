@@ -10,7 +10,7 @@
 .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
 h1{font-size:21px;margin:0;font-weight:800;letter-spacing:-.3px}.sub{color:var(--mut);font-size:12px;margin-top:3px}
 .pill{background:#fff;border:1px solid #e2e6ef;border-radius:11px;padding:8px 12px;font-size:12px;font-weight:600;color:#41495c}.pill b{color:var(--indigo)}
-.lbl9{font-size:10px;font-weight:800;color:#64748b;margin-right:5px}.tgroups{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:42;background:#eef1f7;padding:6px 0 4px}.tgrp{padding:6px 14px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;background:#fff;border:1px solid #d7dcec;color:#3b4256;white-space:nowrap}.tgrp.on{background:#161d2e;color:#fff;border-color:#161d2e}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;position:sticky;top:38px;z-index:40;background:#eef1f7;padding:4px 0 6px}.tab{padding:6px 12px;flex:0 0 auto;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}.tabq{flex:1 0 100%;font-size:11.5px;line-height:1.35;font-weight:600;color:#5a637a;padding:3px 1px 0}.tabq span{display:block;max-width:92ch}
+.lbl9{font-size:10px;font-weight:800;color:#64748b;margin-right:5px}.tgroups{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:42;background:#eef1f7;padding:6px 0 4px}.tgrp{padding:6px 14px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;background:#fff;border:1px solid #d7dcec;color:#3b4256;white-space:nowrap}.tgrp.on{background:#161d2e;color:#fff;border-color:#161d2e}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;position:sticky;top:38px;z-index:40;background:#eef1f7;padding:4px 0 6px}.tab{padding:6px 12px;flex:0 0 auto;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}.tabq{flex:1 0 100%;font-size:11.5px;line-height:1.35;font-weight:600;color:#5a637a;padding:3px 1px 0}.tabq span{display:block;max-width:92ch}.ovt{width:100%;border-collapse:collapse;font-size:12.5px}.ovt th{text-align:right;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.4px;text-transform:uppercase;padding:0 10px 6px;white-space:nowrap}.ovt th:first-child{text-align:left}.ovt td{padding:6px 10px;border-top:1px solid #eef0f5;text-align:right;white-space:nowrap}.ovm{text-align:left!important;font-weight:700;color:#3b4256}.ovv{font-weight:800;color:#0F172A;font-variant-numeric:tabular-nums}.ovc{font-variant-numeric:tabular-nums}.ovn{color:#c8cede}.ovp{display:block;font-size:10px;color:#9aa3b5;font-weight:600}.ovh{text-align:left!important;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.5px;padding-top:12px!important;border-top:0!important}
 .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid #e6e9f1;border-radius:14px;padding:11px 14px;margin-bottom:12px;position:sticky;top:86px;z-index:39;box-shadow:0 3px 10px rgba(20,30,60,.07)}
 .bar label{font-size:10.5px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe3ec;border-radius:9px;padding:7px 9px;background:#f7f8fb;color:#2b3346}
@@ -1403,6 +1403,7 @@ DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const part
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
+ try{ovCard(g);}catch(e){}
  try{paceCard(g);}catch(e){}
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
  if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;const k=c.k(o)[0];if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
@@ -1746,6 +1747,14 @@ function bncYoY(g){const B=_bnrAll();const ks=Object.keys(B);if(!ks.length)retur
   '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Branch</th><th style="text-align:left">NC 6-mo trend</th><th>NC '+lastFull+(isMTD?' MTD':'')+'</th><th>NC '+ly+'</th><th>'+(isMTD?'Pace vs LY':'YoY')+'</th><th>NC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>RC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>Unregistered</th></tr>'+rows+'</table></div>');}
 let BNCM='nc';
 function setBncm(v){BNCM=v;rOff();}
+/* Which number and which view are two separate choices, but the metric chips were wired to
+   reset the view -- pick "New customers" from the per-branch grid and you were dumped into the
+   eight-line overlay without asking. The metric now travels with the view you are in. Only
+   Total orders has no per-branch equivalent, so that one alone falls back, which is honest. */
+function bncPick(k){window.BNCPIE=false;
+ if(window.BNCGRID){var GEQ={nc:'nc',rc:'rc',nrev:'nrev',rrev:'rrev',walk:'walk'};
+  if(GEQ[k])window.BNCGM=GEQ[k];else window.BNCGRID=false;}
+ setBncm(k);}
 function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length||typeof Chart==='undefined')return;
  const t=(O.today||'').slice(0,7);
  let ms=Object.keys(B[ks[0]]||{}).sort().filter(function(m){return m<=t;});
@@ -1754,7 +1763,7 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
  const _msR=ms.filter(function(m){return (!_m0||m>=_m0)&&m<=_m1;});
  ms=_msR.length>=3?_msR:ms.filter(function(m){return m<=_m1;}).slice(-6);
  const MET={nc:['New customers',function(M){return M.nc||0;}],rc:['Returning customers',function(M){return M.rc||0;}],ord:['Total orders',function(M){return (M.nord||0)+(M.rord||0);}],nrev:['New-customer revenue',function(M){return M.nrev||0;}],rrev:['Returning revenue',function(M){return M.rrev||0;}],walk:['Unregistered orders',function(M){return 0;}]};
- const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.BNCPIE=false;window.BNCGRID=false;setBncm(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
+ const chips=Object.keys(MET).map(function(k){return '<span class="chip" style="'+(k===BNCM&&!window.BNCPIE?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="bncPick(\''+k+'\')">'+MET[k][0]+'</span>';}).join(' ')
   +' <span class="chip" style="'+(window.BNCPIE?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCPIE=true;window.BNCGRID=false;rOff()">PIES &middot; per branch</span>'
   +' <span class="chip" style="'+(window.BNCGRID?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="window.BNCGRID=true;window.BNCPIE=false;rOff()">GRID &middot; one graph per branch</span>';
  if(window.BNCGRID==null)window.BNCGRID=true;
@@ -1814,11 +1823,22 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
  pnlCard(g,'odoo',MET[BNCM][0]+' over time &mdash; by branch &middot; '+ms[0]+' &rarr; '+ms[ms.length-1],'Monthly, follows the date filter above (last point = MTD if the current month is in range). Unregistered = walk-in receipts. Click a legend line to isolate a branch.',
   '<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div><div style="position:relative;height:230px"><canvas id="bncTsCv"></canvas></div>');
  const ds=ks.map(function(n){const M=B[n]||{};return {label:n,data:ms.map(function(m){return BNCM==='walk'?((((typeof BWALK!=='undefined'&&BWALK[n])||{})[m]||[0])[0]):MET[BNCM][1](M[m]||{});}),borderColor:(typeof BCOL!=='undefined'&&BCOL[n])||(n==='ONLINE'?'#161d2e':'#e2a33a'),borderWidth:2,pointRadius:0,tension:0};});
- const LASTV={id:'lastv',afterDatasetsDraw:function(cc){var x=cc.ctx;x.save();x.font='700 10px Inter,sans-serif';cc.data.datasets.forEach(function(d,i){var mt=cc.getDatasetMeta(i);if(mt.hidden)return;var p=mt.data[mt.data.length-1];if(!p)return;var v=d.data[d.data.length-1];x.fillStyle=d.borderColor;x.fillText(Math.round(v).toLocaleString(),p.x+4,p.y+3);});x.restore();}};
+ const LASTV={id:'lastv',afterDatasetsDraw:function(cc){var x=cc.ctx;x.save();x.font='700 10px Inter,sans-serif';
+  /* Every series printed its last value at its own y. Branches that finish within a few hundred
+     of each other overprinted into an unreadable stack. Collect them, sort by height, then push
+     each one clear of the previous by a line height -- nothing is dropped, nothing overlaps. */
+  var lab=[];cc.data.datasets.forEach(function(d,i){var mt=cc.getDatasetMeta(i);if(mt.hidden)return;
+   var p=mt.data[mt.data.length-1];if(!p)return;var v=d.data[d.data.length-1];if(v==null)return;
+   lab.push({y:p.y,x:p.x,t:Math.round(v).toLocaleString(),c:d.borderColor});});
+  lab.sort(function(a,b){return a.y-b.y;});
+  var top=cc.chartArea.top+7,bot=cc.chartArea.bottom;
+  for(var i=0;i<lab.length;i++){var want=Math.max(lab[i].y+3,top);
+   if(i&&want<lab[i-1].py+11)want=lab[i-1].py+11;lab[i].py=Math.min(want,bot);}
+  lab.forEach(function(o){x.fillStyle=o.c;x.fillText(o.t,o.x+5,o.py);});x.restore();}};
  const c=new Chart(document.getElementById('bncTsCv'),{type:'line',data:{labels:ms.map(function(m){return m.slice(2)+(m===t?' MTD':'');}),datasets:ds},plugins:[LASTV],
   options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
    plugins:{legend:{display:true,labels:{boxWidth:14,font:{size:10}}}},
-   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
+   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){/* toFixed(0) collapsed 1,500 and 2,000 both to "2k", so the axis printed 4k,4k,3k,3k,2k,2k,1k,1k. */if(v<1000)return v;var k=v/1000;return (k<10&&k%1?k.toFixed(1):k.toFixed(0))+'k';}}}}}});
  ch.push(c);}
 
 
@@ -2094,6 +2114,153 @@ function whyWaterfall(g,W){
     tooltip:{callbacks:{label:c2=>{const v=c2.raw;return (c2.dataIndex===0||c2.dataIndex===bars.length-1)?M(v[1]):sgn(v[1]-v[0]);}}}},
    scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:0,autoSkip:false}},
     y:{beginAtZero:true,grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k'}}}}}));}
+
+/* v9.13 THE WHOLE BUSINESS. Every other tab is one scope: Shopify, or the shops, or the ad
+   accounts. Nothing added them up, so "how did we do" needed four tabs and mental arithmetic.
+   One scoreboard, four columns: the window you picked, then the same window shifted back one
+   period, one month and one year. Shift the window rather than compare to a calendar month, so
+   a 7-day range gives week-on-week and a month gives month-on-month from the same code.
+   Every source has a different history, so each cell is computed only where the data actually
+   reaches and prints an em dash where it does not, rather than quietly showing a smaller number. */
+/* O.bl is the branch POS journal NET of tax; O.pos[n][m][0] is report.pos.order price_total,
+   which includes it -- 1.144x over the overlap, i.e. Egypt's 14% VAT. Outside the daily feed's
+   window (it only starts 2026-05) the monthly ledger stands in for branch revenue, and using the
+   tax-inclusive number there inflated last year by ~14% and understated year-on-year growth by
+   the same amount. The factor is measured from the months where both sources exist rather than
+   hardcoded, so it follows the real mix of taxed and zero-rated lines. */
+function ovNetFactor(){
+ if(window._OVNF!=null)return window._OVNF;
+ let f=1;
+ try{const BL=O.bl||{},names=Object.keys(O.pos||{});
+  if(BL.start&&BL.b&&names.length){
+   const cut=O.partial||null;const t0=new Date(BL.start+'T00:00:00Z').getTime();
+   const bm={},pm={};
+   for(let i=0;i<BL.n;i++){const ds=new Date(t0+i*864e5).toISOString().slice(0,10);
+    if(cut&&ds>=cut)continue;const m=ds.slice(0,7);
+    if(!bm[m])bm[m]={d:0,v:0};bm[m].d++;names.forEach(n=>{bm[m].v+=((BL.b[n]||[])[i])||0;});}
+   let sb=0,sp=0;
+   Object.keys(bm).forEach(m=>{const dim=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+    if(bm[m].d<dim)return;            // complete months only, so the two sides cover the same days
+    let pv=0;names.forEach(n=>{const P=(O.pos[n]||{})[m];if(P)pv+=P[0]||0;});
+    if(pv>0){sb+=bm[m].v;sp+=pv;}});
+   if(sp>0&&sb>0){const r=sb/sp;if(r>0.7&&r<1.05)f=r;}}
+ }catch(e){}
+ return window._OVNF=f;}
+function ovRange(a,b){
+ const out={};
+ const dim=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+ const monthsIn=(s,e)=>{const o=[];let d=new Date(s+'T00:00:00Z');const z=new Date(e+'T00:00:00Z');
+  while(d<=z){const mm=d.toISOString().slice(0,7);const last=new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0));
+   const to=(last<z?last:z);o.push([mm,Math.round((to-d)/864e5)+1]);d=new Date(to.getTime()+864e5);}return o;};
+ const cut=O.partial||null;const lastDone=cut?addD(cut,-1):null;
+ if(lastDone&&b>lastDone)b=lastDone;
+ if(a>b)return null;
+ /* ---- online (Shopify ledger, 2024-08 onward) ---- */
+ const finOK=a>=O.fin.start;
+ out.onRev=finOK?(fSum('rev',a,b)-fSum('refund',a,b)):null;
+ out.onGp=finOK?fSum('gp',a,b):null;
+ out.onOrd=finOK?fSum('orders',a,b):null;
+ /* ---- branches: daily POS feed where it reaches, else the monthly ledger apportioned by days ---- */
+ const BL=O.bl||{},names=Object.keys(O.pos||{});
+ let bRev=null,bGp=null,bOrd=null;
+ const blCov=BL.start&&BL.b&&a>=BL.start;
+ if(blCov){const t0=new Date(BL.start+'T00:00:00Z').getTime();
+  const i0=Math.round((new Date(a+'T00:00:00Z')-t0)/864e5),i1=Math.round((new Date(b+'T00:00:00Z')-t0)/864e5);
+  if(i1<BL.n){bRev=0;names.forEach(n=>{const arr=BL.b[n]||[];for(let i=Math.max(0,i0);i<=i1;i++)bRev+=arr[i]||0;});}}
+ const mo=monthsIn(a,b);let gpT=0,ordT=0,revT=0,anyM=false;
+ mo.forEach(([m,d])=>{let f;
+  if(cut&&m===cut.slice(0,7)){const el=+lastDone.slice(8,10);f=el?Math.min(1,d/el):0;}
+  else f=d/dim(m);
+  names.forEach(n=>{const P=(O.pos[n]||{})[m];if(!P)return;anyM=true;revT+=(P[0]||0)*f;gpT+=(P[1]||0)*f;ordT+=(P[2]||0)*f;});});
+ if(anyM){bGp=gpT;bOrd=ordT;if(bRev==null)bRev=revT*ovNetFactor();}
+ out.bRev=bRev;out.bGp=bGp;out.bOrd=bOrd;out.bApprox=!blCov&&anyM;
+ /* ---- ad spend: the panel is exactly one year long, so a year-ago window has nothing to read ---- */
+ const A=O.ad;const aT=A.start?new Date(A.start+'T00:00:00Z').getTime():null;
+ let sp=null,nc=null;
+ if(aT&&a>=A.start){const i0=Math.round((new Date(a+'T00:00:00Z')-aT)/864e5),i1=Math.round((new Date(b+'T00:00:00Z')-aT)/864e5);
+  if(i1<A.n){sp=0;for(let i=Math.max(0,i0);i<=i1;i++)sp+=((A.mspend||[])[i]||0)+((A.gspend||[])[i]||0)+((A.tspend||[])[i]||0);
+   nc=0;for(let i=Math.max(0,i0);i<=i1;i++)nc+=(A.newcust||[])[i]||0;}}
+ out.spend=sp;out.onNc=nc;
+ /* ---- branch new customers (own 400-day daily series) ---- */
+ const BD=O.bnrD,W=BD&&BD._w;let bnc=null;
+ if(W&&a>=W.start){const t0=new Date(W.start+'T00:00:00Z').getTime();
+  const i0=Math.round((new Date(a+'T00:00:00Z')-t0)/864e5),i1=Math.round((new Date(b+'T00:00:00Z')-t0)/864e5);
+  if(i1<W.n){bnc=0;names.forEach(n=>{const z=BD[n];if(!z)return;for(let i=Math.max(0,i0);i<=i1;i++)bnc+=(z.nc||[])[i]||0;});}}
+ out.bNc=bnc;
+ /* ---- derived ---- */
+ const add=(x,y)=>(x==null||y==null)?null:x+y;
+ out.sales=add(out.onRev,out.bRev);
+ out.gp=add(out.onGp,out.bGp);
+ out.orders=add(out.onOrd,out.bOrd);
+ out.newc=add(out.onNc,out.bNc);
+ out.gm=(out.gp!=null&&out.sales)?out.gp/out.sales*100:null;
+ out.mer=(out.sales!=null&&out.spend)?out.sales/out.spend:null;
+ out.pas=(out.gp!=null&&out.spend!=null)?out.gp-out.spend:null;
+ out.aov=(out.sales!=null&&out.orders)?out.sales/out.orders:null;
+ return out;
+}
+function ovCard(g){
+ if(!O.fin||!O.pos)return;
+ const s=ST.s,e=ST.e;const L=Math.max(1,span(s,e));
+ const mShift=(d,k)=>{const y=+d.slice(0,4),mo=+d.slice(5,7)-1+k,da=+d.slice(8,10);
+  const last=new Date(Date.UTC(y,mo+1,0)).getUTCDate();
+  return new Date(Date.UTC(y,mo,Math.min(da,last))).toISOString().slice(0,10);};
+ const W=[['This period',s,e],
+          ['vs prev '+L+'d',addD(s,-L),addD(e,-L)],
+          ['vs prior month',mShift(s,-1),mShift(e,-1)],
+          ['vs last year',mShift(s,-12),mShift(e,-12)]];
+ const D=W.map(w=>ovRange(w[1],w[2]));
+ /* Selecting today alone left the whole card off the page with no explanation: today is the
+    partial sync day and gets clamped away, so the window collapses to nothing. Say that. */
+ if(!D[0]){pnlCard(g,'odoo','The whole business','','<div style="font-size:12.5px;color:#5a637a;padding:2px 0">Your range is '+s+' &rarr; '+e+', which contains no completed day yet. '+(O.partial?('Today ('+O.partial+') is still syncing and is excluded from every figure in this tool. '):'')+'Widen the range to include '+(O.partial?addD(O.partial,-1):'an earlier day')+' or before.</div>');return;}
+ const M=v=>v==null?null:'E£'+Math.round(v).toLocaleString();
+ const N=v=>v==null?null:Math.round(v).toLocaleString();
+ const P1=v=>v==null?null:v.toFixed(1)+'%';
+ const X=v=>v==null?null:v.toFixed(2)+'×';
+ const ROWS=[
+  ['h','SALES'],
+  ['Total sales','sales',M,1,'Shopify net of refunds, plus the seven shops.'],
+  ['  Online (Shopify)','onRev',M,1,'Shopify team only, net of refunds.'],
+  ['  Branches','bRev',M,1,'The seven shops, from the POS ledger.'],
+  ['h','PROFIT'],
+  ['Gross profit','gp',M,1,'Shopify gross profit plus POS margin. Before ad spend, rent and payroll.'],
+  ['Gross margin','gm',P1,1,'Gross profit as a share of total sales.'],
+  ['Ad spend','spend',M,0,'Meta plus Google plus TikTok. Spending more is not by itself good or bad, so this row is not coloured.'],
+  ['Profit after ad spend','pas',M,1,'Gross profit minus ad spend. Still before rent and payroll.'],
+  ['MER','mer',X,1,'Total sales divided by total ad spend.'],
+  ['h','CUSTOMERS'],
+  ['New customers','newc',N,1,'First-ever Shopify orders plus first-ever POS receipts.'],
+  ['Orders','orders',N,1,'Shopify orders plus POS receipts.'],
+  ['AOV','aov',M,1,'Total sales divided by total orders.']
+ ];
+ const cell=(cur,prv,fmt,hib)=>{
+  if(prv==null||cur==null)return '<td class="ovn">&mdash;</td>';
+  if(!prv)return '<td class="ovn">'+(fmt(prv)||'&mdash;')+'</td>';
+  const d=(cur/prv-1)*100;const good=hib?d>=0:d<=0;
+  const c=(!hib&&hib!==0)?'#5a637a':(Math.abs(d)<0.5?'#5a637a':(good?'#12a06e':'#e23a63'));
+  const col=hib===0?'#5a637a':c;
+  return '<td class="ovc"><span style="color:'+col+';font-weight:800">'+(d>=0?'+':'−')+Math.abs(d).toFixed(d>=100?0:1)+'%</span>'
+   +'<span class="ovp">'+fmt(prv)+'</span></td>';};
+ let body='';
+ ROWS.forEach(r=>{
+  if(r[0]==='h'){body+='<tr><td class="ovh" colspan="5">'+r[1]+'</td></tr>';return;}
+  const k=r[1],fmt=r[2],hib=r[3];
+  body+='<tr><td class="ovm" title="'+r[4].replace(/"/g,'&quot;')+'">'+r[0]+'</td>'
+   +'<td class="ovv">'+(fmt(D[0][k])||'&mdash;')+'</td>'
+   +cell(D[0][k],D[1]?D[1][k]:null,fmt,hib)
+   +cell(D[0][k],D[2]?D[2][k]:null,fmt,hib)
+   +cell(D[0][k],D[3]?D[3][k]:null,fmt,hib)+'</tr>';});
+ const notes=[];
+ const yrNull=D[3]&&D[3].spend==null;
+ if(yrNull)notes.push([C.orange,'<b>Last year is blank on every row that needs ad spend.</b> The ad panel holds exactly '+O.ad.n+' days, starting '+O.ad.start+', so a window twelve months back falls off the front of it. Sales, profit and margin still compare year on year because the Odoo ledger goes back to '+O.fin.start+'.']);
+ if(D[0].bApprox||(D[3]&&D[3].bApprox))notes.push([C.orange,'<b>Branch revenue before '+O.bl.start+' comes from the monthly POS ledger, apportioned by day count and converted to a net-of-tax basis.</b> That ledger is recorded tax-inclusive and the daily branch feed is not &mdash; measured at '+(1/ovNetFactor()).toFixed(3)+'&times; across the months where both exist. Comparing them raw would overstate the older window by about '+((1/ovNetFactor()-1)*100).toFixed(0)+'% and hide that much growth.']);
+ notes.push(['#7c869c','<b>Every comparison shifts your own window</b> &mdash; back '+L+' days, back one calendar month, back one year &mdash; so it is always like-for-like against the same number of days. Pick a 7-day range and the second column is week on week; pick a month and it is month on month.']);
+ notes.push(['#7c869c','<b>Ad spend is not coloured</b> because more of it is neither good nor bad on its own; read it against the profit-after-ad-spend and MER rows directly underneath.']);
+ pnlCard(g,'odoo','The whole business'+INFO('One scoreboard for every scope the tool holds: Shopify and the seven shops added together, the profit left after ads, and the customers behind it. The three comparison columns are your selected window shifted back by its own length, by a month and by a year.'),
+  'Online and branches combined, for '+s+' &rarr; '+e+'. Grey values under each change are what that figure was in the comparison window.',
+  '<div style="overflow-x:auto"><table class="ovt"><tr><th></th><th>'+W.map(w=>w[0]).join('</th><th>')+'</th></tr>'+body+'</table></div>'
+  +'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+}
 
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
@@ -6044,7 +6211,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-151831';
+const BUILD='20260828-153716';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
