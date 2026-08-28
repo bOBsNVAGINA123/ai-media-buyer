@@ -1443,6 +1443,22 @@ def pull_bosta(months_back=13, fee_sample=150, prev=None):
                     fees[t] = dict(seed)
                     log("  bosta fee: live sample n=%d for %s is thinner than the validated %d - keeping validated"
                         % (len(vals), t, seed.get("n", 0)))
+        # An exact pass may have priced every parcel in a month from the courier's own record
+        # (bosta_exact.py, ~0.36 req/s so it runs offline). Where that file covers a month, its
+        # total is the courier's own arithmetic, not count x a mean, and it wins outright.
+        exact = {}
+        try:
+            _xp = os.path.join(DOCS, "bosta_exact.json")
+            if os.path.exists(_xp):
+                exact = json.load(open(_xp)) or {}
+                log("bosta exact totals loaded for months: %s" % ",".join(sorted(exact)))
+        except Exception as e:
+            log("bosta exact load fail", str(e)[:90])
+        for mk, mv in (exact or {}).items():
+            if mk in months and isinstance(mv, dict) and mv.get("total"):
+                months[mk]["exactTotal"] = round(float(mv["total"]))
+                months[mk]["exactN"] = mv.get("n")
+                months[mk]["exactByType"] = mv.get("byType") or {}
         for t, sd in BOSTA_FEE_SEED.items():
             if (fees.get(t) or {}).get("n", 0) < sd.get("n", 0): fees[t] = dict(sd)
         out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
