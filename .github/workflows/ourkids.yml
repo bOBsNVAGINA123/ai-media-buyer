@@ -18,7 +18,10 @@ name: OurKids Live Dashboard
 #     out whether it even runs                         -> push trigger on the code
 on:
   schedule:
-    - cron: "23 */3 * * *"     # every 3 hours at :23 -- off the :00 rush, which GitHub drops. UTC.
+    # v6.4 (28 Aug 2026): GitHub silently DROPPED 6 of 8 slots on 27 Aug -- data sat 12h stale twice.
+    # Cron is best-effort on shared runners, so we ask hourly and skip cheaply when data is still fresh:
+    # a dropped slot now costs one hour, not half a day. Skipped runs exit in seconds.
+    - cron: "17 * * * *"       # hourly at :17 -- off the :00/:30 rush. UTC.
   push:
     branches: [main]
     paths:
@@ -42,11 +45,29 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 2}
+      - name: Freshness gate (skip if data.js is still fresh)
+        id: gate
+        run: |
+          AGE=999999
+          if [ -f docs/ourkids/data.js ]; then
+            LAST=$(git log -1 --format=%ct -- docs/ourkids/data.js || echo 0)
+            NOW=$(date +%s)
+            AGE=$(( (NOW - LAST) / 60 ))
+          fi
+          echo "data.js is $AGE minutes old"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$AGE" -lt 150 ]; then
+            echo 'fresh enough -- skipping this hourly slot'
+            echo 'skip=1' >> $GITHUB_OUTPUT
+          else
+            echo 'skip=0' >> $GITHUB_OUTPUT
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Build the dashboard data
+        if: steps.gate.outputs.skip != '1'
         id: build
         env:
           ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
@@ -75,7 +96,7 @@ jobs:
       # interpreter crash, a runner OOM, a network stall killed by the timeout.
       # One patient retry costs a minute and rescues most transient API blips.
       - name: Retry once if the build failed
-        if: failure()
+        if: steps.gate.outputs.skip != '1' && (failure())
         env:
           ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
           ODOO_DB:      ${{ secrets.ODOO_DB }}
@@ -120,7 +141,7 @@ jobs:
       # and including it meant this bot competed with real dashboard edits over the same
       # file -- which is where the conflicts came from in the first place.
       - name: Commit fresh data
-        if: always()
+        if: steps.gate.outputs.skip != '1' && (always())
         run: |
           set -u
           git config user.name "ourkids-dashboard"
@@ -154,7 +175,7 @@ jobs:
       # Prints the outcome on the run's summary page, so "is it healthy?" is answered
       # by looking, not by reading logs.
       - name: Report
-        if: always()
+        if: steps.gate.outputs.skip != '1' && (always())
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json, os
@@ -213,7 +234,7 @@ jobs:
       # bytes. It now runs from the REPO ROOT, not docs/: Root Directory is applied by
       # Vercel on top of whatever is uploaded, so `cd docs` would resolve to docs/docs.
       - name: Publish to the private mirror (fallback -- Git integration is the primary)
-        if: always()
+        if: steps.gate.outputs.skip != '1' && always()
         continue-on-error: true
         env:
           VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
