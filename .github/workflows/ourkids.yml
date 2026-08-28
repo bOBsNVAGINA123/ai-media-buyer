@@ -85,6 +85,7 @@ jobs:
           GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
           GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
           GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          BOSTA_API_KEY:         ${{ secrets.BOSTA_API_KEY }}
           TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
           # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
@@ -113,6 +114,7 @@ jobs:
           GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
           GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
           GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          BOSTA_API_KEY:         ${{ secrets.BOSTA_API_KEY }}
           TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
           # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
