@@ -2321,7 +2321,7 @@ function ovCard(g){
   ['h','DELIVERY (ONLINE)'],
   ['Delivery, net','delNet',M,1,'What customers paid for shipping minus the courier bill. Negative means product margin is paying for delivery.'],
   ['  Courier bill','delCost',M,0,'Posted to Odoo where it exists; modelled at the settled cost per order where it does not.'],
-  ['  Cost of returned orders','retCost',M,0,'The return leg you are billed for, plus the outbound leg that earned nothing. A returned order is paid for twice.'],
+  ['  Freight on failed + returned','retCost',M,0,'Both courier legs on parcels that came back \u2014 refused at the door (never paid for) and customer refunds. Freight only; the refunded sale is a separate line in the Shopify P&L.'],
   ['h','CUSTOMERS'],
   ['New customers','newc',N,1,'First-ever Shopify orders plus first-ever POS receipts.'],
   ['Orders','orders',N,1,'Shopify orders plus POS receipts.'],
@@ -2399,7 +2399,7 @@ function bostaCard(g){
  /* The per-month figure understates the habit. Total both legs across everything pulled so a
     reader sees the size of the problem, not one month of it. */
  const cum=R.reduce(function(a,x){return {legs:a.legs+x.retLegs,ret:a.ret+x.retCost,out:a.out+x.retLegs*fee('Send')};},{legs:0,ret:0,out:0});
- notes.push(['#e23a63','<b>Across the '+R.length+' months pulled, '+cum.legs.toLocaleString()+' parcels came back.</b> '
+ notes.push(['#e23a63','<b>Across the '+R.length+' months pulled, '+cum.legs.toLocaleString()+' parcels came back &mdash; most of them refused at the door rather than refunded.</b> '
   +M2(cum.ret)+' paid on the return legs, plus '+M2(cum.out)+' already spent sending those same parcels out that earned nothing &mdash; '
   +'<b>'+M2(cum.ret+cum.out)+' of returned-order cost in total</b>, about '+M2((cum.ret+cum.out)/R.length)+' a month.']);
  notes.push(['#e23a63','<b>A returned parcel is billed twice.</b> Sending costs '+M2(fee('Send'))+' and the return leg costs '+M2(fee('Return to Origin'))+', so an order that comes back costs about <b>'+M2(fee('Send')+fee('Return to Origin'))+' and brings in nothing</b>. In '+last.m+' that happened '+last.retLegs.toLocaleString()+' times &mdash; <b>'+M2(last.retCost)+' on return legs alone</b>, on top of the '+M2(last.retLegs*fee('Send'))+' already spent sending those same parcels out.']);
@@ -5043,10 +5043,11 @@ function rShip2(g,mons,T,F,SH){
      was already paid for and earned nothing -- both legs belong here, month by month, next to
      the free-delivery line. Straight from Bosta's own shipment records. */
   null,
-  {n:'Return legs billed by the courier',f:m=>bRetLegs(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Return to Origin plus Customer Return Pickup shipments created that month, counted by Bosta.'},
-  {n:'  paid on the return leg',f:m=>bRetLegCost(m)?-bRetLegCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Return legs x the sampled fee for that shipment type.'},
-  {n:'  outbound leg that earned nothing',f:m=>bRetLegs(m)?-bRetLegs(m)*bFee('Send'):null,fmt:SIG,sh:1,gd:-1,tt:'You had already paid to send each of those parcels before it came back.'},
-  {n:'COST OF RETURNED ORDERS (both legs)',f:m=>{const v=bRetTotal(m);return v?-v:null;},fmt:SIG,sh:1,b:1,gd:-1,tt:'What returns cost you in courier fees alone. The lost product margin is a separate line above.'},
+  {n:'FAILED DELIVERY &mdash; parcels refused or undeliverable',f:m=>bFailN(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Bosta &ldquo;Return to Origin&rdquo;. COD on these is zero &mdash; nothing was ever collected, so there is no refund. The customer refused at the door or could not be reached.'},
+  {n:'  courier cost, out and back',f:m=>bFailCost(m)?-bFailCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'The return leg plus the outbound leg you had already paid for. No revenue was ever recognised against it.'},
+  {n:'CUSTOMER RETURNED IT &mdash; refunded orders',f:m=>bRefN(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Bosta &ldquo;Customer Return Pickup&rdquo;. COD on these is NEGATIVE &mdash; money going back to the customer. They received it, paid, and sent it back.'},
+  {n:'  courier cost, out and back',f:m=>bRefCost(m)?-bRefCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Both legs again. The refunded sale itself is in the Refunds line, not here.'},
+  {n:'COURIER COST OF FAILED + RETURNED',f:m=>{const v=bRetTotal(m);return v?-v:null;},fmt:SIG,sh:1,b:1,gd:-1,tt:'Freight only. The lost sale on a refund and the lost margin sit in their own lines above.'},
   {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
   {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
   {n:'Net delivery per confirmed order',f:m=>s2('conf',m)?(s2('col',m)-s2('cost',m))/s2('conf',m):null,fmt:SIG,sh:1},
@@ -5177,12 +5178,26 @@ function s2h(m){return S2f()&&S2If()[m]!=null;}
 /* Return economics per month, straight from the courier's own shipment records. Returns null
    for months outside the pulled window so the table prints an em dash rather than a zero. */
 function bFee(t){const B=window.O&&O.bosta;return (B&&B.fees&&B.fees[t]&&B.fees[t].mean)||0;}
-function bRetLegs(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
- const bt=B.months[m].byType||{};return (bt['Return to Origin']||0)+(bt['Customer Return Pickup']||0);}
-function bRetLegCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
- const bt=B.months[m].byType||{};
- return (bt['Return to Origin']||0)*bFee('Return to Origin')+(bt['Customer Return Pickup']||0)*bFee('Customer Return Pickup');}
-function bRetTotal(m){return bRetLegCost(m)+bRetLegs(m)*bFee('Send');}
+/* Bosta's two return types are NOT the same event, and the COD field proves it:
+     Return to Origin      -- COD 0. Nothing was ever collected. The parcel was refused at the
+                              door or the customer could not be reached. A FAILED DELIVERY: no
+                              revenue was ever taken, so there is nothing to refund. You lose
+                              both courier legs and that is all.
+     Customer Return Pickup -- COD NEGATIVE (-108,562 in Jul 2026). Money going back out. The
+                              customer received and paid for the order and then sent it back.
+                              A REFUND: you lose both courier legs AND the sale.
+   Merging them under "returns" hides which one is growing, and they need different fixes --
+   failed delivery is an address, contact and expectation problem; a refund is a product,
+   sizing or description problem. */
+function bCnt(m,t){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
+ return ((B.months[m].byType||{})[t])||0;}
+function bFailN(m){return bCnt(m,'Return to Origin');}
+function bRefN(m){return bCnt(m,'Customer Return Pickup');}
+/* Both legs: the return itself, plus the outbound trip that was already paid for. */
+function bFailCost(m){const n=bFailN(m);return n?n*(bFee('Return to Origin')+bFee('Send')):0;}
+function bRefCost(m){const n=bRefN(m);return n?n*(bFee('Customer Return Pickup')+bFee('Send')):0;}
+function bRetLegs(m){return bFailN(m)+bRefN(m);}
+function bRetTotal(m){return bFailCost(m)+bRefCost(m);}
 function bostaCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
  const bt=B.months[m].byType||{},F=B.fees||{};
  return Object.keys(bt).reduce((a,t)=>a+(bt[t]||0)*(((F[t]||{}).mean)||0),0);}
@@ -6479,7 +6494,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-183753';
+const BUILD='20260828-184611';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
