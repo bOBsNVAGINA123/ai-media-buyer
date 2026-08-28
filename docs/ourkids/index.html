@@ -2240,6 +2240,25 @@ function ovRange(a,b){
   const i0=Math.round((new Date(a+'T00:00:00Z')-t0)/864e5),i1=Math.round((new Date(b+'T00:00:00Z')-t0)/864e5);
   if(i1<W.n){bnc=0;names.forEach(n=>{const z=BD[n];if(!z)return;for(let i=Math.max(0,i0);i<=i1;i++)bnc+=(z.nc||[])[i]||0;});}}
  out.bNc=bnc;
+ /* ---- delivery: monthly ledger, apportioned by days like the branch figures ----
+    Online only, so it is labelled that way. Uses s2() so an unsettled month arrives modelled
+    rather than as a zero, exactly as it does on the P&L. */
+ let dcol=0,dcost=0,dret=0,dAny=false;
+ mo.forEach(([m2,d2])=>{
+  if(typeof s2h!=='function'||!s2h(m2))return;
+  const dim2=dim(m2);let f2;
+  if(cut&&m2===cut.slice(0,7)){const el2=+lastDone.slice(8,10);f2=el2?Math.min(1,d2/el2):0;}
+  else f2=d2/dim2;
+  dAny=true;dcol+=s2('col',m2)*f2;dcost+=s2('cost',m2)*f2;
+  const bm=(O.bosta&&O.bosta.months&&O.bosta.months[m2])||null;
+  if(bm){const bt=bm.byType||{},FF2=(O.bosta.fees||{});
+   const fe=t=>((FF2[t]||{}).mean)||0;
+   const legs=(bt['Return to Origin']||0)+(bt['Customer Return Pickup']||0);
+   const legCost=(bt['Return to Origin']||0)*fe('Return to Origin')+(bt['Customer Return Pickup']||0)*fe('Customer Return Pickup');
+   dret+=(legCost+legs*fe('Send'))*f2;}});
+ out.delNet=dAny?(dcol-dcost):null;
+ out.delCost=dAny?dcost:null;
+ out.retCost=dret||null;
  /* ---- derived ---- */
  const add=(x,y)=>(x==null||y==null)?null:x+y;
  out.sales=add(out.onRev,out.bRev);
@@ -2288,6 +2307,10 @@ function ovCard(g){
   ['Ad spend','spend',M,0,'Meta plus Google plus TikTok. Spending more is not by itself good or bad, so this row is not coloured.'],
   ['Profit after ad spend','pas',M,1,'Gross profit minus ad spend. Still before rent and payroll.'],
   ['MER','mer',X,1,'Total sales divided by total ad spend.'],
+  ['h','DELIVERY (ONLINE)'],
+  ['Delivery, net','delNet',M,1,'What customers paid for shipping minus the courier bill. Negative means product margin is paying for delivery.'],
+  ['  Courier bill','delCost',M,0,'Posted to Odoo where it exists; modelled at the settled cost per order where it does not.'],
+  ['  Cost of returned orders','retCost',M,0,'The return leg you are billed for, plus the outbound leg that earned nothing. A returned order is paid for twice.'],
   ['h','CUSTOMERS'],
   ['New customers','newc',N,1,'First-ever Shopify orders plus first-ever POS receipts.'],
   ['Orders','orders',N,1,'Shopify orders plus POS receipts.'],
@@ -5009,7 +5032,7 @@ function rShip2(g,mons,T,F,SH){
  let sub='Across the '+full.length+' settled months in this window you collected <b>E&pound;'+money(tc)+'</b> in delivery charges against a courier bill of <b>E&pound;'+money(tk)+'</b> &mdash; a net of <b>'+(nt<0?'&minus;E&pound;'+money(-nt)+', i.e. delivery is a subsidy you fund out of product margin':'E&pound;'+money(nt))+'</b>. Customers cover <b>'+(tk?(tc/tk*100).toFixed(0):0)+'%</b> of it. Of that bill, <b>E&pound;'+money(tf)+'</b> is the allocated cost of orders shipped free.';
  if(cols.indexOf(lag)>=0)sub+=' <b style="color:#e23a63">'+lag+' is excluded from those totals</b> &mdash; Bosta settles COD on a lag, so only the first batch of the newest month has posted. Its column is still shown so you can watch it fill in.';
  sub+=' Returns before '+rf+' were booked as cancellations, so the returned rows read near zero until then.';
- pnlCard(g,'odoo','Delivery Economics &mdash; what free shipping actually costs (ACTUAL)',sub,T(L,cols)+((function(){var pm=cols.filter(function(m){return s2prov(m);});if(!pm.length)return '';/* The newest column is priced from the courier feed, not the accounts. Without saying so, a   105% recovery rate and a halved cost-per-order read as a win rather than a part-month. */var R=shipRate();var M0=function(v){return 'E&pound;'+Math.round(v).toLocaleString();};return '<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>'+pm.join(', ')+' is estimated, not posted.</b> Bosta settles on a lag so nothing has reached the ledger for it. Left as zero it would have booked that month&rsquo;s entire shipping collection as profit; priced only on parcels already handed over it read far too cheap, because roughly a quarter of the month has not shipped yet. It is therefore charged at <b>'+(R?M0(R.rate):'&mdash;')+' per confirmed order</b> &mdash; the rate actually paid across the '+(R?R.n:0)+' settled months to '+(R?R.to:'&mdash;')+', which is real money out of the bank and so already includes collection fees, insurance and the return legs, not just the shipment fee. '+pm.map(function(m){return '<b>'+m+'</b>: '+M0(s2est(m))+' estimated, of which '+M0(s2floor(m))+' is already on parcels the courier has taken.';}).join(' ')+' That rate has ranged '+(R?M0(R.lo)+' to '+M0(R.hi):'&mdash;')+' a month over the same window, which is the honest width of this estimate.</span></div></div>';})()));
+ pnlCard(g,'odoo','Delivery Economics &mdash; what free shipping actually costs (ACTUAL)',sub,T(L,cols)+((function(){var pm=cols.filter(function(m){return s2prov(m);});if(!pm.length)return '';/* The newest column is priced from the courier feed, not the accounts. Without saying so, a   105% recovery rate and a halved cost-per-order read as a win rather than a part-month. */var R=shipRate();var M0=function(v){return 'E&pound;'+Math.round(v).toLocaleString();};return '<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>'+pm.join(', ')+' is estimated, not posted.</b> In every settled month the courier bill reaches Odoo in 9 to 13 postings spread across that same month, so this is not the usual rhythm running late &mdash; nothing at all has been booked to the Bosta account for it, and the last courier posting of any kind was 30 July. Left as zero it would have booked that month&rsquo;s entire shipping collection as profit; priced only on parcels already handed over it read far too cheap, because roughly a quarter of the month has not shipped yet. It is therefore charged at <b>'+(R?M0(R.rate):'&mdash;')+' per confirmed order</b> &mdash; the rate actually paid across the '+(R?R.n:0)+' settled months to '+(R?R.to:'&mdash;')+', which is real money out of the bank and so already includes collection fees, insurance and the return legs, not just the shipment fee. '+pm.map(function(m){return '<b>'+m+'</b>: '+M0(s2est(m))+' estimated, of which '+M0(s2floor(m))+' is already on parcels the courier has taken.';}).join(' ')+' That rate has ranged '+(R?M0(R.lo)+' to '+M0(R.hi):'&mdash;')+' a month over the same window, which is the honest width of this estimate. It is replaced by the real figure the moment those invoices are booked &mdash; what is behind here is the ledger, not the courier.</span></div></div>';})()));
  /* Per-order outcome costs. Odoo cannot answer this: the ledger holds one
     settlement total per Bosta batch, not a per-shipment breakdown. This comes
     from the Bosta cash-cycle export, deduplicated by Order Id. */
@@ -6421,7 +6444,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-180914';
+const BUILD='20260828-181637';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
