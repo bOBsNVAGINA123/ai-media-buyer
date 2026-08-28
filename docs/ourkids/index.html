@@ -93,7 +93,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="auC" class="hide"><div class="banner" id="bn_au"></div><div class="grid" id="g_au"></div></div><div id="avC" class="hide"><div class="banner" id="bn_av"></div><div class="grid" id="g_av"></div></div><div id="agC" class="hide"><div class="banner" id="bn_ag"></div><div class="grid" id="g_ag"></div></div><div id="aqC" class="hide"><div class="banner" id="bn_aq"></div><div class="grid" id="g_aq"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -951,8 +951,7 @@ const TABGROUPS=[
  ['Consumer',[['cp','Customer Portfolio'],['co','Cohorts'],['rt','Retention'],['lt','LTGP : CAC'],['cj','Journeys']]],
  ['Ads & Media',[['me','Media Efficiency'],['mi','Paid Insights'],['ce','Campaigns'],['ic','Incrementality'],['ao','Ads \u2192 Stores'],['mb','Creative Benchmarks'],['bg','Launches & Budgets'],['ab','\u2691 Advisory'],['si','\ud83d\udd0d Search Advisor'],['tk','TikTok']]],
  ['Finance & Ops',[['pl','Plan'],['cs','Costs & Payroll'],['vl','Vendors & Products']]],
- ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]]
 ];
 let TABGRP=0;
 function grpOf(t){for(let i=0;i<TABGROUPS.length;i++){if(TABGROUPS[i][1].some(x=>x[0]===t))return i;}return 0;}
@@ -985,7 +984,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -993,7 +992,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -1364,6 +1363,7 @@ DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const part
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
+ try{paceCard(g);}catch(e){}
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
  if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;const k=c.k(o)[0];if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
  ord.forEach(id=>{const _pl=PREVLBL;(function(o){const c=by(id),el=document.createElement('div');el.className='card'+(c.full?' full':'');if(c.a)el.dataset.a=c.a;el.dataset.id=id;const na=c.ad&&!o.ad;let b;
@@ -1836,6 +1836,225 @@ function splitPanel(elId,labels,top,bot){
  const d=A.chartArea.right-B.chartArea.right;
  if(Math.abs(d)>0.5){const w=d>0?A:B;w.options.layout={padding:{right:Math.abs(d)}};w.update();}
  ch.push(A);ch.push(B);}
+/* v9.11 PACE. Nothing in this tool answered the question a trading day actually starts with:
+   am I ahead or behind right now? Every other view is a completed window compared to another
+   completed window, which cannot tell you that on the 12th. This one stacks revenue up day by
+   day and lays the same climb from last month and the same month last year underneath, then
+   states the gap AT THE SAME DAY OF THE MONTH -- comparing 12 days against a finished month is
+   the mistake this chart exists to stop. */
+function paceCard(g){
+ if(!O.fin||!DD.length)return;
+ const SC0=(O.shop&&O.shop.rev)?O.shop.rev:O.fin.rev;
+ const cut=O.partial||null;
+ const lastDone=cut?addD(cut,-1):DD[DD.length-1];
+ const curM=lastDone.slice(0,7);
+ const mAdd=(m,k)=>{const y=+m.slice(0,4),mo=+m.slice(5,7)-1+k;const d=new Date(Date.UTC(y,mo,1));return d.toISOString().slice(0,7);};
+ const prevM=mAdd(curM,-1),lyM=mAdd(curM,-12);
+ const dim=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+ const cum=m=>{const out=new Array(31).fill(null);let t=0;let any=false;
+  for(let i=0;i<DD.length;i++){const d=DD[i];if(d.slice(0,7)!==m)continue;if(cut&&d>=cut)continue;
+   t+=(SC0[i]||0)*1000;out[+d.slice(8,10)-1]=t;any=true;}
+  return any?out:null;};
+ const A=cum(curM),B=cum(prevM),L=cum(lyM);
+ if(!A)return;
+ const dayNow=+lastDone.slice(8,10);
+ const at=(arr,d)=>{if(!arr)return null;for(let j=Math.min(d,31)-1;j>=0;j--)if(arr[j]!=null)return arr[j];return null;};
+ const now=at(A,dayNow),bSame=at(B,dayNow),lSame=at(L,dayNow);
+ const bFull=B?at(B,31):null,lFull=L?at(L,31):null;
+ const M=v=>'E£'+Math.round(v).toLocaleString();
+ const pct=(a,b)=>b?((a/b-1)*100):null;
+ const pB=pct(now,bSame),pL=pct(now,lSame);
+ const sign=v=>v==null?'&mdash;':(v>=0?'+':'&minus;')+Math.abs(v).toFixed(0)+'%';
+ const col=v=>v==null?'#9aa3b5':(v>=0?'#12a06e':'#e23a63');
+ /* projection: hold the rest of the month to last month's shape from this day on */
+ let proj=null;
+ if(B&&bSame&&bFull&&now)proj=now*(bFull/bSame);
+ const rows=[];
+ rows.push(['#0F172A','<b>Day '+dayNow+' of '+curM+'.</b> '+M(now)+' banked so far. At the same day last month you were on '+(bSame==null?'&mdash;':M(bSame))+' &mdash; <b style="color:'+col(pB)+'">'+sign(pB)+'</b>. Same day last year '+(lSame==null?'&mdash;':M(lSame))+' &mdash; <b style="color:'+col(pL)+'">'+sign(pL)+'</b>.']);
+ if(proj)rows.push([C.indigo,'<b>If the rest of this month behaves like the rest of last month, you land near '+M(proj)+'</b> against '+M(bFull)+' last month. That is an arithmetic carry-forward of the shape of one month, not a forecast &mdash; a promotion, a payday or a school week bends it.']);
+ rows.push([C.orange,'<b>Read the gap vertically at today&rsquo;s day, never at the end.</b> The faded tails of the two older lines are complete months; this month&rsquo;s line stops at day '+dayNow+' because that is all that exists. '+(cut?('Today ('+cut+') is still coming in and is excluded everywhere.'):'')]);
+ const lab=[];for(let d=1;d<=31;d++)lab.push(String(d));
+ pnlCard(g,'odoo','Pace &mdash; is this month ahead or behind?'+INFO('Revenue added up day by day from the 1st. The solid line is this month so far; the two faded lines are last month and the same month last year, run over the same day numbers. Because all three start at zero on the 1st, the vertical gap at any day is the real like-for-like difference at that point in the month.'),
+  'Shopify revenue, cumulative from the 1st. Compared at the same day of the month, so a part-month is never measured against a finished one.',
+  '<div style="position:relative;height:250px"><canvas id="paceC"></canvas></div>'
+  +'<div class="ins" style="margin-top:8px">'+rows.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+ const ds=[{label:curM+' (this month)',data:A,borderColor:'#5a5bf0',backgroundColor:'#5a5bf016',fill:true,borderWidth:3,pointRadius:0,tension:.15,spanGaps:false}];
+ if(B)ds.push({label:prevM+' (last month)',data:B,borderColor:'#9aa3b5',borderWidth:2,pointRadius:0,tension:.15,borderDash:[5,4],spanGaps:false});
+ if(L)ds.push({label:lyM+' (last year)',data:L,borderColor:'#c9834a',borderWidth:1.8,pointRadius:0,tension:.15,borderDash:[2,3],spanGaps:false});
+ const NOWLINE={id:'paceNow',afterDatasetsDraw(cc){const x=cc.scales.x.getPixelForValue(String(dayNow));const a=cc.chartArea;if(!a||!isFinite(x))return;
+  const t=cc.ctx;t.save();t.strokeStyle='#5a5bf0';t.setLineDash([3,3]);t.lineWidth=1;t.beginPath();t.moveTo(x,a.top);t.lineTo(x,a.bottom);t.stroke();
+  t.setLineDash([]);t.fillStyle='#5a5bf0';t.font='800 10px Inter,system-ui,sans-serif';t.textAlign=x>a.right-60?'right':'left';
+  t.fillText(' day '+dayNow,x,a.top+10);t.restore();}};
+ ch.push(new Chart(document.getElementById('paceC'),{plugins:[NOWLINE],type:'line',data:{labels:lab,datasets:ds},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:14,font:{size:11}}},
+    tooltip:{callbacks:{title:it=>'Day '+it[0].label,label:c2=>c2.dataset.label+': '+M(c2.parsed.y)}}},
+   scales:{x:{grid:{display:false},title:{display:true,text:'day of month',font:{size:10}},ticks:{maxTicksLimit:16,font:{size:10}}},
+    y:{beginAtZero:true,grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k'}}}}}));}
+
+/* v9.11 RETURN AGAINST SPEND LEVEL. The tool could tell you what a platform returned last week
+   but never whether that return holds as you push more money through it -- which is the actual
+   budget question. Weeks are the unit, not days: a day's spend and a day's revenue are pulled
+   apart by attribution lag and by the weekend, and whole weeks absorb both. Weeks are
+   non-overlapping so no week is counted twice and the shape is not autocorrelation. */
+function spendCurveCard(g){
+ const A=O.ad;if(!A||!A.n)return;
+ const PF=[{k:'meta',n:'Meta',c:'#3a9bff',sp:'mspend',v:'mecomrev',f:af('meta')},
+           {k:'google',n:'Google',c:'#c9834a',sp:'gspend',v:'gecomrev',f:af('google')},
+           {k:'tt',n:'TikTok',c:'#12a06e',sp:'tspend',v:'ttValue',f:af('tt')}];
+ const nW=Math.floor(A.n/7);if(nW<10)return;
+ const sets=[],notes=[];let any=false;
+ PF.forEach(P=>{
+  const wk=[];
+  for(let w=0;w<nW;w++){let sp=0,vl=0;
+   for(let d=A.n-(w+1)*7;d<A.n-w*7;d++){if(d<0)continue;sp+=(A[P.sp]||[])[d]||0;vl+=((A[P.v]||[])[d]||0)*P.f;}
+   if(sp>0)wk.push({sp,vl});}
+  if(wk.length<10)return;
+  any=true;
+  wk.sort((a,b)=>a.sp-b.sp);
+  const NB=5,per=Math.floor(wk.length/NB);if(!per)return;
+  const pts=[];
+  for(let b=0;b<NB;b++){const seg=wk.slice(b*per,b===NB-1?wk.length:(b+1)*per);
+   const sp=seg.reduce((a,x)=>a+x.sp,0),vl=seg.reduce((a,x)=>a+x.vl,0);
+   if(sp>0)pts.push({x:sp/seg.length,y:vl/sp,n:seg.length});}
+  if(pts.length<3)return;
+  sets.push({label:P.n+' — return per E£1',data:pts,borderColor:P.c,backgroundColor:P.c,showLine:true,borderWidth:2.6,pointRadius:5,pointHoverRadius:8,tension:0});
+  /* where the account is actually running right now, so the curve is readable as "you are here" */
+  let cur=0;for(let d=Math.max(0,A.n-28);d<A.n;d++)cur+=(A[P.sp]||[])[d]||0;
+  const curW=cur/4;
+  const lo=pts[0],hi=pts[pts.length-1];
+  const drop=lo.y?((hi.y/lo.y-1)*100):null;
+  notes.push([P.c,'<b>'+P.n+'.</b> Quietest weeks averaged E£'+Math.round(lo.x).toLocaleString()+' a week and returned <b>'+lo.y.toFixed(2)+'&times;</b>; heaviest weeks averaged E£'+Math.round(hi.x).toLocaleString()+' and returned <b>'+hi.y.toFixed(2)+'&times;</b>'
+   +(drop==null?'':' &mdash; <b style="color:'+(drop<0?'#e23a63':'#12a06e')+'">'+(drop>=0?'+':'&minus;')+Math.abs(drop).toFixed(0)+'%</b> as the weekly budget roughly '+(lo.x?(hi.x/lo.x).toFixed(1):'?')+'&times;d')
+   +'. You are currently running about <b>E£'+Math.round(curW).toLocaleString()+' a week</b>.']);});
+ if(!any)return;
+ notes.push(['#e23a63','<b>This is not a spend test and cannot be read as one.</b> Nobody randomised these budgets. Heavy weeks are heavy for reasons &mdash; back-to-school, a launch, a sale &mdash; and those same reasons move revenue on their own. A falling line is a reason to run a real holdout on that platform, not proof on its own that the money stopped working.']);
+ notes.push(['#7c869c','<b>Online value only, at your current attribution setting.</b> Meta&rsquo;s in-store leg is deliberately left out of this curve: it is matched offline purchase value, not incremental, so folding it in would lift Meta&rsquo;s line by a multiple that does not respond to budget the way the online leg does.']);
+ pnlCard(g,'ads','Does the next pound still work? &mdash; return against spend level'+INFO('Every non-overlapping week in the ad history is measured twice: what you spent on that platform, and what it returned online. The weeks are then ranked by spend and grouped into five equal-sized bands. Each dot is one band: how much you spent in an average week of that band, and what a pound returned across it. A line that slopes down means the heavier weeks bought less per pound than the lighter ones.'),
+  'Non-overlapping weeks from the last '+nW+' weeks of ad history, grouped into five equal bands by weekly spend. Y is value per pound, so all three platforms share one honest scale.',
+  '<div style="position:relative;height:270px"><canvas id="spcC"></canvas></div>'
+  +'<div class="ins" style="margin-top:8px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+ ch.push(new Chart(document.getElementById('spcC'),{type:'scatter',data:{datasets:sets},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,
+   plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:14,font:{size:11}}},
+    tooltip:{callbacks:{label:c2=>c2.dataset.label.split(' —')[0]+': E£'+Math.round(c2.parsed.x).toLocaleString()+'/week returned '+c2.parsed.y.toFixed(2)+'× ('+(c2.raw.n||'?')+' weeks)'}}},
+   scales:{x:{type:'linear',grid:{color:'#f4f6fa'},title:{display:true,text:'average spend in that band, E£ per week',font:{size:10}},ticks:{font:{size:10},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}},
+    y:{beginAtZero:true,grid:{color:'#eef0f5'},title:{display:true,text:'online value returned per E£1 spent',font:{size:10}},ticks:{font:{size:10},callback:v=>v.toFixed(1)+'×'}}}}}));}
+
+/* v9.11 WHEN YOU PAY vs WHEN THEY BUY. The weekend effect was established in analysis but lived
+   only as a sentence. Both series are shares of their own total, so they sit on one axis and the
+   gap is directly readable: a weekday where the green bar clears the grey one is a day the shops
+   earn more of their week than it costs you. */
+function weekdayCard(g){
+ const BL=O.bl,A=O.ad;if(!BL||!BL.b||!A||!A.n)return;
+ const names=Object.keys(BL.b);if(!names.length)return;
+ const t0=new Date(BL.start+'T00:00:00Z').getTime();
+ const aT=new Date(A.start+'T00:00:00Z').getTime();
+ const cut=O.partial||null;
+ const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ const sp=new Array(7).fill(0),rv=new Array(7).fill(0),nd=new Array(7).fill(0);
+ const weeks={};let d0=null,d1=null;
+ for(let i=0;i<BL.n;i++){
+  const ds=new Date(t0+i*864e5).toISOString().slice(0,10);
+  if(cut&&ds>=cut)continue;
+  const ai=Math.round((new Date(ds+'T00:00:00Z')-aT)/864e5);
+  if(ai<0||ai>=A.n)continue;
+  const w=new Date(ds+'T00:00:00Z').getUTCDay();
+  let r=0;names.forEach(n=>{r+=(BL.b[n]||[])[i]||0;});
+  const s=((A.mspend||[])[ai]||0)+((A.gspend||[])[ai]||0)+((A.tspend||[])[ai]||0);
+  sp[w]+=s;rv[w]+=r;nd[w]++;
+  if(!d0)d0=ds;d1=ds;
+  const mon=new Date(new Date(ds+'T00:00:00Z').getTime()-((w+6)%7)*864e5).toISOString().slice(0,10);
+  (weeks[mon]=weeks[mon]||new Array(7).fill(null))[w]=r;
+ }
+ const tS=sp.reduce((a,b)=>a+b,0),tR=rv.reduce((a,b)=>a+b,0);
+ if(!tS||!tR)return;
+ const shS=sp.map(v=>v/tS*100),shR=rv.map(v=>v/tR*100);
+ const gap=DOW.map((n,i)=>({n,i,g:shR[i]-shS[i],r:sp[i]?rv[i]/sp[i]:null}));
+ const best=gap.slice().sort((a,b)=>b.g-a.g)[0],worst=gap.slice().sort((a,b)=>a.g-b.g)[0];
+ const wkEnd=[5,6],we=r2=>wkEnd.reduce((a,i)=>a+r2[i],0);
+ const notes=[];
+ notes.push([C.grn,'<b>Friday and Saturday take '+we(shR).toFixed(1)+'% of the week&rsquo;s shop revenue but only '+we(shS).toFixed(1)+'% of the week&rsquo;s ad spend.</b> The money is spent flat across the week and collected at the weekend &mdash; people served an ad midweek walk in on their day off. That lag is why same-day ROAS reads badly on a Tuesday and flatters you on a Saturday.']);
+ notes.push([C.indigo,'<b>'+best.n+' is the strongest day</b> &mdash; '+shR[best.i].toFixed(1)+'% of shop revenue against '+shS[best.i].toFixed(1)+'% of spend, E£'+Math.round(best.r).toLocaleString()+' of shop revenue per pound of ad spend that day. <b>'+worst.n+' is the weakest</b>, at '+shR[worst.i].toFixed(1)+'% of revenue against '+shS[worst.i].toFixed(1)+'% of spend.']);
+ notes.push([C.orange,'<b>This does not mean move the budget to the weekend.</b> The weekend visit is very likely bought by the midweek impression; cutting midweek spend may simply remove the thing that fills Friday. It is an argument for judging any day&rsquo;s spend on the WEEK it lands in, which is exactly how the spend-response curve on this tab is built.']);
+ const wk=Object.keys(weeks).sort();
+ const flat=[];wk.forEach(k=>weeks[k].forEach(v=>{if(v!=null)flat.push(v);}));
+ flat.sort((a,b)=>a-b);
+ const q=p=>flat.length?flat[Math.min(flat.length-1,Math.floor(p*flat.length))]:0;
+ const lo=q(.05),hi=q(.95);
+ const cell=v=>{if(v==null)return '<td style="padding:3px 5px;color:#c8cede;text-align:center">·</td>';
+  const t=Math.max(0,Math.min(1,(v-lo)/((hi-lo)||1)));
+  return '<td title="'+ 'E£'+Math.round(v).toLocaleString()+'" style="padding:3px 5px;text-align:center;font-size:10px;font-weight:700;color:'+(t>.55?'#fff':'#334')+';background:rgba(18,160,110,'+(0.08+t*0.82).toFixed(2)+')">'+Math.round(v/1000)+'k</td>';};
+ const heat='<div style="overflow-x:auto;margin-top:10px"><table style="border-collapse:separate;border-spacing:2px;font-size:10.5px">'
+  +'<tr><th style="text-align:left;padding:3px 6px;color:#8a93a6;font-weight:800">week of</th>'+DOW.map((n,i)=>'<th style="padding:3px 5px;color:'+(wkEnd.indexOf(i)>=0?'#12a06e':'#8a93a6')+';font-weight:800">'+n+'</th>').join('')+'</tr>'
+  +wk.map(k=>'<tr><td style="padding:3px 6px;color:#5a637a;font-weight:700;white-space:nowrap">'+k.slice(5)+'</td>'+weeks[k].map(cell).join('')+'</tr>').join('')+'</table></div>';
+ pnlCard(g,'odoo','When you pay, and when they actually buy'+INFO('Left: every day in the window is bucketed by weekday. The grey bar is that weekday&rsquo;s share of all ad spend in the window; the green bar is its share of all shop revenue. Below: the same shop revenue as a calendar, one row per week, so you can see whether the weekend pattern is every week or a few big ones.'),
+  'Shop revenue from the Odoo POS daily series ('+d0+' &rarr; '+d1+', '+wk.length+' weeks) against total ad spend across Meta, Google and TikTok on the same days. Both bars are shares of their own total, so they read on one scale.',
+  '<div style="position:relative;height:230px"><canvas id="wdC"></canvas></div>'
+  +'<div style="font-size:11px;color:#5a637a;font-weight:700;margin-top:12px">Shop revenue by week and weekday &mdash; darker is a bigger day</div>'+heat
+  +'<div class="ins" style="margin-top:8px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+ ch.push(new Chart(document.getElementById('wdC'),{type:'bar',data:{labels:DOW,datasets:[
+   {label:'share of ad spend',data:shS,backgroundColor:'#9aa3b5',borderWidth:0},
+   {label:'share of shop revenue',data:shR,backgroundColor:'#12a06e',borderWidth:0}]},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:14,font:{size:11}}},
+    tooltip:{callbacks:{label:c2=>c2.dataset.label+': '+c2.parsed.y.toFixed(1)+'%'}}},
+   scales:{x:{grid:{display:false},ticks:{font:{size:11}}},
+    y:{beginAtZero:true,grid:{color:'#eef0f5'},title:{display:true,text:'% of the window total',font:{size:10}},ticks:{font:{size:10},callback:v=>v.toFixed(0)+'%'}}}}}));}
+
+/* v9.11 WHAT MOVED THE MONEY. The Why tab could list the biggest product movers but never showed
+   the shape of the move itself. A product waterfall was the obvious build and is the wrong one:
+   O.why.prods is a top-80 truncation that accounts for well under half the 28-day change, so it
+   would not add up and the reader would not know. This decomposes the drivers instead, which
+   closes exactly: revenue = orders x items per order x price per item, chained in that order,
+   then the discount line -- which the collector keeps out of rev as its own product -- applied
+   last. The four bars sum to the whole move with nothing left over. */
+function whyWaterfall(g,W){
+ if(!W||!W.cur||!W.prv)return;
+ const c=W.cur,p=W.prv;
+ if(!p.ord||!p.units||!p.rev)return;
+ const upoP=p.units/p.ord,rpuP=p.rev/p.units,upoC=c.units/c.ord,rpuC=c.rev/c.units;
+ const eOrd=(c.ord-p.ord)*upoP*rpuP;
+ const eBask=c.ord*(upoC-upoP)*rpuP;
+ const ePrice=c.ord*upoC*(rpuC-rpuP);
+ const eDisc=(c.disc||0)-(p.disc||0);
+ const netP=p.rev+(p.disc||0),netC=c.rev+(c.disc||0);
+ const resid=(netC-netP)-(eOrd+eBask+ePrice+eDisc);
+ const steps=[['More orders',eOrd],['Items per order',eBask],['Price per item',ePrice],['Discounts given',eDisc]];
+ if(Math.abs(resid)>Math.max(1,Math.abs(netC-netP)*0.005))steps.push(['Unexplained',resid]);
+ const labs=['Prev period'].concat(steps.map(s=>s[0])).concat(['This period']);
+ const bars=[],cols=[];
+ bars.push([0,netP]);cols.push('#9aa3b5');
+ let run=netP;
+ steps.forEach(s=>{const a=run,b=run+s[1];bars.push([a,b]);cols.push(s[1]>=0?'#12a06e':'#e23a63');run=b;});
+ bars.push([0,netC]);cols.push('#5a5bf0');
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const sgn=v=>(v>=0?'+':'&minus;')+M(v);
+ const tot=netC-netP;
+ const big=steps.slice().sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))[0];
+ const notes=[];
+ notes.push(['#0F172A','<b>Net revenue moved '+sgn(tot)+'</b>, from '+M(netP)+' ('+W.ps+' &rarr; '+W.pe+') to '+M(netC)+' ('+W.s+' &rarr; '+W.e+'). The four bars between the two end columns are the whole of that move &mdash; they add up to it exactly, so nothing is hiding outside the chart.']);
+ notes.push([big[1]>=0?'#12a06e':'#e23a63','<b>'+big[0]+' is the biggest single driver at '+sgn(big[1])+'</b>'+(Math.abs(tot)?', which is '+Math.abs(big[1]/tot*100).toFixed(0)+'% of the size of the total move':'')+'.']);
+ if(eDisc<0&&eOrd>0)notes.push([C.orange,'<b>Discounting gave back '+M(eDisc)+' of the '+M(eOrd)+' the extra orders brought in</b> &mdash; '+Math.abs(eDisc/eOrd*100).toFixed(0)+'% of the volume gain. Orders bought with a deeper discount are not the same win as orders bought at list.']);
+ notes.push(['#7c869c','<b>How to read the order of the bars.</b> Volume is applied first, then basket size, then price, then discount &mdash; each one measured on the mix that the earlier ones already produced. Any chained decomposition has to pick an order; a different order would shift value between the middle bars without changing the total or the end columns.']);
+ pnlCard(g,'odoo','What moved the money'+INFO('The left column is last period’s net revenue and the right column is this period’s. Each bar in between starts where the last one finished and shows one driver: more or fewer orders, bigger or smaller baskets, higher or lower price per item, and finally the change in discounts given. Green adds, red takes away.'),
+  'Shopify order lines, this window against the one immediately before it. Revenue = orders × items per order × price per item, with the discount line applied last; the bars close on the end column exactly.',
+  '<div style="position:relative;height:280px"><canvas id="wfC"></canvas></div>'
+  +'<div class="ins" style="margin-top:8px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+ const VL={id:'wfVal',afterDatasetsDraw(cc){const m=cc.getDatasetMeta(0);if(!m)return;const t=cc.ctx;t.save();
+  t.font='800 10px Inter,system-ui,sans-serif';t.textAlign='center';
+  m.data.forEach((el,i)=>{const v=bars[i];const txt=(i===0||i===bars.length-1)?M(v[1]):sgn(v[1]-v[0]);
+   t.fillStyle=(i===0||i===bars.length-1)?'#0F172A':cols[i];
+   const y=Math.min(el.y,el.base)-5;t.fillText(txt,el.x,Math.max(cc.chartArea.top+9,y));});t.restore();}};
+ ch.push(new Chart(document.getElementById('wfC'),{plugins:[VL],type:'bar',data:{labels:labs,datasets:[
+   {label:'net revenue',data:bars,backgroundColor:cols,borderWidth:0,borderRadius:3}]},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,
+   layout:{padding:{top:16}},
+   plugins:{legend:{display:false},
+    tooltip:{callbacks:{label:c2=>{const v=c2.raw;return (c2.dataIndex===0||c2.dataIndex===bars.length-1)?M(v[1]):sgn(v[1]-v[0]);}}}},
+   scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:0,autoSkip:false}},
+    y:{beginAtZero:true,grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k'}}}}}));}
+
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
@@ -1917,7 +2136,7 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
   +rows.map(tr).join('')+'</table></div>');}
 
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{offOnChart(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
@@ -2499,7 +2718,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='ce')return rCE(),void grainNote(t);if(t==='ic')return rIC(),void grainNote(t);if(t==='why')return rWHY(),void grainNote(t);if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ce')return rCE(),void grainNote(t);if(t==='ic')return rIC(),void grainNote(t);if(t==='why')return rWHY(),void grainNote(t);if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -2697,6 +2916,7 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  const r=aRange(ST.s,ST.e);
  document.getElementById('bn10').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>PAID INSIGHTS</b> &mdash; Meta, Google and TikTok in one place, for the range you picked above. Every rate (CPM, CTR, CVR, ROAS) is computed from the platform&rsquo;s own impressions, clicks, spend and conversion value for exactly those days. Nothing here is modelled.';
  pnlBar(g);
+ try{spendCurveCard(g);}catch(e){}
  if(!r){pnlCard(g,'ads','Paid Insights &mdash; no ad days in this range','The ad feed starts '+O.ad.start+' and ends '+aD(O.ad.n-1)+'. Your selected range ('+ST.s+' &rarr; '+ST.e+') does not overlap it. Widen the range above.','');return;}
  const S=k=>aSum(k,r);
  const mf=af('meta'),gf=af('google'),tf=af('tt');
@@ -5784,7 +6004,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-145109';
+const BUILD='20260828-150411';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -5982,6 +6202,7 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
   +(Math.abs(C.disc)<=Math.abs(P.disc)?'Discounting fell, so price moves are mix, not promo. ':'Discounting rose. ')
   +'Returns '+fp(pc(retC,retP))+'. Vendors driving it: '+vmov+'.</div>';
  pnlCard(g,'odoo','The verdict','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div>',verdict);
+ try{whyWaterfall(g,W);}catch(e){}
  pnlCard(g,'odoo','Root-cause tree','Read it top-down: each box is explained by the boxes indented under it. Percentages in grey = share of the parent&rsquo;s move.',tree);
 }
 function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26');g.innerHTML='';const money=v=>Math.round(v).toLocaleString();
@@ -6566,5 +6787,4 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
 window.rCO=rCO;window.coSel=coSel;
 window.rCJ=rCJ;window.rBG=rBG;window.cjS=cjS;window.aoLv=aoLv;window.aoAc=aoAc;window.aD2=aD2;
 </script>
-<script src="audit_tabs.js"></script>
 </body></html>
