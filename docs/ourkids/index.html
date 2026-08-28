@@ -5053,7 +5053,7 @@ function rShip2(g,mons,T,F,SH){
      delivery costs, and it is knowable exactly because both legs are priced. The lost SALE on a
      refund is deliberately not added here -- it is already carried in the P&L, which scales gross
      profit down by the refund rate, and adding it again would double-count it. */
-  {n:'  what ONE typical failed delivery costs to ship',f:m=>bFailN(m)?(bMed('Return to Origin')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back at the MEDIAN fee for each leg. Send: '+bSpread('Send')+'. Return to Origin: '+bSpread('Return to Origin')+'. The median is used because the fee is right-skewed, so the average describes almost no real parcel. Nothing was ever collected on these, so it is a pure loss.'},
+  {n:'  what ONE typical failed delivery costs to ship',f:m=>bFailN(m)?(bMed('Return to Origin')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back. Return leg: '+(bIsExact(ST.e.slice(0,7),'Return to Origin')?('EXACT \u2014 every one of the month\u2019s return parcels priced from Bosta\u2019s own record'):('measured average, '+bSpread('Return to Origin')))+'. Outbound leg: '+bSpread('Send')+' (it cannot be tied to its own record, so it stays an average). The median is used because the fee is right-skewed, so the average describes almost no real parcel. Nothing was ever collected on these, so it is a pure loss.'},
   {n:'  what ONE typical refunded order costs to ship',f:m=>bRefN(m)?(bMed('Customer Return Pickup')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back at the MEDIAN fee. Customer Return Pickup: '+bSpread('Customer Return Pickup')+'. On top of this you refund the sale itself, which the Shopify P&L already deducts by scaling gross profit down by the month\u2019s refund rate; it is not repeated here.'},
   {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
   {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
@@ -5208,11 +5208,25 @@ function bSpread(t){const B=window.O&&O.bosta;const f=B&&B.fees&&B.fees[t];
    sizing or description problem. */
 function bCnt(m,t){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
  return ((B.months[m].byType||{})[t])||0;}
+/* Exact figures: where every parcel of a type in a month has been priced from the courier's own
+   record, that total is the actual bill for those parcels and replaces count x a mean outright.
+   A type is only used when it is COMPLETE -- a partial sum would silently understate the month. */
+function bEx(m,t){const B=window.O&&O.bosta;const mm=B&&B.months&&B.months[m];
+ const e=mm&&mm.exactByType&&mm.exactByType[t];return (e&&e.complete)?e:null;}
+function bExN(m,t){const e=bEx(m,t);return e?e.n:0;}
+function bIsExact(m,t){return !!bEx(m,t);}
 function bFailN(m){return bCnt(m,'Return to Origin');}
 function bRefN(m){return bCnt(m,'Customer Return Pickup');}
 /* Both legs: the return itself, plus the outbound trip that was already paid for. */
-function bFailCost(m){const n=bFailN(m);return n?n*(bFee('Return to Origin')+bFee('Send')):0;}
-function bRefCost(m){const n=bRefN(m);return n?n*(bFee('Customer Return Pickup')+bFee('Send')):0;}
+/* Both legs. The return leg is exact where priced; the outbound leg cannot be matched to its
+   own shipment record (the courier reference joins only ~15% of the time), so it stays at the
+   measured Send fee and the tooltip says which half is which. */
+function bFailCost(m){const n=bFailN(m);if(!n)return 0;
+ const e=bEx(m,'Return to Origin');
+ return (e?e.total:n*bFee('Return to Origin'))+n*bFee('Send');}
+function bRefCost(m){const n=bRefN(m);if(!n)return 0;
+ const e=bEx(m,'Customer Return Pickup');
+ return (e?e.total:n*bFee('Customer Return Pickup'))+n*bFee('Send');}
 function bRetLegs(m){return bFailN(m)+bRefN(m);}
 function bRetTotal(m){return bFailCost(m)+bRefCost(m);}
 function bostaCost(m){const B=window.O&&O.bosta;if(!B||!B.months||!B.months[m])return 0;
@@ -6517,7 +6531,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-201203';
+const BUILD='20260828-220801';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
