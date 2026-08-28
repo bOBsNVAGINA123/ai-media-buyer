@@ -1400,16 +1400,24 @@ def pull_bosta(months_back=13, fee_sample=30, prev=None):
         # fee per type: reuse what we already learned unless it is missing
         fees = ((prev or {}).get("bosta") or {}).get("fees") or {}
         pool = {}
-        need = [t for t in ("Send",) + BOSTA_RETURN_TYPES + ("Exchange", "Cash Collection") if t not in fees]
+        # Rare types (returns, exchanges) are a small share of any one page, so a single page gave
+        # n=2..4 for them and a mean that swung the whole return-cost figure. Walk enough pages to
+        # fill every type, and re-sample a type whose stored sample is too thin to trust.
+        need = [t for t in ("Send",) + BOSTA_RETURN_TYPES + ("Exchange", "Cash Collection")
+                if (fees.get(t) or {}).get("n", 0) < 15]
         if need:
-            r = _bosta_req(BOSTA_SEARCH, {"limit": 200, "page": 1,
-                                          "createdAtStart": (today - datetime.timedelta(days=60)).isoformat(),
-                                          "createdAtEnd": today.isoformat()})
-            for d in (((r or {}).get("data") or {}).get("deliveries") or []):
-                t = (d.get("type") or {}).get("value") or "?"
-                if t in need:
-                    pool.setdefault(t, [])
-                    if len(pool[t]) < fee_sample: pool[t].append(d.get("_id"))
+            for pg in range(1, 26):
+                r = _bosta_req(BOSTA_SEARCH, {"limit": 200, "page": pg,
+                                              "createdAtStart": (today - datetime.timedelta(days=60)).isoformat(),
+                                              "createdAtEnd": today.isoformat()})
+                ds = ((r or {}).get("data") or {}).get("deliveries") or []
+                if not ds: break
+                for d in ds:
+                    t = (d.get("type") or {}).get("value") or "?"
+                    if t in need:
+                        pool.setdefault(t, [])
+                        if len(pool[t]) < fee_sample: pool[t].append(d.get("_id"))
+                if all(len(pool.get(t, [])) >= fee_sample for t in need): break
             for t, lst in pool.items():
                 vals = []
                 for i in lst:
@@ -1417,10 +1425,12 @@ def pull_bosta(months_back=13, fee_sample=30, prev=None):
                     f = ((j or {}).get("data") or j or {}).get("shipmentFees")
                     if f is not None: vals.append(float(f))
                     time.sleep(0.25)
-                if vals:
+                if len(vals) >= 5:
                     vals.sort()
                     fees[t] = {"mean": round(sum(vals) / len(vals), 1), "median": vals[len(vals) // 2],
                                "min": vals[0], "max": vals[-1], "n": len(vals)}
+                elif vals:
+                    log("  bosta fee sample too thin for %s (n=%d) - keeping previous" % (t, len(vals)))
         out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                "months": months, "fees": fees}
         log("bosta ok: %d months, fee types %s" % (len(months), list(fees)))
