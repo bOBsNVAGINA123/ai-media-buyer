@@ -2770,6 +2770,32 @@ def pull_competitors(ours):
             "rivals": sorted(rivals.values(), key=lambda x: -x["im"])[:12],
             "me": "shop-ourkids.com", "totalGapVol": sum(g["v"] for g in gaps)}
 
+
+def pull_shopify_channels():
+    """Shopify's OWN order attribution (last click) by referrer, per window. This is the store's
+    verdict on where an order came from -- independent of what Meta/Google/TikTok each claim."""
+    out = {}
+    for d in (7, 30, 90):
+        rows = shopify_ql("FROM sales SHOW orders, total_sales, net_sales, gross_sales "
+                          "GROUP BY order_referrer_source, order_referrer_name "
+                          "SINCE -%dd UNTIL today" % d, "chan%dd" % d)
+        if not rows: continue
+        acc = {}
+        for r in rows:
+            src = (r.get("order_referrer_source") or "").strip().lower()
+            nm = (r.get("order_referrer_name") or "").strip().lower()
+            key = nm or src or "direct"
+            if key in ("shop-ourkids", "ourkids-eg", "shopify", "paymob", "android", "wl", "bit"): key = "direct / own"
+            if key in ("", "direct"): key = "direct / own"
+            e = acc.setdefault(key, {"n": key, "ord": 0, "rev": 0.0, "net": 0.0})
+            e["ord"] += int(float(r.get("orders") or 0))
+            e["rev"] += float(r.get("total_sales") or 0)
+            e["net"] += float(r.get("net_sales") or 0)
+        out[str(d)] = sorted(acc.values(), key=lambda x: -x["rev"])
+        log("shopify channels", d, "d ::", len(out[str(d)]), "sources ::",
+            round(sum(x["rev"] for x in out[str(d)])), "EGP")
+    return {"win": out, "asOf": END.isoformat()} if out else {}
+
 def pull_search_intel():
     """Daily search intelligence for the Search Advisor tab: YoY search terms (28d vs same
     weekday-aligned window last year), per-term CVR/CPA, weekly demand curves for the top
@@ -4110,7 +4136,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.22 (BRAND GAP: Egypt demand per brand vs our Odoo range vs what we already pay for, with the move stated; COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.23 (Shopify OWN order attribution by referrer per window (shopch) for the Incrementality tab; BRAND GAP: Egypt demand per brand vs our Odoo range vs what we already pay for, with the move stated; COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
@@ -4366,7 +4392,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "why": safe(pull_why) or prev.get("why") or {},
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": safe(pull_why) or prev.get("why") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
