@@ -1336,6 +1336,12 @@ ANA_BR = {"18": "Dokki", "19": "New Cairo", "20": "Nasr City", "21": "October", 
 #     to send and once to come back, and earns nothing.
 #
 # The key is read from the environment. It is never written to the repo.
+# Measured fee per shipment type, 443 shipments sampled across Apr / Jun / Aug 2026. This is a
+# FLOOR, not a hardcode: it is used only where a live sample is thinner than this one, because a
+# 5-shipment sample put Return to Origin 17.7% too high and moved the per-event cost by E£8.
+# Send is heavily right-skewed (median 61, mean 70.3, max 409), which is why median and spread
+# are carried alongside the mean instead of quoting one number.
+BOSTA_FEE_SEED = {"Customer Return Pickup": {"mean": 76.69,"median": 71.0,"min": 71.0,"max": 141.0,"n": 80,"sd": 10.44},"Send": {"mean": 70.33,"median": 61.0,"min": 61.0,"max": 408.85,"n": 150,"sd": 32.17},"Return to Origin": {"mean": 55.53,"median": 51.0,"min": 51.0,"max": 85.0,"n": 150,"sd": 7.67},"Exchange": {"mean": 81.42,"median": 79.0,"min": 76.0,"max": 110.0,"n": 60,"sd": 7.05},"Cash Collection": {"mean": 57.67,"median": 61.0,"min": 51.0,"max": 61.0,"n": 3,"sd": 4.71}}
 BOSTA_KEY = os.environ.get("BOSTA_API_KEY", "").strip()
 BOSTA_SEARCH = "https://app.bosta.co/api/v2/deliveries/search"
 BOSTA_DETAIL = "https://app.bosta.co/api/v0/deliveries/"
@@ -1357,7 +1363,7 @@ def _bosta_req(url, body=None, tries=4):
     return None
 
 
-def pull_bosta(months_back=13, fee_sample=30, prev=None):
+def pull_bosta(months_back=13, fee_sample=150, prev=None):
     """Monthly shipment mix and sampled fee per type. READ ONLY - only search and detail GETs."""
     if not BOSTA_KEY:
         log("bosta skipped - no BOSTA_API_KEY in env")
@@ -1425,12 +1431,20 @@ def pull_bosta(months_back=13, fee_sample=30, prev=None):
                     f = ((j or {}).get("data") or j or {}).get("shipmentFees")
                     if f is not None: vals.append(float(f))
                     time.sleep(0.25)
-                if len(vals) >= 5:
+                seed = BOSTA_FEE_SEED.get(t)
+                if len(vals) >= max(20, (seed or {}).get("n", 0)):
                     vals.sort()
-                    fees[t] = {"mean": round(sum(vals) / len(vals), 1), "median": vals[len(vals) // 2],
-                               "min": vals[0], "max": vals[-1], "n": len(vals)}
-                elif vals:
-                    log("  bosta fee sample too thin for %s (n=%d) - keeping previous" % (t, len(vals)))
+                    mu = sum(vals) / len(vals)
+                    var = sum((v - mu) ** 2 for v in vals) / len(vals)
+                    fees[t] = {"mean": round(mu, 1), "median": vals[len(vals) // 2],
+                               "min": vals[0], "max": vals[-1], "n": len(vals), "sd": round(var ** 0.5, 1)}
+                elif seed:
+                    # a thinner sample than the validated one tells us nothing new
+                    fees[t] = dict(seed)
+                    log("  bosta fee: live sample n=%d for %s is thinner than the validated %d - keeping validated"
+                        % (len(vals), t, seed.get("n", 0)))
+        for t, sd in BOSTA_FEE_SEED.items():
+            if (fees.get(t) or {}).get("n", 0) < sd.get("n", 0): fees[t] = dict(sd)
         out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                "months": months, "fees": fees}
         log("bosta ok: %d months, fee types %s" % (len(months), list(fees)))
