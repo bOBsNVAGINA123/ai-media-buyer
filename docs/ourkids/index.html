@@ -2321,7 +2321,7 @@ function ovCard(g){
   ['h','DELIVERY (ONLINE)'],
   ['Delivery, net','delNet',M,1,'What customers paid for shipping minus the courier bill. Negative means product margin is paying for delivery.'],
   ['  Courier bill','delCost',M,0,'Posted to Odoo where it exists; modelled at the settled cost per order where it does not.'],
-  ['  Freight on failed + returned','retCost',M,0,'Both courier legs on parcels that came back \u2014 refused at the door (never paid for) and customer refunds. Freight only; the refunded sale is a separate line in the Shopify P&L.'],
+  ['  Shipping paid on failed + returned','retCost',M,0,'What Bosta charged to move parcels that came back \u2014 refused at the door (never paid for) and customer refunds. Shipping charges only; the refunded sale itself is a separate line in the Shopify P&L.'],
   ['h','CUSTOMERS'],
   ['New customers','newc',N,1,'First-ever Shopify orders plus first-ever POS receipts.'],
   ['Orders','orders',N,1,'Shopify orders plus POS receipts.'],
@@ -5053,8 +5053,8 @@ function rShip2(g,mons,T,F,SH){
      delivery costs, and it is knowable exactly because both legs are priced. The lost SALE on a
      refund is deliberately not added here -- it is already carried in the P&L, which scales gross
      profit down by the refund rate, and adding it again would double-count it. */
-  {n:'  what ONE failed delivery costs you in freight',f:m=>bFailN(m)?(bFee('Return to Origin')+bFee('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back. Nothing was ever collected on it, so this is a pure loss with no revenue against it.'},
-  {n:'  what ONE refunded order costs you in freight',f:m=>bRefN(m)?(bFee('Customer Return Pickup')+bFee('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back. On top of this you refund the sale itself \u2014 that is already deducted in the Shopify P&L, which scales gross profit down by the month&rsquo;s refund rate, so it is not repeated here.'},
+  {n:'  what ONE typical failed delivery costs to ship',f:m=>bFailN(m)?(bMed('Return to Origin')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back at the MEDIAN fee for each leg. Send: '+bSpread('Send')+'. Return to Origin: '+bSpread('Return to Origin')+'. The median is used because the fee is right-skewed, so the average describes almost no real parcel. Nothing was ever collected on these, so it is a pure loss.'},
+  {n:'  what ONE typical refunded order costs to ship',f:m=>bRefN(m)?(bMed('Customer Return Pickup')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back at the MEDIAN fee. Customer Return Pickup: '+bSpread('Customer Return Pickup')+'. On top of this you refund the sale itself, which the Shopify P&L already deducts by scaling gross profit down by the month\u2019s refund rate; it is not repeated here.'},
   {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
   {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
   {n:'Net delivery per confirmed order',f:m=>s2('conf',m)?(s2('col',m)-s2('cost',m))/s2('conf',m):null,fmt:SIG,sh:1},
@@ -5185,6 +5185,16 @@ function s2h(m){return S2f()&&S2If()[m]!=null;}
 /* Return economics per month, straight from the courier's own shipment records. Returns null
    for months outside the pulled window so the table prints an em dash rather than a zero. */
 function bFee(t){const B=window.O&&O.bosta;return (B&&B.fees&&B.fees[t]&&B.fees[t].mean)||0;}
+/* The mean is right for a TOTAL (count x mean) but wrong for "what one costs": the Send fee is
+   heavily right-skewed -- median 61, mean 70, a long tail to 409 for heavy or remote parcels --
+   so the average describes almost none of them. Per-event lines use the median and carry the
+   spread, because quoting one number off a thin sample is how the first version of this row
+   came out E8 too high. */
+function bMed(t){const B=window.O&&O.bosta;const f=B&&B.fees&&B.fees[t];return (f&&(f.median!=null?f.median:f.mean))||0;}
+function bSpread(t){const B=window.O&&O.bosta;const f=B&&B.fees&&B.fees[t];
+ return f?('typical E\u00a3'+Math.round(f.median!=null?f.median:f.mean)+', average E\u00a3'+Math.round(f.mean)
+   +(f.min!=null?', range E\u00a3'+Math.round(f.min)+'\u2013'+Math.round(f.max):'')
+   +(f.n?', from '+f.n+' shipments':'')):'no sample';}
 /* Bosta's two return types are NOT the same event, and the COD field proves it:
      Return to Origin      -- COD 0. Nothing was ever collected. The parcel was refused at the
                               door or the customer could not be reached. A FAILED DELIVERY: no
@@ -6501,7 +6511,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-185056';
+const BUILD='20260828-191059';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
