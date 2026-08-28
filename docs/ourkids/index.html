@@ -79,7 +79,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="tgroups" id="tgroups"></div><div class="tabs" id="tabrow"></div>
 <div id="stale"></div>
 <div id="onC"><div class="bar"><label>PERIOD</label><span id="pre"></span><label class="xtl" title="the running day is always incomplete — keep it out so today never reads as a crash"><input type="checkbox" id="xt" checked onchange="setEXT(this.checked)" style="width:auto;margin-right:3px">excl. today</label><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
-<label>COMPARE TO</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select>
+<label>COMPARE TO</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select><span id="cmpst" style="font-size:10.5px;font-weight:700;margin-left:7px"></span>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
 <div class="banner" id="bn"></div><div class="grid" id="g1"></div></div>
 <div id="offC" class="hide"><div class="bar"><span class="hide"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select></span><span class="hide"><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select></span><label style="margin-left:8px" title="Meta only measures in-store revenue for a branch when that branch own custom conversion fires. Off = branches with no measurement show a dash. On = network Meta offline value is spread across branches by revenue share and badged allocated."><input type="checkbox" id="alloc" onchange="setAlloc(this.checked)"/> allocate Meta offline (modelled)</label><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
@@ -1095,7 +1095,29 @@ function markPre(){const last=lastD();document.querySelectorAll('.chip[onclick^=
 function RDR(){syncMonthly();syncBars();rTab();try{markPre();}catch(e){}}
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));RDR();}
 function cmpW(){return cmpWr(ST.s,ST.e);}
-function ppHdr(){const p=document.getElementById('pp');if(!p)return;
+/* The COMPARE control sits in the global header, so it reads as global -- but only a handful of
+   tabs ever consulted it. A control that silently does nothing on most of the app is worse than
+   no control, so it now says, per tab, whether it is live and what that tab compares against
+   instead. Tabs listed as "not wired" are an honest gap, not a design decision. */
+const CMPUSE={on:1,off:1,ce:1,pl:1,mi:1};
+const CMPWHY={
+ cp:'compares customer bands to each other',co:'compares acquisition months to each other',
+ rt:'compares cohorts to each other',lt:'compares payback horizons to each other',
+ cj:'compares scopes to each other',
+ ai:'reads the latest complete month',iq:'reads the latest complete months',
+ why:'has its own 1 / 7 / 28-day prior window',
+ si:'snaps to a pre-built window',tr:'snaps to a pre-built window',
+ vz:'every chart here carries its own compare control',
+ vl:'has its own per-chart compare control',
+ pn:'compares month to month',rp:'compares month to month',cs:'compares month to month',
+ me:'compares month to month',mb:'judged against the 2026 benchmark set',
+ rm:'no figures to compare'};
+function cmpNote(){const el=document.getElementById('cmpst');if(!el)return;
+ const sel=document.getElementById('cm');const lab=sel?sel.options[sel.selectedIndex].text:'';
+ if(CMPUSE[TAB]){el.innerHTML=(ST.cmp==='off'?'<span style="color:#9aa3b5">comparison off on this tab</span>'
+   :'<span style="color:#12a06e">live on this tab</span>');return;}
+ el.innerHTML='<span style="color:#b8860b">not used here</span> &mdash; '+(CMPWHY[TAB]||'this tab is not wired to it yet');}
+function ppHdr(){const p=document.getElementById('pp');if(!p)return;try{cmpNote();}catch(e){}
  const w=cmpW(),mg=['pl','pn','vl','cs','ao','me','mi'].indexOf(TAB)>=0;
  p.innerHTML='Range <b>'+ST.s+'</b> &rarr; '+ST.e+(mg?' &middot; months <b>'+(ST.pm0||'&mdash;')+'</b> &rarr; '+(ST.pm1||'&mdash;'):'')+' &middot; vs '+(ST.cmp==='off'?'<b>no comparison</b>':'<b>'+w[0]+'</b> &rarr; '+w[1]);}
 function cmpWr(_S,_E,_C){_C=_C||ST.cmp;const ln=span(_S,_E);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(_C==='yoy')return[addD(_S,-365),addD(_E,-365)];if(_C==='wk')return[addD(_S,-7),addD(_E,-7)];if(_C==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
@@ -2205,10 +2227,17 @@ function ovCard(g){
  const mShift=(d,k)=>{const y=+d.slice(0,4),mo=+d.slice(5,7)-1+k,da=+d.slice(8,10);
   const last=new Date(Date.UTC(y,mo+1,0)).getUTCDate();
   return new Date(Date.UTC(y,mo,Math.min(da,last))).toISOString().slice(0,10);};
- const W=[['This period',s,e],
-          ['vs prev '+L+'d',addD(s,-L),addD(e,-L)],
-          ['vs prior month',mShift(s,-1),mShift(e,-1)],
-          ['vs last year',mShift(s,-12),mShift(e,-12)]];
+ /* The second column follows the COMPARE control in the header rather than always being the
+    previous period -- picking "same period last year" there should change this table, not just
+    the Shopify tab. Month and year stay as standing columns, minus whichever one the selection
+    already duplicates, so no column is ever shown twice. */
+ const sel=document.getElementById('cm');
+ const selLab=sel?sel.options[sel.selectedIndex].text:'Previous period';
+ const cw=(ST.cmp&&ST.cmp!=='off')?cmpWr(s,e):null;
+ const W=[['This period',s,e]];
+ if(cw)W.push(['vs '+selLab.toLowerCase(),cw[0],cw[1]]);
+ if(ST.cmp!=='mo')W.push(['vs prior month',mShift(s,-1),mShift(e,-1)]);
+ if(ST.cmp!=='yoy')W.push(['vs last year',mShift(s,-12),mShift(e,-12)]);
  const D=W.map(w=>ovRange(w[1],w[2]));
  /* Selecting today alone left the whole card off the page with no explanation: today is the
     partial sync day and gets clamped away, so the window collapses to nothing. Say that. */
@@ -2247,14 +2276,12 @@ function ovCard(g){
   const k=r[1],fmt=r[2],hib=r[3];
   body+='<tr><td class="ovm" title="'+r[4].replace(/"/g,'&quot;')+'">'+r[0]+'</td>'
    +'<td class="ovv">'+(fmt(D[0][k])||'&mdash;')+'</td>'
-   +cell(D[0][k],D[1]?D[1][k]:null,fmt,hib)
-   +cell(D[0][k],D[2]?D[2][k]:null,fmt,hib)
-   +cell(D[0][k],D[3]?D[3][k]:null,fmt,hib)+'</tr>';});
+   +D.slice(1).map(function(dd){return cell(D[0][k],dd?dd[k]:null,fmt,hib);}).join('')+'</tr>';});
  const notes=[];
- const yrNull=D[3]&&D[3].spend==null;
+ const yrIdx=W.map(w=>w[0]).findIndex(t=>/last year/.test(t));const yrNull=yrIdx>0&&D[yrIdx]&&D[yrIdx].spend==null;
  if(yrNull)notes.push([C.orange,'<b>Last year is blank on every row that needs ad spend.</b> The ad panel holds exactly '+O.ad.n+' days, starting '+O.ad.start+', so a window twelve months back falls off the front of it. Sales, profit and margin still compare year on year because the Odoo ledger goes back to '+O.fin.start+'.']);
- if(D[0].bApprox||(D[3]&&D[3].bApprox))notes.push([C.orange,'<b>Branch revenue before '+O.bl.start+' comes from the monthly POS ledger, apportioned by day count and converted to a net-of-tax basis.</b> That ledger is recorded tax-inclusive and the daily branch feed is not &mdash; measured at '+(1/ovNetFactor()).toFixed(3)+'&times; across the months where both exist. Comparing them raw would overstate the older window by about '+((1/ovNetFactor()-1)*100).toFixed(0)+'% and hide that much growth.']);
- notes.push(['#7c869c','<b>Every comparison shifts your own window</b> &mdash; back '+L+' days, back one calendar month, back one year &mdash; so it is always like-for-like against the same number of days. Pick a 7-day range and the second column is week on week; pick a month and it is month on month.']);
+ if(D.some(function(d){return d&&d.bApprox;}))notes.push([C.orange,'<b>Branch revenue before '+O.bl.start+' comes from the monthly POS ledger, apportioned by day count and converted to a net-of-tax basis.</b> That ledger is recorded tax-inclusive and the daily branch feed is not &mdash; measured at '+(1/ovNetFactor()).toFixed(3)+'&times; across the months where both exist. Comparing them raw would overstate the older window by about '+((1/ovNetFactor()-1)*100).toFixed(0)+'% and hide that much growth.']);
+ notes.push(['#7c869c','<b>Every comparison shifts your own window by whole days</b>, so it is always like-for-like against the same number of days. The second column follows the COMPARE control at the top of the page &mdash; currently <b>'+selLab+'</b> &mdash; and the month and year columns stand on their own.']);
  notes.push(['#7c869c','<b>Ad spend is not coloured</b> because more of it is neither good nor bad on its own; read it against the profit-after-ad-spend and MER rows directly underneath.']);
  pnlCard(g,'odoo','The whole business'+INFO('One scoreboard for every scope the tool holds: Shopify and the seven shops added together, the profit left after ads, and the customers behind it. The three comparison columns are your selected window shifted back by its own length, by a month and by a year.'),
   'Online and branches combined, for '+s+' &rarr; '+e+'. Grey values under each change are what that figure was in the comparison window.',
@@ -3135,7 +3162,30 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  ].filter(x=>x.sp>0||x.imp>0);
  PF.forEach(x=>{x.cpm=x.imp?x.sp/x.imp*1000:null;x.ctr=x.imp?x.clk/x.imp*100:null;x.cvr=x.clk?x.pur/x.clk*100:null;
   x.cpc=x.clk?x.sp/x.clk:null;x.cpa=x.pur?x.sp/x.pur:null;x.ro=x.sp?x.on/x.sp:null;x.rot=x.sp?(x.on+x.off)/x.sp:null;});
- const T={sp:0,imp:0,clk:0,on:0,off:0,pur:0};PF.forEach(x=>{T.sp+=x.sp;T.imp+=x.imp;T.clk+=x.clk;T.on+=x.on;T.off+=x.off;T.pur+=x.pur;});
+ /* v9.14 This table showed the window and nothing else, so "CPM 63" meant nothing without
+    opening another tab to find last week's. Every rate now carries its move against whatever
+    the COMPARE control is set to, computed over exactly the same number of days. */
+ let PP=null,cmpLbl='';
+ if(ST.cmp&&ST.cmp!=='off'){try{const cwn=cmpWr(ST.s,ST.e);const rP=aRange(cwn[0],cwn[1]);
+  if(rP){const SP=k=>aSum(k,rP);const mOffP=(O.ad.moffv?SP('moffv'):SP('instoreMeta'))*afo();
+   const raw=[{k:'meta',sp:SP('mspend'),imp:O.ad.mimp?SP('mimp'):0,clk:O.ad.mclk?SP('mclk'):0,on:SP('mecomrev')*mf,off:mOffP,pur:SP('mpur')},
+    {k:'google',sp:SP('gspend'),imp:O.ad.gimp?SP('gimp'):0,clk:O.ad.gclk?SP('gclk'):0,on:SP('gecomrev')*gf,off:0,pur:SP('gconv')},
+    {k:'tiktok',sp:SP('tspend'),imp:O.ad.timp?SP('timp'):0,clk:O.ad.tclk?SP('tclk'):0,on:SP('ttValue')*tf,off:SP('ttOffValue')*tf,pur:SP('tpur')}];
+   raw.forEach(y=>{y.cpm=y.imp?y.sp/y.imp*1000:null;y.ctr=y.imp?y.clk/y.imp*100:null;y.cvr=y.clk?y.pur/y.clk*100:null;
+    y.cpc=y.clk?y.sp/y.clk:null;y.ro=y.sp?y.on/y.sp:null;y.rot=y.sp?(y.on+y.off)/y.sp:null;});
+   PP={};raw.forEach(y=>PP[y.k]=y);
+   const tp={sp:0,imp:0,clk:0,on:0,off:0,pur:0};raw.forEach(y=>{tp.sp+=y.sp;tp.imp+=y.imp;tp.clk+=y.clk;tp.on+=y.on;tp.off+=y.off;tp.pur+=y.pur;});
+   tp.cpm=tp.imp?tp.sp/tp.imp*1000:null;tp.ctr=tp.imp?tp.clk/tp.imp*100:null;tp.cvr=tp.clk?tp.pur/tp.clk*100:null;
+   tp.cpc=tp.clk?tp.sp/tp.clk:null;tp.ro=tp.sp?tp.on/tp.sp:null;tp.rot=tp.sp?(tp.on+tp.off)/tp.sp:null;PP.__t=tp;
+   const _se=document.getElementById('cm');cmpLbl=(_se?_se.options[_se.selectedIndex].text:'previous period')+' ('+cwn[0]+' \u2192 '+cwn[1]+')';}
+ }catch(e){PP=null;}}
+ PF.forEach(x=>{x.p=PP?PP[x.k]:null;});
+ /* hib: 1 higher is better, -1 lower is better, 0 neither */
+ const dsub=(c,pv,hib)=>{if(!PP||pv==null||c==null||!pv)return '';
+  const d=(c/pv-1)*100;if(!isFinite(d))return '';
+  const col=hib===0?'#8a93a6':((hib>0?d>=0:d<=0)?'#12a06e':'#e23a63');
+  return '<span style="display:block;font-size:9.5px;font-weight:800;color:'+col+'">'+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(Math.abs(d)>=100?0:1)+'%</span>';};
+ const T={sp:0,imp:0,clk:0,on:0,off:0,pur:0};T.p=PP?PP.__t:null;PF.forEach(x=>{T.sp+=x.sp;T.imp+=x.imp;T.clk+=x.clk;T.on+=x.on;T.off+=x.off;T.pur+=x.pur;});
  T.cpm=T.imp?T.sp/T.imp*1000:null;T.ctr=T.imp?T.clk/T.imp*100:null;T.cvr=T.clk?T.pur/T.clk*100:null;
  T.cpc=T.clk?T.sp/T.clk:null;T.cpa=T.pur?T.sp/T.pur:null;T.ro=T.sp?T.on/T.sp:null;T.rot=T.sp?(T.on+T.off)/T.sp:null;
  const d2=v=>v==null?'&mdash;':v.toFixed(2),d1=v=>v==null?'&mdash;':v.toFixed(1);
@@ -3147,16 +3197,16 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10.5px;font-weight:800;color:#64748B;text-align:right;text-transform:uppercase;letter-spacing:.3px';
  const row=(x,bold)=>'<tr'+(bold?' style="background:#f7f8fc;font-weight:800"':'')+'>'
   +'<td style="'+TD+';text-align:left;font-weight:800">'+(x.c?chip(x.n.toUpperCase(),x.c):x.n)+(x.c?'':'')+'</td>'
-  +'<td style="'+TD+'">'+cur(x.sp)+'</td>'
+  +'<td style="'+TD+'">'+cur(x.sp)+dsub(x.sp,x.p&&x.p.sp,0)+'</td>'
   +'<td style="'+TD+'">'+(x.imp?money(x.imp):'&mdash;')+'</td>'
   +'<td style="'+TD+'">'+(x.clk?money(x.clk):'&mdash;')+'</td>'
-  +'<td style="'+TD+'">'+(x.cpm==null?'&mdash;':'E&pound; '+x.cpm.toFixed(1))+'</td>'
-  +'<td style="'+TD+'">'+(x.ctr==null?'&mdash;':d2(x.ctr)+'%')+'</td>'
-  +'<td style="'+TD+'">'+(x.cvr==null?'&mdash;':d2(x.cvr)+'%')+'</td>'
-  +'<td style="'+TD+'">'+(x.cpc==null?'&mdash;':'E&pound; '+x.cpc.toFixed(1))+'</td>'
-  +'<td style="'+TD+'">'+cur(x.on)+'</td>'
+  +'<td style="'+TD+'">'+(x.cpm==null?'&mdash;':'E&pound; '+x.cpm.toFixed(1))+dsub(x.cpm,x.p&&x.p.cpm,-1)+'</td>'
+  +'<td style="'+TD+'">'+(x.ctr==null?'&mdash;':d2(x.ctr)+'%')+dsub(x.ctr,x.p&&x.p.ctr,1)+'</td>'
+  +'<td style="'+TD+'">'+(x.cvr==null?'&mdash;':d2(x.cvr)+'%')+dsub(x.cvr,x.p&&x.p.cvr,1)+'</td>'
+  +'<td style="'+TD+'">'+(x.cpc==null?'&mdash;':'E&pound; '+x.cpc.toFixed(1))+dsub(x.cpc,x.p&&x.p.cpc,-1)+'</td>'
+  +'<td style="'+TD+'">'+cur(x.on)+dsub(x.on,x.p&&x.p.on,1)+'</td>'
   +'<td style="'+TD+'">'+(x.off?cur(x.off):'<span style="color:#94a3b8">none reported</span>')+'</td>'
-  +'<td style="'+TD+'">'+(x.ro==null?'&mdash;':d2(x.ro)+'x')+'</td>'
+  +'<td style="'+TD+'">'+(x.ro==null?'&mdash;':d2(x.ro)+'x')+dsub(x.ro,x.p&&x.p.ro,1)+'</td>'
   +'<td style="'+TD+';color:'+((x.rot||0)>=(x.ro||0)?'#12a06e':'#0F172A')+'">'+(x.rot==null?'&mdash;':d2(x.rot)+'x')+'</td></tr>';
  const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:6px">'
   +'<tr><th style="'+TH+';text-align:left">Platform</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Impr.</th><th style="'+TH+'">Clicks</th>'
@@ -6211,7 +6261,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-153716';
+const BUILD='20260828-154707';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
