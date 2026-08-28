@@ -71,6 +71,42 @@ function auNoData(id, what) {
       : what + ' is loading.'), '', '');
 }
 
+/* ---- session basis -------------------------------------------------------
+   O.ad.sessions is Shopify, ALL COUNTRIES. Roughly a sixth of it is foreign traffic that
+   almost never orders, so every session-based ratio -- GPPV, conversion, cost per visit --
+   reads low against it. The routing pull already ships an Egypt-only cut of the same
+   Shopify sessions (O.cvr.wins["30eg"] vs ["30"]), so the honest fix is to scale by the
+   MEASURED share rather than guess. Default is Egypt-only, because a bot is not a visit;
+   the chip flips it and the banner always names the basis and the factor. */
+let AUEG = true;
+function auEgSet(v) { AUEG = !!v; RDR(); }
+function auEgFactor() {
+  const w = ((O.cvr || {}).wins) || {};
+  for (const k of ['30', '14', '7']) {
+    const a = w[k], b = w[k + 'eg'];
+    if (a && b && a.allSess > 0 && b.allSess > 0) {
+      const f = b.allSess / a.allSess;
+      if (f > 0.3 && f <= 1) return { f: f, win: k, eg: b.allSess, all: a.allSess };
+    }
+  }
+  return null;
+}
+function auBasis() {
+  const e = auEgFactor();
+  return { on: AUEG && !!e, f: (AUEG && e) ? e.f : 1, m: e };
+}
+function auBasisChips() {
+  const e = auEgFactor();
+  if (!e) return '';
+  return '<div style="display:flex;gap:5px;align-items:center;padding:2px 12px 10px">' +
+    '<span style="font-size:10px;color:#8a93a6;font-weight:800;letter-spacing:.3px">SESSION BASIS</span>' +
+    [[true, 'Egypt only'], [false, 'All countries']].map(x =>
+      '<span class="chip" style="' + (AUEG === x[0] ? 'background:#2b3242;color:#fff;border-color:#2b3242' : '') +
+      '" onclick="auEgSet(' + x[0] + ')">' + x[1] + '</span>').join(' ') +
+    '<span style="flex:1"></span><span style="font-size:10.5px;color:#8a93a6">Egypt is ' +
+    (e.f * 100).toFixed(1) + '% of Shopify sessions over the last ' + e.win + ' days</span></div>';
+}
+
 /* ---------------------------------------------------------- window arithmetic */
 /* O.fin is ONLINE + marketplaces only -- branches are not in it. Branch revenue and
    gross profit live in O.pos, monthly and exact (it reconciles to Odoo to the pound).
@@ -136,6 +172,11 @@ function auWin() {
     o.atc += s2 * (((A.atcRatio || [])[i] || 0) / 100);
     o.chk += s2 * (((A.checkoutRatio || [])[i] || 0) / 100);
   }
+  const bas = auBasis();
+  o.basis = bas.on ? 'Egypt only' : 'All countries';
+  o.basisF = bas.f;
+  o.sessAll = o.sess;
+  o.sess = o.sess * bas.f;          // ratios below all divide by this
   const b = auBranch(ST.s, ST.e);
   o.branch = b.rev; o.branchGp = b.gp; o.branchOrd = b.ord;
   o.rev = o.orev + o.mkt + o.branch;
@@ -180,7 +221,8 @@ function rAU() {
     'computed live from the daily series, so it moves with the range bar above. <b>GPPV</b> is gross profit per visit — ' +
     'online gross profit ÷ sessions — and it is the metric this audit ranks everything by, because revenue per visit ' +
     'hides that we buy expensive traffic for thin-margin categories. Each headline has a <b>net</b> reading beside it ' +
-    'that takes refunds and exchanges out.' +
+    'that takes refunds and exchanges out. Sessions are on a <b>' + c.basis + '</b> basis' +
+    (c.basisF < 1 ? ' (' + (c.basisF * 100).toFixed(1) + '% of Shopify sessions — the rest is foreign traffic that almost never orders)' : '') + '.' +
     (c.adCover < 0.999 ? ' <b style="color:#b8860b">Sessions and spend only exist from ' + (O.ad && O.ad.start) +
       ', so every ratio on this page (GPPV, MER, conversion) is measured over ' + c.adFrom + ' → ' + c.adTo +
       ' — ' + c.adDays + ' of the ' + c.days + ' days in the range. Revenue totals still cover the whole range.</b>' : '');
@@ -189,13 +231,13 @@ function rAU() {
     auKpi('Revenue', 'E£ ' + auK(c.rev) + dl(c.rev, p && p.rev), 'GP ' + auP(c.gpPct) + ' · E£ ' + auK(c.gp)) +
     auKpi('Online share', auP(c.onShare) + dl(c.onShare, p && p.onShare), 'E£ ' + auK(c.orev) + ' of E£ ' + auK(c.rev)) +
     auKpi('GPPV', c.gppv ? 'E£ ' + c.gppv.toFixed(2) + dl(c.gppv, p && p.gppv) : '—',
-      'net E£ ' + (c.gppvNet ? c.gppvNet.toFixed(2) : '—') + ' · ' + auK(c.sess) + ' sessions') +
+      'net E£ ' + (c.gppvNet ? c.gppvNet.toFixed(2) : '—') + ' · ' + auK(c.sess) + ' sessions, ' + c.basis.toLowerCase()) +
     auKpi('Online MER', auX(c.mer) + dl(c.mer, p && p.mer), 'net ' + auX(c.merNet) + ' · spend E£ ' + auK(c.spend)) +
     auKpi('Media as % of online GP', auP(c.mediaOfGp, 0) + dl(c.mediaOfGp, p && p.mediaOfGp, true),
       'E£ ' + auK(c.spend) + ' spent · E£ ' + auK(c.ogp) + ' made online · ' + auP(c.mediaOfAllGp, 0) + ' of company GP') +
     auKpi('Site conversion', auP(c.cvr, 2) + dl(c.cvr, p && p.cvr), 'AOV E£ ' + auK(c.aov)) +
     auKpi('Online refunds', auP(c.retOn) + dl(c.retOn, p && p.retOn, true), 'E£ ' + auK(c.oref) + ' returned') +
-    auKpi('Company MER', auX(c.coMer), 'all revenue ÷ all media'), '', 'blend');
+    auKpi('Company MER', auX(c.coMer), 'all revenue ÷ all media'), auBasisChips(), 'blend');
 
   /* channel split */
   const chan = { 'Branches': c.branch, 'Online (ourkids-eg.com)': c.orev, 'Marketplaces': c.mkt };
