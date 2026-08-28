@@ -33,9 +33,20 @@ DISPATCH = "if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return
 # rTab() is the one the DATE BAR calls (RDR -> rTab). tab() is only the click path. Without
 # this second hook a range change on an Audit tab fell through to `else rAds()` and re-rendered
 # the Ads tab instead -- the date bar looked wired and was not.
-RTAB_ANCHOR = "function rTab(){const t=TAB;PREVLBL='';ppHdr();"
+RTAB_HEAD = "function rTab("
 TBT = "['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];"
 SCRIPT = '<script src="audit_tabs.js"></script>'
+
+
+def _rtab_ok(s):
+    """Is the Audit dispatch actually INSIDE rTab()? Checking for an exact anchor string is
+       not enough: when another session renamed `const t=TAB` to `var t=TAB`, the anchor
+       stopped matching, the hook was silently skipped, and the installer still exited 0 --
+       tabs restored, date bar quietly broken. So inspect rTab's own body instead."""
+    i = s.find(RTAB_HEAD)
+    if i < 0:
+        return False
+    return "rAU()" in s[i:i + 600]
 
 
 def install(s):
@@ -70,8 +81,16 @@ def install(s):
         s = s.replace(a, DISPATCH + a, 1)
         changed.append("dispatch")
 
-    if RTAB_ANCHOR in s and (RTAB_ANCHOR + DISPATCH) not in s:
-        s = s.replace(RTAB_ANCHOR, RTAB_ANCHOR + DISPATCH, 1)
+    if not _rtab_ok(s):
+        i = s.find(RTAB_HEAD)
+        if i < 0:
+            raise SystemExit("FATAL: rTab() not found -- the date bar hook cannot be placed")
+        # insert straight after the first ppHdr(); inside rTab, whatever the body looks like
+        j = s.find("ppHdr();", i)
+        if j < 0 or j - i > 400:
+            raise SystemExit("FATAL: rTab() no longer starts with ppHdr(); -- refusing to guess where the dispatch goes")
+        j += len("ppHdr();")
+        s = s[:j] + DISPATCH + s[j:]
         changed.append("rTab dispatch")
 
     if "['au','auC']" not in s:
@@ -99,7 +118,7 @@ def verify(s):
         raise SystemExit("FATAL: TABGROUPS is no longer terminated by ];")
     if tail.index("['Audit',") > tail.index("\n];"):
         raise SystemExit("FATAL: the Audit group landed outside TABGROUPS")
-    if RTAB_ANCHOR in s and (RTAB_ANCHOR + DISPATCH) not in s:
+    if not _rtab_ok(s):
         raise SystemExit("FATAL: rTab() has no Audit dispatch -- the date bar would re-render the wrong tab")
     for need in ('id="auC"', "['au','auC']", "if(t==='au')return rAU();", SCRIPT):
         if need not in s:
