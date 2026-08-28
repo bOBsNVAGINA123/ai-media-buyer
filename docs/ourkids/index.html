@@ -93,7 +93,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="auC" class="hide"><div class="banner" id="bn_au"></div><div class="grid" id="g_au"></div></div><div id="avC" class="hide"><div class="banner" id="bn_av"></div><div class="grid" id="g_av"></div></div><div id="agC" class="hide"><div class="banner" id="bn_ag"></div><div class="grid" id="g_ag"></div></div><div id="aqC" class="hide"><div class="banner" id="bn_aq"></div><div class="grid" id="g_aq"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -645,6 +645,7 @@ function trScore(arr){const dest=arr.filter(u=>TR_DEST.indexOf(u.type)>=0);
  return {dest:dest,siteCVR:site,totSess:ts,totOrd:to};}
 function trRaw(){return O.cvrRoute||O.cvr||{};}
 function trWins(){const C=trRaw();return C.windows&&C.windows.length?C.windows:[C.days||14];}
+function trAuto(){try{const d=Math.max(1,span(ST.s,ST.e));const ws=trWins();let best=ws[0];ws.forEach(w=>{if(Math.abs(w-d)<Math.abs(best-d))best=w;});return best;}catch(e){return null;}}
 /* v9.7.2: the collector ships an Egypt-only twin of every window under "<days>eg".
    Egypt is 92% of sessions and ~99.5% of orders, so the unfiltered table hands a FIX
    verdict to any page that happens to catch foreign browse traffic. Default is Egypt;
@@ -789,7 +790,8 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
  h+='</table>';
  if(rows.length>400)h+='<div class="rtNote">Showing the top 400 of '+rows.length+' — narrow it with the search box.</div>';
  return h;}
-function rTR(){if(TAB!=='tr')return;dCh();
+function rTR(){try{const a=trAuto();if(a&&TRS.win!==a&&!TRS._pin)TRS.win=a;}catch(e){}
+if(TAB!=='tr')return;dCh();
  const g=document.getElementById('g22'),M=trModel();
  if(!M){document.getElementById('bn21x')&&0;
   document.getElementById('bn22').innerHTML='&#8635; <b>TRAFFIC ROUTING</b> — no CVR routing data in this sync yet. The collector pulls it from Shopify (ShopifyQL, sessions by landing page); it appears after the next successful run.';
@@ -948,8 +950,7 @@ const TABGROUPS=[
  ['Consumer',[['cp','Customer Portfolio'],['co','Cohorts'],['rt','Retention'],['lt','LTGP : CAC'],['cj','Journeys']]],
  ['Ads & Media',[['me','Media Efficiency'],['mi','Paid Insights'],['ce','Campaigns'],['ic','Incrementality'],['ao','Ads \u2192 Stores'],['mb','Creative Benchmarks'],['bg','Launches & Budgets'],['ab','\u2691 Advisory'],['si','\ud83d\udd0d Search Advisor'],['tk','TikTok']]],
  ['Finance & Ops',[['pl','Plan'],['cs','Costs & Payroll'],['vl','Vendors & Products']]],
- ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['AI & Info',[['ai','\u2605 AI Insights'],['rm','README']]]
 ];
 let TABGRP=0;
 function grpOf(t){for(let i=0;i<TABGROUPS.length;i++){if(TABGROUPS[i][1].some(x=>x[0]===t))return i;}return 0;}
@@ -958,7 +959,7 @@ function renderTabs(){const gr=document.getElementById('tgroups'),tr=document.ge
  gr.innerHTML=TABGROUPS.map(function(g,i){return '<div class="tgrp'+(i===TABGRP?' on':'')+'" onclick="selGroup('+i+')">'+g[0]+'</div>';}).join('');
  tr.innerHTML=TABGROUPS[TABGRP][1].map(function(x){return '<div class="tab'+(x[0]===TAB?' on':'')+'" onclick="tab(\''+x[0]+'\')">'+x[1]+'</div>';}).join('');}
 function selGroup(i){TABGRP=i;const tabs=TABGROUPS[i][1];if(tabs.some(function(x){return x[0]===TAB;}))renderTabs();else tab(tabs[0][0]);}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),void qsweep('g13');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -966,7 +967,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -1645,6 +1646,13 @@ function blSeries(name,r){const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(bD(
 function pearson(a,b){const n=Math.min(a.length,b.length);if(n<3)return 0;let sa=0,sb=0;for(let i=0;i<n;i++){sa+=a[i];sb+=b[i];}const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;for(let i=0;i<n;i++){num+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)*(a[i]-ma);db+=(b[i]-mb)*(b[i]-mb);}return da&&db?num/Math.sqrt(da*db):0;}
 const _bnrAll=function(){var b=Object.assign({},O.bnr||{});var N=O.nr||{};if(Object.keys(N).length){var m={};Object.keys(N).forEach(function(k){var n=N[k];m[k]={nc:n.nord||0,rc:n.rord||0,nord:n.nord||0,rord:n.rord||0,nrev:n.nrev||0,rrev:n.rrev||0};});b['ONLINE']=m;}return b;};
 function bncYoY(g){const B=_bnrAll();const ks=Object.keys(B);if(!ks.length)return;const money=v=>Math.round(v).toLocaleString();
+ // daily feed first: if the range is not a full month, show the range itself, not a month bucket
+ const _BD=O.bnrD||null,_BW=(_BD&&_BD._w)?_BD._w:null;const _spanD=Math.max(1,span(ST.s,ST.e));
+ const useD=!!(_BD&&_BW&&_spanD<=45);
+ const _bi=d=>Math.round((new Date(d+'T00:00:00Z')-new Date((_BW||{start:'2026-01-01'}).start+'T00:00:00Z'))/864e5);
+ const _dsum=(n,a,b)=>{const z=_BD?_BD[n]:null;if(!z)return null;const o={nc:0,rc:0,nrev:0,rrev:0};
+  for(let i=Math.max(0,_bi(a));i<=Math.min(_BW.n-1,_bi(b));i++){o.nc+=(z.nc||[])[i]||0;o.rc+=(z.rc||[])[i]||0;o.nrev+=(z.nrev||[])[i]||0;o.rrev+=(z.rrev||[])[i]||0;}return o;};
+ const _pwB=cmpWr(ST.s,ST.e);
  const tNow=(O.today||'').slice(0,7);const msAll=Object.keys(B[ks[0]]||{}).sort();
  const sel=(ST.e||'').slice(0,7);const lastFull=(sel&&msAll.indexOf(sel)>=0)?sel:msAll.filter(m=>m<=tNow).pop();
  if(!lastFull)return;
@@ -1658,11 +1666,13 @@ function bncYoY(g){const B=_bnrAll();const ks=Object.keys(B);if(!ks.length)retur
   const mx=Math.max.apply(null,ms6.map(m=>(M[m]||{}).nc||0))||1;
   const spark=ms6.map(m=>{const v=(M[m]||{}).nc||0;const h=Math.max(2,Math.round(v/mx*16));return '<span title="'+m+': '+money(v)+'" style="display:inline-block;width:7px;height:'+h+'px;background:#5a5bf0;opacity:.75;margin-right:2px;vertical-align:bottom;border-radius:1px"></span>';}).join('');
   rows+='<tr><td style="text-align:left;font-weight:800">'+n+'</td><td style="text-align:left">'+spark+'</td>'
-   +'<td>'+money(cur.nc||0)+'</td><td>'+money(old.nc||0)+'</td><td>'+cell(d((cur.nc||0)*pf,old.nc))+'</td>'
+   +(function(){if(!useD)return '<td>'+money(cur.nc||0)+'</td><td>'+money(old.nc||0)+'</td><td>'+cell(d((cur.nc||0)*pf,old.nc))+'</td>';
+     const a=_dsum(n,ST.s,ST.e)||{nc:0},b2=_dsum(n,_pwB[0],_pwB[1])||{nc:0};
+     return '<td>'+money(a.nc)+'</td><td>'+money(b2.nc)+'</td><td>'+cell(d(a.nc,b2.nc))+'</td>';})()
    +'<td>E£ '+money(cur.nrev||0)+'</td><td>'+cell(d((cur.nrev||0)*pf,old.nrev))+'</td>'
    +'<td>E£ '+money(cur.rrev||0)+'</td><td>'+cell(d((cur.rrev||0)*pf,old.rrev))+'</td>'
    +(function(){var W=(typeof BWALK!=='undefined'&&BWALK[n])||{};var w=(W[lastFull]||[0,0])[0];var tot=(cur.nc||0)+(cur.rc||0)+w;return '<td>'+money(w)+'<div style="font-size:9px;color:#8a93a6">'+(tot?(w/tot*100).toFixed(1):'0')+'% of orders</div></td>';})()+'</tr>';});
- pnlCard(g,'odoo','New customers by branch &mdash; '+lastFull+(isMTD?' MTD (day '+elapsed+' of '+dimM+', YoY shown as PACE vs the full month)':'')+' vs '+ly+' (same month last year)','REGISTERED first-time customers per branch (<b>new-to-CHAIN</b>, counted at their first-ever branch — a customer who shopped another branch before is not counted here; branch-first counts run ~5-10% higher) (verified: unregistered walk-ins are only ~1% of receipts, so these counts are near-complete). Spark = last 6 months of new customers. <b>Unregistered = walk-in receipts with no customer attached — ~1% of all orders, so the registered counts ARE the real picture.</b> NC rev = revenue from that month&rsquo;s first-time customers; RC rev = revenue from customers acquired earlier.',
+ pnlCard(g,'odoo','New customers by branch &mdash; '+(useD?(ST.s+' → '+ST.e+' vs '+_pwB[0]+' → '+_pwB[1]+' (your window)'):(lastFull+(isMTD?' MTD (day '+elapsed+' of '+dimM+', YoY shown as PACE vs the full month)':'')+' vs '+ly+' (same month last year)')),'REGISTERED first-time customers per branch (<b>new-to-CHAIN</b>, counted at their first-ever branch — a customer who shopped another branch before is not counted here; branch-first counts run ~5-10% higher) (verified: unregistered walk-ins are only ~1% of receipts, so these counts are near-complete). Spark = last 6 months of new customers. <b>Unregistered = walk-in receipts with no customer attached — ~1% of all orders, so the registered counts ARE the real picture.</b> NC rev = revenue from that month&rsquo;s first-time customers; RC rev = revenue from customers acquired earlier.',
   '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Branch</th><th style="text-align:left">NC 6-mo trend</th><th>NC '+lastFull+(isMTD?' MTD':'')+'</th><th>NC '+ly+'</th><th>'+(isMTD?'Pace vs LY':'YoY')+'</th><th>NC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>RC revenue'+(isMTD?' MTD':'')+'</th><th>'+(isMTD?'Pace':'YoY')+'</th><th>Unregistered</th></tr>'+rows+'</table></div>');}
 let BNCM='nc';
 function setBncm(v){BNCM=v;rOff();}
@@ -1741,6 +1751,33 @@ function bncTs(g){const B=_bnrAll();const ks=Object.keys(B).sort();if(!ks.length
    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:13,font:{size:10}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10},callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
  ch.push(c);}
 
+
+function offOnChart(g){const A=O.ad,BM=O.bmeta||{};if(!A||!A.start)return;
+ const names=Object.keys(O.pos||{});const t0=new Date(A.start+'T00:00:00Z').getTime();
+ const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ let i1=Math.min(A.n-1,ix(ST.e)),i0=Math.max(0,ix(ST.s));
+ if(i1-i0<13){i0=Math.max(0,i1-27);}  // always enough days to see a shape
+ const mfo=afo();const lab=[],spend=[],store=[],online=[];
+ for(let i=i0;i<=i1;i++){
+  lab.push(new Date(t0+i*864e5).toISOString().slice(5,10));
+  spend.push((A.mspend||[])[i]||0);
+  let st=0;names.forEach(n=>{st+=((BM[n]||{}).v||[])[i]||0;});
+  store.push(st*mfo);
+  online.push(((A.mecomrev||[])[i]||0)*af('meta'));}
+ const sSp=spend.reduce((a,b)=>a+b,0),sSt=store.reduce((a,b)=>a+b,0),sOn=online.reduce((a,b)=>a+b,0);
+ const M=v=>'E£ '+Math.round(v).toLocaleString();
+ pnlCard(g,'meta','What Meta spend does ONLINE vs IN-STORE, day by day',
+  'One picture of the split: grey bars are what you spent on Meta that day, the blue line is the website value Meta credits and the green line is the value it credits to the shops (offline CAPI), both at your attribution setting. Over this window '+M(sSp)+' of spend sat against '+M(sOn)+' online and <b>'+M(sSt)+' in-store</b> — in-store is '+(sOn?(sSt/sOn).toFixed(1):'—')+'× the online leg, which is why judging Meta on website ROAS alone understates it.',
+  '<div style="position:relative;height:260px"><canvas id="ooC"></canvas></div>');
+ ch.push(new Chart(document.getElementById('ooC'),{data:{labels:lab,datasets:[
+  {type:'bar',label:'Meta spend',data:spend,backgroundColor:'#c3c9d64d',borderWidth:0,yAxisID:'y2',order:9},
+  {type:'line',label:'In-store value (Meta CAPI)',data:store,borderColor:'#12a06e',backgroundColor:'#12a06e18',fill:true,borderWidth:2.5,pointRadius:0,tension:.3,yAxisID:'y'},
+  {type:'line',label:'Website value (Meta)',data:online,borderColor:'#3a9bff',borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y'}]},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{callbacks:{label:c2=>c2.dataset.label+': E£ '+Math.round(c2.parsed.y).toLocaleString()}}},
+   scales:{x:{grid:{display:false},ticks:{maxTicksLimit:10,font:{size:9}}},
+    y:{grid:{color:'#eef0f5'},ticks:{font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}},
+    y2:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>Math.round(v/1000)+'k'}}}}}));}
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
@@ -1801,7 +1838,7 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   return '<tr'+(r.n==='ALL STORES'?' style="background:#f8f9fc;font-weight:800"':'')+'><td style="text-align:left;font-weight:800">'+r.n+'</td>'
   +'<td>'+M(r.rv)+'</td><td>'+fp(pc(r.rv,r.rp))+'</td>'
   +'<td style="border-left:1px solid #e6e9f0">'+M(r.av)+'</td><td'+(r.aNo?' title="Meta&rsquo;s per-day attributed feed starts '+(AD.start||'')+' — this comparison window is before it, so there is nothing to compare against."':'')+'>'+(r.aNo?'<span style="color:#c9ccd6">no feed</span>':fp(pc(r.av,r.ap)))+'</td>'  +(function(){const cv=(c2,p2)=>'<td>'+(c2==null?'<span style="color:#c9ccd6">—</span>':M(c2)+(p2?'<div style="font-size:9.5px;font-weight:800;color:'+(c2<=p2?'#12a06e':'#e23a63')+'">'+(c2>=p2?'▲+':'▼−')+Math.abs((c2/p2-1)*100).toFixed(0)+'%</div>':''))+'</td>';
-   const al=r.alloc?'<div style="font-size:9px;color:#b8860b">allocated</div>':'';
+   const al=r.alloc?'<div style="font-size:9px;color:#b8860b" title="Ads are not targeted per branch, so branch spend is not a measured number. This row = total Meta spend in the window x this branch share of the Meta in-store attributed value in the same window. Meta decides the share, not us; ONLINE and ALL STORES are real spend and carry no tag.">allocated &#9432;</div>':'';
    return '<td style="border-left:1px solid #e6e9f0">'+(M(r.sp.m)+(r.sp.mp?'<div style="font-size:9.5px;font-weight:800;color:'+(r.sp.m<=r.sp.mp?'#12a06e':'#e23a63')+'">'+(r.sp.m>=r.sp.mp?'▲+':'▼−')+Math.abs((r.sp.m/r.sp.mp-1)*100).toFixed(0)+'%</div>':'')+al)+'</td>'
     +cv(r.sp.g,r.sp.gp)+cv(r.sp.t,r.sp.tp)+cv(r.sp.a,r.sp.ap2);})()
   +'<td style="color:'+((r.rv&&r.av/r.rv>1)?'#b8860b;font-weight:800':'#8a93a6')+'" title="'+((r.rv&&r.av/r.rv>1)?'Meta claims more than this scope sold — over-attribution at this window; switch Meta to Incremental':'share of revenue Meta attributes to its ads')+'">'+(r.rv?Math.round(r.av/r.rv*100):0)+'%'+((r.rv&&r.av/r.rv>1)?' ⚠':'')+'</td>'
@@ -1822,7 +1859,7 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
   +rows.map(tr).join('')+'</table></div>');}
 
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{offOnChart(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
@@ -2404,7 +2441,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='ai')return rAI(),void qsweep('g13');if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12');if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -5653,7 +5690,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828T124347Z';
+const BUILD='20260828T130129Z';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -5664,7 +5701,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260828T124347Z'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260828T130129Z'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
@@ -5851,9 +5888,10 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  document.getElementById('bn26').innerHTML='&#8635; <b>SEARCH ADVISOR</b> &mdash; your own Google search terms ARE live demand in your vertical. 28-day window '+((SI.win||[])[0]||'')+' &rarr; '+((SI.win||[])[1]||'')+' vs the same weekday-aligned window last year. Refreshed automatically every sync (pulled '+(SI.pulled||'&mdash;')+').';
  if(!SI.terms||!SI.terms.length){pnlCard(g,'blend','Search Advisor','Search-term intelligence arrives on the next sync (collector v9.7.12+). Nothing to do — check back within 3 hours.','');return;}
  window.SIW=window.SIW||'28';window.SIQ=window.SIQ||'';window.SIV=window.SIV||'over';
+ if(!window.SIWPIN){const _d=Math.max(1,span(ST.s,ST.e));window.SIW=_d<=10?'7':(_d<=45?'28':'90');}
  const T=(SI.multi&&SI.multi[window.SIW])||SI.terms;
  const SIV=window.SIV,V=v=>(SIV===v||SIV==='all');
- const winChips=['7','28','90'].map(w=>'<span class="chip" style="'+(w===window.SIW?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.SIW=\''+w+'\';rSI()">'+w+'d vs LY</span>').join(' ');
+ const winChips=['7','28','90'].map(w=>'<span class="chip" style="'+(w===window.SIW?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="window.SIWPIN=1;window.SIW=\''+w+'\';rSI()">'+w+'d vs LY</span>').join(' ')+(window.SIWPIN?' <span class="chip" onclick="window.SIWPIN=0;rSI()">&times; follow page range</span>':'');
  const vchip=(id,lbl)=>'<span class="chip" style="'+(SIV===id?'background:#0f172a;color:#fff;border-color:#0f172a':'font-weight:700')+'" onclick="window.SIV=\''+id+'\';rSI()">'+lbl+'</span>';
  g.insertAdjacentHTML('beforeend','<div class="card full" style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:800;color:#8a93a6">VIEW</span>'
   +vchip('over','Overview')+vchip('terms','Search terms')+vchip('kw','Keywords')+vchip('comp','Competitors')+vchip('cov','Am I covering it?')+vchip('act','Actions')+vchip('all','Everything')
@@ -5916,9 +5954,12 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
  pnlCard(g,'blend','New signals &mdash; Egypt, your demographic','What just appeared or accelerated: NEW terms from your own Egypt search traffic, 50%+ risers YoY, and Google Trends (geo=EG) rising queries around your category seeds — the earliest demand you can get ahead of. Refreshes with every sync.',sig);
  if(trKeys.length){const anyS=trKeys.filter(k=>(TR[k]||{}).series&&Object.keys(TR[k].series).length);
   if(anyS.length){const lab=Object.keys(TR[anyS[0]].series);
-   pnlCard(g,'blend','Google Trends &mdash; Egypt, 12 months','Relative search interest (0–100) in Egypt for your category seed terms — the macro demand wave over your vertical.','<div style="position:relative;height:220px"><canvas id="siTr"></canvas></div>');
+   window.TRALL=window.TRALL||false;
+   pnlCard(g,'blend','Google Trends &mdash; Egypt, 12 months','Relative search interest (0–100) in Egypt. Showing the '+(window.TRALL?'ALL '+anyS.length:'THREE biggest')+' seed terms — more lines than that is unreadable. <a href="javascript:void(0)" onclick="window.TRALL=!window.TRALL;rSI()" style="color:#5a5bf0;font-weight:800">'+(window.TRALL?'show top 3 only':'show all '+anyS.length)+'</a>','<div style="position:relative;height:230px"><canvas id="siTr"></canvas></div>');
    const CS=['#3a9bff','#5a5bf0','#ff5da2','#12a06e','#ff8b42'];
-   const c0=new Chart(document.getElementById('siTr'),{type:'line',data:{labels:lab,datasets:anyS.map((k,i)=>({label:k,data:lab.map(l=>(TR[k].series||{})[l]||0),borderColor:CS[i%5],borderWidth:2,pointRadius:0,tension:.3}))},options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}}}}});
+   const _rank=anyS.slice().sort((a,b)=>{const sa=lab.reduce((t,l)=>t+((TR[a].series||{})[l]||0),0),sb=lab.reduce((t,l)=>t+((TR[b].series||{})[l]||0),0);return sb-sa;});
+   const _show=window.TRALL?_rank:_rank.slice(0,3);
+   const c0=new Chart(document.getElementById('siTr'),{type:'line',data:{labels:lab,datasets:_show.map((k,i)=>({label:k,data:lab.map(l=>(TR[k].series||{})[l]||0),borderColor:CS[i%5],borderWidth:2.5,pointRadius:0,tension:.35}))},options:{responsive:1,maintainAspectRatio:0,animation:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:9}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:10}}}}}});
    ch.push(c0);}}
  } // end V('over') signals block
  // ---- 1. YoY movers ----
@@ -5956,10 +5997,10 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
   const mv=mine?mine.vol:0;
   const bar=(v,mx)=>'<div style="background:#eef0f5;border-radius:5px;height:9px;width:150px;display:inline-block;vertical-align:middle"><div style="width:'+Math.round(100*v/mx)+'%;background:#5a5bf0;height:9px;border-radius:5px"></div></div>';
   const mx=Math.max(mv,...rows.map(r=>r.v))||1;
-  let h='<table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Site</th><th>Keywords it is relevant for</th><th>Their monthly search volume</th><th style="text-align:left">&nbsp;</th><th>vs you</th></tr>';
+  let h='<table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Site</th><th>Keywords Google links to the site</th><th>Volume behind those keywords</th><th style="text-align:left">&nbsp;</th><th>vs you</th></tr>';
   if(mine)h+='<tr style="background:#eef6ff;font-weight:800"><td style="text-align:left">'+me+' <span class="bg b-live">you</span></td><td>'+M(mine.n)+'</td><td>'+M(mv)+'</td><td style="text-align:left">'+bar(mv,mx)+'</td><td>—</td></tr>';
   h+=rows.map(r=>'<tr><td style="text-align:left"><b>'+r.s+'</b></td><td>'+M(r.n)+'</td><td>'+M(r.v)+'</td><td style="text-align:left">'+bar(r.v,mx)+'</td><td style="font-weight:800;color:'+(mv&&r.v>mv?'#e23a63':'#12a06e')+'">'+(mv?(r.v/mv).toFixed(1)+'x':'—')+'</td></tr>').join('')+'</table>';
-  pnlCard(g,'blend','Who you are actually up against','Keyword Planner site seeds: the keywords Google associates with each shop and the Egyptian search volume behind them. Your own site is the benchmark row. This is footprint, not their spend — Google never exposes a rival&rsquo;s bids.',h);
+  pnlCard(g,'blend','Who you are actually up against','Keyword Planner site seeds: for each shop, the keywords Google associates with that domain and the Egyptian volume behind THOSE keywords. <b>Read it as relative footprint, not as total demand.</b> Google returns a sample per site (a few dozen to a few hundred keywords), so your own row is NOT your search volume — your ads alone took '+(function(){try{return Math.round((SI.terms||[]).reduce(function(t,x){return t+(x.im||0);},0)).toLocaleString();}catch(e){return 'far more';}})()+' impressions in the last 28 days. Use the ratio column, not the absolute number. Google never exposes a rival&rsquo;s bids.',h);
   const R=C.rivals||[];
   if(R.length)pnlCard(g,'blend','Rival demand landing on YOUR ads','People searching a competitor BY NAME whose search triggered your ad in the last 28 days. This is the clearest evidence of who your customers see as the alternative — and free traffic you already intercept.',
    '<table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">They searched for</th><th>Impressions on your ads</th><th style="text-align:left">Example searches</th></tr>'
@@ -6424,5 +6465,4 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
 window.rCO=rCO;window.coSel=coSel;
 window.rCJ=rCJ;window.rBG=rBG;window.cjS=cjS;window.aoLv=aoLv;window.aoAc=aoAc;window.aD2=aD2;
 </script>
-<script src="audit_tabs.js"></script>
 </body></html>
