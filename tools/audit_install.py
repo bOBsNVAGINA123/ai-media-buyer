@@ -30,6 +30,10 @@ GROUP = " ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing G
 TOGGLE = ("['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');"
           "if(e)e.classList.toggle('hide',t!==x);});")
 DISPATCH = "if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();"
+# rTab() is the one the DATE BAR calls (RDR -> rTab). tab() is only the click path. Without
+# this second hook a range change on an Audit tab fell through to `else rAds()` and re-rendered
+# the Ads tab instead -- the date bar looked wired and was not.
+RTAB_ANCHOR = "function rTab(){const t=TAB;PREVLBL='';ppHdr();"
 TBT = "['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];"
 SCRIPT = '<script src="audit_tabs.js"></script>'
 
@@ -66,6 +70,10 @@ def install(s):
         s = s.replace(a, DISPATCH + a, 1)
         changed.append("dispatch")
 
+    if RTAB_ANCHOR in s and (RTAB_ANCHOR + DISPATCH) not in s:
+        s = s.replace(RTAB_ANCHOR, RTAB_ANCHOR + DISPATCH, 1)
+        changed.append("rTab dispatch")
+
     if "['au','auC']" not in s:
         a = "['cs','csC'],['ab','abC']];"
         if a not in s:
@@ -91,6 +99,8 @@ def verify(s):
         raise SystemExit("FATAL: TABGROUPS is no longer terminated by ];")
     if tail.index("['Audit',") > tail.index("\n];"):
         raise SystemExit("FATAL: the Audit group landed outside TABGROUPS")
+    if RTAB_ANCHOR in s and (RTAB_ANCHOR + DISPATCH) not in s:
+        raise SystemExit("FATAL: rTab() has no Audit dispatch -- the date bar would re-render the wrong tab")
     for need in ('id="auC"', "['au','auC']", "if(t==='au')return rAU();", SCRIPT):
         if need not in s:
             raise SystemExit("FATAL: hook missing after install -- " + need)
