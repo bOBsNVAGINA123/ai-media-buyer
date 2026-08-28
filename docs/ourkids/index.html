@@ -5009,7 +5009,7 @@ function rShip2(g,mons,T,F,SH){
  let sub='Across the '+full.length+' settled months in this window you collected <b>E&pound;'+money(tc)+'</b> in delivery charges against a courier bill of <b>E&pound;'+money(tk)+'</b> &mdash; a net of <b>'+(nt<0?'&minus;E&pound;'+money(-nt)+', i.e. delivery is a subsidy you fund out of product margin':'E&pound;'+money(nt))+'</b>. Customers cover <b>'+(tk?(tc/tk*100).toFixed(0):0)+'%</b> of it. Of that bill, <b>E&pound;'+money(tf)+'</b> is the allocated cost of orders shipped free.';
  if(cols.indexOf(lag)>=0)sub+=' <b style="color:#e23a63">'+lag+' is excluded from those totals</b> &mdash; Bosta settles COD on a lag, so only the first batch of the newest month has posted. Its column is still shown so you can watch it fill in.';
  sub+=' Returns before '+rf+' were booked as cancellations, so the returned rows read near zero until then.';
- pnlCard(g,'odoo','Delivery Economics &mdash; what free shipping actually costs (ACTUAL)',sub,T(L,cols)+((function(){var pm=cols.filter(function(m){return s2prov(m);});if(!pm.length)return '';/* The newest column is priced from the courier feed, not the accounts. Without saying so, a   105% recovery rate and a halved cost-per-order read as a win rather than a part-month. */return '<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>'+pm.join(', ')+' is provisional.</b> Nothing has posted to Odoo for it yet &mdash; Bosta settles on a lag &mdash; so the bill is priced from the courier&rsquo;s own shipment feed at the sampled fee per type. It counts only parcels already handed over, so the per-order and recovery figures in that column are flattered and will fall as the rest of the month ships. Reading it as zero, which is what the ledger alone says, would have booked the whole month&rsquo;s shipping collection as profit.</span></div></div>';})()));
+ pnlCard(g,'odoo','Delivery Economics &mdash; what free shipping actually costs (ACTUAL)',sub,T(L,cols)+((function(){var pm=cols.filter(function(m){return s2prov(m);});if(!pm.length)return '';/* The newest column is priced from the courier feed, not the accounts. Without saying so, a   105% recovery rate and a halved cost-per-order read as a win rather than a part-month. */var R=shipRate();var M0=function(v){return 'E&pound;'+Math.round(v).toLocaleString();};return '<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>'+pm.join(', ')+' is estimated, not posted.</b> Bosta settles on a lag so nothing has reached the ledger for it. Left as zero it would have booked that month&rsquo;s entire shipping collection as profit; priced only on parcels already handed over it read far too cheap, because roughly a quarter of the month has not shipped yet. It is therefore charged at <b>'+(R?M0(R.rate):'&mdash;')+' per confirmed order</b> &mdash; the rate actually paid across the '+(R?R.n:0)+' settled months to '+(R?R.to:'&mdash;')+', which is real money out of the bank and so already includes collection fees, insurance and the return legs, not just the shipment fee. '+pm.map(function(m){return '<b>'+m+'</b>: '+M0(s2est(m))+' estimated, of which '+M0(s2floor(m))+' is already on parcels the courier has taken.';}).join(' ')+' That rate has ranged '+(R?M0(R.lo)+' to '+M0(R.hi):'&mdash;')+' a month over the same window, which is the honest width of this estimate.</span></div></div>';})()));
  /* Per-order outcome costs. Odoo cannot answer this: the ledger holds one
     settlement total per Bosta batch, not a per-shipment breakdown. This comes
     from the Bosta cash-cycle export, deduplicated by Order Id. */
@@ -5136,8 +5136,31 @@ function s2src(m){if(!s2h(m))return 'none';
  const a=S2f()['cost'];const posted=(a&&a[S2If()[m]])||0;
  if(posted>0)return 'ledger';
  return bostaCost(m)>0?'bosta':'none';}
+/* v9.18 MODEL THE UNSETTLED MONTH, DO NOT JUST FLOOR IT.
+   Pricing only the parcels already handed to the courier made August read E£49 an order against
+   July's E£91 -- a 46% "saving" that was really a quarter of the month not yet shipped (0.60
+   parcels per order against 0.74-0.86 in every settled month).
+   So the month is modelled on the rate the business actually pays: total posted courier cost
+   divided by confirmed orders across the trailing settled months. That rate comes from money
+   that really left the bank, so it carries everything Bosta bills -- collection fees, insurance,
+   the return legs -- not just the shipment fee. It is applied to the month's own order count.
+   bostaCost() is kept as the FLOOR: what is certainly already spent on parcels handed over.
+   Both are exposed so a card can show the floor and the estimate rather than one number. */
+function shipRate(n){n=n||6;const S=S2f();if(!S)return null;
+ const idx=[];for(let i=0;i<S.m.length;i++)if((S.cost[i]||0)>0)idx.push(i);
+ if(!idx.length)return null;
+ const use=idx.slice(-n);
+ let c=0,o=0;const per=[];
+ use.forEach(i=>{const ci=S.cost[i]||0,oi=S.conf[i]||0;c+=ci;o+=oi;if(oi)per.push(ci/oi);});
+ if(!o)return null;per.sort((a,b)=>a-b);
+ return {rate:c/o,lo:per[0],hi:per[per.length-1],n:use.length,
+  from:S.m[use[0]],to:S.m[use[use.length-1]]};}
+function s2floor(m){return bostaCost(m);}          // already-shipped parcels, priced
+function s2est(m){const r=shipRate();if(!r)return bostaCost(m);
+ const conf=(function(){const a=S2f()['conf'];return (a&&a[S2If()[m]])||0;})();
+ return Math.max(bostaCost(m),conf*r.rate);}       // never below what is already spent
 function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])||0;
- if(k==='cost'&&!v)return bostaCost(m);
+ if(k==='cost'&&!v)return s2est(m);
  return v;}
 /* The final month is ALWAYS understated: Bosta settles COD on a lag, so only the
    first settlement batch of that month has hit the ledger when we read it. Every
@@ -5177,7 +5200,10 @@ function rPE(g){
  if(!O.shop||!O.ad||!O.ship2)return;
  const money=v=>Math.round(v).toLocaleString();
  let r=rng(ST.s,ST.e);if(r){r=[Math.max(0,Math.min(r[0],r[1]-27)),r[1]];} // at least 28 days of history so a 7-day filter still gets a real curveif(!r)return;
- const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept:S2.kept[j]||0,cost:S2.cost[j]||0,col:S2.col[j]||0};});
+ /* Read the cost through s2() so the unsettled month arrives modelled rather than as a zero:
+   this engine answers "spend more or cut", and a month with no delivery cost in it says cut
+   nothing and spend freely. */
+const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept:S2.kept[j]||0,cost:s2('cost',m)||0,col:S2.col[j]||0};});
  const goodM=(S2.m||[]).filter(k=>SM[k].conf>=100).sort();
  const lastGood=SM[goodM[goodM.length-1]]||{conf:1,kept:1,cost:0,col:0};
  // courier invoices lag: a month whose posted cost is BELOW what customers paid back
@@ -6395,7 +6421,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-175832';
+const BUILD='20260828-180914';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
