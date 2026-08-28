@@ -2631,6 +2631,86 @@ def _kw_ideas(hd, ver, cid, seeds):
     except Exception as e:
         log("kw ideas fail ::", str(e)[:120]); return []
 
+
+# Discovered 28 Aug 2026 from OUR OWN search terms: shops people hunt by name and land on our ads.
+# Suppliers we stock (Awlad Farghaly, Cubs, Bingo, Junior, Glossy Bird, Smiggle, 3M, Momolly) are NOT
+# competitors and are deliberately excluded. shop-ourkids.com is us -- kept as the benchmark row.
+COMPETITORS = [x.strip() for x in os.environ.get("COMPETITOR_SITES",
+    "hedeya.com,kidiastore.com,arafastores.com,babyshopstores.com,mothercare.com.eg,shop-ourkids.com").split(",") if x.strip()]
+RIVAL_RE = re.compile(r"hedeya|hedaya|kidia|arafa\s*store|babyshop|baby\s*shop|mothercare|mother\s*care|panda\s*baby|kids\s*house|lovely\s*baby", re.I)
+
+def _site_ideas(hd, ver, cid, site):
+    """Keyword Planner SITE seed: the keywords Google associates with a competitor's site,
+    with Egypt volume, competition and the top-of-page bid range (what entering costs)."""
+    url = "https://googleads.googleapis.com/%s/customers/%s:generateKeywordIdeas" % (ver, cid)
+    body = {"siteSeed": {"site": site}, "geoTargetConstants": ["geoTargetConstants/2818"],
+            "language": "languageConstants/1019", "includeAdultKeywords": False}
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=hd)
+        with urllib.request.urlopen(req, timeout=120) as r:
+            out = json.loads(r.read())
+    except Exception as e:
+        log("competitor ideas fail", site, str(e)[:140]); return []
+    rows = []
+    for it in (out.get("results") or []):
+        m = it.get("keywordIdeaMetrics") or {}
+        v = int(m.get("avgMonthlySearches") or 0)
+        if v < 50: continue
+        rows.append({"t": it.get("text", ""), "v": v, "c": (m.get("competition") or "")[:4],
+                     "lo": round(int(m.get("lowTopOfPageBidMicros") or 0) / 1e6, 2),
+                     "hi": round(int(m.get("highTopOfPageBidMicros") or 0) / 1e6, 2)})
+    rows.sort(key=lambda x: -x["v"])
+    return rows[:300]
+
+def pull_competitors(ours):
+    """What each competitor's site is relevant for, what it would cost to show there, and which of
+    those keywords WE are absent from. `ours` = our own search terms (term -> impressions)."""
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    at = GTOK[0]
+    if not (dev and cid and at and COMPETITORS): return {}
+    hd = {"Authorization": "Bearer " + at, "developer-token": dev, "Content-Type": "application/json"}
+    lc = os.environ.get("GOOGLE_LOGIN_CID", "")
+    if lc: hd["login-customer-id"] = lc
+    ver = _gads_ver(hd)
+    mine = {str(k).lower().strip(): v for k, v in (ours or {}).items()}
+    def covered(t):
+        q = str(t).lower().strip()
+        if mine.get(q, 0) >= 30: return True
+        for k, v in mine.items():
+            if v >= 30 and (k in q or q in k): return True
+        return False
+    sites = {}; allk = {}
+    for site in COMPETITORS:
+        rows = _site_ideas(hd, ver, cid, site)
+        if not rows: continue
+        for r in rows:
+            r["mine"] = int(mine.get(str(r["t"]).lower().strip(), 0))
+            e = allk.setdefault(r["t"], {"t": r["t"], "v": r["v"], "c": r["c"], "lo": r["lo"], "hi": r["hi"],
+                                         "mine": r["mine"], "who": []})
+            e["who"].append(site)
+        sites[site] = {"n": len(rows), "vol": sum(r["v"] for r in rows), "rows": rows[:120]}
+        log("competitor", site, "::", len(rows), "keywords ::", sum(r["v"] for r in rows), "searches/mo")
+    # who people hunt BY NAME and end up on our ads -- demand for a rival, served by us
+    rivals = {}
+    try:
+        for t, im in (ours or {}).items():
+            m = RIVAL_RE.search(str(t))
+            if not m: continue
+            k = re.sub(r"\s+", " ", m.group(0).lower())
+            k = {"hedaya": "hedeya", "mother care": "mothercare", "baby shop": "babyshop"}.get(k, k)
+            e = rivals.setdefault(k, {"n": k, "im": 0, "terms": []})
+            e["im"] += int(im or 0)
+            if len(e["terms"]) < 6: e["terms"].append(str(t)[:48])
+    except Exception as e:
+        log("rival demand fail", str(e)[:100])
+    gaps = [v for v in allk.values() if not covered(v["t"])]
+    gaps.sort(key=lambda x: -x["v"])
+    shared = [v for v in allk.values() if len(v["who"]) >= 2]
+    shared.sort(key=lambda x: -x["v"])
+    return {"asOf": END.isoformat(), "sites": sites, "gaps": gaps[:80], "shared": shared[:40],
+            "rivals": sorted(rivals.values(), key=lambda x: -x["im"])[:12],
+            "me": "shop-ourkids.com", "totalGapVol": sum(g["v"] for g in gaps)}
+
 def pull_search_intel():
     """Daily search intelligence for the Search Advisor tab: YoY search terms (28d vs same
     weekday-aligned window last year), per-term CVR/CPA, weekly demand curves for the top
@@ -2715,8 +2795,12 @@ def pull_search_intel():
     tr = {}
     try: tr = _trends_eg()
     except Exception as e: log("trends wrapper fail", str(e)[:80])
+    comp = {}
+    try: comp = pull_competitors({t["t"]: t["im"] for t in T})
+    except Exception as e: log("competitors fail", str(e)[:140])
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
-            "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp, "trends": tr, "kw": kw}
+            "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp,
+            "trends": tr, "kw": kw, "comp": comp}
 
 def pull_why():
     """WHY tab: Shopify order-line decomposition for 1/7/28-day windows vs the prior window —
@@ -3963,7 +4047,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.20 (LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.21 (COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
