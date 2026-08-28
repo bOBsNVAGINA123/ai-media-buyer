@@ -2639,6 +2639,65 @@ COMPETITORS = [x.strip() for x in os.environ.get("COMPETITOR_SITES",
     "hedeya.com,kidiastore.com,arafastores.com,babyshopstores.com,mothercare.com.eg,shop-ourkids.com").split(",") if x.strip()]
 RIVAL_RE = re.compile(r"hedeya|hedaya|kidia|arafa\s*store|babyshop|baby\s*shop|mothercare|mother\s*care|panda\s*baby|kids\s*house|lovely\s*baby", re.I)
 
+
+# Brands people search in Egypt, with the Arabic spellings they actually type. English-only lists
+# miss most of the demand here.
+BRAND_MAP = {
+ "lc waikiki":["\u0627\u0644 \u0633\u064a \u0648\u0627\u064a\u0643\u064a\u0643\u064a"],"barbie":["\u0628\u0627\u0631\u0628\u064a"],"joie":["\u062c\u0648\u064a"],"lego":["\u0644\u064a\u062c\u0648"],"skechers":["\u0633\u0643\u064a\u062a\u0634\u0631\u0632"],
+ "crocs":["\u0643\u0631\u0648\u0643\u0633"],"sudocrem":["\u0633\u0648\u062f\u0648\u0643\u0631\u064a\u0645"],"juniors":["\u062c\u0648\u0646\u064a\u0648\u0631"],"chicco":["\u0634\u064a\u0643\u0648"],"doona":["\u062f\u0648\u0646\u0627"],
+ "pampers":["\u0628\u0627\u0645\u0628\u0631\u0632"],"stanley":["\u0633\u062a\u0627\u0646\u0644\u064a"],"johnsons baby":["\u062c\u0648\u0646\u0633\u0648\u0646"],"thermos":["\u062a\u0631\u0645\u0633"],"bata":["\u0628\u0627\u062a\u0627"],
+ "clarks":[],"hot wheels":[],"mustela":["\u0645\u0648\u0633\u062a\u064a\u0644\u0627"],"samsonite":["\u0633\u0627\u0645\u0633\u0648\u0646\u0627\u064a\u062a"],"carters":["\u0643\u0627\u0631\u062a\u0631"],
+ "smiggle":["\u0633\u0645\u064a\u062c\u0644"],"sebamed":["\u0633\u064a\u0628\u0627\u0645\u064a\u062f"],"play doh":[],"cetaphil":[],"sistema":["\u0633\u064a\u0633\u062a\u064a\u0645\u0627"],
+ "mothercare":["\u0645\u0630\u0631\u0643\u064a\u0631"],"molfix":["\u0645\u0648\u0644\u0641\u0643\u0633"],"mam":[],"hydro flask":[],"nerf":[],"jansport":[],"kipling":[],
+ "munchkin":[],"stokke":[],"huggies":["\u0647\u0627\u062c\u064a\u0632"],"contigo":[],"tommee tippee":[],"avent":["\u0627\u0641\u0646\u062a"],"medela":[],"graco":[],"cybex":[]}
+
+def pull_brand_gap(hd, ver, cid, terms):
+    """The strategist question: which brands have real Egyptian demand that our range does not serve,
+    and are we already buying clicks for them? Joins Keyword Planner volume + our own search terms +
+    the live Odoo catalogue, then states the move."""
+    url = "https://googleads.googleapis.com/%s/customers/%s:generateKeywordIdeas" % (ver, cid)
+    q = []
+    for en, ars in BRAND_MAP.items(): q.append(en); q.extend(ars)
+    vol = {}
+    for i in range(0, len(q), 20):
+        body = {"keywordSeed": {"keywords": q[i:i + 20]}, "geoTargetConstants": ["geoTargetConstants/2818"],
+                "language": "languageConstants/1019", "includeAdultKeywords": False}
+        try:
+            req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=120) as r: res = json.loads(r.read()).get("results", [])
+        except Exception as e:
+            log("brand gap volumes fail", str(e)[:110]); continue
+        for x in res:
+            m = x.get("keywordIdeaMetrics") or {}
+            vol[(x.get("text") or "").lower()] = (int(m.get("avgMonthlySearches") or 0),
+                (m.get("competition") or "")[:4], round(int(m.get("lowTopOfPageBidMicros") or 0) / 1e6, 2),
+                round(int(m.get("highTopOfPageBidMicros") or 0) / 1e6, 2))
+    rows = []
+    for en, ars in BRAND_MAP.items():
+        v = 0; comp = ""; lo = hi = 0.0
+        for k in [en] + ars:
+            d = vol.get(k.lower())
+            if d: v += d[0]; comp = comp or d[1]; lo = lo or d[2]; hi = max(hi, d[3])
+        if v < 500: continue
+        try:
+            sk = oexec("product.template", "search_count", [[["name", "ilike", en]]]) or 0
+        except Exception:
+            sk = -1
+        im = ck = 0; sp = 0.0; cv = 0.0
+        for t in (terms or []):
+            tl = str(t.get("t", "")).lower()
+            if en in tl or any(a and a in tl for a in ars):
+                im += t.get("im", 0); ck += t.get("ck", 0); sp += t.get("sp", 0); cv += t.get("cn", 0)
+        if sk == 0 and v >= 2000: verdict = "RANGE GAP"
+        elif 0 < sk < 8 and v >= 10000: verdict = "THIN RANGE"
+        elif sk == 0 and im > 500: verdict = "PAYING, CANNOT FULFIL"
+        else: verdict = "COVERED"
+        rows.append({"b": en, "v": v, "c": comp, "lo": lo, "hi": hi, "sk": sk,
+                     "im": im, "ck": ck, "sp": round(sp), "cv": round(cv, 1), "vd": verdict})
+    rows.sort(key=lambda x: -x["v"])
+    log("brand gap", len(rows), "brands ::", sum(1 for r in rows if r["vd"] != "COVERED"), "with a gap")
+    return rows
+
 def _site_ideas(hd, ver, cid, site):
     """Keyword Planner SITE seed: the keywords Google associates with a competitor's site,
     with Egypt volume, competition and the top-of-page bid range (what entering costs)."""
@@ -2796,7 +2855,11 @@ def pull_search_intel():
     try: tr = _trends_eg()
     except Exception as e: log("trends wrapper fail", str(e)[:80])
     comp = {}
-    try: comp = pull_competitors({t["t"]: t["im"] for t in T})
+    try:
+        comp = pull_competitors({t["t"]: t["im"] for t in T})
+        comp["brandGap"] = pull_brand_gap(hd, ver, cid, T)
+    except Exception as _e: log("comp/brandgap fail", str(_e)[:120])
+    try: pass
     except Exception as e: log("competitors fail", str(e)[:140])
     return {"pulled": END.isoformat(), "win": [s1.isoformat(), e1.isoformat()],
             "terms": T, "multi": multi, "trend7": trend7, "weekly": wk, "is": isc, "isLY": isp,
@@ -4047,7 +4110,7 @@ def pull_salaries():
 
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
-    log("collector v9.7.21 (COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
+    log("collector v9.7.22 (BRAND GAP: Egypt demand per brand vs our Odoo range vs what we already pay for, with the move stated; COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
     win = drange(AD_START, END)
     def safe(fn, *a):
         try: return fn(*a)
