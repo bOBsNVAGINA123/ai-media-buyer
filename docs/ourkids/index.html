@@ -941,7 +941,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
   if(O.exp&&pms.length){let u=0;pms.forEach(m=>{const e=O.exp[m];if(!e)return;const tp=Object.keys(O.pos).reduce((a,n)=>a+((O.pos[n][m]||[0])[0]||0),0);const sh2=tp?((O.pos[b.name][m]||[0])[0]||0)/tp:0;u+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;});
    b.opexEst=Math.round(u/pms.length);}});}
  cards();rOn();
- document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the README tab. · <b>v9.8</b>';}
+ document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the Guide tab. · <b>v9.8</b>';}
 function lastD(){const a=(O.aw&&O.aw[1])||ST.e;return (window.EXT!==false&&a===(O.today||''))?addD(a,-1):a;}
 function setEXT(v){window.EXT=v;const t=(O.today||'');if(v&&ST.e===t)ST.e=addD(t,-1);if(!v&&ST.e===addD(t,-1))ST.e=t;RDR();}
 function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
@@ -994,6 +994,8 @@ const TABQ={
  rm:'How every number here is built, and what it does and does not include.'
 };
 let TABGRP=0;
+function tabLabel(id){for(var i=0;i<TABGROUPS.length;i++){var g=TABGROUPS[i][1];
+ for(var j=0;j<g.length;j++)if(g[j][0]===id)return g[j][1];}return id;}
 function grpOf(t){for(let i=0;i<TABGROUPS.length;i++){if(TABGROUPS[i][1].some(x=>x[0]===t))return i;}return 0;}
 function syncTabGroup(t){TABGRP=grpOf(t);}
 function renderTabs(){const gr=document.getElementById('tgroups'),tr=document.getElementById('tabrow');if(!gr||!tr)return;
@@ -1008,6 +1010,35 @@ const COHORTTABS={co:'Cohorts',rt:'Retention',lt:'LTGP : CAC',cj:'Journeys',mb:'
 // These three pin their own window on purpose and ignore the date picker. The note used to
 // claim they were monthly, which was simply untrue -- they never moved at all.
 const FIXEDTABS={pl:'the last 30 days against the 30 before, always \u2014 it overwrites the date box on entry so the comparison stays like-for-like',ai:'the latest complete month, always \u2014 the findings are ranked by monthly gross profit at risk, so a part-month would rank them wrongly',iq:'the latest complete months in the ledger, always \u2014 it is a standing read of the business, not a window report'};
+/* v9.15 READING ORDER. Tab order was fixed but card order inside a tab was whatever sequence the
+   render function happened to append in, and four tabs read backwards because of it:
+     Actions   opened on a budget table and buried "The call" and "Where the next pound goes" at
+               the bottom -- the two cards the tab exists for.
+     Branches  opened on two Meta attribution charts, so the branch scoreboard (what actually
+               happened in the shops) sat third.
+     Paid      opened on Reach & CPMR, a side metric, pushing the platform comparison to fourth.
+     Retention put last month's P&L above its own verdict.
+   Rather than surgery inside four render functions, the cards are reordered in the DOM after
+   render: a declared front-list per tab, matched on title. Anything unlisted keeps the order it
+   was appended in, so adding a card later cannot silently break the sequence.
+   The Overview tab is deliberately excluded -- it has a user-controlled card sort already. */
+const CARDFLOW={
+ ab:['The call','Where the next E','Budget Advisor'],
+ off:['Branch scoreboard'],
+ mi:['Paid performance','Does the next pound still work'],
+ rt:['The verdict']
+};
+function flowSort(t){
+ const want=CARDFLOW[t];if(!want)return;
+ const host=document.getElementById(t+'C');if(!host)return;
+ const grid=host.querySelector('.grid');if(!grid)return;
+ const cards=[].slice.call(grid.children).filter(function(c){return c.classList&&c.classList.contains('card');});
+ if(!cards.length)return;
+ const titleOf=function(c){const e=c.querySelector('.ct');/* a title can lead with a glyph or punctuation, so compare from the first letter or digit */return e?e.textContent.replace(/\s+/g,' ').replace(/^[^0-9A-Za-z]+/,'').trim():'';};
+ for(let i=want.length-1;i>=0;i--){
+  const hit=cards.filter(function(c){return titleOf(c).indexOf(want[i])===0;})[0];
+  if(hit&&hit.parentNode===grid)grid.insertBefore(hit,grid.firstChild);}
+}
 function grainNote(t){try{
  const gid=(document.getElementById(t+'C')||{}).querySelector?document.getElementById(t+'C').querySelector('.grid'):null;
  if(!gid)return;const old=gid.querySelector('.grainN');if(old)old.remove();
@@ -1024,7 +1055,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -1085,7 +1116,7 @@ function _allM(){if(_ALLM)return _ALLM;const a=[];for(let i=0;i<O.fin.n;i++){con
 function monEnd(m){let y=+m.slice(0,4),mo=+m.slice(5,7);mo++;if(mo>12){mo=1;y++;}const nf=y+'-'+String(mo).padStart(2,'0')+'-01';const d=addD(nf,-1);return d>O.aw[1]?O.aw[1]:d;}
 function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);ST.pm0=c(ST.s.slice(0,7));ST.pm1=c(ST.e.slice(0,7));
  /* A range that lands inside one month gave the monthly tabs a single data point: 39 panels on
-    the Charts tab drew one dot and no line, which is not a chart. Widen backwards to a readable
+    the All charts tab drew one dot and no line, which is not a chart. Widen backwards to a readable
     trail ending on the month you picked, and flag it so the notice can say what it did. */
  const i1=A.indexOf(ST.pm1);let i0=A.indexOf(ST.pm0);ST.pmAuto=0;
  if(i1>=0&&i1-i0<2){const w=A[Math.max(0,i1-11)];if(w!==ST.pm0){ST.pm0=w;ST.pmAuto=1;}}}
@@ -2565,7 +2596,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
   pnlCard(g,'blend','ALL Customers &mdash; total gross profit vs media spend','Not just new customers: the entire Shopify-channel actual GP against total platform spend, monthly.',h5);}}
 function monthsIn(a,b){const out=[];let d=new Date(Date.parse(a+'-01T00:00:00Z'));while(true){const m=d.toISOString().slice(0,7);if(m>b)break;out.push(m);d.setUTCMonth(d.getUTCMonth()+1);}return out;}
 /* v9.7 MTD/L3M/L6M/L13M/All now also move the month FROM/TO window (pm0/pm1). They used to
-   set only the daily range, and every card on the Charts tab reads pm0/pm1 — so the chips
+   set only the daily range, and every card on the All charts tab reads pm0/pm1 — so the chips
    visibly did nothing there. */
 function pnlQuick(k){const A=_allM();const last=A[A.length-1];let m0;if(k==='mtd')m0=last;else if(k==='all')m0=A[0];else m0=A[Math.max(0,A.length-k)];ST.pm0=m0;ST.pm1=last;ST.s=m0+'-01';ST.e=O.aw[1];RDR();}
 function pnlBar(g,extra){const allM=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);if(allM[allM.length-1]!==m)allM.push(m);}
@@ -2952,7 +2983,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='ce')return rCE(),void grainNote(t);if(t==='ic')return rIC(),void grainNote(t);if(t==='why')return rWHY(),void grainNote(t);if(t==='ai')return rAI(),qsweep('g13'),void grainNote(t);if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void grainNote(t);if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='ce')return rCE(),void (grainNote(t),flowSort(t));if(t==='ic')return rIC(),void (grainNote(t),flowSort(t));if(t==='why')return rWHY(),void (grainNote(t),flowSort(t));if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t));if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -3446,7 +3477,7 @@ function SIGX(){
     t:'The WHOLE store estate moved together in '+lm+' &mdash; '+(TD<0?'down ':'up ')+Math.abs(TP).toFixed(0)+'%',
     num:sg(TD)+' of store revenue, carrying '+sg(TG)+' of gross profit',
     why:same+' of '+rows.length+' branches moved the same way, so this is one network event and not '+same+' separate branch problems. Store revenue was '+sg(TA)+' in '+pm+' and '+sg(TB)+' in '+lm+'; the '+pc(TP)+' is that difference divided by the estate&rsquo;s OWN '+pm+' revenue of '+sg(TA)+'. The money at stake is the '+sg(TG)+' of gross profit that revenue carried, not the '+sg(TD)+' of turnover &mdash; turnover is not what you keep. Largest movers by cash: '+ord.slice(0,4).map(x=>x.n+' '+sg(x.d)+' ('+pc(x.p)+' of its own '+pm+')').join(', ')+'.',
-    act:TD<0?'Do not send six managers to fix six branches. Something network-wide moved: a calendar effect (Eid and the school year both shift by weeks year on year), a price change, a stock gap, or paid reach. Check the same month last year on the Charts tab before treating it as a decline.':'Confirm the driver is repeatable before you build a plan on it &mdash; a shifted holiday flatters one month and punishes the next.'});
+    act:TD<0?'Do not send six managers to fix six branches. Something network-wide moved: a calendar effect (Eid and the school year both shift by weeks year on year), a price change, a stock gap, or paid reach. Check the same month last year on the All charts tab before treating it as a decline.':'Confirm the driver is repeatable before you build a plan on it &mdash; a shifted holiday flatters one month and punishes the next.'});
    /* now only the branches that did NOT simply follow the network */
    rows.forEach(x=>{const dev=x.p-TP;if(Math.abs(dev)<10)return;
     add({imp:x.gd*(Math.abs(dev)/Math.max(1,Math.abs(x.p))),sev:dev<0?'watch':'good',
@@ -3461,7 +3492,7 @@ function SIGX(){
      t:(x.d<0?'Revenue down &mdash; ':'Revenue up &mdash; ')+x.n,
      num:sg(x.d)+' of revenue between '+pm+' and '+lm+', carrying '+sg(x.gd)+' of gross profit',
      why:x.n+' took '+sg(x.a)+' in '+pm+' and '+sg(x.b)+' in '+lm+'. The '+pc(x.p)+' is that difference divided by '+x.n+'&rsquo;s OWN '+pm+' revenue of '+sg(x.a)+'. Nothing here is a share of the company. It is ranked on the '+sg(x.gd)+' of gross profit the move carried, because turnover is not what you keep.',
-     act:x.d<0?'Split it: fewer receipts or a smaller basket. The customer-mix chart on the Charts tab answers the first, AOV answers the second.':'Check whether the gain is new customers or returning ones before you copy it elsewhere.'});});}
+     act:x.d<0?'Split it: fewer receipts or a smaller basket. The customer-mix chart on the All charts tab answers the first, AOV answers the second.':'Check whether the gain is new customers or returning ones before you copy it elsewhere.'});});}
  })();
 
  /* ---- 3. company bottom line ---- */
@@ -3524,7 +3555,7 @@ function SIGX(){
   add({imp:r/Math.max(1,AM.length),sev:p>=20?'critical':'watch',grp:'Shopify',tab:'pn',chart:'refund',
    t:'Shopify refunds are running at '+p.toFixed(1)+'% of gross',num:sg(r)+' refunded, whole window',
    why:'Refunds '+sg(r)+' against Shopify gross revenue '+sg(g2)+'. The '+p.toFixed(1)+'% is refunds divided by SHOPIFY GROSS REVENUE for the same days &mdash; not by orders, not by net. Every gross-profit figure on the P&amp;L tab is already taken net of this.',
-   act:'Refund value concentrates in a few SKUs and a few sizes. The Vendors &amp; Products tab is where to look.'});})();
+   act:'Refund value concentrates in a few SKUs and a few sizes. The Products &amp; vendors tab is where to look.'});})();
 
  /* ---- 9. vendor concentration ---- */
  (function(){if(!O.vend)return;const V=O.vend;const rows=Object.keys(V).map(k=>({k:k,v:(V[k]&&(V[k].rev||V[k][0]))||0})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
@@ -3551,7 +3582,7 @@ function rAI(){if(TAB!=='ai')return;dCh();const g=document.getElementById('g13')
  const mo=v=>Math.round(Math.abs(v)).toLocaleString();
  const el=document.createElement('div');el.className='card full';el.dataset.a='ins';
  const cN=S.filter(x=>x.sev==='critical').length,wN=S.filter(x=>x.sev==='watch').length,gN=S.filter(x=>x.sev==='good').length;
- el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct"><span style="color:#f0a500">&#9733;</span> '+S.length+' findings, ranked by money at stake'+QT('AI Insights ranked')+'</div>'
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">'+S.length+' findings, ranked by money at stake'+QT('AI Insights ranked')+'</div>'
   +'<div class="cs">'+cN+' need action now &middot; '+wN+' worth watching &middot; '+gN+' working. Sorted by E&pound; per month, highest first. The badge on the right of every card is that figure and the share it is of the company&rsquo;s own monthly GROSS profit of E&pound; '+mo(S[0].yard)+' for '+lm+' (Shopify gross profit net of refunds plus retail POS gross profit) &mdash; that is the base, stated once here and repeated on every card. Gross profit is the base rather than net profit on purpose: net profit is a small difference between two large numbers and can be negative, so a share of it is unreadable in exactly the months you most need to read it.</div></div></div>'
   +S.map((x,i)=>{const sv=SEV[x.sev]||SEV.watch;
    return '<div style="border:1px solid #e6e9f2;border-left:4px solid '+sv[1]+';border-radius:10px;padding:11px 13px;margin-top:9px;background:'+sv[2]+'">'
@@ -3562,7 +3593,7 @@ function rAI(){if(TAB!=='ai')return;dCh();const g=document.getElementById('g13')
    +'<div style="font-size:12px;font-weight:800;color:#334155;margin-top:5px">'+x.num+'</div>'
    +'<div style="font-size:12px;line-height:1.6;color:#334155;margin-top:5px"><b>Why this ranks here:</b> '+x.why+'</div>'
    +'<div style="font-size:12px;line-height:1.6;color:#0F172A;margin-top:5px"><b>Do this:</b> '+x.act+'</div>'
-   +'<div style="font-size:10.5px;font-weight:700;color:#6b7488;margin-top:6px">'+x.grp+' &middot; evidence lives on the <b>'+({on:'Shopify',off:'Offline / Branches',pn:'Shopify P&amp;L',rp:'Retail P&amp;L',me:'Media Efficiency',vz:'Charts',mi:'Paid Insights',vl:'Vendors &amp; Products'}[x.tab]||x.tab)+'</b> tab <span onclick="tab(\''+x.tab+'\')" style="color:#5a5bf0;cursor:pointer;text-decoration:underline">open it</span></div>'
+   +'<div style="font-size:10.5px;font-weight:700;color:#6b7488;margin-top:6px">'+x.grp+' &middot; evidence lives on the <b>'+tabLabel(x.tab)+'</b> tab <span onclick="tab(\''+x.tab+'\')" style="color:#5a5bf0;cursor:pointer;text-decoration:underline">open it</span></div>'
    +'</div>';}).join('');
  g.appendChild(el);
  const ins=document.createElement('div');ins.className='card full';ins.dataset.a='ins';
@@ -4274,7 +4305,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
  vzOrder(g);
 }
 
-/* Reorders the already-rendered cards on the Charts tab by the significance engine and
+/* Reorders the already-rendered cards on the All charts tab by the significance engine and
    writes the reason onto each promoted card. Cards the engine has nothing to say about keep
    their dashboard order underneath -- they are not hidden and nothing is thrown away. */
 let VZORD='def';
@@ -4298,7 +4329,7 @@ function vzOrder(g){
   +OPT.map(o=>'<option value="'+o[0]+'"'+(VZORD===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></span>'
   +'<span style="color:#0F172A">'+(VZORD==='sig'
     ?'Charts the engine has a finding about are pulled to the top, biggest money at stake first, each stamped with the reason it was promoted. Everything else keeps its normal order below.'
-    :'Switch to &ldquo;Most significant first&rdquo; to have the engine rank these by E&pound; at stake and tell you why. The full ranked list lives on the <span onclick="tab(&quot;ai&quot;)" style="color:#5a5bf0;cursor:pointer;text-decoration:underline">&#9733; AI Insights</span> tab.')+'</span></div>';
+    :'Switch to &ldquo;Most significant first&rdquo; to have the engine rank these by E&pound; at stake and tell you why. The full ranked list lives on the <span onclick="tab(&quot;ai&quot;)" style="color:#5a5bf0;cursor:pointer;text-decoration:underline">Findings</span> tab.')+'</span></div>';
  g.insertBefore(ctl,g.firstChild);
  if(VZORD!=='sig'||!S.length)return;
  const cards=[].slice.call(g.children).filter(c=>c!==ctl);
@@ -4853,7 +4884,7 @@ function rCost(){if(TAB!=='cs')return;const g=document.getElementById('g14');g.i
  document.getElementById('bn14').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Everything on this tab is a posted Odoo figure &mdash; no estimates. Shipping is the 31.01.08.* tree plus the 32.00.00.18 rebate; payroll is the 31.01.01.* tree, line by line. The month range applies to both.';
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
- ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="csCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="csCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><div class="sp"></div><span class="cs">Filter applies to every table on this tab, and is shared with the Shopify P&amp;L tab.</span></div>';
+ ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="csCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="csCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><div class="sp"></div><span class="cs">Filter applies to every table on this tab, and is shared with the Online P&amp;L tab.</span></div>';
  g.appendChild(ctl);
  const CURM=O.aw[1].slice(0,7);const T=MKT(CURM);
  const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
@@ -6253,7 +6284,7 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  const body=chips+tier1+quadBoard+tier2
   +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><thead><tr style="color:#8a93a6;font-size:10px;text-transform:uppercase"><th>#</th><th style="text-align:left">Plat</th><th style="text-align:left">Active campaign</th><th>Spend/day</th><th>Website</th><th>In-store</th><th>Total</th><th>CPM</th><th>CPMR</th><th>CVR</th><th>Est GP/day</th><th>Action</th><th>Status</th><th>Do</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+pauseH+graftH+clog;
  const winNote=window.__abRanged?(' <b style="color:#12a06e">Sliced to '+ST.s+' &rarr; '+ST.e+'</b> (per-campaign daily, within each platform’s last-60d window).'):(' <b>Full ~60-day window</b> &mdash; pick a range inside the last 60 days to slice.');
- pnlCard(g,'meta','&#9873; Budget Advisor &mdash; cross-platform reallocation','Active campaigns ranked by SIGNIFICANCE (E£ at stake &times; distance from bar) on ROAS vs an intent-adjusted breakeven bar &mdash; retargeting (existing customers) held to a higher bar than prospecting (new). CPMR = spend &divide; unique reach &times;1000 (Meta, ad-summed). Actions open the exact campaign/ad in the platform; nothing is auto-pushed.'+winNote,body);offlineDowCard(g);}
+ pnlCard(g,'meta','Budget Advisor &mdash; cross-platform reallocation','Active campaigns ranked by SIGNIFICANCE (E£ at stake &times; distance from bar) on ROAS vs an intent-adjusted breakeven bar &mdash; retargeting (existing customers) held to a higher bar than prospecting (new). CPMR = spend &divide; unique reach &times;1000 (Meta, ad-summed). Actions open the exact campaign/ad in the platform; nothing is auto-pushed.'+winNote,body);offlineDowCard(g);}
 // Apply a Search Advisor recommendation: copy the term, open the matching Google Ads
 // screen (negatives vs keywords). True API apply waits on Basic Access approval.
 window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(e){}
@@ -6261,7 +6292,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-154707';
+const BUILD='20260828-163642';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -6706,7 +6737,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
   rec+='<b>Push these, they are proven and you are not buying them:</b><ol style="margin:6px 0 0 18px;padding:0">';
   gl.forEach(r=>{rec+='<li style="margin-bottom:6px"><b>'+r.nm+'</b> &mdash; first-time buyers come back '+r.rep+'% of the time'+(r.med2!=null?' within a median '+r.med2+' days':'')+' and are worth <b>E&pound; '+money(r.ltgp)+'</b> in lifetime gross profit'+(med&&r.ltgp>med?' ('+Math.round((r.ltgp/med-1)*100)+'% above the median hook)':'')+', on '+money(r.n)+' real customers. Meta spend against it in the last 60 days: <b>E&pound; '+money(r.adSp)+'</b>.'+((r.next||[]).length?' They go on to buy '+(r.next||[]).slice(0,2).map(x=>Array.isArray(x)?x[0]:x).join(' and ')+' &mdash; that is the follow-up offer.':'')+'</li>';});
   rec+='</ol></div>';
-  pnlCard(g,'odoo','&#9873; The call &mdash; acquire on these','The gap between what creates loyal customers and what you actually advertise.',rec);
+  pnlCard(g,'odoo','The call &mdash; acquire on these','The gap between what creates loyal customers and what you actually advertise.',rec);
  }
  // ---------- 3. scale / kill from the live per-ad series ----------
  if(W&&ADS.length){
