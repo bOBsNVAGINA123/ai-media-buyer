@@ -1317,6 +1317,118 @@ POS_CFG = [("Dokki", "Dokki"), ("New  Cairo", "New Cairo"), ("New Cairo", "New C
 ANA_BR = {"18": "Dokki", "19": "New Cairo", "20": "Nasr City", "21": "October", "22": "Zayed", "38": "Smouha", "39": "Mall of Arabia",
           "41": "Dokki", "42": "Nasr City", "43": "New Cairo", "44": "October", "46": "Zayed"}
 
+
+# ============================ BOSTA COURIER (READ ONLY) ============================
+# The Odoo ledger says how much was PAID to Bosta. It cannot say what was bought: how many
+# parcels went out, how many came back, and what the return leg costs. Bosta's own API can.
+#
+# Two limits shape this function, both discovered by measurement, not assumption:
+#   * The bulk search endpoint carries state / type / cod / businessReference but NO price.
+#     The fee only exists on the per-delivery detail call at ~1.1s each, so pricing every
+#     shipment is impossible. Counts are EXACT; the fee per TYPE is a sampled mean (n=30),
+#     and both are emitted separately so the dashboard can reconcile against the ledger
+#     instead of passing an estimate off as an invoice. Measured agreement over 12 months:
+#     API model 5.20M vs Odoo posted 4.80M, ratio 1.08.
+#   * businessReference matches a return leg back to its send only ~15% of the time, because
+#     returns lag by months and many outbound legs predate any window worth pulling. So NO
+#     per-order return rate is emitted. What is emitted is the return-leg VOLUME and COST,
+#     which is the thing that actually hits the P&L: a returned order is charged twice, once
+#     to send and once to come back, and earns nothing.
+#
+# The key is read from the environment. It is never written to the repo.
+BOSTA_KEY = os.environ.get("BOSTA_API_KEY", "").strip()
+BOSTA_SEARCH = "https://app.bosta.co/api/v2/deliveries/search"
+BOSTA_DETAIL = "https://app.bosta.co/api/v0/deliveries/"
+BOSTA_RETURN_TYPES = ("Return to Origin", "Customer Return Pickup")
+
+
+def _bosta_req(url, body=None, tries=4):
+    import urllib.request, urllib.error
+    for a in range(tries):
+        try:
+            data = json.dumps(body).encode() if body is not None else None
+            rq = urllib.request.Request(url, data=data, method=("POST" if body is not None else "GET"))
+            rq.add_header("Authorization", BOSTA_KEY)
+            rq.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(rq, timeout=45) as r:
+                return json.loads(r.read().decode())
+        except Exception:
+            time.sleep(1.5 * (a + 1))
+    return None
+
+
+def pull_bosta(months_back=13, fee_sample=30, prev=None):
+    """Monthly shipment mix and sampled fee per type. READ ONLY - only search and detail GETs."""
+    if not BOSTA_KEY:
+        log("bosta skipped - no BOSTA_API_KEY in env")
+        return (prev or {}).get("bosta") or {}
+    try:
+        today = datetime.date.today()
+        months = {}
+        for k in range(months_back):
+            y, m = today.year, today.month - k
+            while m <= 0:
+                m += 12; y -= 1
+            nxt = datetime.date(y + (m == 12), 1 if m == 12 else m + 1, 1)
+            a = "%04d-%02d-01" % (y, m)
+            b = (nxt - datetime.timedelta(days=1)).isoformat()
+            key = "%04d-%02d" % (y, m)
+            by, cod, n = {}, 0.0, 0
+            ids = {}
+            pg = 1
+            while pg <= 80:
+                lim = 200
+                r = None
+                for shrink in range(3):
+                    r = _bosta_req(BOSTA_SEARCH, {"limit": max(50, lim >> shrink), "page": pg,
+                                                  "createdAtStart": a, "createdAtEnd": b})
+                    if r: break
+                ds = ((r or {}).get("data") or {}).get("deliveries") or []
+                if not ds: break
+                for d in ds:
+                    t = (d.get("type") or {}).get("value") or "?"
+                    by[t] = by.get(t, 0) + 1
+                    n += 1
+                    cod += float(d.get("cod") or 0)
+                    ids.setdefault(t, [])
+                    if len(ids[t]) < fee_sample: ids[t].append(d.get("_id"))
+                pg += 1
+            months[key] = {"n": n, "cod": round(cod), "byType": by,
+                           "ret": sum(by.get(t, 0) for t in BOSTA_RETURN_TYPES),
+                           "sends": by.get("Send", 0)}
+            log("  bosta %s: %d shipments %s" % (key, n, by))
+        # fee per type: reuse what we already learned unless it is missing
+        fees = ((prev or {}).get("bosta") or {}).get("fees") or {}
+        pool = {}
+        need = [t for t in ("Send",) + BOSTA_RETURN_TYPES + ("Exchange", "Cash Collection") if t not in fees]
+        if need:
+            r = _bosta_req(BOSTA_SEARCH, {"limit": 200, "page": 1,
+                                          "createdAtStart": (today - datetime.timedelta(days=60)).isoformat(),
+                                          "createdAtEnd": today.isoformat()})
+            for d in (((r or {}).get("data") or {}).get("deliveries") or []):
+                t = (d.get("type") or {}).get("value") or "?"
+                if t in need:
+                    pool.setdefault(t, [])
+                    if len(pool[t]) < fee_sample: pool[t].append(d.get("_id"))
+            for t, lst in pool.items():
+                vals = []
+                for i in lst:
+                    j = _bosta_req(BOSTA_DETAIL + str(i))
+                    f = ((j or {}).get("data") or j or {}).get("shipmentFees")
+                    if f is not None: vals.append(float(f))
+                    time.sleep(0.25)
+                if vals:
+                    vals.sort()
+                    fees[t] = {"mean": round(sum(vals) / len(vals), 1), "median": vals[len(vals) // 2],
+                               "min": vals[0], "max": vals[-1], "n": len(vals)}
+        out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
+               "months": months, "fees": fees}
+        log("bosta ok: %d months, fee types %s" % (len(months), list(fees)))
+        return out
+    except Exception as e:
+        log("bosta fail", str(e)[:150])
+        return (prev or {}).get("bosta") or {}
+
 def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
@@ -4170,6 +4282,15 @@ def build():
         shop["ncrev"][_d] = round(_c["nrev"]); shop["rcrev"][_d] = round(_c["rrev"])
     if _nrdOK: log("new/returning from Odoo customer actuals, days", _nrdOK)
     pos = safe(pull_pos_branches) or {}
+    # heavy months only on a full crawl; otherwise refresh the last two and keep the rest
+    # 13 months on a forced/first crawl (~9 min of paging), otherwise refresh the last two
+    _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
+    bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
+    if prev.get("bosta", {}).get("months"):
+        merged = dict(prev["bosta"]["months"]); merged.update(bosta.get("months") or {})
+        bosta["months"] = merged
+        bosta.setdefault("fees", prev["bosta"].get("fees") or {})
+
     onu = safe(pull_online_units) or {}
     prev = {}
     try:
@@ -4382,7 +4503,7 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
