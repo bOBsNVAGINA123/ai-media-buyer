@@ -2590,6 +2590,7 @@ function actProducts(){
 function actProductMix(){
  const P=actProducts(); if(!P)return null;
  const HV={}; ((O.hookV||{}).rows||[]).forEach(r=>{HV[r.v]=r;});
+ const BASE=(O.hookV||{}).base||null;
  const push=P.up.map(p=>{
   const h=HV[p.v]||null;
   const cover=(p.st!=null&&p.q)?(p.st/(p.q/7)):null;   // days of stock at the current rate
@@ -2632,6 +2633,7 @@ function rActions(g){
  const {head,deco,stage,R,TAG,OBS,INF,HYP,REC}=V;
  const {M,SGN,PC,dRev,material}=R;
  const PM=actProductMix();
+ const BASE=(O.hookV||{}).base||null;
  let prod='';
  if(PM){
   const P=PM.P;
@@ -2694,9 +2696,14 @@ function rActions(g){
   PM.push.slice(0,5).forEach(p=>{
    const h=p.hook;
    acts.push({p:'P1',a:'ADVERTISE THIS',ent:String(p.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,52),
-    why:'Growing on its own with stock behind it'+(h?', and its supplier brings in customers worth '+h.lift.toFixed(1)+'&times; the average first purchase':'')+'.',
+    /* hookV.lift is a PROBABILITY multiple -- the share of a vendor's first-time buyers that land
+       in the top spending decile, divided by the 10% you would get by chance. It is NOT a value
+       multiple, and hookV.mean is that vendor's own mean, not the account's. The account-wide
+       figure is hookV.base. Saying "customers worth 9x the average" was wrong on both counts. */
+    why:'Growing on its own with stock behind it'+(h?', and its supplier is an unusually good front door: buyers whose FIRST purchase includes it are '+h.lift.toFixed(1)+'&times; likelier than chance to end up in your top 10% of customers':'')+'.',
     ev:(p.pq||0)+' &rarr; '+(p.q||0)+' units, '+SGN(p.d)+', '+(p.st!=null?p.st+' in stock':'stock unknown')
-      +(h?'. First-time buyers of '+h.nm+' reach E£'+Math.round(h.ltgp).toLocaleString()+' lifetime gross profit against an account mean of E£'+Math.round(h.mean).toLocaleString():''),
+      +(h?'. '+h.d1.toFixed(0)+'% of '+h.nm+'&rsquo;s first-time buyers land in the top decile against 10% by chance, and their MEDIAN lifetime gross profit is E£'+Math.round(h.ltgp).toLocaleString()
+        +(BASE?' against E£'+Math.round(BASE).toLocaleString()+' across all first-time buyers':'')+' (n='+h.n+')':''),
     conf:h?'High':'Moderate',col:'#12a06e',
     test:'Put it in a dedicated ad set rather than adding it to a mixed one, so its own return is readable.'});});
  }
@@ -7013,7 +7020,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-114913';
+const BUILD='20260829-120027';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -7588,7 +7595,12 @@ function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19')
     +'<div class="ak"><span>Account</span><b>'+(a.acct||'&mdash;')+'</b></div>'+'</div>';}).join('')+'</div>'
    +'<div style="font-size:11px;color:#5a637a;margin-top:8px"><b>Motion&rsquo;s instruction: interrogate these, not the losers.</b> What is the format, the hook, the offer? The Launches &amp; Budgets tab has each one&rsquo;s daily ROAS and profit-after-spend &mdash; feed the winners, clone the pattern, and keep the losers&rsquo; budget moving into new tests.</div>';
  }else{
-  wg='<div class="cs" style="font-size:13px"><b>No ad in this window has crossed 10&times; your account median'+(FLOOR?' + the E&pound; '+money(FLOOR)+' floor':'')+'.</b> That is statistically unremarkable &mdash; only ~1 in 10&ndash;13 creatives ever becomes a winner, and at your current launch rate of '+wk.toFixed(1)+'/week the tier expectation is '+TIER.allW+' winners a month. The report&rsquo;s answer is not better guessing, it is more swings: top-25% accounts in your tier ship '+TIER.topV+' creatives a week.</div>';}
+  /* "0 winners" alone reads as "nothing is working". Naming the closest ad and its multiple
+     turns that into a distance: an ad at 8.9x is a near miss worth feeding, not a failure. */
+  const near=rows.slice().sort((a2,b2)=>(b2.mult||0)-(a2.mult||0))[0];
+  wg='<div class="cs" style="font-size:13px">'
+   +(near&&near.mult?'<b>Closest: '+String(near.a.n||'').slice(0,46)+' at '+near.mult.toFixed(1)+'&times; the median</b> (E&pound; '+money(near.t)+' against a '+money(10*(med[near.a.acct||'?']||0))+' bar). '+(near.mult>=7?'That is a near miss, not a failure &mdash; it is the one to feed.':'')+'<br>':'')
+   +'<b>No ad in this window has crossed 10&times; your account median'+(FLOOR?' + the E&pound; '+money(FLOOR)+' floor':'')+'.</b> That is statistically unremarkable &mdash; only ~1 in 10&ndash;13 creatives ever becomes a winner, and at your current launch rate of '+wk.toFixed(1)+'/week the tier expectation is '+TIER.allW+' winners a month. The report&rsquo;s answer is not better guessing, it is more swings: top-25% accounts in your tier ship '+TIER.topV+' creatives a week.</div>';}
  pnlCard(g,'meta','Your WINNERS — ads spending ≥10× your account median ('+nW.length+')','The ~5% club. Median ad spend per account: '+Object.entries(med).map(([k,v])=>k+' E£ '+money(v)).join(' · ')+'.',wg);
  // ---------- launch cadence ----------
  const mxW=Math.max.apply(null,wkB.concat([TIER.vol,TIER.fash,1]));
