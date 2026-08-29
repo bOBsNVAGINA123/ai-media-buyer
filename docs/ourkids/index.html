@@ -1265,12 +1265,12 @@ function cohRows(){if(!O.coh||!O.coh.length)return[];const AM=adMonthly();const 
  return O.coh.map(c=>{const a=AM[c.m];const full=a&&c.m>'2025-07';const ncac=full&&c.size?a.s/c.size:null;
   const eom=new Date(Date.parse(c.m+'-01T00:00:00Z'));eom.setUTCMonth(eom.getUTCMonth()+1);eom.setUTCDate(0);
   const age=Math.round((Date.parse(last)-eom.getTime())/864e5);
-  const r=w=>{const g=c['g'+w];if(age< w-30&&w>30)return null;if(w===30&&age<0)return null;return c.size&&ncac?(g/c.size)/ncac:null;};
+  const r=w=>{const g=c['g'+w];if(age< w-30&&w>30)return null;if(age<w)return null;return c.size&&ncac?(g/c.size)/ncac:null;};
   const gp30=c.size?c.g30/c.size:null;
-  const gp90a=(age>=60&&c.size)?c.g90/c.size:null;
-  const nr90a=(age>=60&&c.size&&c.r90!=null)?c.r90/c.size:null;
+  const gp90a=(age>=90&&c.size)?c.g90/c.size:null;
+  const nr90a=(age>=90&&c.size&&c.r90!=null)?c.r90/c.size:null;
   const ln90=(nr90a!=null&&ncac)?nr90a/ncac:null;
-  const ln365=(age>=335&&c.size&&c.r365!=null&&ncac)?(c.r365/c.size)/ncac:null;
+  const ln365=(age>=365&&c.size&&c.r365!=null&&ncac)?(c.r365/c.size)/ncac:null;
   return {m:c.m,size:c.size,ms:a?a.ms:null,gs:a?a.gs:null,ts:a?a.ts:null,s:a?a.s:null,ncac,gp30,gp90a,nr90a,ln90,ln365,l30:r(30),l90:r(90),l180:r(180),l365:r(365),age};});}
 
 /* CAC by cohort month. Spend that month ÷ new customers that month. MEALLNC=true assumes
@@ -5079,7 +5079,13 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
   // Showing it next to matured cohorts made young branches look weak. Immature cells are
   // blanked, exactly like the online cohort table's age gate.
   const _age=m=>{const e2=new Date(Date.parse(m+'-01T00:00:00Z'));e2.setUTCMonth(e2.getUTCMonth()+1);e2.setUTCDate(0);return Math.round((Date.parse(O.aw[1])-e2.getTime())/864e5);};
-  const _mt=(m,w)=>_age(m)>=(w===30?0:w-30);
+  /* v9.21 MATURITY. _age(m) counts from the LAST day of the cohort month, so it is the age of
+   the YOUNGEST customer in it. The old gate, w-30, only guaranteed that the customer acquired
+   on the FIRST day had lived the window -- a '365d' cell could be a cohort 335 days old, and a
+   '30d' cell a cohort that ended yesterday. The card said 'matured cohorts only', which was not
+   what it did. Requiring _age >= w means EVERY customer in the cohort has lived the full window.
+   It costs the newest cohort per window and moves the network figure 0% at 30d to 2.2% at 365d. */
+const _mt=(m,w)=>_age(m)>=w;
   let hc='';
   names.forEach(n=>{const B=BCO[n];if(!B)return;const ms=Object.keys(B).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);if(!ms.length)return;
    const CL2=[
@@ -5129,7 +5135,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     h7+='</tr>';});
    h7+='</table></div>';
    const young=rows2.filter(r=>r.first>oldest);
-   let note='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#3a9bff"></span><span>'+(useShared?'Restricted to the cohort months every branch shares, so no branch is credited with a season another never traded. ':'')+'Every cell averages ONLY matured cohorts (a 90d cell needs the cohort &ge;60 days past its month, 365d needs &ge;335) &mdash; young branches are never scored on windows they have not lived.</span></div>';
+   let note='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#3a9bff"></span><span>'+(useShared?'Restricted to the cohort months every branch shares, so no branch is credited with a season another never traded. ':'')+'Every cell averages ONLY cohorts where EVERY customer has lived the window (a 90d cell needs the cohort 90 days past its last day, a 365d cell 365) &mdash; young branches are never scored on windows they have not lived.</span></div>';
    young.forEach(r=>{const d30=(r.v[30]!=null&&avg[30])?(r.v[30]/avg[30]-1)*100:null;const d90=(r.v[90]!=null&&avg[90])?(r.v[90]/avg[90]-1)*100:null;
     note+='<div class="row"><span class="dot" style="background:#ff8b42"></span><span><b>'+r.n+'</b> has only been selling since <b>'+r.first+'</b> ('+r.months+' cohort months vs '+maxM+' for the oldest) &mdash; it has had LESS TIME to build retention, so judge it on the same-age columns: at 30 days its customers are <b>'+(d30==null?'n/a':(d30>=0?'+':'')+d30.toFixed(0)+'%')+'</b> vs network, at 90 days <b>'+(d90==null?'n/a':(d90>=0?'+':'')+d90.toFixed(0)+'%')+'</b>. The 180/365d cells cover fewer, younger cohorts.</span></div>';});
    note+='</div>';
@@ -7020,7 +7026,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-120027';
+const BUILD='20260829-122400';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -7774,7 +7780,13 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
  const A=(ST.coA&&S[ST.coA])?ST.coA:(S['ALL STORES']?'ALL STORES':keys[0]);
  const Bk=(ST.coB&&S[ST.coB]&&ST.coB!==A)?ST.coB:'';
  const _age=m=>{const e2=new Date(Date.parse(m+'-01T00:00:00Z'));e2.setUTCMonth(e2.getUTCMonth()+1);e2.setUTCDate(0);return Math.round((Date.parse(O.aw[1])-e2.getTime())/864e5);};
- const _mt=(m,w)=>_age(m)>=(w===30?0:w-30);
+ /* v9.21 MATURITY. _age(m) counts from the LAST day of the cohort month, so it is the age of
+   the YOUNGEST customer in it. The old gate, w-30, only guaranteed that the customer acquired
+   on the FIRST day had lived the window -- a '365d' cell could be a cohort 335 days old, and a
+   '30d' cell a cohort that ended yesterday. The card said 'matured cohorts only', which was not
+   what it did. Requiring _age >= w means EVERY customer in the cohort has lived the full window.
+   It costs the newest cohort per window and moves the network figure 0% at 30d to 2.2% at 365d. */
+const _mt=(m,w)=>_age(m)>=w;
  const wins=[30,90,180,365];
  const sel=(id,val,extra)=>'<select onchange="coSel(\''+id+'\',this.value)">'+(extra||'')+keys.sort().map(k=>'<option value="'+k+'"'+(k===val?' selected':'')+'>'+k+'</option>').join('')+'</select>';
  const hd='<div style="margin:0 0 10px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">'
@@ -7806,7 +7818,7 @@ function rCOfallback(){dCh();const g=document.getElementById('g18');g.innerHTML=
   if(Bk){h+='<td style="border-left:2px solid #dfe4ee">'+(cB.size?money(cB.size):'&mdash;')+'</td>';
    wins.forEach(w=>{const v=pc(Bk,m,w);h+='<td>'+(v==null?'&mdash;':'E£ '+money(v))+'</td>';});}
   h+='</tr>';});
- h+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">'+(Bk?'Colored cells = '+A+' vs '+Bk+' in the SAME cohort month and window (green = '+A+' wins). ':'Heat = best/worst cohorts within each window. ')+'LTGP/cust = cohort gross profit within the window &divide; cohort size. 30d needs the month to be over; 90d needs &ge;60 days past it; 365d needs &ge;335.</div>';
+ h+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">'+(Bk?'Colored cells = '+A+' vs '+Bk+' in the SAME cohort month and window (green = '+A+' wins). ':'Heat = best/worst cohorts within each window. ')+'LTGP/cust = cohort gross profit within the window &divide; cohort size. 30d needs the month to be over; 90d needs &ge;60 days past its last day; a 365d cell needs 365. Every customer in the cohort has lived the window, not just the earliest.</div>';
  pnlCard(g,'odoo','Cohorts &mdash; '+A+(Bk?' vs '+Bk:''),'LTGP per acquired customer by cohort month, matured windows only.',hd+sum+h);
  // cohort sizes trend (acquisition volume)
  const mx=Math.max.apply(null,months.map(m=>Math.max((S[A][m]||{}).size||0,Bk?((S[Bk][m]||{}).size||0):0,1)));
