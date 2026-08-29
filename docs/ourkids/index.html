@@ -2609,7 +2609,9 @@ function ovCard(g){
    +D.slice(1).map(function(dd){return cell(D[0][k],dd?dd[k]:null,fmt,hib);}).join('')+'</tr>';});
  const notes=[];
  const yrIdx=W.map(w=>w[0]).findIndex(t=>/last year/.test(t));const yrNull=yrIdx>0&&D[yrIdx]&&D[yrIdx].spend==null;
- if(yrNull)notes.push([C.orange,'<b>Last year is blank on every row that needs ad spend.</b> The ad panel holds exactly '+O.ad.n+' days, starting '+O.ad.start+', so a window twelve months back falls off the front of it. Sales, profit and margin still compare year on year because the Odoo ledger goes back to '+O.fin.start+'.']);
+ if(yrNull)notes.push([C.orange,'<b>Last year is blank on the rows that need ad spend.</b> The ad feed holds '+O.ad.n+' days from '+O.ad.start
+  +', which covers a year-ago comparison for windows up to about '+Math.max(0,O.ad.n-365)+' days &mdash; yours is '+Math.max(1,span(ST.s,ST.e))+' days, so it reaches past the front of the feed. '
+  +'Shorten the range and the year column fills in. Sales, profit and margin compare year on year regardless, because the Odoo ledger goes back to '+O.fin.start+'.']);
  if(D.some(function(d){return d&&d.bApprox;}))notes.push([C.orange,'<b>Branch revenue before '+O.bl.start+' comes from the monthly POS ledger, apportioned by day count and converted to a net-of-tax basis.</b> That ledger is recorded tax-inclusive and the daily branch feed is not &mdash; measured at '+(1/ovNetFactor()).toFixed(3)+'&times; across the months where both exist. Comparing them raw would overstate the older window by about '+((1/ovNetFactor()-1)*100).toFixed(0)+'% and hide that much growth.']);
  notes.push(['#7c869c','<b>Every comparison shifts your own window by whole days</b>, so it is always like-for-like against the same number of days. The second column follows the COMPARE control at the top of the page &mdash; currently <b>'+selLab+'</b> &mdash; and the month and year columns stand on their own.']);
  notes.push(['#7c869c','<b>Ad spend is not coloured</b> because more of it is neither good nor bad on its own; read it against the profit-after-ad-spend and MER rows directly underneath.']);
@@ -4491,6 +4493,105 @@ function merDaily(g){
    {sets:money,h:170,fmt:v=>'E£'+Math.round(v).toLocaleString()},
    {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7'});
 }
+/* v9.46 NEW-AUDIENCE SPEND AND REACH (Meta).
+   "How much am I spending to reach people who have never bought from me, and how many of them am I
+   reaching?" was not answerable before: the collector only kept the per-campaign SHARE of spend by
+   audience class, so every absolute number -- spend, reach, cost per new buyer -- was missing, and
+   the classifier itself under-read because it tested fields the targeting spec never returns.
+   Both are fixed upstream; this card reads the absolutes.
+   REACH IS A SUM OF AD-SET REACH. Meta deduplicates people inside one ad set, not across them, so
+   somebody hit by three prospecting sets counts three times. It is an upper bound on people and is
+   labelled as one. Impressions and spend are exact. */
+function metaAud(g){
+ const A=(O.audMix&&O.audMix.tot)?O.audMix:null;
+ if(!A||!A.tot)return;
+ const T=A.tot, W=A.win||{};
+ const CLS=[['new','Never bought from you','#12a06e','Prospecting &mdash; broad, interest and lookalike sets, and sets that exclude your buyers.'],
+             ['engaged','Warm, no purchase yet','#ff8b42','Sets built on viewers, cart-abandoners and page engagers who have not bought.'],
+             ['existing','Already bought','#5a5bf0','Sets that include a buyer, customer-file or offline-winner audience.']];
+ const tsp=CLS.reduce((a,c)=>a+((T[c[0]]||{}).sp||0),0);
+ if(!tsp)return;
+ const trc=CLS.reduce((a,c)=>a+((T[c[0]]||{}).rch||0),0);
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+
+ // headline: the two numbers he asked for, said plainly
+ const nw=T['new']||{};
+ let head='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+  +'<div style="flex:1;min-width:190px;padding:11px 13px;border:1px solid #cdeede;border-radius:11px;background:#f0fdf6">'
+  +'<div style="font-size:10px;font-weight:800;color:#0f6e56;text-transform:uppercase;letter-spacing:.03em">Spend on people who have never bought</div>'
+  +'<div style="font-size:23px;font-weight:800;color:#0f6e56;line-height:1.15;margin-top:3px">'+M(nw.sp||0)+'</div>'
+  +'<div style="font-size:11px;color:#3d6b5c">'+Math.round((nw.sp||0)/tsp*100)+'% of the Meta spend I could classify</div></div>'
+  +'<div style="flex:1;min-width:190px;padding:11px 13px;border:1px solid #cfe3ff;border-radius:11px;background:#f2f8ff">'
+  +'<div style="font-size:10px;font-weight:800;color:#1c4f8f;text-transform:uppercase;letter-spacing:.03em">People reached who have never bought</div>'
+  +'<div style="font-size:23px;font-weight:800;color:#1c4f8f;line-height:1.15;margin-top:3px">'+N(nw.rch||0)+'</div>'
+  +'<div style="font-size:11px;color:#3b6091">summed across '+N(nw.sets||0)+' ad sets &mdash; the same person can be counted more than once</div></div>'
+  +'<div style="flex:1;min-width:190px;padding:11px 13px;border:1px solid #e2e6ef;border-radius:11px;background:#fafbfd">'
+  +'<div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.03em">Cost to reach 1,000 of them</div>'
+  +'<div style="font-size:23px;font-weight:800;color:#26313f;line-height:1.15;margin-top:3px">'+((nw.rch)?M((nw.sp||0)/nw.rch*1000):'&mdash;')+'</div>'
+  +'<div style="font-size:11px;color:#64748b">'+((nw.pur)?M((nw.sp||0)/nw.pur)+' per purchase off prospecting':'no purchases recorded on prospecting sets')+'</div></div>'
+  +'</div>';
+
+ // stacked share bars: spend and reach side by side, because they do NOT split the same way
+ const bar=(key,lbl)=>{const t=CLS.reduce((a,c)=>a+((T[c[0]]||{})[key]||0),0);if(!t)return '';
+  let h='<div style="font-size:11px;font-weight:700;color:#475569;margin:8px 0 3px">'+lbl+'</div>'
+   +'<div style="display:flex;height:20px;border-radius:5px;overflow:hidden">';
+  CLS.forEach(c=>{const v=(T[c[0]]||{})[key]||0;if(!v)return;
+   const pc=v/t*100;
+   h+='<div title="'+c[1]+': '+(key==='sp'?M(v):N(v))+'" style="width:'+pc.toFixed(2)+'%;background:'+c[2]
+     +';color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center">'
+     +(pc>=9?Math.round(pc)+'%':'')+'</div>';});
+  return h+'</div>';};
+
+ let rows='';
+ CLS.forEach(c=>{const v=T[c[0]]||{};if(!v.sp&&!v.rch)return;
+  const cpm=v.imp?v.sp/v.imp*1000:null, cpr=v.rch?v.sp/v.rch*1000:null;
+  const cpa=v.pur?v.sp/v.pur:null, roas=v.sp?v.val/v.sp:null;
+  rows+='<tr>'
+   +'<td style="'+TD+';text-align:left"><b style="color:'+c[2]+'">'+c[1]+'</b>'
+     +'<div style="font-size:10px;color:#8a93a6;white-space:normal;max-width:330px">'+c[3]+'</div></td>'
+   +'<td style="'+TD+'"><b>'+M(v.sp)+'</b><div style="font-size:10px;color:#8a93a6">'+Math.round(v.sp/tsp*100)+'% of spend</div></td>'
+   +'<td style="'+TD+'">'+N(v.rch)+(trc?'<div style="font-size:10px;color:#8a93a6">'+Math.round(v.rch/trc*100)+'% of reach</div>':'')+'</td>'
+   +'<td style="'+TD+'">'+(v.imp&&v.rch?(v.imp/v.rch).toFixed(1)+'&times;':'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(cpr!=null?M(cpr):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(cpm!=null?M(cpm):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(v.pur?N(v.pur):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(cpa!=null?M(cpa):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+(roas!=null?roas.toFixed(2)+'&times;':'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+N(v.sets)+'</td></tr>';});
+
+ let tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Audience</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Reach (sum)</th>'
+  +'<th style="'+TH+'">Freq</th><th style="'+TH+'">Cost / 1k reached</th><th style="'+TH+'">CPM</th>'
+  +'<th style="'+TH+'">Purchases</th><th style="'+TH+'">Cost / purchase</th><th style="'+TH+'">ROAS</th>'
+  +'<th style="'+TH+'">Ad sets</th></tr>'+rows+'</table></div>';
+
+ // biggest sets per class, so he can act rather than admire the split
+ const SS=(A.sets||[]);
+ let top='';
+ CLS.forEach(c=>{const list=SS.filter(r=>r.cls===c[0]).slice(0,5);if(!list.length)return;
+  top+='<div style="margin-top:10px"><div style="font-size:11px;font-weight:800;color:'+c[2]+'">'+c[1]+' &mdash; biggest ad sets</div>'
+   +list.map(r=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 9px;border:1px solid #eef0f5;border-radius:8px;margin:4px 0;font-size:11px;background:#fafbfd">'
+    +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>'+esc(r.n||r.id)+'</b>'
+      +(r.st&&r.st!=='ACTIVE'?' <span style="color:#8a93a6;font-weight:700">('+esc(String(r.st).toLowerCase())+')</span>':'')+'</span>'
+    +'<span style="white-space:nowrap;color:#475569">'+M(r.sp)+' &middot; '+N(r.rch)+' reached'
+      +(r.sp&&r.val?' &middot; <b>'+(r.val/r.sp).toFixed(1)+'&times;</b>':'')+'</span></div>').join('')
+   +'</div>';});
+
+ const cov=A.cov||0;
+ let note='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11px;color:#5b6478;line-height:1.55">'
+  +'<b>Reach here is a sum of ad-set reach, not unique people.</b> Meta deduplicates within an ad set and not between them, so anyone hit by several prospecting sets is counted several times. '
+  +'Spend, impressions and purchases are exact. The audience of a set is read from the custom audiences it INCLUDES: a lookalike of your buyers counts as prospecting, because the people in it have not bought.'
+  +(cov?' This covers <b>'+Math.round(cov*100)+'%</b> of Meta spend in the window &mdash; the rest sits in ad sets the targeting pull could not return.':'')
+  +'</div>';
+
+ pnlCard(g,'meta','New audience vs warm vs existing &mdash; spend and reach'+INFO('Meta spend, reach, purchases and ROAS split by whether the ad set targets people who have never bought, warm non-buyers, or your existing customers. Reach is summed across ad sets, so the same person can appear more than once.'),
+  (W.start?W.start+' &rarr; '+(W.end||'today')+'. ':'')+'Classified from each ad set’s included custom audiences. Reach is a sum of ad-set reach, not unique people.',
+  head+bar('sp','Share of spend')+bar('rch','Share of reach (summed)')+tbl+top+note);
+}
+
 /* v9.38 AUDIENCES IN OBSERVATION -- what they can and cannot tell you.
    Observation attaches a list without restricting delivery, so Google reports the slice it
    RECOGNISES as list members. That recognition happens at ad-serve time and is a completely
@@ -9397,7 +9498,10 @@ function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  // PURCHASE segment (it's an audience type, not in the pixel), so this is new vs existing only.
  // 3-way audience mix (new/engaged/existing) from the collector's ad-set-targeting pull (O.audMix,
  // keyed by campaign id, spend-weighted). Falls back to the 2-way value-share until that lands.
- const AM=(typeof O!=='undefined'&&O.audMix)||null;
+ // v9.46: audMix grew from {cid:{n,e,x}} to {cmp:{cid:{n,e,x}},tot,sets,win,cov} so that new-audience
+ // SPEND and REACH are answerable, not just the share. Read .cmp when it is there, the bare object
+ // when data.js still predates the collector change.
+ const AM=(typeof O!=='undefined'&&O.audMix)?(O.audMix.cmp||(O.audMix.tot?null:O.audMix)):null;
  const newOf=c=>{const a=AM&&AM[String(c.id)];return a?a.n:(c.newShare!=null?c.newShare:null);};
  const nsArr=act.map(newOf).filter(v=>v!=null),avgNew=nsArr.length?nsArr.reduce((a,b)=>a+b,0)/nsArr.length:null;
  const segTag=c=>{const a=AM&&AM[String(c.id)];
@@ -9501,7 +9605,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='__BUILD__'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-231833'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
@@ -9902,7 +10006,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
  try{alertBand(g);}catch(e){}
- try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{gAudObs(g);}catch(e){}try{gPlumbing(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
+ try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{gAudObs(g);}catch(e){}try{metaAud(g);}catch(e){}try{gPlumbing(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
