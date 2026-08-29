@@ -2393,6 +2393,77 @@ function ovCard(g){
       endpoint, the only place the fee exists). So the modelled cost is reconciled against the
       posted Odoo ledger and the ratio is printed rather than hidden -- measured at 1.08 across
       twelve months, which is the honest precision of this card. */
+/* v9.19 WHAT ACTUALLY HAPPENS TO A PARCEL. The tab used three different words for overlapping
+   things -- returned, refused, RTO -- and they are not the same event and do not cost the same.
+   Settled from the courier's own records:
+     RETURN TO ORIGIN   one shipment. oldType is SEND and there is a changed-to-RTO date: the
+                        parcel that went out is the same record that came back. COD is zero, so
+                        nothing was ever collected. Charged ONCE, at a lower rate than a
+                        successful delivery. In July every single one had been attempted, most
+                        once or twice, one in five three times or more -- these are real failed
+                        deliveries, not silent cancellations.
+     CUSTOMER RETURN    two shipments. oldType is null and the COD is NEGATIVE, money going back
+                        out: the order was delivered and paid for, then a second shipment was
+                        booked to collect it. Charged twice, and the sale is refunded on top.
+     EXCHANGE           a swap shipment.
+     CANCELLED          never handed to the courier, so it costs nothing here. */
+function parcelTaxonomy(g){
+ const B=window.O&&O.bosta;if(!B||!B.months)return;
+ const m=(ST.e||'').slice(0,7);const v=B.months[m]||B.months[Object.keys(B.months).sort().pop()];
+ if(!v)return;
+ const mk=Object.keys(B.months).sort().filter(x=>B.months[x]===v)[0]||m;
+ const bt=v.byType||{},F=B.fees||{};
+ const ex=(v.exactByType)||{};
+ const fee=t=>((F[t]||{}).mean)||0;
+ const cost=t=>{const e=ex[t];return (e&&e.complete)?e.total:(bt[t]||0)*fee(t);};
+ const isEx=t=>!!(ex[t]&&ex[t].complete);
+ const M=x=>'E£'+Math.round(x).toLocaleString();
+ const N=x=>Math.round(x).toLocaleString();
+ const ROWS=[
+  ['Delivered and kept','Send','#12a06e',
+   'The parcel reached the customer and stayed there. This is what you are paying the courier to do.',
+   'once'],
+  ['Came back to you','Return to Origin','#e23a63',
+   'The courier tried, failed, and brought it back &mdash; refused at the door, nobody reachable, or the address did not work. It is the SAME shipment flipped, not a second one, so Bosta charges once and at a lower rate than a delivery. Nothing was collected, so the whole charge is a loss.',
+   'once'],
+  ['Customer sent it back','Customer Return Pickup','#c9834a',
+   'Different thing entirely: they received it and paid, then changed their mind. A SECOND shipment is booked to collect it, so you pay twice &mdash; and you refund the sale on top, which shows up in the Refunds line, not here.',
+   'twice'],
+  ['Exchange','Exchange','#8b5cf6','A swap: one out, one back, on a single exchange shipment.','once'],
+  ['Cash collection only','Cash Collection','#7c869c','Money collected with no goods moving.','once']
+ ].filter(r=>bt[r[1]]);
+ const tot=ROWS.reduce((a,r)=>a+cost(r[1]),0);
+ let h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+  +'<tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">What happened</th>'
+  +'<th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Parcels</th>'
+  +'<th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Charged</th>'
+  +'<th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">What Bosta billed</th>'
+  +'<th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Meaning</th></tr>';
+ ROWS.forEach(r=>{const n=bt[r[1]]||0,c=cost(r[1]);
+  h+='<tr><td style="padding:7px 8px;border-bottom:1px solid #eef0f5;font-weight:800;color:'+r[2]+'">'+r[0]+'</td>'
+   +'<td style="padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:700">'+N(n)+'</td>'
+   +'<td style="padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;color:#5a637a">'+r[4]+'</td>'
+   +'<td style="padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:800">'+M(c)
+     +'<span style="display:block;font-size:9.5px;font-weight:600;color:'+(isEx(r[1])?'#12a06e':'#9aa3b5')+'">'
+     +(isEx(r[1])?'exact, every parcel priced':'measured average')+'</span></td>'
+   +'<td style="padding:7px 8px;border-bottom:1px solid #eef0f5;font-size:11.5px;color:#5a637a;max-width:430px">'+r[3]+'</td></tr>';});
+ h+='</table></div>';
+ /* how hard the courier tried before giving up -- the difference between a refusal and a
+    delivery that was never really made */
+ const at=v.rtoAttempts||null;
+ if(at){const ks=Object.keys(at).sort((a,b)=>(+a)-(+b));const tt=ks.reduce((a,k)=>a+at[k],0);
+  h+='<div style="margin-top:12px;font-size:11.5px;color:#5a637a"><b>Before a parcel was sent back, the courier tried:</b> '
+   +ks.map(k=>'<span style="display:inline-block;margin-right:12px"><b style="color:#0F172A">'+k+'&times;</b> &mdash; '
+     +at[k].toLocaleString()+' parcels ('+Math.round(at[k]/tt*100)+'%)</span>').join('')+'</div>';
+  const three=ks.filter(k=>+k>=3).reduce((a,k)=>a+at[k],0);
+  if(three)h+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:#e23a63"></span><span>'
+   +'<b>'+Math.round(three/tt*100)+'% of the parcels that came back were attempted three times or more.</b> '
+   +'Those are not customers refusing at the door on sight &mdash; the courier went back repeatedly and still could not hand it over. '
+   +'That is an address, a phone number or an expectation problem, and every attempt is time you are paying for.</span></div></div>';}
+ pnlCard(g,'ins','What actually happens to a parcel &mdash; '+mk+INFO('The four outcomes the courier records, what each one means in plain words, and what each one costs. "Came back to you" and "customer sent it back" are different events with different bills, which is why they are separated everywhere on this tab.'),
+  'Every parcel Bosta handled in '+mk+', by outcome. Charged once vs twice is the courier&rsquo;s own billing, read off the shipment records.',h);
+}
+
 function bostaCard(g){
  const B=O.bosta;
  if(!B||!B.months||!Object.keys(B.months).length){
@@ -5017,7 +5088,7 @@ function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><ta
    did not belong -- branch payroll is not a Shopify line item. They live here now. */
 function csCtl(k,v){if(k==='pm0'){ST.s=v+'-01';return RDR();}if(k==='pm1'){ST.e=monEnd(v);return RDR();}ST[k]=v;if(TAB==='cs')rCost();}
 function rCost(){if(TAB!=='cs')return;const g=document.getElementById('g14');g.innerHTML='';
- try{bostaCard(g);}catch(e){}
+ try{parcelTaxonomy(g);}catch(e){}try{bostaCard(g);}catch(e){}
  if(!O.fin||!O.fin.n){g.innerHTML='<div class="card full"><div class="chead"><div><div class="ct">No data loaded</div></div></div></div>';return;}
  const money=v=>Math.round(v).toLocaleString();
  const M={};for(let i=0;i<O.fin.n;i++)M[DD[i].slice(0,7)]=1;
@@ -6564,7 +6635,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-093413';
+const BUILD='20260829-094843';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
