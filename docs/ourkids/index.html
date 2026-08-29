@@ -3015,7 +3015,7 @@ function platformTree(g){
    +'<td style="'+TD+';font-weight:700">'+M(c.cur.vl)+'</td>'
    +'<td style="'+TD+';font-weight:700;color:'+CO(c.cur.vl,c.prv.vl)+'">'+PC(c.cur.vl,c.prv.vl)+'</td>'
    +'<td style="'+TD+'">'+(c.rc.roas!=null?c.rc.roas.toFixed(2)+'×':'—')+' <span style="font-size:11px;color:#5b6478">was '+(c.rp.roas!=null?c.rp.roas.toFixed(2)+'×':'—')+'</span></td>'
-   +'<td style="'+TD+';font-weight:800">'+(okI?c.incRoas.toFixed(2)+'×':'—')+' <span style="font-size:10px;color:#8a93a6">×'+(c.inc?c.inc.toFixed(2):'—')+'</span></td>'
+   +'<td style="'+TD+';font-weight:800">'+(okI?c.incRoas.toFixed(2)+'×':'—')+' <span style="font-size:10px;color:#5b6478">×'+(c.inc?c.inc.toFixed(2):'—')+'</span>'+incrChip(c.P.at)+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(okI?(c.incRoas>=be?'#12a06e':'#e23a63'):'#9aa3b5')+'">'
    +(okI?(c.incRoas>=be?'clears':'BELOW')+' '+(c.incRoas/be).toFixed(2)+'×':'—')+'</td></tr>';});
  tb+='</table></div>';
@@ -3047,7 +3047,8 @@ function platformTree(g){
    +bars
    +(v.pnl?'<div style="margin-top:8px;font-size:12px;color:#334155;padding-top:7px;border-top:1px dashed #e2e6ef">'+v.pnl.line+'</div>':'')
    +'<div style="margin-top:7px;font-size:12.5px;font-weight:700;color:#0F172A">&rarr; '+v.act+'</div></div>';});
- const notes=[['#e23a63','<b>Judged on incremental, not reported.</b> Breakeven here is '+be.toFixed(2)+'× on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
+ const notes=[['#ff8b42','<b>Not every incremental figure here is a measurement.</b> '+PFDEF.map(P=>'<b>'+P.n+'</b>: '+incrSrc(P.at).tag).join(' &middot; ')+'. '+incrSrc('google').note],
+  ['#e23a63','<b>Judged on incremental, not reported.</b> Breakeven here is '+be.toFixed(2)+'× on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
   ['#7c869c','<b>Value = clicks × click→buy rate × basket.</b> The three contributions are a Shapley split, so they sum exactly to the actual move and no factor gets credit for being considered first. Spend sits outside that split — it is what the move cost, not part of it.'],
   ['#7c869c','Each platform is measured on the value <i>it</i> claims, so these do not add up to Shopify revenue and are not meant to. Cross-platform double-counting is the whole reason the ledger view exists.']];
  pnlCard(g,'ins','Platform diagnosis — what each channel did, and what to do'+INFO('Per-platform funnel decomposition. Attributed value is split into clicks, click-to-buy rate and basket size by closed-form Shapley, then each platform is judged on incremental value against the real breakeven from the ledger.'),
@@ -3351,6 +3352,35 @@ function mdRoll(rows,lvl){
    rescaled by 1.4826 so the result reads on a normal-distribution scale.
    The result is deliberately NOT a p-value. Daily ad performance is not independent or normal, so
    a precise probability would be false precision; this is "how unusual for this entity", banded. */
+/* v9.45 IS THIS INCREMENTAL FIGURE MEASURED, OR ASSUMED?
+   The three platforms are not equal and the dashboard was treating them as if they were.
+     META      - measured. Pulled from Meta's own incrementality attribution window at build time;
+                 the collector overwrites the constant and labels it "Meta ACTUAL".
+     TIKTOK    - the 7d/1d ladder is measured off TikTok's Attribution Analytics; the incremental
+                 floor is a reasoned Shopify last-click floor, not a platform product.
+     GOOGLE    - ASSUMED. Google sells no incrementality measurement, nothing overwrites the
+                 constant, and no holdout has been run on this account. Every "incremental"
+                 Google figure in this tool is that assumption carried through the arithmetic.
+   Saying so costs nothing and stops an assumption being spent like a measurement. */
+function incrSrc(pf){
+ const A=O.attr||{}, lab=(A.labels||{}).incr||'';
+ if(pf==='meta'||pf==='metaOff'){
+  const measured=/ACTUAL/i.test(lab);
+  return {measured, tag:measured?'MEASURED':'ASSUMED',
+   note:measured?'Meta&rsquo;s own incrementality attribution window, read from the API at build time.'
+                :'Meta&rsquo;s incrementality window did not return on the last sync, so a modelled coefficient is standing in.'};
+ }
+ if(pf==='tt')return {measured:false,tag:'FLOOR',
+   note:'TikTok sells no incrementality measurement. This is the Shopify last-click floor &mdash; the only TikTok revenue that survives a holdout &mdash; so it is deliberately conservative, not measured.'};
+ return {measured:false,tag:'ASSUMED',
+   note:'<b>Google sells no incrementality measurement and none has been run on this account.</b> This multiplier is a fixed assumption in the collector, not a number Google or a holdout produced. Treat every Google &ldquo;incremental&rdquo; figure as that assumption carried through the arithmetic &mdash; the ranking between Google campaigns is still sound, the absolute level is not.'};
+}
+function incrChip(pf){
+ const s2=incrSrc(pf), c=s2.measured?'#12a06e':(s2.tag==='FLOOR'?'#5a5bf0':'#ff8b42');
+ return '<span title="'+String(s2.note).replace(/<[^>]+>/g,'').replace(/"/g,'&quot;')+'" '
+  +'style="display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:'+c
+  +';padding:1px 5px;border-radius:3px;vertical-align:1px;margin-left:5px">'+s2.tag+'</span>';
+}
 function mdSignif(ent,W,pf,curRoas){
  const d=ent&&ent.d; if(!d||!W||!W.n)return null;
  const iM=((O.attr||{}).meta||{}).incr||1, iMo=((O.attr||{}).metaOff||{}).incr||1;
@@ -3492,7 +3522,8 @@ function moneyDesk(g){
    +(note?'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">'+note+'</div>':'')
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
    +'<tr><th style="'+TH+';text-align:left">Do</th><th style="'+TH+';text-align:left">Entity</th>'
-   +'<th style="'+TH+'">Spend</th><th style="'+TH+'">Reported</th><th style="'+TH+'">Incremental</th>'
+   +'<th style="'+TH+'">Spend</th><th style="'+TH+'">Reported</th>'
+   +'<th style="'+TH+'">Incremental<div style="font-weight:400;text-transform:none;font-size:9px;color:#8a93a6">Meta '+incrSrc('meta').tag.toLowerCase()+' &middot; Google '+incrSrc('google').tag.toLowerCase()+'</div></th>'
    +'<th style="'+TH+'">vs prior</th><th style="'+TH+'">GP after ad cost</th><th style="'+TH+'">How unusual</th><th style="'+TH+'">Purch.</th></tr>';
   list.slice(0,18).forEach(r=>{
    h+='<tr><td style="'+TD+';text-align:left"><span style="display:inline-block;font-size:9.5px;font-weight:800;color:#fff;background:'+VC[r.v]+';padding:2px 7px;border-radius:4px">'+r.v+'</span></td>'
@@ -3528,6 +3559,7 @@ function moneyDesk(g){
    +'<div style="font-size:11.5px;color:#7c869c;margin-top:2px">Under '+M(MD_MIN_SP)+' spend or under '+MD_MIN_PUR+' purchases in this window. They are not losers &mdash; they have not been tested. Give them budget or stop them for a reason other than this table.</div></div>';}
  const notes=[['#5a5bf0','<b>Ranked by money AND how unusual it is</b>, not money alone. Each entity is compared with its own daily history: <b>how far this window sits from its own normal level</b>, against <b>how much it normally moves anyway</b>. A 77% fall on something that routinely swings 90% is not news; a 40% fall on something that never moves more than 10% is. Both are shown as percentage change, and the comparison uses the middle of the entity&rsquo;s own range so one huge in-store matched day cannot widen it and hide a real break.'],
   ['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. Anything under that is selling at a loss no matter how the platform reports it.'],
+  ['#ff8b42','<b>Where each incremental rate comes from.</b> '+incrSrc('google').note+' Meta&rsquo;s is '+incrSrc('meta').tag.toLowerCase()+': '+incrSrc('meta').note],
   ['#3a9bff','<b>Website and in-store value are discounted differently.</b> Website carries the platform&rsquo;s measured incremental rate; Meta in-store carries '+(((O.attr||{}).metaOff||{}).incr||0).toFixed(3)+', because that number is mostly Meta recognising a shop buyer it had already reached, not sales it created. An ad can look strong on total value and still appear here as a CUT.'],
   ['#7c869c','<b>The swing figure assumes the PUMP list holds its current rate on new money.</b> It will not hold perfectly &mdash; that is what a staged scale test is for. Treat it as the size of the prize, not a forecast.'],
   ['#7c869c','Meta windows are the last '+((O.madsW&&O.madsW.n)||60)+' days from '+((O.madsW&&O.madsW.start)||'—')+'. This card reads whole-entity totals from the ad platforms and does <b>not</b> follow the date filter above.']];
@@ -9458,7 +9490,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-225708';
+const BUILD='20260829-230351';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
