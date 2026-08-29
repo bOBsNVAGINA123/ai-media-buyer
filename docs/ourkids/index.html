@@ -3471,6 +3471,127 @@ function testLibrary(g){
   form+tb);
 }
 
+/* v9.30 CREATIVE MATRIX + THE KINGS + MAKE MORE.
+   Attention and conversion are different jobs and an ad can be good at one and useless at the
+   other. A ranked list by any single metric hides that; a scatter shows it in one look, and the
+   four quadrants each imply a different fix.
+   Labels are deliberately sparse -- only the outliers that carry real money get named, because a
+   chart with 120 labels is a chart nobody reads. */
+function creMatrix(g){
+ const ADS=(O.mads||[]).filter(a=>(a.sp||0)>=2000&&(a.imp||0)>=20000&&(a.clk||0)>=100);
+ if(ADS.length<5)return;
+ const AT=O.attr||{}, iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const R=ADS.map(a=>{const inc=(a.pv||0)*iM+(a.ofv||0)*iMo;
+   return {a, ctr:a.clk/a.imp*100, roas:inc/a.sp, sp:a.sp,
+           cvr:a.clk?((a.pur||0)+(a.opur||0))/a.clk*100:0, hook:a.imp?a.vv/a.imp*100:0};});
+ const med=arr=>{const s=arr.slice().sort((x,y)=>x-y);return s[Math.floor(s.length/2)];};
+ const mCtr=med(R.map(r=>r.ctr)), mRoas=be;
+ const mxSp=Math.max.apply(null,R.map(r=>r.sp));
+ /* name only what matters: big spend, or an extreme on either axis */
+ const worth=r=>r.sp>=mxSp*0.35||r.roas>=be*2.2||(r.roas<be*0.6&&r.sp>=mxSp*0.12);
+ const pt=R.map(r=>({x:+r.ctr.toFixed(3), y:+r.roas.toFixed(2), r:6+Math.sqrt(r.sp/mxSp)*20,
+   nm:r.a.n, sp:r.sp, cvr:r.cvr, hook:r.hook, lab:worth(r)?r.a.n.slice(0,26):''}));
+ const el=document.createElement('div'); el.className='card full';
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Attention against return &mdash; every live creative</div>'
+  +'<div class="cs">Horizontal: click-through rate. Vertical: incremental ROAS. Bubble: spend. The lines are the median CTR ('
+  +mCtr.toFixed(2)+'%) and your '+be.toFixed(2)+'&times; breakeven, so the four quadrants are real thresholds, not decoration. '
+  +ADS.length+' creatives with at least E£2,000 spend and 100 clicks.</div></div></div>'
+  +'<div style="position:relative;height:330px"><canvas id="crmx"></canvas></div>'
+  +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:#5b6478">'
+  +'<div><b style="color:#12a06e">Top right</b> &mdash; earns attention and money. Scale, and make more of it.</div>'
+  +'<div><b style="color:#ff8b42">Top left</b> &mdash; few clicks, but they buy. The offer works; the opening does not. Test hooks.</div>'
+  +'<div><b style="color:#3a9bff">Bottom right</b> &mdash; plenty of clicks that do not convert. Message-to-page mismatch, not a creative shortage.</div>'
+  +'<div><b style="color:#e23a63">Bottom left</b> &mdash; neither. Cut.</div></div>';
+ g.appendChild(el);
+ const cv=document.getElementById('crmx'); if(!cv)return;
+ const col=p=>{const rt=p.y>=mRoas, ct=p.x>=mCtr;
+   return rt&&ct?'rgba(18,160,110,0.55)':(rt?'rgba(255,139,66,0.55)':(ct?'rgba(58,155,255,0.5)':'rgba(226,58,99,0.5)'));};
+ ch.push(new Chart(cv,{type:'bubble',data:{datasets:[{label:'Creative',data:pt,
+    backgroundColor:pt.map(col),borderColor:pt.map(p=>col(p).replace(/0\.\d+\)/,'0.95)')),borderWidth:1}]},
+  options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,
+   plugins:{legend:{display:false},
+    tooltip:{callbacks:{label:c2=>{const p=c2.raw;
+      return [p.nm,'CTR '+p.x.toFixed(2)+'%  ·  incremental ROAS '+p.y.toFixed(2)+'×',
+              'Spend E£'+Math.round(p.sp).toLocaleString()+'  ·  click→buy '+p.cvr.toFixed(1)+'%  ·  hook '+p.hook.toFixed(1)+'%'];}}},
+    datalabels:false},
+   scales:{x:{title:{display:true,text:'Click-through rate %',font:{size:10,weight:'700'},color:'#5a637a'},
+      grid:{color:c2=>Math.abs(c2.tick.value-mCtr)<0.001?'#94a3b8':'#eef0f5'},ticks:{font:{size:9}}},
+    y:{title:{display:true,text:'Incremental ROAS',font:{size:10,weight:'700'},color:'#5a637a'},
+      beginAtZero:true,grid:{color:c2=>Math.abs(c2.tick.value-mRoas)<0.05?'#94a3b8':'#eef0f5'},
+      ticks:{font:{size:9},callback:v=>v.toFixed(1)+'×'}}}},
+  plugins:[{id:'lab',afterDatasetsDraw(c2){const{ctx}=c2;ctx.save();
+    ctx.font='600 9.5px system-ui';ctx.fillStyle='#334155';ctx.textAlign='center';
+    c2.getDatasetMeta(0).data.forEach((el2,i)=>{const p=pt[i];if(p.lab)ctx.fillText(p.lab,el2.x,el2.y-el2.options.radius-3);});
+    ctx.restore();}}]}));
+ /* ---- the kings, and the diagnostic pairs ---- */
+ const top=(key,n)=>R.slice().sort((a,b)=>b[key]-a[key]).slice(0,n);
+ /* A conversation objective reports a "click" that never reached the site, so its purchases-per-
+    click runs to 55% and would top any conversion ranking while meaning nothing comparable. Rates
+    above 20% are excluded from that one list -- they are not wrong, they are a different unit. */
+ const plausible=R.filter(r=>r.cvr<=20);
+ const topCvr=n=>plausible.slice().sort((a,b)=>b.cvr-a.cvr).slice(0,n);
+ const oddCvr=R.filter(r=>r.cvr>20).length;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const kingRow=(ttl,list,fmt,note)=>'<div style="flex:1 1 230px;min-width:215px">'
+  +'<div style="font-size:10px;font-weight:800;color:#64748B;letter-spacing:.3px">'+ttl+'</div>'
+  +'<div style="font-size:10.5px;color:#8a93a6;margin-bottom:3px">'+note+'</div>'
+  +list.map(r=>'<div style="font-size:11.5px;color:#0F172A;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    +'<b>'+fmt(r)+'</b> · '+r.a.n.slice(0,30)+'</div>').join('')+'</div>';
+ const kings='<div style="display:flex;gap:20px;flex-wrap:wrap;margin:4px 0 10px">'
+  +kingRow('HOOK KINGS',top('hook',4),r=>r.hook.toFixed(0)+'%','video views per impression')
+  +kingRow('CTR KINGS',top('ctr',4),r=>r.ctr.toFixed(2)+'%','clicks per impression')
+  +kingRow('CONVERSION KINGS',topCvr(4),r=>r.cvr.toFixed(1)+'%','purchases per site click'+(oddCvr?' · '+oddCvr+' conversation-objective ad'+(oddCvr>1?'s':'')+' excluded':''))
+  +kingRow('RETURN KINGS',top('roas',4),r=>r.roas.toFixed(2)+'×','incremental, after the haircut')
+  +'</div>';
+ /* mismatches worth a specific test */
+ const hiCtrLoCvr=R.filter(r=>r.ctr>=mCtr*1.15&&r.roas<be&&r.sp>=4000).sort((a,b)=>b.sp-a.sp).slice(0,5);
+ const loCtrHiCvr=R.filter(r=>r.ctr<mCtr*0.85&&r.roas>=be*1.2&&r.sp>=4000).sort((a,b)=>b.roas-a.roas).slice(0,5);
+ const box=(ttl,list,col2,diag,test)=>list.length?('<div style="border:1px solid #e6e9f0;border-left:3px solid '+col2+';border-radius:8px;padding:9px 11px;margin:7px 0;background:#fbfcfe">'
+   +'<div style="font-size:11.5px;font-weight:800;color:'+col2+'">'+ttl+'</div>'
+   +'<div style="font-size:12px;color:#334155;margin:3px 0 5px">'+diag+'</div>'
+   +'<div style="font-size:12px;color:#0F172A">'+list.map(r=>'<b>'+r.a.n.slice(0,40)+'</b> ('+M(r.sp)+', CTR '+r.ctr.toFixed(2)+'%, '+r.roas.toFixed(2)+'×)').join('<br>')+'</div>'
+   +'<div style="font-size:12px;font-weight:700;color:#0F172A;margin-top:6px">→ '+test+'</div></div>'):'';
+ let body=kings
+  +box('HIGH ATTENTION, NO RETURN',hiCtrLoCvr,'#3a9bff',
+    'These earn more clicks than the median and still do not pay. The opening is doing its job; everything after it is not. Making more creative in this style buys more of the same problem.',
+    'Test the destination, not the ad: does the page match what the ad promised, is the promoted variant in stock, is the price what the ad implied.')
+  +box('LOW ATTENTION, STRONG RETURN',loCtrHiCvr,'#ff8b42',
+    'Below-median click rate but the people who do click buy well above breakeven. The offer is right and the opening is throttling how many people ever see it.',
+    'Keep the body and the offer exactly as they are. Test new openings only — first frame, first line, thumbnail.');
+ /* ---- MAKE MORE ---- */
+ const winners=R.filter(r=>r.roas>=be*1.35&&r.sp>=6000).sort((a,b)=>b.roas-a.roas).slice(0,4);
+ if(winners.length){
+  const derive=[['Same opening, new footage','Isolates whether the result came from the hook or the body. If it holds, the hook is the asset and you can mass-produce against it.'],
+   ['Same angle, new opening','The cheapest way to widen reach on a proven angle when frequency starts climbing.'],
+   ['Same product, new angle','Protects against the angle, not the product, being what is tired six weeks from now.'],
+   ['Same concept as testimonial','A different proof format against the same claim, for the audience the current execution does not convince.'],
+   ['Same concept as static','Cheap to produce, different placements, and it tells you whether the motion is doing any work at all.']];
+  body+='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:14px 0 3px;letter-spacing:.3px">MAKE MORE OF THESE</div>'
+   +'<div style="font-size:11px;color:#7c869c;margin-bottom:6px">Clearing breakeven by 35%+ on incremental value with real spend behind them. Five derivatives each, and the reason for each &mdash; so the brief is a decision, not a guess.</div>';
+  winners.forEach(w=>{
+   body+='<div style="border:1px solid #e6e9f0;border-left:3px solid #12a06e;border-radius:8px;padding:9px 11px;margin:7px 0;background:#f3fbf7">'
+    +'<div style="display:flex;gap:10px;align-items:flex-start">'
+    +(w.a.th?'<img src="'+w.a.th+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto" alt="">':'')
+    +'<div style="flex:1"><div style="font-size:12.5px;font-weight:800;color:#0F172A">'+w.a.n+'</div>'
+    +'<div style="font-size:11.5px;color:#5b6478">'+M(w.sp)+' spend · '+w.roas.toFixed(2)+'× incremental · CTR '+w.ctr.toFixed(2)+'% · '
+    +(w.cvr>20?'<span title="a conversation objective: the reported click is a message thread, not a site visit, so a click-to-buy rate is not the same unit here">click→buy n/a (conversation objective)</span>':'click→buy '+w.cvr.toFixed(1)+'%')
+    +' · hook '+w.hook.toFixed(0)+'%'
+    +(w.a.pl?' · <a href="'+w.a.pl+'" target="_blank" rel="noopener" style="color:#3a9bff">open the ad</a>':'')+'</div>'
+    +'<ol style="margin:6px 0 0 16px;padding:0;font-size:11.5px;color:#334155">'
+    +derive.map(d=>'<li style="margin:2px 0"><b>'+d[0]+'</b> — '+d[1]+'</li>').join('')+'</ol></div></div></div>';});
+ }
+ const notes=[['#e23a63','<b>Creative DNA is UNAVAILABLE FROM SOURCE.</b> The ads feed returns performance, a thumbnail and a permalink &mdash; not the hook line, angle, talent, format or editing style. The derivative briefs above are therefore structural, and the specific hook or angle has to come from watching the ad, which is what the link is for. Nothing here guesses at content it cannot see.'],
+  ['#3a9bff','<b>Hold rate is not scored.</b> Three-second, quartile and ThruPlay breakdowns are not in this sync, so hook is video views over impressions and there is no honest hold measure to pair with it.'],
+  ['#ff8b42','<b>Conversation-objective ads are kept out of the conversion ranking.</b> Their reported click is a message thread, not a site visit, so purchases-per-click reads above 50% and is not the same unit as the rest. They still appear everywhere else, including the matrix and the money desk.'],
+  ['#7c869c','Creatives under E£2,000 spend, 20,000 impressions or 100 clicks are excluded entirely. At that size CTR and conversion rate are noise, and a matrix that plots noise invites confident nonsense.']];
+ const el2=document.createElement('div'); el2.className='card full';
+ el2.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Who wins at what &mdash; and what to make next</div>'
+  +'<div class="cs">Leaders on each job, the ads that are good at one and bad at another, and derivative briefs for the proven winners.</div></div></div>'
+  +body+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>';
+ g.appendChild(el2);
+}
+
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
  document.getElementById('bn30').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>Did the thing you did actually work?</b> Budget moves, launches and pauses are detected from each entity&rsquo;s own daily spend, then scored on the seven days before against the days after &mdash; on incremental value, at your real margin. A rise that bought volume at a worse rate is not growth and is not scored as such.';
  let _ev=[];
@@ -8155,7 +8276,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-173044';
+const BUILD='20260829-173734';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -8647,6 +8768,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
   }
  }}
 function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19');g.innerHTML='';
+ try{creMatrix(g);}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  const W=O.madsW,ALL=(O.mads||[]).filter(a=>a.d);
  document.getElementById('bn19').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Your LAUNCHED Meta creatives, judged by the definitions in Motion&rsquo;s <b>Creative Benchmarks 2026</b> ($1.29B spend, 578,750 creatives, 6,015 accounts, Sep 2025 &rarr; Jan 2026). Winner = an ad that spends &ge;10&times; your account&rsquo;s median ad. OurKids numbers below are computed from the REAL per-ad daily series &mdash; nothing modelled.';
