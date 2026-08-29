@@ -5051,26 +5051,50 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
  const PS2=O.pos||{},BC2=O.bcost||{};
  if(Object.keys(PS2).length){
   const lastM=allM[allM.length-1];
-  const win=(n,k)=>{const ms=Object.keys(PS2[n]||{}).sort();const take=ms.slice(-k);let gp=0,cost=0;
-   take.forEach(m=>{const P=PS2[n][m];gp+=P[1];const bc=(BC2[n]||{})[m]||{};
-    cost+=(bc.sal>0?bc.sal:((FF.branches.find(b=>b.name===n)||{}).payroll||0))+(bc.rent>0?bc.rent:0);
+  /* v9.22 THIS RATIO WAS NOT COMPARABLE BETWEEN BRANCHES. Three faults, all now fixed:
+       1. RENT IS LUMPY. Nasr City pays a quarterly cheque, so 8 of its last 12 months carry no
+          rent at all. A 30d or 90d window therefore caught nought, one or two payments purely by
+          timing, swinging the ratio by up to 0.8x. Rent is now charged at a trailing-12-month
+          RUN RATE, so every window carries the same monthly burden.
+       2. DOKKI HAS NO RENT POSTED AT ALL -- zero across all 25 months. It was winning "best
+          branch" at 4.65x on an expense base missing its single largest fixed cost. A branch
+          with no rent in the ledger is no longer scored or ranked; it is named and excluded,
+          because inventing a market rent would be worse than admitting the gap.
+       3. THE NEWEST MONTH IS PARTIAL. A part-month of gross profit was being divided by a whole
+          month of salary and rent. Only complete months are used. */
+  const partialM=(O.partial||'').slice(0,7);
+  const rentRun=n=>{const all=Object.keys(BC2[n]||{}).sort().filter(m=>m!==partialM).slice(-12);
+   if(!all.length)return null;const t=all.reduce((a2,m)=>a2+(((BC2[n]||{})[m]||{}).rent||0),0);
+   return {perMonth:t/all.length,months:all.length,total:t};};
+  const noRent=n=>{const r=rentRun(n);return !r||r.total<=0;};
+  const win=(n,k)=>{const ms=Object.keys(PS2[n]||{}).sort().filter(m=>m!==partialM);const take=ms.slice(-k);
+   if(!take.length)return null;
+   const rr=rentRun(n);let gp=0,cost=0;
+   take.forEach(m=>{const P=PS2[n][m];if(!P)return;gp+=P[1];const bc=(BC2[n]||{})[m]||{};
+    cost+=(bc.sal>0?bc.sal:((FF.branches.find(b=>b.name===n)||{}).payroll||0))+(rr?rr.perMonth:0);
     const e=O.exp&&O.exp[m];if(e){const tp=names.reduce((a2,x)=>a2+((PS2[x]&&PS2[x][m])?PS2[x][m][0]:0),0);const sh2=tp&&P?P[0]/tp:0;cost+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;}});
-   return cost?{g:gp/cost,n:(gp-cost)/cost}:null;};
+   return cost?{g:gp/cost,n:(gp-cost)/cost,noRent:noRent(n)}:null;};
   const WINS=[[1,'30d'],[2,'60d'],[3,'90d'],[6,'180d'],[12,'365d']];
   let hw='<div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr><th style="text-align:left">Branch</th>'+WINS.map(w=>'<th>GP:Exp '+w[1]+'</th>').join('')+WINS.map(w=>'<th>NP:Exp '+w[1]+'</th>').join('')+'</tr>';
   const rowsW=names.map(n=>({n,vals:WINS.map(w=>win(n,w[0]))}));
-  rowsW.forEach(r2=>{hw+='<tr><td style="text-align:left;font-weight:700">'+r2.n+'</td>'+r2.vals.map(v=>'<td>'+(v?v.g.toFixed(2)+'x':'&mdash;')+'</td>').join('')+r2.vals.map(v=>'<td style="color:'+(v&&v.n>=0?'#12a06e':'#e23a63')+';font-weight:700">'+(v?v.n.toFixed(2)+'x':'&mdash;')+'</td>').join('')+'</tr>';});
+  rowsW.forEach(r2=>{const nr=noRent(r2.n);
+   const tag=nr?' <span class="tg" style="background:#e23a6322;color:#e23a63">no rent in ledger</span>':'';
+   const cell=v=>nr?'<td style="color:#c8cede">n/a</td>':'<td>'+(v?v.g.toFixed(2)+'x':'&mdash;')+'</td>';
+   const cell2=v=>nr?'<td style="color:#c8cede">n/a</td>':'<td style="color:'+(v&&v.n>=0?'#12a06e':'#e23a63')+';font-weight:700">'+(v?v.n.toFixed(2)+'x':'&mdash;')+'</td>';
+   hw+='<tr><td style="text-align:left;font-weight:700">'+r2.n+tag+'</td>'+r2.vals.map(cell).join('')+r2.vals.map(cell2).join('')+'</tr>';});
   hw+='</table></div>';
-  pnlCard(g,'odoo','Branch efficiency &mdash; GP &amp; Net Profit vs Expenses (30/60/90/180/365d)','Real POS gross profit and contribution against actual salaries + rent + allocated utilities, per trailing window. GP:Exp &ge; 1.00x = the branch covers its costs from gross profit (breakeven). NP:Exp = profit left per pound of cost; 0.00x is breakeven there.',hw);
+  pnlCard(g,'odoo','Branch efficiency &mdash; GP &amp; Net Profit vs Expenses (30/60/90/180/365d)','Real POS gross profit against salaries + rent + allocated utilities, over complete months only. Rent is charged at each branch&rsquo;s trailing-12-month run rate rather than whatever landed inside the window &mdash; Nasr City pays quarterly, so 8 of its last 12 months show no rent at all and a raw window caught nought, one or two cheques purely by timing. GP:Exp &ge; 1.00x means the branch covers its costs from gross profit. A branch with no rent in the ledger is shown as n/a, not as a winner.',hw);
   // best branch verdict
-  const score=names.map(n=>{const w3=win(n,3);const bs=(O.bstat||{})[n]||{};const P3=Object.keys(PS2[n]||{}).sort().slice(-3);
+  const score=names.filter(n=>!noRent(n)).map(n=>{const w3=win(n,3);const bs=(O.bstat||{})[n]||{};const P3=Object.keys(PS2[n]||{}).sort().filter(m=>m!==partialM).slice(-3);
    const rev3=P3.reduce((a2,m)=>a2+PS2[n][m][0],0);
    return {n,np:w3?w3.n:0,ltgp:bs.ltgp||0,rep:bs.repeatRate||0,rev3};}).sort((a2,b)=>b.np-a2.np);
   const best=score[0],worst=score[score.length-1];
   let hv='<div class="ins">'
   +'<div class="row"><span class="dot" style="background:'+C.grn+'"></span><span><b>BEST BRANCH: '+best.n+'</b> &mdash; NP:Exp '+best.np.toFixed(2)+'x over 90d, LTGP/customer E&pound; '+money(best.ltgp)+', repeat rate '+best.rep+'%. This is the model to copy: assortment, roster, catchment.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.red+'"></span><span><b>WEAKEST: '+worst.n+'</b> &mdash; NP:Exp '+worst.np.toFixed(2)+'x, LTGP/customer E&pound; '+money(worst.ltgp)+', repeat rate '+worst.rep+'%. Every month it runs below 1.00x it destroys cash after its own costs.</span></div>'
-  +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Full ranking by 90d NP:Exp: '+score.map(x=>x.n+' '+x.np.toFixed(2)+'x').join(' &middot; ')+'.</span></div></div>';
+  +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Full ranking by 90d NP:Exp: '+score.map(x=>x.n+' '+x.np.toFixed(2)+'x').join(' &middot; ')+'.</span></div>'
+  +(names.filter(noRent).length?'<div class="row"><span class="dot" style="background:'+C.red+'"></span><span><b>'+names.filter(noRent).join(', ')+' is not in this ranking.</b> No rent has ever been posted against it &mdash; '+((O.rentDx&&O.rentDx[names.filter(noRent)[0]])?('0 of '+O.rentDx[names.filter(noRent)[0]].all+' months carry a rent line'):'no rent line exists')+'. It was previously winning on an expense base missing its largest fixed cost. Either the branch genuinely pays none, in which case say so and it wins fairly, or the lease is not coded in Odoo. Until that is settled it cannot be compared with branches that are charged rent.</span></div>':'')
+  +'</div>';
   pnlCard(g,'ins','Which branch is best &mdash; ranked on real economics','Contribution after actual costs, customer lifetime value and loyalty, combined.',hv);}
  // branch cohorts
  const BCO=O.bcoh||{};
@@ -7026,7 +7050,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-122400';
+const BUILD='20260829-123730';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
