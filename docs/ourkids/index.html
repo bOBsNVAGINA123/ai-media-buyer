@@ -4186,6 +4186,87 @@ function merDaily(g){
    {sets:money,h:170,fmt:v=>'E£'+Math.round(v).toLocaleString()},
    {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7'});
 }
+/* v9.38 AUDIENCES IN OBSERVATION -- what they can and cannot tell you.
+   Observation attaches a list without restricting delivery, so Google reports the slice it
+   RECOGNISES as list members. That recognition happens at ad-serve time and is a completely
+   different thing from the upload match rate: a list can be 100% matched on upload and still be
+   recognised on only a few percent of converting sessions, because recognition needs a signed-in
+   or cookie-matched user and this account's traffic is overwhelmingly in-app browsers.
+   So the observed share is a FLOOR on existing-customer value, never the customer mix. The card
+   says so, and puts the ledger's own number beside it rather than letting the smaller one pass
+   for truth. */
+function gAudObs(g){
+ const G=O.gops||{}; const OB=G.obs, LI=G.listIds||{}, AT=G.aud||{}, MODE=G.audMode||{};
+ if(!OB||!Object.keys(OB).length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const rows=Object.entries(OB).map(([id,v])=>{
+   const L=LI[id]||{}; return {id,n:L.n||('list '+id),t:L.t||'',size:L.size||0,match:L.match,
+     sp:v.sp,cn:v.cn,cv:v.cv,cmp:v.cmp||{},crm:/CRM/.test(L.t||'')};})
+  .sort((a,b)=>b.cv-a.cv);
+ const crm=rows.filter(r=>r.crm);
+ /* the recognised slice against the campaigns those lists actually run on */
+ let recog=null;
+ if(crm.length){
+  let obsV=0, totV=0;
+  const camps=new Set();
+  crm.forEach(r=>Object.keys(r.cmp).forEach(c=>camps.add(c)));
+  crm.forEach(r=>{obsV+=r.cv;});
+  (O.gads||[]).forEach(c=>{if(camps.has(c.n))totV+=c.pv||0;});
+  if(totV>0)recog={obsV,totV,pct:obsV/totV*100,camps:camps.size};
+ }
+ let body='';
+ if(recog){
+  /* what the ledger says, for contrast */
+  let odooNew=null;
+  const NRm=O.nr||{}; const ms=Object.keys(NRm).sort().slice(-3);
+  if(ms.length===3){let n2=0,r2=0;ms.forEach(m=>{const v=NRm[m]||{};n2+=v.nrev||0;r2+=v.rrev||0;});
+   if(n2+r2>0)odooNew=n2/(n2+r2)*100;}
+  const impliedNew=100-recog.pct;
+  body+='<div style="border:1px solid #e6e9f0;border-left:3px solid #ff8b42;background:#fffaf2;border-radius:8px;padding:10px 12px;margin:4px 0 10px">'
+   +'<div style="font-size:12.5px;font-weight:800;color:#0F172A">Observation is on and working &mdash; but it cannot tell you your customer mix</div>'
+   +'<div style="font-size:12.5px;color:#0F172A;margin-top:4px">'
+   +'Your customer list is attached to <b>'+recog.camps+' campaigns</b> in observation mode. Across those campaigns Google recognised <b>'+M(recog.obsV)+'</b> of <b>'+M(recog.totV)+'</b> in conversion value as coming from someone already on the list &mdash; <b>'+recog.pct.toFixed(1)+'%</b>. '
+   +'Read naively that says <b>'+impliedNew.toFixed(0)+'% of your Google value is new customers</b>'
+   +(odooNew!=null?', while your own ledger says the business runs at <b>'+odooNew.toFixed(0)+'% new</b>. Both cannot be right.':'.')
+   +'</div>'
+   +'<div style="font-size:12px;color:#334155;margin-top:6px"><b>The list is not the problem.</b> It is uploaded and matched. What is low is <i>recognition at ad-serve time</i> &mdash; Google can only tag an impression as a list member when it can identify the user in that moment, and most of your traffic arrives inside in-app browsers where it cannot. So this figure is a <b>floor</b> on existing-customer value, not a measurement of it.</div>'
+   +'<div style="font-size:12.5px;font-weight:700;color:#0F172A;margin-top:7px">&rarr; Keep observation on &mdash; it is a useful bidding signal and costs nothing. But take the new-versus-returning answer from the order ledger, not from here.</div></div>';
+ }
+ body+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Audience</th><th style="'+TH+';text-align:left">Type</th>'
+  +'<th style="'+TH+'">List size</th><th style="'+TH+'">Campaigns</th><th style="'+TH+'">Spend 30d</th>'
+  +'<th style="'+TH+'">Value recognised</th></tr>';
+ rows.forEach(r=>{
+  const nCmp=(AT[r.id]||[]).length||Object.keys(r.cmp).length;
+  body+='<tr><td style="'+TD+';text-align:left;font-weight:'+(r.crm?'800':'400')+'">'+r.n+'</td>'
+   +'<td style="'+TD+';text-align:left;font-size:11px;color:#5b6478">'+(r.t||'').replace(/_/g,' ')+(r.match!=null?' &middot; '+r.match+'% matched':'')+'</td>'
+   +'<td style="'+TD+'">'+Math.round(r.size).toLocaleString()+'</td>'
+   +'<td style="'+TD+'">'+nCmp+'</td>'
+   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(r.cv)+'</td></tr>';});
+ body+='</table></div>';
+ /* lists that exist, match, and are attached to nothing */
+ const unattached=Object.entries(LI).filter(([id,L])=>/CRM/.test(L.t||'')&&!(AT[id]&&AT[id].length));
+ if(unattached.length){
+  body+='<div style="margin-top:12px;padding:9px 11px;background:#fffaf2;border-left:3px solid #ff8b42;border-radius:6px">'
+   +'<div style="font-size:11.5px;font-weight:800;color:#ff8b42">'+unattached.length+' matched customer list'+(unattached.length>1?'s are':' is')+' attached to no campaign at all</div>'
+   +'<div style="font-size:12px;color:#334155;margin-top:3px">'
+   +unattached.map(x=>'<b>'+x[1].n+'</b> ('+Math.round(x[1].size||0).toLocaleString()+(x[1].match!=null?', '+x[1].match+'% matched':'')+')').join(' &middot; ')
+   +'</div><div style="font-size:11px;color:#7c869c;margin-top:4px">Uploaded, matched, and doing nothing. Attaching in observation changes no delivery and no bids by itself &mdash; it only starts reporting that slice, which is free information.</div></div>';
+ }
+ const modes=Object.entries(MODE);
+ const hard=modes.filter(x=>x[1]==='TARGETING');
+ if(hard.length)body+='<div style="margin-top:10px;padding:8px 10px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:6px;font-size:12px;color:#334155">'
+   +'<b>'+hard.length+' campaign'+(hard.length>1?'s are':' is')+' set to TARGETING, not observation</b> &mdash; '+hard.slice(0,4).map(x=>x[0]).join(', ')
+   +'. That restricts delivery to the list rather than just reporting on it, which is a very different thing from what observation does.</div>';
+ else if(modes.length)body+='<div style="margin-top:10px;font-size:11.5px;color:#5b6478">All '+modes.length+' campaigns with an audience setting are on <b>observation</b>, so none of these lists is restricting who sees your ads.</div>';
+ pnlCard(g,'google','Audiences in observation &mdash; what they can and cannot tell you'+INFO('Attached lists, whether each campaign observes or targets, and the value Google recognised as coming from list members in the last 30 days.'),
+  'Last 30 days. Observed value is the slice Google could identify as list members at serve time, which is not the same as your customer mix.',
+  body);
+}
+
 function alertBand(g){
  const A=[];
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -8995,7 +9076,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-184938';
+const BUILD='20260829-185709';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -9407,7 +9488,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
  try{alertBand(g);}catch(e){}
- try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{gPlumbing(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
+ try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{gAudObs(g);}catch(e){}try{gPlumbing(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
