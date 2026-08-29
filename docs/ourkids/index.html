@@ -3457,7 +3457,7 @@ function prodContrib(g){
  const idOf=s=>{const m=String(s||'').match(/^\[(\d+)\]/);return m?m[1]:null;};
  const rows=P.map(r=>{const a=(r.mon||{})[m1]||[0,0], b=(r.mon||{})[m0]||[0,0];
    return {n:nm(r.n), id:idOf(r.n), vn:r.vn, cat:r.cat, rNow:a[0]||0, rPrev:b[0]||0, gNow:a[1]||0, gPrev:b[1]||0,
-           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0)};})
+           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0), st:r.st||null};})
   .filter(r=>r.rNow||r.rPrev);
  if(!rows.length)return;
  const tR=rows.reduce((a,r)=>a+r.dR,0), tG=rows.reduce((a,r)=>a+r.dG,0);
@@ -3471,13 +3471,26 @@ function prodContrib(g){
    .sort((a,b)=>((b.gPrev/b.rPrev)-(b.gNow/b.rNow))-((a.gPrev/a.rPrev)-(a.gNow/a.rNow))).slice(0,6);
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ /* Stock is the missing half of the margin column. A product whose revenue collapsed while its
+    margin held is either out of stock or out of season, and only one of those is fixable this
+    week. The number that settles it is not units left -- a product can hold plenty of stock in
+    sizes nobody wanted -- it is what share of recent sales came from variants now at zero. */
+ const stockCell=r=>{
+  const st=r.st;
+  if(!st||!st.n)return '<span style="color:#b9c0cc" title="not matched to an Odoo template in this sync">&mdash;</span>';
+  const allOut=(st.oos>=st.n), share=st.deadShare;
+  const col=allOut?'#e23a63':(share!=null&&share>=40?'#e23a63':(st.oos?'#ff8b42':'#12a06e'));
+  const head=allOut?'OUT':(Math.round(st.u).toLocaleString()+' units');
+  const sub=st.oos?(st.oos+' of '+st.n+' variants at zero'+(share!=null?' &middot; they were '+share+'% of sales':'')):(st.n+' variants, all in stock');
+  return '<span style="font-weight:800;color:'+col+'">'+head+'</span>'
+   +'<div style="font-size:9.5px;color:'+(share!=null&&share>=40?'#c0143c':'#8a93a6')+'">'+sub+'</div>';};
  const tbl=(list,ttl,base,note)=>{
   if(!list.length)return '';
   let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
    +(note?'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">'+note+'</div>':'')
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
    +'<tr><th style="'+TH+';text-align:left">Product</th><th style="'+TH+'">Gross profit '+m1+'</th><th style="'+TH+'">'+m0+'</th>'
-   +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th></tr>';
+   +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th><th style="'+TH+'">Stock</th></tr>';
   list.slice(0,12).forEach(r=>{
    const mg=mrg(r), mgP=r.rPrev?r.gPrev/r.rPrev:null;
    h+='<tr><td style="'+TD+';text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis"><b>'+r.n+'</b>'
@@ -3487,7 +3500,8 @@ function prodContrib(g){
     +'<td style="'+TD+';font-weight:700">'+(base?Math.abs(r.dG/base*100).toFixed(0)+'%':'—')+'</td>'
     +'<td style="'+TD+'">'+M(r.rNow)+' <span style="color:#8a93a6;font-size:10.5px">'+PC(r.rNow,r.rPrev)+'</span></td>'
     +'<td style="'+TD+';color:'+((mg!=null&&mgP!=null&&mg<mgP-0.03)?'#e23a63':'#334155')+'">'+(mg!=null?(mg*100).toFixed(0)+'%':'—')
-    +' <span style="color:#8a93a6;font-size:10.5px">'+(mgP!=null?'was '+(mgP*100).toFixed(0)+'%':'')+'</span></td></tr>';});
+    +' <span style="color:#8a93a6;font-size:10.5px">'+(mgP!=null?'was '+(mgP*100).toFixed(0)+'%':'')+'</span></td>'
+    +'<td style="'+TD+'">'+stockCell(r)+'</td></tr>';});
   return h+'</table></div>';};
  let body='<div style="display:flex;gap:22px;flex-wrap:wrap;margin:2px 0 8px">'
   +'<div><div style="font-size:10px;font-weight:800;color:#64748B">GROSS PROFIT MOVE</div>'
@@ -3507,10 +3521,25 @@ function prodContrib(g){
    +'<div style="font-size:11.5px;color:#334155;margin-top:3px">'
    +bleedMargin.map(r=>'<b>'+r.n+'</b> '+((r.gPrev/r.rPrev)*100).toFixed(0)+'% &rarr; '+((r.gNow/r.rNow)*100).toFixed(0)+'%').join(' &middot; ')
    +'</div><div style="font-size:11px;color:#7c869c;margin-top:4px">Discounting or cost, not demand. Scaling media on these buys revenue at a worse rate than last month.</div></div>';}
- body+='<div style="margin-top:10px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px;font-size:11.5px;color:#5b6478">'
-  +'<b>Per-variant stock is UNAVAILABLE FROM SOURCE in this sync.</b> Inventory arrives aggregated by vendor ('+Object.keys(O.vinv||{}).length
-  +' vendors), not by product or size, so this card cannot tell you whether a fall is an availability problem. '
-  +'A product down with margin intact and no price move is the pattern that usually means stock &mdash; check the exact SKU in Odoo before blaming the ads.</div>';
+ /* name the supply casualties outright rather than leaving the reader to infer them */
+ const supply=down.filter(r=>r.st&&r.st.n&&(r.st.oos>=r.st.n||(r.st.deadShare!=null&&r.st.deadShare>=40)))
+   .sort((a,b)=>a.dG-b.dG).slice(0,6);
+ if(supply.length){
+  const lost=supply.reduce((a,r)=>a+r.dG,0);
+  body+='<div style="margin-top:12px;padding:9px 11px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:6px">'
+   +'<div style="font-size:12.5px;font-weight:800;color:#e23a63">'+M(lost)+' of the loss is a SUPPLY problem, not a demand one</div>'
+   +'<div style="font-size:12px;color:#334155;margin-top:4px">'
+   +supply.map(r=>'<b>'+r.n+'</b> '+SG(r.dG)+' &mdash; '
+     +(r.st.oos>=r.st.n?'every variant at zero'
+       :(r.st.oos+' of '+r.st.n+' variants at zero, and those were '+r.st.deadShare+'% of its recent units'))).join('<br>')
+   +'</div><div style="font-size:11.5px;font-weight:700;color:#0F172A;margin-top:6px">&rarr; No creative, bid or budget change recovers these. They need reordering, or the media pointed at something you can actually ship.</div></div>';
+ } else if(down.some(r=>r.st)){
+  body+='<div style="margin-top:12px;padding:8px 10px;background:#f3fbf7;border-left:3px solid #12a06e;border-radius:6px;font-size:12px;color:#334155">'
+   +'<b>None of the falling products is out of stock in the sizes that sold.</b> Availability has been checked per variant and ruled out, so these are demand, price or season &mdash; look at the media and the offer, not the warehouse.</div>';
+ } else {
+  body+='<div style="margin-top:10px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px;font-size:11.5px;color:#5b6478">'
+   +'<b>Stock has not landed in this sync yet.</b> Per-variant availability is pulled from Odoo on the next collector run; until then a fall cannot be separated into supply versus demand here.</div>';
+ }
  pnlCard(g,'odoo','Which exact products moved the profit'+INFO('Every product ranked by the gross profit it added or removed between the two most recent complete months, with its share of the total move. Margin is shown beside revenue so growth bought with discount is visible.'),
   '<b>'+m0+' &rarr; '+m1+'</b>, the two most recent COMPLETE months &mdash; the running month is excluded so a part-month is never compared with a whole one. This card does not follow the date filter.',
   body);
@@ -9226,7 +9255,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-195946';
+const BUILD='20260829-200929';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
