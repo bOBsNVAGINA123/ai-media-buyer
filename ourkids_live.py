@@ -1499,6 +1499,20 @@ def _clarity_call(params, tries=3):
     return None
 
 
+# Clarity names its dimension fields inconsistently across queries: the URL breakdown returns
+# "Url", the browser breakdown returns "Browser"/"Device". Matching them case-sensitively made
+# every page row key on the empty tuple, so all pages collapsed into ONE row and the URL itself
+# was stored as if it were a metric ("DeadClickCount:Url"). Match case-insensitively instead, and
+# treat anything non-numeric as a dimension so a new breakdown does not silently do this again.
+_CL_DIMS = ("browser", "device", "os", "operatingsystem", "url", "page", "country",
+            "source", "medium", "campaign", "channel", "devicetype")
+# emit one canonical spelling so the dashboard has a single key to read regardless of which
+# breakdown the row came from
+_CL_CANON = {"browser": "Browser", "device": "Device", "devicetype": "Device",
+             "os": "OS", "operatingsystem": "OS", "url": "Url", "page": "Url",
+             "country": "Country", "source": "Source", "medium": "Medium",
+             "campaign": "Campaign", "channel": "Channel"}
+
 def _cl_rows(raw):
     """Clarity returns a list of {metricName, information:[{...}]}; flatten to one row per
     dimension combination with every metric on it."""
@@ -1506,16 +1520,29 @@ def _cl_rows(raw):
     for block in (raw or []):
         mn = block.get("metricName") or "?"
         for it in (block.get("information") or []):
-            key = tuple((it.get(k) or "") for k in ("Browser", "Device", "OS", "URL", "Country"))
-            row = out.setdefault(key, {k: it.get(k) for k in ("Browser", "Device", "OS", "URL", "Country") if it.get(k)})
+            dims = {}
+            for k, v in it.items():
+                if k.lower() in _CL_DIMS:
+                    dims[_CL_CANON.get(k.lower(), k)] = v
+            key = tuple(sorted(dims.items()))
+            row = out.setdefault(key, dict(dims))
             for mk, mv in it.items():
-                if mk in ("Browser", "Device", "OS", "URL", "Country"):
+                if mk.lower() in _CL_DIMS:
                     continue
                 try:
                     row[mn + ":" + mk] = float(mv)
                 except Exception:
                     row[mn + ":" + mk] = mv
     return list(out.values())
+
+
+def _cl_num(row, metric, *fields):
+    """Pull the first present numeric field for a metric off a flattened row."""
+    for f in fields:
+        v = row.get(metric + ":" + f)
+        if isinstance(v, (int, float)):
+            return float(v)
+    return 0.0
 
 
 def pull_clarity(days=3, prev=None):
