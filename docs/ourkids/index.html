@@ -1125,9 +1125,14 @@ function verdictStrip(t,grid){
    in this file produces one, so rather than keep hunting a ghost this normalises every rendered
    cell after the fact. Text nodes only -- attributes and scripts are untouched. */
 function fixCurrency(root){
- if(!root)return;
+ /* Scoped to the VISIBLE grid, never the whole document: a TreeWalker over the full page on every
+    tab switch stalled the renderer outright. Cheap string test first so the walk only happens on
+    the rare render that actually needs it. */
+ const host=root||document.querySelector('.grid:not(.hide)');
+ if(!host)return 0;
+ if(!/(E£\s*){2,}/.test(host.innerText||''))return 0;
  const rx=/(E£\s*){2,}/;
- const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
+ const w=document.createTreeWalker(host,NodeFilter.SHOW_TEXT,null);
  const hits=[];
  while(w.nextNode())if(rx.test(w.currentNode.nodeValue))hits.push(w.currentNode);
  hits.forEach(n=>{n.nodeValue=n.nodeValue.replace(/(E£\s*){2,}/g,'E£');});
@@ -1152,7 +1157,7 @@ function foldTail(t,grid){
  /* some cards build their tables after this hook runs, so sweep once more shortly after */
  setTimeout(function(){try{pinRowLabels(grid);}catch(e){}},400);
  setTimeout(function(){try{verdictStrip(t,grid);}catch(e){}},60);
- setTimeout(function(){try{fixCurrency(grid);}catch(e){}},120);
+
  if(FOLD_SKIP[t]||!grid)return;
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  const cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
@@ -1236,7 +1241,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -1309,6 +1314,8 @@ function markPre(){const last=lastD();document.querySelectorAll('.chip[onclick^=
    hunting for your place after every single change. Tab switches still go to the top, because
    they call rTab directly rather than RDR. */
 function RDR(){const _y=window.scrollY||window.pageYOffset||0;
+ /* one currency mark, everywhere, every render */
+ setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);
  syncMonthly();syncBars();rTab();try{markPre();}catch(e){}
  if(_y>40){window.scrollTo(0,_y);requestAnimationFrame(function(){window.scrollTo(0,_y);});}}
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));RDR();}
@@ -2368,7 +2375,9 @@ function whyWaterfall(g,W){
  steps.forEach(s=>{const a=run,b=run+s[1];bars.push([a,b]);cols.push(s[1]>=0?'#12a06e':'#e23a63');run=b;});
  bars.push([0,netC]);cols.push('#5a5bf0');
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
- const sgn=v=>(v>=0?'+':'&minus;')+M(v);
+ /* real minus sign, not an HTML entity: this string is also drawn onto a canvas, where
+    entities print literally ('&minus;E£230,027' appeared on the bars). */
+ const sgn=v=>(v>=0?'+':'\u2212')+M(v);
  const tot=netC-netP;
  const big=steps.slice().sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))[0];
  const notes=[];
@@ -2745,6 +2754,17 @@ function pdToggle(k){window.PDOPEN[k]=!window.PDOPEN[k];
  const el=document.getElementById('pd_'+k);if(el)el.style.display=window.PDOPEN[k]?'block':'none';
  const ar=document.getElementById('pa_'+k);if(ar)ar.textContent=window.PDOPEN[k]?'▾':'▸';}
 window.pdToggle=pdToggle;
+/* v9.43 Product names open the live page. The URL is resolved by the collector from the bracket
+   code against Shopify's variant SKU, so it is the real storefront link, not a slug guessed from
+   the title -- guessing breaks immediately on the Arabic names. Products with no live page (not
+   published) stay as plain text rather than becoming a link that 404s. */
+function pLink(name,url,style){
+ const safe=String(name==null?'':name);
+ if(!url)return safe;
+ return '<a href="'+String(url).replace(/"/g,'&quot;')+'" target="_blank" rel="noopener" '
+  +'onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9aa3b5;'+(style||'')+'" '
+  +'title="Open on shop-ourkids.com">'+safe+'</a>';
+}
 function prodBars(rows,opt){
  opt=opt||{};
  if(!rows||!rows.length)return '<div style="font-size:12px;color:#8a93a6">Nothing moved materially in this window.</div>';
@@ -2753,7 +2773,7 @@ function prodBars(rows,opt){
  const clean=n=>String(n||'').replace(/^\[[^\]]*\]\s*/,'').replace(/^\[[^\]]*\]\s*/,'');
  return '<div style="margin-top:6px">'+rows.map((r,i)=>{
   const k=(opt.key||'p')+i;
-  const w=Math.max(2,Math.abs(r.d)/mx*50);           // 50% each side of the centre line
+  const w=Math.max(2,Math.abs(r.d)/mx*100);          // now a % of its own half-width cell
   const neg=r.d<0, col=neg?'#e23a63':'#12a06e';
   const stock=r.st==null?'':(r.st<=3?'<span style="color:#e23a63;font-weight:800">'+r.st+' left</span>'
     :(r.st<10?'<span style="color:#c9834a;font-weight:700">'+r.st+' left</span>':r.st+' in stock'));
@@ -2761,16 +2781,24 @@ function prodBars(rows,opt){
   return '<div style="border-bottom:1px solid #f1f3f8">'
    +'<div onclick="pdToggle(\''+k+'\')" style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer">'
      +'<span id="pa_'+k+'" style="width:10px;color:#9aa3b5;font-size:10px">'+(window.PDOPEN[k]?'▾':'▸')+'</span>'
-     +'<div style="width:230px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+clean(r.n)+'</div>'
-     +'<div style="flex:1;position:relative;height:20px">'
-       +'<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#dfe4ee"></div>'
-       +'<div style="position:absolute;top:3px;height:14px;border-radius:4px;background:'+col+';'
-         +(neg?('right:50%;width:'+w.toFixed(1)+'%'):('left:50%;width:'+w.toFixed(1)+'%'))+'"></div>'
-       +'<div style="position:absolute;top:0;height:20px;line-height:20px;font-size:11.5px;font-weight:800;color:'+col+';white-space:nowrap;'
-         +(neg?('right:'+(50+w).toFixed(1)+'%;padding-right:7px'):('left:'+(50+w).toFixed(1)+'%;padding-left:7px'))+'">'
-         +(neg?'−':'+')+M(r.d)+'</div>'
+     +'<div style="width:230px;flex:0 0 230px;padding-right:10px;box-sizing:border-box;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+pLink(clean(r.n),r.url)+'</div>'
+     /* Was absolutely positioned just past the end of the bar, which works until the bar is the
+        longest one: the offset then reaches the container edge and the number printed on top of
+        the product name. Rebuilt as two half-width flex cells -- [label][bar] on the losing side,
+        [bar][label] on the gaining side -- so the label physically cannot land on a neighbour
+        whatever the bar length. */
+     +'<div style="flex:1;display:flex;align-items:center;height:20px;min-width:0">'
+       +'<div style="width:50%;display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;overflow:hidden">'
+         +(neg?('<span style="font-size:11.5px;font-weight:800;color:'+col+';white-space:nowrap">\u2212'+M(r.d)+'</span>'
+                +'<span style="height:14px;border-radius:4px 0 0 4px;background:'+col+';width:'+w.toFixed(1)+'%;flex:0 1 auto;min-width:2px"></span>'):'')
+       +'</div>'
+       +'<div style="width:1px;height:20px;background:#dfe4ee;flex:0 0 1px"></div>'
+       +'<div style="width:50%;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">'
+         +(neg?'':('<span style="height:14px;border-radius:0 4px 4px 0;background:'+col+';width:'+w.toFixed(1)+'%;flex:0 1 auto;min-width:2px"></span>'
+                +'<span style="font-size:11.5px;font-weight:800;color:'+col+';white-space:nowrap">+'+M(r.d)+'</span>'))
+       +'</div>'
      +'</div>'
-     +'<div style="width:96px;text-align:right;font-size:11px;color:#5a637a">'+stock+'</div>'
+     +'<div style="width:96px;flex:0 0 96px;padding-left:10px;box-sizing:border-box;text-align:right;font-size:11px;color:#5a637a">'+stock+'</div>'
    +'</div>'
    +'<div id="pd_'+k+'" style="display:'+(window.PDOPEN[k]?'block':'none')+';padding:2px 2px 10px 22px;font-size:11.5px;color:#5a637a">'
      +'<table style="border-collapse:collapse"><tr>'
@@ -3534,7 +3562,7 @@ function prodContrib(g){
  const idOf=s=>{const m=String(s||'').match(/^\[(\d+)\]/);return m?m[1]:null;};
  const rows=P.map(r=>{const a=(r.mon||{})[m1]||[0,0], b=(r.mon||{})[m0]||[0,0];
    return {n:nm(r.n), id:idOf(r.n), vn:r.vn, cat:r.cat, rNow:a[0]||0, rPrev:b[0]||0, gNow:a[1]||0, gPrev:b[1]||0,
-           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0), st:r.st||null};})
+           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0), st:r.st||null, url:r.url||null};})
   .filter(r=>r.rNow||r.rPrev);
  if(!rows.length)return;
  const tR=rows.reduce((a,r)=>a+r.dR,0), tG=rows.reduce((a,r)=>a+r.dG,0);
@@ -3570,7 +3598,7 @@ function prodContrib(g){
    +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th><th style="'+TH+'">Stock</th></tr>';
   list.slice(0,12).forEach(r=>{
    const mg=mrg(r), mgP=r.rPrev?r.gPrev/r.rPrev:null;
-   h+='<tr><td style="'+TD+';text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis"><b>'+r.n+'</b>'
+   h+='<tr><td style="'+TD+';text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis"><b>'+pLink(r.n,r.url)+'</b>'
     +'<div style="font-size:11px;color:#5b6478">'+(r.id?'#'+r.id+' · ':'')+(r.vn||'—')+(r.cat?' · '+r.cat:'')+'</div></td>'
     +'<td style="'+TD+'">'+M(r.gNow)+'</td><td style="'+TD+';color:#8a93a6">'+M(r.gPrev)+'</td>'
     +'<td style="'+TD+';font-weight:800;color:'+(r.dG<0?'#e23a63':'#12a06e')+'">'+SG(r.dG)+'</td>'
@@ -3596,7 +3624,7 @@ function prodContrib(g){
   body+='<div style="margin-top:12px;padding:8px 10px;background:#fffaf2;border-left:3px solid #ff8b42;border-radius:6px">'
    +'<div style="font-size:11.5px;font-weight:800;color:#ff8b42">'+bleedMargin.length+' products are holding revenue while the margin drops</div>'
    +'<div style="font-size:11.5px;color:#334155;margin-top:3px">'
-   +bleedMargin.map(r=>'<b>'+r.n+'</b> '+((r.gPrev/r.rPrev)*100).toFixed(0)+'% &rarr; '+((r.gNow/r.rNow)*100).toFixed(0)+'%').join(' &middot; ')
+   +bleedMargin.map(r=>'<b>'+pLink(r.n,r.url)+'</b> '+((r.gPrev/r.rPrev)*100).toFixed(0)+'% &rarr; '+((r.gNow/r.rNow)*100).toFixed(0)+'%').join(' &middot; ')
    +'</div><div style="font-size:11px;color:#7c869c;margin-top:4px">Discounting or cost, not demand. Scaling media on these buys revenue at a worse rate than last month.</div></div>';}
  /* name the supply casualties outright rather than leaving the reader to infer them */
  const supply=down.filter(r=>r.st&&r.st.n&&(r.st.oos>=r.st.n||(r.st.deadShare!=null&&r.st.deadShare>=40)))
@@ -3606,7 +3634,7 @@ function prodContrib(g){
   body+='<div style="margin-top:12px;padding:9px 11px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:6px">'
    +'<div style="font-size:12.5px;font-weight:800;color:#e23a63">'+M(lost)+' of the loss is a SUPPLY problem, not a demand one</div>'
    +'<div style="font-size:12px;color:#334155;margin-top:4px">'
-   +supply.map(r=>'<b>'+r.n+'</b> '+SG(r.dG)+' &mdash; '
+   +supply.map(r=>'<b>'+pLink(r.n,r.url)+'</b> '+SG(r.dG)+' &mdash; '
      +(r.st.oos>=r.st.n?'every variant at zero'
        :(r.st.oos+' of '+r.st.n+' variants at zero, and those were '+r.st.deadShare+'% of its recent units'))).join('<br>')
    +'</div><div style="font-size:11.5px;font-weight:700;color:#0F172A;margin-top:6px">&rarr; No creative, bid or budget change recovers these. They need reordering, or the media pointed at something you can actually ship.</div></div>';
@@ -5905,7 +5933,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -7614,7 +7642,7 @@ function cbCard(g){const DB=O.decB;if(!DB||!DB.win)return;
   const rvA=totA.r?b.r/totA.r*100:0,rvB=(b2&&totB.r)?b2.r/totB.r*100:null;
   const acvA=b.c?b.r/b.c:0,acvB=(b2&&b2.c)?b2.r/b2.c:null;
   const repA=b.c?b.rep/b.c*100:0,repB=(b2&&b2.c)?b2.rep/b2.c*100:null;
-  const dd=(a,b3)=>b3==null?'':'<span style="font-size:9.5px;font-weight:800;color:'+(a>=b3?'#12a06e':'#e23a63')+'"> '+(a>=b3?'▲':'▼')+Math.abs(a-b3).toFixed(a<10?1:0)+(Math.abs(a)<100?'pp':'')+'</span>';
+  const dd=(a,b3)=>b3==null?'':'<span style="font-size:9.5px;font-weight:800;color:'+(a>=b3?'#12a06e':'#e23a63')+'"> '+(a>=b3?'▲':'▼')+Math.abs(a-b3).toFixed(a<10?1:0)+(Math.abs(a)<100?'%':'')+'</span>';
   return '<tr><td style="text-align:left;font-weight:700">'+lab(b)+'</td>'
    +'<td>'+N(b.c)+'</td><td>'+shA.toFixed(1)+'%</td><td>'+M(b.r)+'</td><td>'+rvA.toFixed(1)+'%</td><td>'+M(acvA)+'</td><td>'+repA.toFixed(0)+'%</td>'
    +(RB?'<td style="border-left:1px solid #e6e9f0">'+N(b2?b2.c:0)+'</td><td>'+(shB==null?'—':shB.toFixed(1)+'%'+dd(shA,shB))+'</td><td>'+M(b2?b2.r:0)+'</td><td>'+(rvB==null?'—':rvB.toFixed(1)+'%')+'</td><td>'+(acvB==null?'—':M(acvB))+'</td><td>'+(repB==null?'—':repB.toFixed(0)+'%')+'</td>':'')
@@ -7851,6 +7879,26 @@ function vTrend(r){if(!r.mon)return null;const ms=Object.keys(r.mon).sort();if(m
  const s2=a=>a.reduce((x,m)=>x+(r.mon[m]?r.mon[m][0]:0),0)/a.length;
  const L=s2(last),Pv=s2(prev);if(!Pv)return null;return {pct:(L-Pv)/Pv*100};}
 function vCover(r){const iv=vInv(r);if(!iv||!iv.u)return null;const spm=(r.q||0)/vMOS();return spm>0?iv.u/spm:null;}
+/* v9.44 The monthly cards read ST.pm0/ST.pm1, which syncMonthly widens when the day range is
+   shorter than a month -- a monthly ledger cannot answer a 7-day question. That widening was
+   silent, so the header could read "L7D" above a table covering a year and the numbers looked
+   frozen when the date changed. This states the months actually being shown, and says plainly
+   when they are not what was picked. */
+function monthScopeNote(){
+ const a=ST.pm0,b=ST.pm1;
+ if(!a&&!b)return '';
+ const n=(a&&b)?((+b.slice(0,4)*12+ +b.slice(5,7))-(+a.slice(0,4)*12+ +a.slice(5,7))+1):null;
+ const picked=(ST.s||'')+' → '+(ST.e||'');
+ const sameMonth=(ST.s||'').slice(0,7)===(ST.e||'').slice(0,7);
+ const widened=!!(ST.pmAuto)||sameMonth;
+ return '<div style="margin-top:5px;font-size:11.5px;padding:6px 9px;border-radius:6px;background:'
+  +(widened?'#fffaf2;border-left:3px solid #ff8b42':'#f6f7fa;border-left:3px solid #9aa3b5')+';color:#334155">'
+  +'<b>Showing '+(a||'start')+' → '+(b||'now')+(n?' ('+n+' month'+(n>1?'s':'')+')':'')+'.</b> '
+  +(widened
+    ? 'This card reads the monthly ledger, which cannot answer a range shorter than a month &mdash; your pick of <b>'+picked+'</b> has been widened to the months above. The day picker still drives every daily card on the other tabs.'
+    : 'Follows the month range derived from your <b>'+picked+'</b> selection.')
+  +'</div>';
+}
 function vWin(r){if(!ST.pm0&&!ST.pm1)return null;if(!r.mon)return {r:0,g:0,has:0};let a=0,b=0,n=0;for(const m in r.mon){if(ST.pm0&&m<ST.pm0)continue;if(ST.pm1&&m>ST.pm1)continue;a+=r.mon[m][0];b+=r.mon[m][1];n++;}return {r:a,g:b,has:n};}
 /* v6.4 -- the month-column table renderer, hoisted out of rPnl so the Costs tab can use it too. */
 function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+(m===CURM?' <span style="color:#5a5bf0">(MTD)</span>':'')+'</th>').join('')+'</tr>';
@@ -8522,7 +8570,7 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
     +'<td style="text-align:right;padding:4px 7px;font-size:11.5px;white-space:nowrap">'+E+money(gp2)+'</td>'
     +'<td style="text-align:right;padding:4px 7px;font-size:11.5px;font-weight:800;color:'+(t2&&gp2/t2>0.32?'#12a06e':t2&&gp2/t2<0.18?'#e23a63':'#334155')+';white-space:nowrap">'+fP(t2?gp2/t2*100:0)+'</td></tr>';}).join('');
   pnlCard(g,'ins','Product LTV &mdash; the 80 items that carry the business'+INFO('One row per product template, retail plus Shopify, since 1 Aug 2024. Quantity is POS units. Revenue and gross profit combine report.pos.order and sale.order.line so a product sold in both channels appears once with both halves added.'),
-   'Ranked by total revenue across every branch and every Shopify channel. Green GP% is above 32%, red is below 18%.',
+   'Ranked by total revenue across every branch and every Shopify channel. Green GP% is above 32%, red is below 18%.'+monthScopeNote(),
    '<div style="overflow:auto;max-height:560px"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff;z-index:2"><tr>'
    +['Product','Supplier','Category','Model','Units','Revenue','Gross profit','GP%'].map((h,i)=>'<th style="text-align:'+(i>=4?'right':'left')+';padding:6px 7px;font-size:10.5px;font-weight:800;color:#64748b;border-bottom:2px solid #e6e9f2;white-space:nowrap">'+h+'</th>').join('')
    +'</tr></thead><tbody>'+ph+'</tbody></table></div>'
@@ -9410,7 +9458,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-203450';
+const BUILD='20260829-225708';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -9880,7 +9928,19 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
  }
  // ---------- 3. scale / kill from the live per-ad series ----------
  if(W&&ADS.length){
-  const today=W.n-1,i0=Math.max(0,today-13);
+  /* This block ignored the date picker entirely and always read the trailing 14 days of the ad
+     feed, so changing the range above changed nothing here. It now follows the filter, and only
+     falls back to a trailing window when the chosen range has too few days inside the feed to
+     judge an ad on -- a two-day range cannot separate a winner from noise. The heading says
+     which of the two is being shown so the number is never mistaken for the other. */
+  const _t0=new Date(W.start+'T00:00:00Z').getTime();
+  const _ix=d=>Math.round((new Date(d+'T00:00:00Z')-_t0)/864e5);
+  const _cut=O.partial||null; let _e=ST.e; if(_cut&&_e>=_cut)_e=addD(_cut,-1);
+  let today=Math.min(W.n-1,_ix(_e)), i0=Math.max(0,_ix(ST.s));
+  let winFollows=true;
+  if(!(today>=0)||today<i0||(today-i0+1)<7){today=W.n-1;i0=Math.max(0,today-13);winFollows=false;}
+  const WDAYS=today-i0+1;
+  const winLbl=winFollows?('the '+WDAYS+' days you selected'):('the last '+WDAYS+' days (your range is too short to judge an ad on)');
   const rows=[];let tSp=0,tVal=0;
   ADS.forEach(a=>{let sp=0,pv=0,fv=0,pu=0,op=0;
    for(let k=i0;k<=today;k++){sp+=a.d.sp[k]||0;pv+=a.d.pv[k]||0;fv+=a.d.fv[k]||0;pu+=a.d.pu[k]||0;op+=a.d.op[k]||0;}
@@ -9894,8 +9954,8 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
    const store=rows.filter(r=>r.offShare>=0.6&&r.pas>0).sort((x,y)=>y.fv-x.fv).slice(0,4);
    const card=(ttl,list,col2,note,fmt)=>list.length?'<div style="flex:1;min-width:330px"><div style="font-size:11.5px;font-weight:800;color:'+col2+';margin-bottom:4px">'+ttl+'</div><table class="bt" style="width:100%"><tr><th style="text-align:left">Ad</th><th>14d spend</th><th>ROAS</th><th>Profit after spend</th></tr>'+list.map(r=>'<tr><td style="text-align:left"><b>'+String(r.a.n||'').slice(0,40)+'</b><div style="font-size:10px;color:#8a93a6">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div></td><td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td><td style="color:'+(r.pas>=0?'#12a06e':'#e23a63')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>').join('')+'</table><div style="font-size:10px;color:#8a93a6;margin-top:3px">'+note+'</div></div>':'';
    let h3='<div style="display:flex;gap:16px;flex-wrap:wrap">'
-    +card('SCALE &mdash; beating the account and making money',scale,'#12a06e','Account blended ROAS over the same 14 days is '+bench.toFixed(2)+'x. These clear it by 20%+ AND cover their own spend.')
-    +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over 14 days at your real margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store).')
+    +card('SCALE &mdash; beating the account and making money',scale,'#12a06e','Account blended ROAS over '+winLbl+' is '+bench.toFixed(2)+'x. These clear it by 20%+ AND cover their own spend.')
+    +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over '+winLbl+' at your real margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store).')
     +'</div>';
    if(store.length)h3+='<div style="margin-top:14px">'+card('STORE DRIVERS &mdash; most of their return is in-store',store,'#9d6bff','60%+ of the value these produce is in-store, not website. Judging them on website ROAS alone would kill your best footfall ads.')+'</div>';
    (function(){var nclip=(O.mads||[]).filter(function(a){return a._fvClip;}).length;
