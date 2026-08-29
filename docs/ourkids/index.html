@@ -1064,6 +1064,63 @@ function flowSort(t){
    gallery IS the point there. The choice is remembered per tab so someone who wants everything
    open keeps it open. */
 const FOLD_KEEP=6, FOLD_MIN=9, FOLD_SKIP={vz:1,rm:1,iq:1};
+/* v9.40 THE VERDICT STRIP. Both, not either: the conclusions of every card on the tab, gathered
+   at the top, with all the cards and charts still underneath untouched.
+   The strip is BUILT FROM the cards, never written separately -- it reads each card's own action
+   line or first insight, so it cannot drift away from what the card below actually says. A card
+   with nothing to conclude contributes nothing rather than a padded restatement of its title.
+   Click a line to jump to the card it came from. */
+function verdictStrip(t,grid){
+ if(!grid||grid.querySelector(':scope > .vstrip'))return;
+ if(t==='vz'||t==='rm')return;                       // a gallery and a reference page have no verdicts
+ const cards=[];
+ const collect=(root)=>[].slice.call(root.children).forEach(c=>{
+   if(c.classList&&c.classList.contains('card'))cards.push(c);
+   else if(c.classList&&c.classList.contains('foldwrap'))
+     [].slice.call(c.querySelectorAll('.card')).forEach(x=>cards.push(x));});
+ collect(grid);
+ if(cards.length<2)return;
+ const clean=s=>String(s||'').replace(/\s+/g,' ').trim();
+ const out=[];
+ cards.forEach((c,i)=>{
+  const ttlEl=c.querySelector('.ct');
+  const ttl=clean(ttlEl?ttlEl.textContent:'').replace(/[?i]+$/,'').trim();
+  let line='', kind='';
+  /* an explicit action beats a description of one */
+  const act=[].slice.call(c.querySelectorAll('div')).filter(d=>d.children.length===0&&/^→|^&rarr;/.test(clean(d.textContent)))[0];
+  const why=[].slice.call(c.querySelectorAll('div')).filter(d=>/^Why:/.test(clean(d.textContent)))[0];
+  const ins=c.querySelector('.ins .row span:last-child');
+  const concl=c.querySelector('.cline span:last-child');   // conclCard's computed verdict lines
+  if(act){line=clean(act.textContent).replace(/^→\s*/,'');kind='do';}
+  else if(why){line=clean(why.textContent).replace(/^Why:\s*/,'');kind='why';}
+  else if(concl){line=clean(concl.textContent);kind='note';}
+  else if(ins){line=clean(ins.textContent);kind='note';}
+  if(!line||!ttl)return;
+  if(line.length>230)line=line.slice(0,227)+'…';
+  if(!c.id)c.id='vcard_'+t+'_'+i;
+  out.push({ttl,line,kind,id:c.id});
+ });
+ if(!out.length)return;
+ const COL={do:'#e23a63',why:'#ff8b42',note:'#5a5bf0'};
+ const LBL={do:'DO',why:'WHY',note:'NOTE'};
+ const el=document.createElement('div');
+ el.className='card full vstrip';
+ el.style.cssText='border-left:4px solid #5a5bf0';
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+  +'<div class="ct">What this tab concludes</div>'
+  +'<div class="cs">Every verdict on this page, gathered here so the answer takes seconds. Nothing is hidden &mdash; the full card and its numbers are still below, and each line jumps to the one it came from.</div>'
+  +'</div></div>'
+  +'<div style="display:flex;flex-direction:column;gap:1px">'
+  +out.map(o=>'<div onclick="(function(){var e=document.getElementById(\''+o.id+'\');if(e){e.scrollIntoView({block:\'start\',behavior:\'smooth\'});e.style.transition=\'box-shadow .25s\';e.style.boxShadow=\'0 0 0 3px rgba(90,91,240,.35)\';setTimeout(function(){e.style.boxShadow=\'\';},1400);}})()" '
+   +'style="display:flex;gap:9px;align-items:baseline;padding:7px 4px;border-bottom:1px solid #f1f3f8;cursor:pointer" '
+   +'onmouseover="this.style.background=\'#f8f9fc\'" onmouseout="this.style.background=\'\'">'
+   +'<span style="flex:0 0 34px;font-size:8.5px;font-weight:800;letter-spacing:.4px;color:'+COL[o.kind]+';padding-top:2px">'+LBL[o.kind]+'</span>'
+   +'<span style="flex:0 0 178px;font-size:11.5px;font-weight:700;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+o.ttl+'</span>'
+   +'<span style="flex:1;font-size:12px;color:#334155;line-height:1.45">'+o.line+'</span></div>').join('')
+  +'</div>';
+ grid.insertBefore(el,grid.firstChild);
+}
+
 function pinRowLabels(grid){
  if(!grid)return;
  /* Driven off the TABLE, not off a particular wrapper markup: wide tables are built in several
@@ -1082,13 +1139,17 @@ function foldTail(t,grid){
  pinRowLabels(grid);
  /* some cards build their tables after this hook runs, so sweep once more shortly after */
  setTimeout(function(){try{pinRowLabels(grid);}catch(e){}},400);
+ setTimeout(function(){try{verdictStrip(t,grid);}catch(e){}},60);
  if(FOLD_SKIP[t]||!grid)return;
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  const cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
  const rest=cards.slice(FOLD_KEEP);
  if(rest.length<2)return;
- const open=(()=>{try{return localStorage.getItem('okfold_'+t)==='1';}catch(e){return false;}})();
+ /* Default OPEN. Hiding the working to save space costs more than it saves: the numbers are the
+    evidence for the verdict and both need to be on the page. The control stays so anyone who
+    wants a short page can collapse it, and that choice is remembered. */
+ const open=(()=>{try{const v=localStorage.getItem('okfold_'+t);return v===null?true:v==='1';}catch(e){return true;}})();
  const d=document.createElement('details');
  d.className='foldwrap'; d.open=open;
  d.style.cssText='grid-column:1/-1;margin-top:4px';
@@ -1097,7 +1158,7 @@ function foldTail(t,grid){
  sum.style.cssText='cursor:pointer;list-style:none;padding:9px 13px;border:1px dashed #cfd6e4;border-radius:8px;background:#fbfcfe;font-size:12.5px;font-weight:700;color:#334155;user-select:none';
  sum.innerHTML='<span style="color:#5a5bf0">&#9662;</span> '+rest.length+' more detail card'+(rest.length>1?'s':'')
   +(nCh?' and '+nCh+' chart'+(nCh>1?'s':''):'')
-  +' <span style="font-weight:400;color:#8a93a6">&mdash; the answer is above; this is the working behind it</span>';
+  +' <span style="font-weight:400;color:#8a93a6">&mdash; the working behind the verdicts above. Click to collapse if you want a shorter page.</span>';
  d.appendChild(sum);
  const inner=document.createElement('div');
  inner.style.cssText='display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px';
@@ -5076,7 +5137,8 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
   +rows.map(tr).join('')+'</table></div>');}
 
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';
+ try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
@@ -9164,7 +9226,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-193402';
+const BUILD='20260829-195946';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -9781,7 +9843,7 @@ function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19')
 function conclCard(g,title,lines,note){if(!lines||!lines.length)return;
  const el=document.createElement('div');el.className='card full';el.dataset.a='odoo';
  el.innerHTML='<div class="chead"><div><div class="ct">'+title+'</div><div class="cs">Computed from the table below — not written by hand. Re-reads every sync.</div></div></div>'
-  +'<div style="padding:2px 14px 12px">'+lines.map(l=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><span style="min-width:8px;height:8px;border-radius:50%;background:'+(l[0]||'#5a5bf0')+';margin-top:6px"></span><span>'+l[1]+'</span></div>').join('')+(note?'<div class="rtNote" style="padding-top:6px">'+note+'</div>':'')+'</div>';
+  +'<div style="padding:2px 14px 12px">'+lines.map(l=>'<div class="cline" style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:12.5px"><span style="min-width:8px;height:8px;border-radius:50%;background:'+(l[0]||'#5a5bf0')+';margin-top:6px"></span><span>'+l[1]+'</span></div>').join('')+(note?'<div class="rtNote" style="padding-top:6px">'+note+'</div>':'')+'</div>';
  g.appendChild(el);}
 function scopeVerdicts(){const out=[];const BS=O.bstat||{};const names=Object.keys(BS);
  const M=v=>'E£ '+Math.round(v).toLocaleString();
