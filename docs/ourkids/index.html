@@ -8822,6 +8822,142 @@ const ACTID={'Ourkids EGP':'336343742536460','Basic':'652528128810469','Playmore
 function amURL(lvl,id,acct){const a2=ACTID[acct];if(!a2||!id)return null;
  return 'https://adsmanager.facebook.com/adsmanager/manage/'+(lvl==='campaign'?'campaigns?act='+a2+'&selected_campaign_ids='+id:lvl==='adset'?'adsets?act='+a2+'&selected_adset_ids='+id:'ads?act='+a2+'&selected_ad_ids='+id);}
 function amLink(lvl,id,acct,txt){const u=amURL(lvl,id,acct);return u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a9bff;font-size:11px;font-weight:700;white-space:nowrap">&#9998; '+(txt||'edit in Ads Manager')+' &rarr;</a>':'';}
+/* v9.46 CAMPAIGN LAUNCH BOARD -- Google AND Meta, at campaign level.
+   The existing launch library reads O.mads only, so it is Meta ads and nothing else: after a
+   Google restructure there was no way to find what had just been switched on, let alone judge it.
+   This rolls Meta ads up to their campaign, puts Google campaigns beside them, and finds anything
+   whose FIRST spending day sits inside the window (so it cannot have been running before).
+
+   Judged with the learning phase respected: a launch is never called a loser on days alone. The
+   gate is PURCHASES, because ROAS on four conversions is noise, and the card says what is still
+   missing rather than printing a verdict it cannot support. Each platform is benchmarked against
+   its OWN last-14-day blend -- Google and Meta do not convert at the same rate and comparing a new
+   Google campaign to a Meta average would condemn it for being Google. */
+function cmpLaunches(g){
+ const W=O.madsW; if(!W||!W.n)return;
+ const N=W.n, today=N-1, LOOK=Math.min(45,N-1);
+ const fON=af('meta'), fOFF=afo(), fG=af('google');
+ const {gpOn,gpSt}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SM=v=>(v>=0?'+':'−')+M(v);
+ const iso=k=>{const d=new Date(W.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+k);return d.toISOString().slice(0,10);};
+
+ // ---- roll Meta ads up to their campaign ----
+ const mc={};
+ (O.mads||[]).filter(a=>a.d&&a.cid).forEach(a=>{
+  const e=mc[a.cid]||(mc[a.cid]={id:a.cid,n:a.cmp||a.cid,pf:'meta',acct:a.acct,ads:0,
+    sp:new Array(N).fill(0),val:new Array(N).fill(0),pur:new Array(N).fill(0),imp:new Array(N).fill(0),clk:new Array(N).fill(0)});
+  e.ads++;
+  for(let k=0;k<N;k++){e.sp[k]+=a.d.sp[k]||0;
+   e.val[k]+=((a.d.pv[k]||0)*fON)+((a.d.fv[k]||0)*fOFF);
+   e.pur[k]+=(a.d.pu[k]||0)+(a.d.op[k]||0);
+   e.imp[k]+=a.d.im[k]||0;e.clk[k]+=a.d.oc[k]||0;}});
+ // ---- Google campaigns are already campaign-grained ----
+ const gc={};
+ (O.gads||[]).filter(a=>a.d).forEach(a=>{
+  gc[a.id]={id:a.id,n:a.n||a.id,pf:'google',acct:a.cmp||'',ads:null,st:a.st,
+   sp:a.d.sp||[],val:(a.d.pv||[]).map(v=>(v||0)*fG),pur:a.d.pur||[],imp:a.d.imp||[],clk:a.d.clk||[]};});
+
+ const ALL=Object.values(mc).concat(Object.values(gc));
+ // platform benchmark: its own last 14 days, everything it is running
+ const bench={};
+ ['meta','google'].forEach(pf=>{let bs=0,bv=0;
+  ALL.filter(c=>c.pf===pf).forEach(c=>{for(let k=Math.max(0,today-13);k<=today;k++){bs+=c.sp[k]||0;bv+=c.val[k]||0;}});
+  bench[pf]=bs>0?bv/bs:null;});
+
+ const L=[];
+ ALL.forEach(c=>{
+  let f0=-1;for(let k=0;k<N;k++){if((c.sp[k]||0)>0){f0=k;break;}}
+  if(f0<1)return;                       // spending on day 0 => it predates the window, not a launch
+  if(f0<N-LOOK)return;
+  let sp=0,val=0,pur=0,imp=0,clk=0,live=0;
+  for(let k=f0;k<=today;k++){sp+=c.sp[k]||0;val+=c.val[k]||0;pur+=c.pur[k]||0;imp+=c.imp[k]||0;clk+=c.clk[k]||0;if((c.sp[k]||0)>0)live++;}
+  if(sp<500)return;
+  const roas=sp?val/sp:0, gp=val*(c.pf==='meta'?gpOn:gpOn), b=bench[c.pf];
+  L.push({...c,f0,start:iso(f0),days:today-f0+1,live,sp,val,pur,imp,clk,roas,
+          pas:val*gpOn-sp, cpp:pur?sp/pur:null, b});});
+ if(!L.length)return;
+ L.sort((a,b)=>b.sp-a.sp);
+
+ /* Verdict. Purchases gate first -- everything below 10 is TOO EARLY no matter how the ratio
+    looks, because at 4 conversions a single order swings ROAS by half. */
+ const MINP=10;
+ /* The absolute test runs BEFORE the relative one, deliberately. An earlier cut of this ladder
+    called anything under 60% of the platform average a KILL, which flagged a campaign returning
+    8x at +E£46k profit for the chop purely because the account average is 12x. Losing money is a
+    reason to cut; earning less than your best campaign is a reason to cap and move the increment.
+    Those are different instructions and merging them destroys profitable campaigns. */
+ const verd=x=>{
+  if(x.pur<MINP)return {t:'TOO EARLY',c:'#8a93a6',
+    w:'Only '+Math.round(x.pur)+' purchase'+(Math.round(x.pur)===1?'':'s')+' so far. Needs '+(MINP-Math.round(x.pur))+' more before the ratio means anything &mdash; leave it alone.'};
+  if(x.days<4)return {t:'TOO EARLY',c:'#8a93a6',w:'Live '+x.days+' days. Give it a week.'};
+  if(x.pas<0&&x.days>=7)return {t:'CUT &mdash; LOSING MONEY',c:'#a3271a',
+    w:'Gross profit does not cover what it spent: '+SM(x.pas)+' over '+x.days+' days at '+x.roas.toFixed(2)+'&times; against a '+be.toFixed(2)+'&times; breakeven. This one is a real loss.'};
+  if(x.b&&x.roas>=x.b*1.15&&x.pas>0)return {t:'WORKING &mdash; FUND IT',c:'#0f6e56',
+    w:'Returning '+x.roas.toFixed(2)+'&times; against the '+x.pf+' average of '+x.b.toFixed(2)+'&times;, and '+SM(x.pas)+' after ad cost. This is where the next pound goes.'};
+  if(x.b&&x.roas<=x.b*0.6&&x.days>=7)return {t:'PROFITABLE BUT TRAILING',c:'#a35a1a',
+    w:'Makes money ('+SM(x.pas)+' at '+x.roas.toFixed(2)+'&times; over a '+be.toFixed(2)+'&times; breakeven) but returns barely half the '+x.pf+' average of '+x.b.toFixed(2)+'&times;. Cap it where it is and put the next increment somewhere better &mdash; do not switch it off.'};
+  return {t:'HOLD',c:'#475569',
+    w:'Returning '+x.roas.toFixed(2)+'&times; against a '+x.pf+' average of '+(x.b?x.b.toFixed(2):'—')+'&times;, '+SM(x.pas)+' after ad cost. Neither winning nor bleeding &mdash; let it run.'};};
+
+ const PF={meta:['#5a5bf0','Meta'],google:['#12a06e','Google']};
+ const nG=L.filter(x=>x.pf==='google').length, nM=L.filter(x=>x.pf==='meta').length;
+
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let rows='';
+ L.forEach(x=>{const v=verd(x);const pf=PF[x.pf]||['#8a93a6',x.pf];
+  rows+='<tr>'
+   +'<td style="'+TD+';text-align:left"><span style="display:inline-block;padding:1px 6px;border-radius:5px;background:'+pf[0]+';color:#fff;font-size:9px;font-weight:800">'+pf[1]+'</span> '
+     +'<b>'+esc(x.n)+'</b>'+(x.acct?'<span style="color:#8a93a6;font-size:10px"> · '+esc(x.acct)+'</span>':'')
+     +'<div style="font-size:10px;color:#8a93a6">launched '+x.start+' · live '+x.live+' of '+x.days+' days'+(x.ads?' · '+x.ads+' ads':'')+(x.st?' · '+esc(String(x.st).toLowerCase()):'')+'</div></td>'
+   +'<td style="'+TD+'"><b>'+M(x.sp)+'</b></td>'
+   +'<td style="'+TD+'">'+M(x.val)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+x.roas.toFixed(2)+'&times;'
+     +(x.b?'<div style="font-size:10px;color:'+(x.roas>=x.b?'#0f6e56':'#a3271a')+'">'+(x.roas>=x.b?'+':'−')+Math.abs(Math.round((x.roas/x.b-1)*100))+'% vs '+pf[1]+' avg</div>':'')+'</td>'
+   +'<td style="'+TD+'">'+Math.round(x.pur)+'</td>'
+   +'<td style="'+TD+'">'+(x.cpp!=null?M(x.cpp):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(x.pas>=0?'#0f6e56':'#a3271a')+'">'+SM(x.pas)+'</td>'
+   +'<td style="'+TD+';text-align:left"><b style="color:'+v.c+'">'+v.t+'</b>'
+     +'<div style="font-size:10.5px;color:#5b6478;white-space:normal;max-width:330px">'+v.w+'</div></td></tr>';});
+
+ const fund=L.filter(x=>verd(x).t.indexOf('WORKING')===0);
+ const kill=L.filter(x=>verd(x).t.indexOf('CUT')===0);
+ const cap=L.filter(x=>verd(x).t.indexOf('PROFITABLE')===0);
+ const early=L.filter(x=>verd(x).t==='TOO EARLY');
+ let head='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+  +'<div style="flex:1;min-width:170px;padding:10px 12px;border:1px solid #cdeede;border-radius:11px;background:#f0fdf6">'
+   +'<div style="font-size:10px;font-weight:800;color:#0f6e56;text-transform:uppercase">Fund these</div>'
+   +'<div style="font-size:21px;font-weight:800;color:#0f6e56">'+fund.length+'</div>'
+   +'<div style="font-size:11px;color:#3d6b5c">'+(fund.length?fund.map(x=>esc(x.n)).slice(0,2).join(', '):'nothing has cleared the bar yet')+'</div></div>'
+  +'<div style="flex:1;min-width:170px;padding:10px 12px;border:1px solid #fbe0e8;border-radius:11px;background:#fff6f9">'
+   +'<div style="font-size:10px;font-weight:800;color:#a3271a;text-transform:uppercase">Cut &mdash; losing money</div>'
+   +'<div style="font-size:21px;font-weight:800;color:#a3271a">'+kill.length+'</div>'
+   +'<div style="font-size:11px;color:#8a4a3a">'+(kill.length?M(kill.reduce((a,x)=>a+Math.max(0,-x.pas),0))+' of gross profit gone':'every launch is covering its own spend')+'</div></div>'
+  +'<div style="flex:1;min-width:170px;padding:10px 12px;border:1px solid #f2e2c8;border-radius:11px;background:#fff9f0">'
+   +'<div style="font-size:10px;font-weight:800;color:#a35a1a;text-transform:uppercase">Cap, don&rsquo;t kill</div>'
+   +'<div style="font-size:21px;font-weight:800;color:#a35a1a">'+cap.length+'</div>'
+   +'<div style="font-size:11px;color:#8a6a3a">profitable, but well under the platform average</div></div>'
+  +'<div style="flex:1;min-width:170px;padding:10px 12px;border:1px solid #e2e6ef;border-radius:11px;background:#fafbfd">'
+   +'<div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase">Too early to call</div>'
+   +'<div style="font-size:21px;font-weight:800;color:#26313f">'+early.length+'</div>'
+   +'<div style="font-size:11px;color:#64748b">under '+MINP+' purchases &mdash; do not touch them</div></div></div>';
+
+ const note='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11px;color:#5b6478;line-height:1.55">'
+  +'<b>A launch is anything whose first spending day falls inside the last '+LOOK+' days</b>, so a campaign rebuilt during a restructure shows up here as new even if the name is old. '
+  +'Each platform is scored against its OWN last-14-day blend, never against the other &mdash; a new Google campaign compared to a Meta average would be condemned for being Google. '
+  +'Nothing is called a loser under '+MINP+' purchases, however bad the ratio looks; at that count one order moves it by half. '
+  +'<b>Losing money and earning less than your best campaign are kept apart.</b> Only a campaign whose gross profit fails to cover its own spend is marked for cutting; one that makes money but trails the platform average is marked to cap, because switching it off would throw away profit. '
+  +'Profit after ad cost applies your real online margin of '+(gpOn*100).toFixed(1)+'%, so breakeven is '+be.toFixed(2)+'&times;.</div>';
+
+ pnlCard(g,'meta','New campaigns since the restructure &mdash; '+nG+' Google, '+nM+' Meta'
+   +INFO('Every campaign whose first spending day is inside the window, on both platforms, with what it has returned and whether it is safe to judge yet.'),
+  'First spend between '+iso(Math.max(1,N-LOOK))+' and today. Sorted by spend. Verdicts gate on purchase count before ratio, so a young campaign is never killed on noise.',
+  head+'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Value</th>'
+   +'<th style="'+TH+'">ROAS</th><th style="'+TH+'">Purchases</th><th style="'+TH+'">Cost / purchase</th>'
+   +'<th style="'+TH+'">After ad cost</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+rows+'</table></div>'+note);
+}
 function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString();
  const EV=O.bev||[];const W=O.madsW;const CRE=O.cre||{};const SD=O.objD||{};
@@ -8831,6 +8967,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
  document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>BUDGET CALLS</b>: every budget change on both accounts (60d, Meta activity feed), judged on the object&rsquo;s own day-by-day numbers. <b>AD LAUNCHES</b>: a library of every ad that started delivering in the last 3 weeks. Website and store legs are shown separately &mdash; at the attribution window you pick below, each leg scaled by its OWN measured ladder. GP uses your real channel margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store, from Odoo).';
  // attribution selector (same measured ladders as everywhere else)
  const _pctLive=(m=>m?m[1]:null)(/\((\d+)% of live\)/.exec(String(AL[AK]||'')));
+ try{cmpLaunches(g);}catch(e){}
  const attExpl=AK==='default'?'LIVE = exactly what Ads Manager reports under your account setting (7-day click / 1-day view). No scaling.':
   (_pctLive?'&ldquo;'+_pctLive+'% of live&rdquo; means: Meta re-measured the SAME conversions under this stricter view and only '+_pctLive+'% of the value it claims under your live setting survives. So of every E&pound;100 Ads Manager shows, E&pound;'+_pctLive+' is what this view credits to ads. Every number below is scaled by its own leg&rsquo;s measured factor &mdash; online &times;'+fON.toFixed(2)+', store &times;'+fOFF.toFixed(2)+' &mdash; not by one blanket ratio.':
   'This window re-scales both legs by ladders Meta measured on your own conversions: online &times;'+fON.toFixed(2)+', store &times;'+fOFF.toFixed(2)+'.');
@@ -9609,7 +9746,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-232858'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-235024'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
