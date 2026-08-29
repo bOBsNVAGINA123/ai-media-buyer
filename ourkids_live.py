@@ -1380,6 +1380,7 @@ def pull_bosta(months_back=13, fee_sample=150, prev=None):
             b = (nxt - datetime.timedelta(days=1)).isoformat()
             key = "%04d-%02d" % (y, m)
             by, cod, n = {}, 0.0, 0
+            att = {}
             ids = {}
             pg = 1
             while pg <= 80:
@@ -1396,10 +1397,16 @@ def pull_bosta(months_back=13, fee_sample=150, prev=None):
                     by[t] = by.get(t, 0) + 1
                     n += 1
                     cod += float(d.get("cod") or 0)
+                    # How hard the courier tried before sending a parcel back. This is the
+                    # difference between "the customer refused" and "we never really got there",
+                    # and it is in the bulk feed, so it costs nothing to record.
+                    if t == "Return to Origin":
+                        k = d.get("numberOfAttempts")
+                        att[str(k if k is not None else "?")] = att.get(str(k if k is not None else "?"), 0) + 1
                     ids.setdefault(t, [])
                     if len(ids[t]) < fee_sample: ids[t].append(d.get("_id"))
                 pg += 1
-            months[key] = {"n": n, "cod": round(cod), "byType": by,
+            months[key] = {"n": n, "cod": round(cod), "byType": by, "rtoAttempts": att,
                            "ret": sum(by.get(t, 0) for t in BOSTA_RETURN_TYPES),
                            "sends": by.get("Send", 0)}
             log("  bosta %s: %d shipments %s" % (key, n, by))
