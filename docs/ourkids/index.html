@@ -70,7 +70,18 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 #g20 input[type=range]{accent-color:var(--indigo);width:100%;padding:0;background:transparent;border:none}
 #g20 table.bt input{width:118px}
 .rtNote{font-size:10.5px;color:#8a93a6;line-height:1.5;margin-top:8px}
-</style></head><body>
+</style><style>
+/* v9.39 Wide tables scroll horizontally; without a pinned label column the reader loses the row
+   they are on halfway across. Applies only inside a scroll container, so narrow tables are
+   untouched. The header corner needs the higher z-index or the sticky column paints over it. */
+.stickyfirst table td:first-child, .stickyfirst table th:first-child{
+  position:sticky; left:0; z-index:2; background:#fff;
+  box-shadow:1px 0 0 #eef0f5;
+}
+.stickyfirst table tr:nth-child(even) td:first-child{background:#fcfcfe}
+.stickyfirst table th:first-child{z-index:3; background:#fff}
+</style>
+</head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
 <input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
 <div class="wrap hide" id="app">
@@ -1031,15 +1042,82 @@ const CARDFLOW={
  rt:['The verdict']
 };
 function flowSort(t){
- const want=CARDFLOW[t];if(!want)return;
  const host=document.getElementById(t+'C');if(!host)return;
  const grid=host.querySelector('.grid');if(!grid)return;
+ const want=CARDFLOW[t];
  const cards=[].slice.call(grid.children).filter(function(c){return c.classList&&c.classList.contains('card');});
  if(!cards.length)return;
+ if(!want){foldTail(t,grid);return;}
  const titleOf=function(c){const e=c.querySelector('.ct');/* a title can lead with a glyph or punctuation, so compare from the first letter or digit */return e?e.textContent.replace(/\s+/g,' ').replace(/^[^0-9A-Za-z]+/,'').trim():'';};
  for(let i=want.length-1;i>=0;i--){
   const hit=cards.filter(function(c){return titleOf(c).indexOf(want[i])===0;})[0];
   if(hit&&hit.parentNode===grid)grid.insertBefore(hit,grid.firstChild);}
+ foldTail(t,grid);
+}
+
+/* v9.39 FOLD THE TAIL. Overview was rendering 36 cards and 25 charts on the landing screen, which
+   is the opposite of an answer. Nothing is deleted -- the order each tab was designed in already
+   puts the conclusion first, so everything past the first few is detail and belongs behind one
+   click rather than three screens of scrolling.
+   Charts inside a collapsed element measure zero, so every chart is resized when the fold opens;
+   without that they come back as slivers. The gallery tab and the guide are exempt because a
+   gallery IS the point there. The choice is remembered per tab so someone who wants everything
+   open keeps it open. */
+const FOLD_KEEP=6, FOLD_MIN=9, FOLD_SKIP={vz:1,rm:1,iq:1};
+function pinRowLabels(grid){
+ if(!grid)return;
+ /* Driven off the TABLE, not off a particular wrapper markup: wide tables are built in several
+    places with different containers, and matching one container style missed most of them. Any
+    table wide enough to scroll gets its parent turned into a scroll box with a pinned first
+    column, whatever that parent happens to be. */
+ grid.querySelectorAll('table').forEach(function(t){
+  const head=t.querySelector('tr');
+  if(!head||head.children.length<7)return;
+  const w=t.parentElement; if(!w||w===grid)return;
+  if(getComputedStyle(w).overflowX!=='auto'&&getComputedStyle(w).overflowX!=='scroll')w.style.overflowX='auto';
+  w.classList.add('stickyfirst');
+ });
+}
+function foldTail(t,grid){
+ pinRowLabels(grid);
+ /* some cards build their tables after this hook runs, so sweep once more shortly after */
+ setTimeout(function(){try{pinRowLabels(grid);}catch(e){}},400);
+ if(FOLD_SKIP[t]||!grid)return;
+ if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
+ const cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
+ if(cards.length<FOLD_MIN)return;
+ const rest=cards.slice(FOLD_KEEP);
+ if(rest.length<2)return;
+ const open=(()=>{try{return localStorage.getItem('okfold_'+t)==='1';}catch(e){return false;}})();
+ const d=document.createElement('details');
+ d.className='foldwrap'; d.open=open;
+ d.style.cssText='grid-column:1/-1;margin-top:4px';
+ const sum=document.createElement('summary');
+ const nCh=rest.reduce((a,c)=>a+c.querySelectorAll('canvas').length,0);
+ sum.style.cssText='cursor:pointer;list-style:none;padding:9px 13px;border:1px dashed #cfd6e4;border-radius:8px;background:#fbfcfe;font-size:12.5px;font-weight:700;color:#334155;user-select:none';
+ sum.innerHTML='<span style="color:#5a5bf0">&#9662;</span> '+rest.length+' more detail card'+(rest.length>1?'s':'')
+  +(nCh?' and '+nCh+' chart'+(nCh>1?'s':''):'')
+  +' <span style="font-weight:400;color:#8a93a6">&mdash; the answer is above; this is the working behind it</span>';
+ d.appendChild(sum);
+ const inner=document.createElement('div');
+ inner.style.cssText='display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px';
+ rest.forEach(c=>inner.appendChild(c));
+ d.appendChild(inner);
+ grid.appendChild(d);
+ d.addEventListener('toggle',function(){
+  try{localStorage.setItem('okfold_'+t,d.open?'1':'0');}catch(e){}
+  /* A chart laid out while its container is collapsed measures nothing and Chart.js falls back to
+     a 300px default, so it comes back as a sliver in a 700px card. Resizing via the module's own
+     chart registry does NOT fix them -- not every chart on the page is in it. Ask Chart.js for the
+     instance bound to each canvas instead, which works no matter how the chart was created.
+     Two frames: the first lets the browser lay the opened block out, the second resizes against
+     real measurements. */
+  if(d.open)requestAnimationFrame(()=>requestAnimationFrame(()=>{
+   d.querySelectorAll('canvas').forEach(cv=>{
+    try{const inst=(window.Chart&&Chart.getChart)?Chart.getChart(cv):null; if(inst)inst.resize();}catch(e){}
+   });
+  }));
+ });
 }
 /* v9.18 THE COMPARE CONTROL WAS LYING BY OMISSION. It sits in the global header, so it reads as
    global, but only a handful of tabs actually re-render against it -- pick "same period last
@@ -1084,7 +1162,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI();if(t==='why')return rWHY();if(t==='ce')return rCE();if(t==='ic')return rIC();if(t==='ab')return rAB();if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -9086,7 +9164,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-190012';
+const BUILD='20260829-193402';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
