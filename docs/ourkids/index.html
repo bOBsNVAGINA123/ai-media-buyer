@@ -1150,7 +1150,13 @@ function syncMonthly(){const A=_allM();if(!A.length||!ST.s||!ST.e)return;const c
 function markPre(){const last=lastD();document.querySelectorAll('.chip[onclick^="pre("]').forEach(ch2=>{const m=ch2.getAttribute('onclick').match(/pre\('([^']+)'\)/);if(!m)return;const p=m[1];let on=false;
  if(p==='mtd')on=ST.s===last.slice(0,8)+'01'&&ST.e===last;else if(p==='ytd')on=ST.s===last.slice(0,4)+'-01-01'&&ST.e===last;else if(+p>=9999)on=ST.s===(O.fin&&O.fin.start);else on=ST.e===last&&ST.s===addD(last,-(+p-1));
  ch2.style.background=on?'#0f172a':'';ch2.style.color=on?'#fff':'';ch2.style.borderColor=on?'#0f172a':'';});}
-function RDR(){syncMonthly();syncBars();rTab();try{markPre();}catch(e){}}
+/* v9.23 Every control -- date range, attribution, compare -- re-renders the whole tab, and the
+   page threw you back to the top each time. On a tab three thousand pixels long that means
+   hunting for your place after every single change. Tab switches still go to the top, because
+   they call rTab directly rather than RDR. */
+function RDR(){const _y=window.scrollY||window.pageYOffset||0;
+ syncMonthly();syncBars();rTab();try{markPre();}catch(e){}
+ if(_y>40){window.scrollTo(0,_y);requestAnimationFrame(function(){window.scrollTo(0,_y);});}}
 function cmpSel(v){ST.cmp=v;const sh=v!=='custom';['cl0','c0','cl1','c1'].forEach(id=>document.getElementById(id).classList.toggle('hide',sh));RDR();}
 function cmpW(){return cmpWr(ST.s,ST.e);}
 /* The COMPARE control sits in the global header, so it reads as global -- but only a handful of
@@ -2492,6 +2498,56 @@ function actionEngine(g){
 /* The Actions Centre itself. Order is fixed and deliberate: what changed -> how much each factor
    contributed -> where exactly -> what to do. Never the reverse. */
 var R_MASKED=[];
+/* v9.24 PRODUCT MOVERS, READABLE. The old table was five numeric columns and the eye had to
+   reconstruct the ranking from them. A diverging bar does that work: losses run left in red,
+   gains right in green, off a shared scale, so the biggest mover is obvious without reading a
+   single figure. Every row opens on click to show the numbers behind it, so the detail is one
+   tap away instead of permanently in the way. */
+window.PDOPEN=window.PDOPEN||{};
+function pdToggle(k){window.PDOPEN[k]=!window.PDOPEN[k];
+ const el=document.getElementById('pd_'+k);if(el)el.style.display=window.PDOPEN[k]?'block':'none';
+ const ar=document.getElementById('pa_'+k);if(ar)ar.textContent=window.PDOPEN[k]?'▾':'▸';}
+window.pdToggle=pdToggle;
+function prodBars(rows,opt){
+ opt=opt||{};
+ if(!rows||!rows.length)return '<div style="font-size:12px;color:#8a93a6">Nothing moved materially in this window.</div>';
+ const mx=Math.max.apply(null,rows.map(r=>Math.abs(r.d)))||1;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const clean=n=>String(n||'').replace(/^\[[^\]]*\]\s*/,'').replace(/^\[[^\]]*\]\s*/,'');
+ return '<div style="margin-top:6px">'+rows.map((r,i)=>{
+  const k=(opt.key||'p')+i;
+  const w=Math.max(2,Math.abs(r.d)/mx*50);           // 50% each side of the centre line
+  const neg=r.d<0, col=neg?'#e23a63':'#12a06e';
+  const stock=r.st==null?'':(r.st<=3?'<span style="color:#e23a63;font-weight:800">'+r.st+' left</span>'
+    :(r.st<10?'<span style="color:#c9834a;font-weight:700">'+r.st+' left</span>':r.st+' in stock'));
+  const share=opt.pool?Math.abs(r.d/opt.pool*100):null;
+  return '<div style="border-bottom:1px solid #f1f3f8">'
+   +'<div onclick="pdToggle(\''+k+'\')" style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer">'
+     +'<span id="pa_'+k+'" style="width:10px;color:#9aa3b5;font-size:10px">'+(window.PDOPEN[k]?'▾':'▸')+'</span>'
+     +'<div style="width:230px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+clean(r.n)+'</div>'
+     +'<div style="flex:1;position:relative;height:20px">'
+       +'<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#dfe4ee"></div>'
+       +'<div style="position:absolute;top:3px;height:14px;border-radius:4px;background:'+col+';'
+         +(neg?('right:50%;width:'+w.toFixed(1)+'%'):('left:50%;width:'+w.toFixed(1)+'%'))+'"></div>'
+       +'<div style="position:absolute;top:0;height:20px;line-height:20px;font-size:11.5px;font-weight:800;color:'+col+';white-space:nowrap;'
+         +(neg?('right:'+(50+w).toFixed(1)+'%;padding-right:7px'):('left:'+(50+w).toFixed(1)+'%;padding-left:7px'))+'">'
+         +(neg?'−':'+')+M(r.d)+'</div>'
+     +'</div>'
+     +'<div style="width:96px;text-align:right;font-size:11px;color:#5a637a">'+stock+'</div>'
+   +'</div>'
+   +'<div id="pd_'+k+'" style="display:'+(window.PDOPEN[k]?'block':'none')+';padding:2px 2px 10px 22px;font-size:11.5px;color:#5a637a">'
+     +'<table style="border-collapse:collapse"><tr>'
+     +'<td style="padding:2px 14px 2px 0"><b style="color:#0F172A">'+(r.pq||0)+' &rarr; '+(r.q||0)+'</b> units</td>'
+     +'<td style="padding:2px 14px 2px 0">'+M(r.pr||0)+' &rarr; <b style="color:#0F172A">'+M(r.r||0)+'</b></td>'
+     +(share!=null?'<td style="padding:2px 14px 2px 0"><b style="color:#0F172A">'+share.toFixed(1)+'%</b> of everything that '+(neg?'fell':'rose')+'</td>':'')
+     +'</tr><tr>'
+     +'<td colspan="3" style="padding:2px 0">'+(r.vn?'<b>'+r.vn+'</b>':'')+(r.cat?' &middot; '+r.cat:'')+(r.id?' &middot; id '+r.id:'')+'</td>'
+     +'</tr>'
+     +(r.st!=null&&r.q?'<tr><td colspan="3" style="padding:4px 0 0">At the current rate that is about <b style="color:#0F172A">'+Math.round(r.st/Math.max(0.1,r.q/7))+' days</b> of stock left.</td></tr>':'')
+     +'</table>'
+   +'</div></div>';}).join('')+'</div>';
+}
+
 function rActionsCentre(g){
  const R=actionEngine(g); if(!R)return;
  const {C,P,dRev,pct,band,material,sh,cover,s,e,pw,len,M,SGN,PC}=R;
@@ -2657,12 +2713,23 @@ function rActions(g){
    +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Revenue move</th>'
    +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Share of its side</th>'
    +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Stock</th></tr>';
-  prod='<div style="font-size:11.5px;color:#5a637a;margin-bottom:6px">'+OBS+'Comparing '+P.w.s+' &rarr; '+P.w.e+' against '+P.w.ps+' &rarr; '+P.w.pe+'. '
-   +'These are the biggest movers by name, not a category. They account for '+(cov!=null?cov.toFixed(0)+'%':'an unknown share')+' of the total move &mdash; the crawl keeps the top movers only, so the rest is spread thinly across the tail.</div>'
-   +'<div style="font-weight:800;font-size:12px;color:#e23a63;margin:10px 0 2px">LOSING THE MOST</div>'
-   +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+TH+PM.P.down.map(line).join('')+'</table>'
-   +'<div style="font-weight:800;font-size:12px;color:#12a06e;margin:14px 0 2px">GAINING THE MOST</div>'
-   +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+TH+PM.P.up.map(line).join('')+'</table>';
+  /* The picked range and the window this table can answer on are not the same thing, and that
+     gap was buried in a footnote. It is now the first line, in the reader's face, with both
+     dates spelled out -- the product crawl is pre-built at fixed windows and cannot be sliced to
+     an arbitrary range. */
+  const pickedD=Math.max(1,span(ST.s,ST.e));
+  const usedD=Math.max(1,span(P.w.s,P.w.e));
+  const mismatch=(P.w.s!==ST.s||P.w.e!==ST.e);
+  prod=(mismatch?'<div style="background:#fff7ed;border:1px solid #f0e2c0;border-radius:8px;padding:8px 11px;font-size:11.5px;color:#7a5c1e;margin-bottom:9px">'
+      +'<b>You picked '+ST.s+' &rarr; '+ST.e+' ('+pickedD+(pickedD===1?' day':' days')+'). These products are '+P.w.s+' &rarr; '+P.w.e+' ('+usedD+(usedD===1?' day':' days')+').</b> '
+      +'The product-level crawl is pre-built at fixed windows and cannot be cut to an arbitrary range, so it snaps to the nearest one. '
+      +'Everything above this section does follow your exact dates.</div>':'')
+   +'<div style="font-size:11.5px;color:#5a637a;margin-bottom:4px">'+OBS+'Biggest movers by name, against '+P.w.ps+' &rarr; '+P.w.pe+'. '
+   +'They cover '+(P.move?Math.abs(P.covered/P.move*100).toFixed(0)+'%':'an unknown share')+' of the total move; the crawl keeps the top movers, the rest is a long tail. Click any row for its numbers.</div>'
+   +'<div style="font-weight:800;font-size:12px;color:#e23a63;margin:10px 0 0">LOSING THE MOST</div>'
+   +prodBars(PM.P.down,{key:'dn',pool:PM.P.downSum})
+   +'<div style="font-weight:800;font-size:12px;color:#12a06e;margin:14px 0 0">GAINING THE MOST</div>'
+   +prodBars(PM.P.up,{key:'up',pool:PM.P.upSum});
  }
  /* ---------- the actions ---------- */
  const acts=[];
@@ -3676,11 +3743,19 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
 function hbar(g,title,sub,rows,opt){opt=opt||{};if(!rows||!rows.length)return;
  const mx=Math.max.apply(null,rows.map(r=>Math.abs(r.v)))||1;
  let h='<div style="margin-top:8px">'+rows.map(r=>{const w=Math.max(1.5,Math.abs(r.v)/mx*100);
-  return '<div style="display:flex;align-items:center;gap:9px;margin:5px 0" title="'+(r.tip||'').replace(/"/g,'&quot;')+'">'
+  /* The number used to sit in a fixed column at the far right, so on a short bar the eye had to
+     travel the whole width of the card to connect the two. It now rides at the end of the bar:
+     inside it when the bar is long enough to hold it, just past the tip when it is not. */
+  const inside=w>62;
+  return '<div style="display:flex;align-items:center;gap:9px;margin:6px 0" title="'+(r.tip||'').replace(/"/g,'&quot;')+'">'
    +'<div style="width:'+(opt.nw||190)+'px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.n+'</div>'
-   +'<div style="flex:1;background:#f0f2f7;border-radius:6px;height:15px;position:relative"><div style="width:'+w.toFixed(1)+'%;height:100%;border-radius:6px;background:'+r.c+'"></div></div>'
-   +'<div style="width:98px;text-align:right;font-weight:800;font-size:12px">'+r.rl+'</div>'
-   +'<div style="width:66px;text-align:right;font-size:10.5px;font-weight:800;color:#fff"><span style="background:'+r.c+';border-radius:5px;padding:2px 6px">'+r.b+'</span></div></div>';}).join('')+'</div>';
+   +'<div style="flex:1;background:#f4f6fa;border-radius:6px;height:18px;position:relative">'
+     +'<div style="width:'+w.toFixed(1)+'%;height:100%;border-radius:6px;background:'+r.c+'"></div>'
+     +'<div style="position:absolute;top:0;height:18px;line-height:18px;font-size:11.5px;font-weight:800;white-space:nowrap;'
+       +(inside?('right:'+(100-w).toFixed(1)+'%;padding-right:7px;color:#fff')
+               :('left:'+w.toFixed(1)+'%;padding-left:7px;color:#0F172A'))+'">'+r.rl+'</div>'
+   +'</div>'
+   +'<div style="width:60px;text-align:right;font-size:10.5px;font-weight:800;color:#fff"><span style="background:'+r.c+';border-radius:5px;padding:2px 6px">'+r.b+'</span></div></div>';}).join('')+'</div>';
  pnlCard(g,'ins',title,sub,h+(opt.cmt&&opt.cmt.length?'<div class="ins" style="margin-top:8px">'+opt.cmt.map(x=>'<div class="row"><span class="dot" style="background:'+(x[0]||'#5a5bf0')+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>':''));}
 function rverd(r){const a=Math.abs(r);return a>=0.7?'strong':a>=0.4?'moderate':'weak';}
 function trendPts(pts){const xs=pts.map(q=>q.x),ys=pts.map(q=>q.y),n2=xs.length;if(n2<3)return null;
@@ -7050,7 +7125,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-123730';
+const BUILD='20260829-130050';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -7210,6 +7285,8 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
  if(!W){pnlCard(g,'odoo','Why tab','Root-cause data arrives on the next collector sync (v9.7.17). Check back within 3 hours.','');return;}
  const M=v=>'E£ '+Math.round(Math.abs(v)).toLocaleString();const SM=v=>(v>=0?'+':'−')+M(v);const col=v=>v>=0?'#12a06e':'#e23a63';
  const pc=(c,p)=>(p?((c/p-1)*100):null);const fp=v=>v==null?'—':((v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%');
+ const pickD=Math.max(1,span(ST.s,ST.e));
+ const winBanner=(W.s!==ST.s||W.e!==ST.e)?'<div style="background:#fff7ed;border:1px solid #f0e2c0;border-radius:8px;padding:8px 11px;font-size:11.5px;color:#7a5c1e;margin:0 0 9px"><b>You picked '+ST.s+' &rarr; '+ST.e+' ('+pickD+(pickD===1?' day':' days')+'). This page is showing '+W.s+' &rarr; '+W.e+'.</b> The order-line crawl is pre-built at 1, 7 and 28 days and cannot be cut to an arbitrary range, so it snaps to the closest. Pick 1, 7 or 28 days to line them up.</div>':'';
  const chips=['1','7','28'].map(k=>'<span class="chip" style="'+(k===window.WHYW?'background:#0f172a;color:#fff;border-color:#0f172a':'')+'" onclick="window.WHYPIN=1;window.WHYW=\''+k+'\';rWHY()">'+k+' day'+(k==='1'?'':'s')+' vs prior '+k+'</span>').join(' ')+(window.WHYPIN?' <span class="chip" onclick="window.WHYPIN=0;rWHY()">&times; follow page range</span>':'')+'<span style="font-size:10.5px;color:#8a93a6;margin-left:8px">this decomposition is pre-built at 1 / 7 / 28 days, so your '+Math.max(1,span(ST.s,ST.e))+'-day range snaps to the closest one ('+window.WHYW+'d)</span>';
  const C=W.cur,P=W.prv;
  // returns from the daily finance panel (K£), same windows
@@ -7239,7 +7316,14 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
    node(4,'Discounts',SM(C.disc-P.disc)+' <span style="color:#8a93a6">('+(P.rev?(Math.abs(P.disc)/P.rev*100).toFixed(1):'0')+'% → '+(C.rev?(Math.abs(C.disc)/C.rev*100).toFixed(1):'0')+'% of gross)</span>','Shopify discount lines. '+(Math.abs(C.disc)<=Math.abs(P.disc)?'Discounting did NOT drive the move — it went down.':'Discounting increased — part of the price-per-unit drop is deliberate.'))
   +node(4,'Ran out of stock — revenue lost on items now at &le;3 units that sold less',oosLoss?'<span style="color:#e23a63">−'+M(oosLoss)+'</span> <span style="color:#8a93a6">('+Math.round(oosLoss/totAbs*100)+'% of all product moves · '+oos.length+' items)</span>':'none','These are the items to restock first.',oos.length?ptab(oos.slice(0,8)):'')
   +node(4,'Vendors — who gained, who lost',vend.length?'<span style="color:#8a93a6">'+vend.length+' vendors moved</span>':'—','Revenue by supplier; price/unit shows whether a vendor sold cheaper items or fewer of the same.',vtab)
-  +node(4,'Biggest product fallers','','',ptab(losers))+node(4,'Biggest product gainers','','',ptab(gainers)));
+  +node(4,'Biggest product fallers','','',
+    /* was a five-column table; a diverging bar ranks them at a glance and each row opens for
+       the numbers instead of showing all of them at once */
+    prodBars(losers.map(function(x){return Object.assign({},x,{d:(x.r||0)-(x.pr||0)});}),
+             {key:'wl',pool:losers.reduce(function(a,x){return a+((x.r||0)-(x.pr||0));},0)}))
+  +node(4,'Biggest product gainers','','',
+    prodBars(gainers.map(function(x){return Object.assign({},x,{d:(x.r||0)-(x.pr||0)});}),
+             {key:'wg',pool:gainers.reduce(function(a,x){return a+((x.r||0)-(x.pr||0));},0)})));
  // ---- tree ----
  const tree=node(0,'Net revenue — '+W.s+' &rarr; '+W.e+' vs '+W.ps+' &rarr; '+W.pe,M(netP)+' → <b>'+M(netC)+'</b> <span style="color:'+col(netC-netP)+'">'+SM(netC-netP)+' · '+fp(pc(netC,netP))+'</span>','Net = gross order lines − posted credit notes (returns). Shopify channel.',
    node(1,'Gross sales (order lines, excl. shipping)',M(P.rev)+' → <b>'+M(C.rev)+'</b> <span style="color:'+col(C.rev-P.rev)+'">'+SM(C.rev-P.rev)+' · '+fp(pc(C.rev,P.rev))+'</span>','Gross = orders &times; AOV &nbsp;&rarr;&nbsp; '+shareLine(share([['orders',C.ord,P.ord],['AOV',aovC,aovP]])),
@@ -7257,7 +7341,7 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
   +(oosLoss>totAbs*0.1?'<b style="color:#e23a63">Stock-outs explain '+Math.round(oosLoss/totAbs*100)+'% of all product movement ('+oos.length+' items at &le;3 units — restock list below).</b> ':'')
   +(Math.abs(C.disc)<=Math.abs(P.disc)?'Discounting fell, so price moves are mix, not promo. ':'Discounting rose. ')
   +'Returns '+fp(pc(retC,retP))+'. Vendors driving it: '+vmov+'.</div>';
- pnlCard(g,'odoo','The verdict','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div>',verdict);
+ pnlCard(g,'odoo','The verdict','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div>',winBanner+verdict);
  try{whyWaterfall(g,W);}catch(e){}
  pnlCard(g,'odoo','Root-cause tree','Read it top-down: each box is explained by the boxes indented under it. Percentages in grey = share of the parent&rsquo;s move.',tree);
 }
