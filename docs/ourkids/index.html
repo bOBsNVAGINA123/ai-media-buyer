@@ -2927,9 +2927,24 @@ function googleChain(g){
   if(budgetBound.length)body+=L('INFERRED','<b>'+budgetBound.length+' campaign'+(budgetBound.length>1?'s are':' is')+' losing more than a quarter of available impressions to budget AND clearing breakeven</b> &mdash; '
     +budgetBound.slice(0,3).map(r=>{const e=econOf(r.n);return r.n+' ('+(r.bl*100).toFixed(0)+'% capped'+(e?', '+e.iroas.toFixed(2)+'&times; incremental over the '+e.win:'')+')';}).join(', ')
     +'. That is capacity you are choosing not to buy, and it is the cheapest thing on this page to change.');
-  if(cappedBad.length)body+=L('OBSERVED','<b>'+cappedBad.length+' campaign'+(cappedBad.length>1?'s are':' is')+' budget-capped but does NOT pay at current spend</b> &mdash; '
+  if(cappedBad.length){
+   body+=L('OBSERVED','<b>'+cappedBad.length+' campaign'+(cappedBad.length>1?'s are':' is')+' budget-capped but does NOT pay at current spend</b> &mdash; '
     +cappedBad.slice(0,3).map(r=>r.n+' ('+(r.bl*100).toFixed(0)+'% capped, '+econOf(r.n).iroas.toFixed(2)+'&times; over the '+econOf(r.n).win+' against a '+_be.toFixed(2)+'&times; breakeven)').join(', ')
-    +'. The cap is holding back losses, not growth. Fix the economics before lifting it &mdash; raising this budget buys more of something that already does not pay.');
+    +'. On immediate return the cap is holding back losses, not growth.');
+   /* immediate return is not the only thing a campaign can be for. Where Google's own
+      new-versus-returning split says a capped, unprofitable campaign is mostly ACQUIRING, saying
+      flatly "do not lift it" answers the wrong question -- so the tension is put to the reader
+      instead of being resolved by whichever number was computed first. */
+   const NRm=(O.gops||{}).newRet||{};
+   const acq=cappedBad.map(r=>{const d=NRm[r.n]; if(!d)return null;
+     const tot=Object.keys(d).reduce((a,k)=>a+d[k][1],0);
+     const unk=(d.UNKNOWN||[0,0])[1];
+     const nw=((d.NEW||[0,0])[1])+((d.NEW_AND_HIGH_LTV||[0,0])[1]);
+     const kn=tot-unk;
+     return kn>0?{n:r.n, share:nw/kn*100}:null;}).filter(x=>x&&x.share>=60);
+   if(acq.length)body+=L('HYPOTHESIS','<b>'+acq.map(a=>a.n+' is '+a.share.toFixed(0)+'% new customers</b>').join(', ')
+     +' of the value Google can classify &mdash; the highest acquisition rate in the account. That cap is limiting new-customer intake as well as losses. Whether it should be lifted depends on what a first order is worth to you over a year, not on this week&rsquo;s return, and this card cannot settle that. Judge it against the cohort payback in <b>Customers &rarr; LTGP : CAC</b>, not here.');
+  }
   if(rankBound.length)body+=L('HYPOTHESIS','<b>'+rankBound.slice(0,3).map(r=>r.n+' ('+(r.rl*100).toFixed(0)+'% lost to rank)').join(', ')
     +'</b> is being outranked rather than out-budgeted. Auction pressure is a plausible contributor; rivals visible on your terms are '
     +((S.comp&&S.comp.rivals)||[]).slice(0,2).map(r=>'<b>'+r.n+'</b>').join(' and ')+'. This does NOT establish that they cost you a specific sum.');
@@ -3793,8 +3808,118 @@ function clFrict(g){
   body);
 }
 
+/* v9.32 GOOGLE'S OWN CHANGE HISTORY.
+   Inferring a budget move from a step in daily spend is a guess; Google records the exact old and
+   new amount, the person, and the client it came through. Where a recorded change exists it wins,
+   and the inferred one for the same campaign and day is suppressed so the log does not double-count
+   one decision as two. */
+function gadsChanges(g){
+ const G=O.gops; if(!G||!G.changes||!G.changes.length)return;
+ const B=(G.budgetChanges||[]).slice();
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const PC=(o,n)=>(!o)?'—':((n/o-1>=0?'+':'−')+Math.abs((n/o-1)*100).toFixed(0)+'%');
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let body='';
+ if(B.length){
+  body+='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:6px 0 3px;letter-spacing:.3px">BUDGET CHANGES — EXACT, FROM GOOGLE&rsquo;S CHANGE HISTORY</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+   +'<tr><th style="'+TH+';text-align:left">When</th><th style="'+TH+';text-align:left">Campaign</th>'
+   +'<th style="'+TH+'">Daily budget</th><th style="'+TH+'">Change</th><th style="'+TH+';text-align:left">Made through</th></tr>';
+  B.slice(0,14).forEach(c=>{
+   body+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+c.d+'</td>'
+    +'<td style="'+TD+';text-align:left">'+(c.cmp||'—')+'</td>'
+    +'<td style="'+TD+'">'+M(c.old)+' &rarr; <b>'+M(c.new)+'</b></td>'
+    +'<td style="'+TD+';font-weight:800;color:'+(c.new>=c.old?'#12a06e':'#ff8b42')+'">'+PC(c.old,c.new)+'</td>'
+    +'<td style="'+TD+';text-align:left;font-size:11px;color:#5b6478">'+(c.via||'—')+(c.who?'<div style="color:#8a93a6">'+c.who+'</div>':'')+'</td></tr>';});
+  body+='</table></div>';
+ } else body+='<div style="font-size:12px;color:#8a93a6">No budget change recorded in the last 14 days.</div>';
+ /* everything else that changed, grouped -- structural edits explain performance steps that no
+    budget change accounts for */
+ const other={};
+ (G.changes||[]).forEach(c=>{if(c.t==='CAMPAIGN_BUDGET')return;
+  const k=c.t+'|'+(c.cmp||'');(other[k]=other[k]||{t:c.t,cmp:c.cmp,n:0,d:c.d,f:c.f});other[k].n++;});
+ const ol=Object.values(other).sort((a,b)=>b.n-a.n).slice(0,10);
+ if(ol.length){
+  body+='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:14px 0 3px;letter-spacing:.3px">EVERYTHING ELSE THAT CHANGED</div>'
+   +'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">Structural edits do not move spend on the day they happen, so they never appear as a step &mdash; but they are often what a later performance change is actually about.</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+   +'<tr><th style="'+TH+';text-align:left">When</th><th style="'+TH+';text-align:left">What</th><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Edits</th><th style="'+TH+';text-align:left">Fields</th></tr>';
+  ol.forEach(o=>{
+   body+='<tr><td style="'+TD+';text-align:left">'+o.d+'</td>'
+    +'<td style="'+TD+';text-align:left;font-weight:700">'+o.t.replace(/_/g,' ')+'</td>'
+    +'<td style="'+TD+';text-align:left">'+(o.cmp||'—')+'</td>'
+    +'<td style="'+TD+';font-weight:700">'+o.n+'</td>'
+    +'<td style="'+TD+';text-align:left;font-size:10.5px;color:#8a93a6;max-width:300px;overflow:hidden;text-overflow:ellipsis">'+(o.f||'')+'</td></tr>';});
+  body+='</table></div>';
+ }
+ pnlCard(g,'google','What actually changed in Google &mdash; recorded, not inferred'+INFO('Google Ads change history: exact budget amounts before and after, who made the change and through which client, plus every structural edit.'),
+  'Last 14 days, pulled '+(G.pulled||'—')+'. Google caps this history at 30 days. Recorded changes take precedence over anything inferred from a spend step.',
+  body);
+}
+
+/* v9.32 NEW vs RETURNING at Google.
+   This is a CONVERSION-side segment: Google splits the conversions and their value by whether the
+   converter was new to the business. It does NOT split cost, so there is no honest per-segment CAC
+   to show and none is shown. The UNKNOWN bucket is large by nature -- Google cannot classify every
+   converter -- and it is reported as its own share rather than being redistributed across the
+   others, which would silently invent precision. */
+function gadsNewRet(g){
+ const G=O.gops; if(!G||!G.newRet||!Object.keys(G.newRet).length)return;
+ const NR=G.newRet;
+ const tot={};
+ Object.values(NR).forEach(d=>Object.entries(d).forEach(([k,v])=>{
+   const t=tot[k]=tot[k]||[0,0]; t[0]+=v[0]; t[1]+=v[1];}));
+ const tv=Object.values(tot).reduce((a,v)=>a+v[1],0);
+ const tc=Object.values(tot).reduce((a,v)=>a+v[0],0);
+ if(!tv)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const LBL={NEW:'New to the business',RETURNING:'Returning',NEW_AND_HIGH_LTV:'New and high lifetime value',UNKNOWN:'Google could not classify'};
+ const COL={NEW:'#12a06e',NEW_AND_HIGH_LTV:'#1fc3b6',RETURNING:'#3a9bff',UNKNOWN:'#9aa3b5'};
+ const order=['NEW','NEW_AND_HIGH_LTV','RETURNING','UNKNOWN'];
+ const known=order.filter(k=>k!=='UNKNOWN').reduce((a,k)=>a+((tot[k]||[0,0])[1]),0);
+ const newV=((tot.NEW||[0,0])[1])+((tot.NEW_AND_HIGH_LTV||[0,0])[1]);
+ let bar='<div style="display:flex;height:22px;border-radius:5px;overflow:hidden;margin:6px 0 4px">';
+ order.forEach(k=>{const v=(tot[k]||[0,0])[1]; if(!v)return;
+   bar+='<div title="'+(LBL[k]||k)+': '+M(v)+'" style="width:'+(v/tv*100).toFixed(2)+'%;background:'+COL[k]+'"></div>';});
+ bar+='</div>';
+ let leg='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:#334155;margin-bottom:8px">';
+ order.forEach(k=>{const v=(tot[k]||[0,0])[1]; if(!v)return;
+   leg+='<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+COL[k]+';margin-right:5px"></span>'
+     +'<b>'+(LBL[k]||k)+'</b> '+(v/tv*100).toFixed(1)+'% · '+M(v)+'</div>';});
+ leg+='</div>';
+ const head='<div style="font-size:13px;color:#0F172A;margin-bottom:2px">'
+  +'Of the value Google can classify, <b>'+(known?newV/known*100:0).toFixed(0)+'% came from customers new to the business</b>. '
+  +'Across everything including the unclassified, new is '+(newV/tv*100).toFixed(0)+'%.</div>';
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const rows=Object.entries(NR).map(([c,d])=>{
+   const t=order.reduce((a,k)=>a+((d[k]||[0,0])[1]),0);
+   const n=((d.NEW||[0,0])[1])+((d.NEW_AND_HIGH_LTV||[0,0])[1]);
+   const kn=t-((d.UNKNOWN||[0,0])[1]);
+   return {c,t,n,kn,share:kn?n/kn*100:null,unk:t?((d.UNKNOWN||[0,0])[1])/t*100:0};})
+  .filter(r=>r.t>0).sort((a,b)=>b.t-a.t);
+ let tb='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Conversion value</th>'
+  +'<th style="'+TH+'">New share (of classified)</th><th style="'+TH+'">Unclassified</th></tr>';
+ rows.slice(0,14).forEach(r=>{
+  tb+='<tr><td style="'+TD+';text-align:left">'+r.c+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(r.t)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(r.share==null?'#9aa3b5':(r.share>=50?'#12a06e':(r.share>=30?'#334155':'#ff8b42')))+'">'
+   +(r.share==null?'—':r.share.toFixed(0)+'%')+'</td>'
+   +'<td style="'+TD+';color:#8a93a6">'+r.unk.toFixed(0)+'%</td></tr>';});
+ tb+='</table></div>';
+ const notes=[['#7c869c','<b>Google segments the conversions, not the spend.</b> There is no cost breakdown by new versus returning, so a per-segment cost per acquisition cannot be computed from this and is not shown. Anything claiming one would be inventing it.'],
+  ['#9aa3b5','<b>The unclassified share is real, not a gap to be filled.</b> Google cannot identify every converter as new or returning, so the honest denominator is stated twice above &mdash; once across classified value only, once across everything.'],
+  ['#3a9bff','A campaign that looks weak on immediate return but carries a high new-customer share is buying future customers, not this week&rsquo;s revenue. Read it against the Money desk before cutting it &mdash; those two answers are allowed to disagree, and the disagreement is the decision.']];
+ pnlCard(g,'google','New versus returning customers at Google'+INFO('Google Ads new_versus_returning_customers segment over the last 30 days, by campaign, on conversion value.'),
+  'Last 30 days, pulled '+(G.pulled||'—')+'. Conversion value only &mdash; Google does not segment cost this way.',
+  head+bar+leg+tb+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+}
+
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
  document.getElementById('bn30').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>Did the thing you did actually work?</b> Budget moves, launches and pauses are detected from each entity&rsquo;s own daily spend, then scored on the seven days before against the days after &mdash; on incremental value, at your real margin. A rise that bought volume at a worse rate is not growth and is not scored as such.';
+ try{gadsChanges(g);}catch(e){}
  let _ev=[];
  try{_ev=changeLog(g)||[];}catch(e){g.innerHTML='<div style="padding:12px;color:#e23a63">Change log failed: '+e.message+'</div>';}
  try{interventionChart(g,_ev);}catch(e){}
@@ -3810,6 +3935,16 @@ function changeLog(g){
    detectSteps(sp,W.start,a.n,{pf:'meta',ent:a,W,cmp:a.cmp}).forEach(x=>ev.push(x));});
  if(GW)(O.gads||[]).forEach(a=>{const sp=(a.d||{}).sp; if(!sp||!sp.length)return;
    detectSteps(sp,GW.start,a.n,{pf:'google',ent:a,W:GW,cmp:a.cmp||'Google'}).forEach(x=>ev.push(x));});
+ /* a recorded change and an inferred one are the SAME decision seen two ways -- Google tells us
+    the exact budget edit, and the spend step it caused shows up a day either side. Drop the
+    inferred twin so one decision is not logged, and scored, twice. */
+ const rec=((O.gops||{}).budgetChanges)||[];
+ if(rec.length){
+  const near=(a,b)=>Math.abs((new Date(a+'T00:00:00Z')-new Date(b+'T00:00:00Z'))/864e5)<=1;
+  const before=ev.length;
+  ev=ev.filter(x=>!(x.meta&&x.meta.pf==='google'&&rec.some(c=>c.cmp===x.label&&near(c.d.slice(0,10),x.d))));
+  window.__clDeduped=before-ev.length;
+ }
  const manual=abGet(CL_MAN,[]);
  manual.forEach(m=>ev.push({d:m.d,kind:m.kind||'MANUAL',label:m.label,before:null,after:null,manual:true,note:m.note,meta:{pf:m.pf||'meta'}}));
  ev=ev.filter(x=>CLPF==='all'||x.meta.pf===CLPF).filter(x=>CLKIND==='all'||x.kind===CLKIND);
@@ -3891,6 +4026,7 @@ function changeLog(g){
  const notes=[['#e23a63','<b>A budget rise only "worked" if the return survived it.</b> Spending more will almost always buy more revenue; the test applied here is whether incremental ROAS held within 15% of its own pre-change level AND still cleared the '+be.toFixed(2)+'× breakeven. Anything that bought volume at a worse rate reads as DILUTED or FAILED SCALE, not as growth.'],
   ['#3a9bff','<b>Windows are compared per day, not per window.</b> A change three days from the edge of the feed has a three-day after-window, and comparing that total against seven days before would manufacture a collapse.'],
   ['#9aa3b5','<b>A bracketed, greyed profit figure means the change is not proven</b> &mdash; fewer than four days after it, or too few purchases either side. Those rows are excluded from the headline total rather than quietly counted.'],
+  ['#3a9bff','<b>Google budget moves are read from Google&rsquo;s own change history, not inferred.</b> Where a recorded change exists, the inferred spend step within a day of it is dropped so one decision is not counted twice'+(window.__clDeduped?' ('+window.__clDeduped+' suppressed this run)':'')+'. Meta exposes no comparable history, so Meta rows here are all inferred.'],
   ['#7c869c','<b>Detection needs the step to stick.</b> A move must be at least 40% and E£300/day, and must still be near its new level several days later, so a weekend dip or a one-day surge is not logged as a decision.'],
   ['#7c869c','Changes are read from the '+(W.n||60)+'-day ad feed. Anything older has aged out, and edits that did not move daily spend &mdash; a new creative swapped in at the same budget, an audience edit, a landing-page change &mdash; are <b>UNAVAILABLE FROM SOURCE</b> here: log those by hand to have them scored.']];
  pnlCard(g,'ins','What you changed, and whether it worked'+INFO('Sustained steps in each entity’s daily spend are detected as budget moves, launches and pauses, then scored on the seven days before against the days after, on incremental value at your real margin.'),
@@ -8477,7 +8613,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-180133';
+const BUILD='20260829-181732';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -8888,7 +9024,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
    '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Campaign</th><th>Impr share</th><th>LY</th><th>Rank lost</th><th>Rank lost YoY</th><th>Budget lost</th></tr>'+rws+'</table></div>');}
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
- try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
+ try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
