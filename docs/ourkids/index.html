@@ -3092,7 +3092,196 @@ function moneyDesk(g){
 }
 function rMD(){if(TAB!=='md')return;dCh();const g=document.getElementById('g25');g.innerHTML='';
  document.getElementById('bn25').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>One question: where should the money be?</b> Every entity is scored on gross profit left after the ad is paid for &mdash; platform value discounted to its measured incremental rate, then costed at your real gross margin. Nothing is called a loser without enough spend and purchases behind it.';
+ try{prodContrib(g);}catch(e){}
+ try{creativeFatigue(g);}catch(e){}
  try{moneyDesk(g);}catch(e){g.innerHTML='<div style="padding:12px;color:#e23a63">Money desk failed: '+e.message+'</div>';}
+}
+
+/* v9.28 EXACT PRODUCT CONTRIBUTION. "Backpacks are down" is not an instruction; a named product
+   with a number attached is. Every row here is the exact catalogue name and Shopify id.
+   MONTH CHOICE: prodv.mon carries whole-month totals only, so comparing a part-month against a
+   full one would invent a decline out of the calendar. The current month is therefore dropped and
+   the two most recent COMPLETE months are used, with the months printed on the card. */
+function prodContrib(g){
+ const P=O.prodv&&O.prodv.rows; if(!P||!P.length)return;
+ const cur=(O.today||'').slice(0,7);
+ const months={};
+ P.forEach(r=>Object.keys(r.mon||{}).forEach(m=>{months[m]=1;}));
+ const ms=Object.keys(months).sort().filter(m=>m<cur);   // drop the running month
+ if(ms.length<2)return;
+ const m1=ms[ms.length-1], m0=ms[ms.length-2];
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v>=0?'+':'−')+M(v);
+ const PC=(c,p)=>(!p)?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
+ const nm=s=>String(s||'').replace(/^\[(\d+)\]\s*/,'').replace(/^\[(\d+)\]\s*/,'').trim();
+ const idOf=s=>{const m=String(s||'').match(/^\[(\d+)\]/);return m?m[1]:null;};
+ const rows=P.map(r=>{const a=(r.mon||{})[m1]||[0,0], b=(r.mon||{})[m0]||[0,0];
+   return {n:nm(r.n), id:idOf(r.n), vn:r.vn, cat:r.cat, rNow:a[0]||0, rPrev:b[0]||0, gNow:a[1]||0, gPrev:b[1]||0,
+           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0)};})
+  .filter(r=>r.rNow||r.rPrev);
+ if(!rows.length)return;
+ const tR=rows.reduce((a,r)=>a+r.dR,0), tG=rows.reduce((a,r)=>a+r.dG,0);
+ const down=rows.filter(r=>r.dG<0).sort((a,b)=>a.dG-b.dG);
+ const up=rows.filter(r=>r.dG>0).sort((a,b)=>b.dG-a.dG);
+ const lossTot=down.reduce((a,r)=>a+r.dG,0), gainTot=up.reduce((a,r)=>a+r.dG,0);
+ /* margin-quality flag: a product can grow revenue and shrink profit. Worth naming separately,
+    because "advertise more of this" is the wrong call on a product whose margin is collapsing. */
+ const mrg=r=>r.rNow?r.gNow/r.rNow:null;
+ const bleedMargin=rows.filter(r=>r.rNow>40000&&r.rPrev>40000&&mrg(r)!=null&&r.rPrev&&(r.gPrev/r.rPrev)-mrg(r)>0.05)
+   .sort((a,b)=>((b.gPrev/b.rPrev)-(b.gNow/b.rNow))-((a.gPrev/a.rPrev)-(a.gNow/a.rNow))).slice(0,6);
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const tbl=(list,ttl,base,note)=>{
+  if(!list.length)return '';
+  let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
+   +(note?'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">'+note+'</div>':'')
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Product</th><th style="'+TH+'">Gross profit '+m1+'</th><th style="'+TH+'">'+m0+'</th>'
+   +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th></tr>';
+  list.slice(0,12).forEach(r=>{
+   const mg=mrg(r), mgP=r.rPrev?r.gPrev/r.rPrev:null;
+   h+='<tr><td style="'+TD+';text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis"><b>'+r.n+'</b>'
+    +'<div style="font-size:10.5px;color:#8a93a6">'+(r.id?'#'+r.id+' · ':'')+(r.vn||'—')+(r.cat?' · '+r.cat:'')+'</div></td>'
+    +'<td style="'+TD+'">'+M(r.gNow)+'</td><td style="'+TD+';color:#8a93a6">'+M(r.gPrev)+'</td>'
+    +'<td style="'+TD+';font-weight:800;color:'+(r.dG<0?'#e23a63':'#12a06e')+'">'+SG(r.dG)+'</td>'
+    +'<td style="'+TD+';font-weight:700">'+(base?Math.abs(r.dG/base*100).toFixed(0)+'%':'—')+'</td>'
+    +'<td style="'+TD+'">'+M(r.rNow)+' <span style="color:#8a93a6;font-size:10.5px">'+PC(r.rNow,r.rPrev)+'</span></td>'
+    +'<td style="'+TD+';color:'+((mg!=null&&mgP!=null&&mg<mgP-0.03)?'#e23a63':'#334155')+'">'+(mg!=null?(mg*100).toFixed(0)+'%':'—')
+    +' <span style="color:#8a93a6;font-size:10.5px">'+(mgP!=null?'was '+(mgP*100).toFixed(0)+'%':'')+'</span></td></tr>';});
+  return h+'</table></div>';};
+ let body='<div style="display:flex;gap:22px;flex-wrap:wrap;margin:2px 0 8px">'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">GROSS PROFIT MOVE</div>'
+  +'<div style="font-size:19px;font-weight:800;color:'+(tG>=0?'#12a06e':'#e23a63')+'">'+SG(tG)+'</div>'
+  +'<div style="font-size:10.5px;color:#8a93a6">'+m0+' &rarr; '+m1+', '+rows.length+' products</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">LOST BY FALLING PRODUCTS</div>'
+  +'<div style="font-size:19px;font-weight:800;color:#e23a63">'+M(lossTot)+'</div>'
+  +'<div style="font-size:10.5px;color:#8a93a6">'+down.length+' products down</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">WON BY RISING PRODUCTS</div>'
+  +'<div style="font-size:19px;font-weight:800;color:#12a06e">'+M(gainTot)+'</div>'
+  +'<div style="font-size:10.5px;color:#8a93a6">'+up.length+' products up</div></div></div>';
+ body+=tbl(down,'THE EXACT PRODUCTS THAT TOOK THE PROFIT OUT',lossTot,'Ranked by gross profit lost, not revenue &mdash; revenue can hold while the margin goes.');
+ body+=tbl(up,'AND THE ONES THAT PUT IT BACK',gainTot,'These are the products worth more media, subject to the margin column holding.');
+ if(bleedMargin.length){
+  body+='<div style="margin-top:12px;padding:8px 10px;background:#fffaf2;border-left:3px solid #ff8b42;border-radius:6px">'
+   +'<div style="font-size:11.5px;font-weight:800;color:#ff8b42">'+bleedMargin.length+' products are holding revenue while the margin drops</div>'
+   +'<div style="font-size:11.5px;color:#334155;margin-top:3px">'
+   +bleedMargin.map(r=>'<b>'+r.n+'</b> '+((r.gPrev/r.rPrev)*100).toFixed(0)+'% &rarr; '+((r.gNow/r.rNow)*100).toFixed(0)+'%').join(' &middot; ')
+   +'</div><div style="font-size:11px;color:#7c869c;margin-top:4px">Discounting or cost, not demand. Scaling media on these buys revenue at a worse rate than last month.</div></div>';}
+ body+='<div style="margin-top:10px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px;font-size:11.5px;color:#5b6478">'
+  +'<b>Per-variant stock is UNAVAILABLE FROM SOURCE in this sync.</b> Inventory arrives aggregated by vendor ('+Object.keys(O.vinv||{}).length
+  +' vendors), not by product or size, so this card cannot tell you whether a fall is an availability problem. '
+  +'A product down with margin intact and no price move is the pattern that usually means stock &mdash; check the exact SKU in Odoo before blaming the ads.</div>';
+ pnlCard(g,'odoo','Which exact products moved the profit'+INFO('Every product ranked by the gross profit it added or removed between the two most recent complete months, with its share of the total move. Margin is shown beside revenue so growth bought with discount is visible.'),
+  '<b>'+m0+' &rarr; '+m1+'</b>, the two most recent COMPLETE months &mdash; the running month is excluded so a part-month is never compared with a whole one. This card does not follow the date filter.',
+  body);
+}
+
+/* v9.28 CREATIVE FATIGUE, WITH FALSE-FATIGUE DETECTION.
+   Each ad is compared against ITS OWN recent history, not an account average -- a 1.2% CTR is
+   healthy for one format and dying for another, so cross-ad CTR league tables mislead.
+   The signals: frequency, CPM, CTR, hook rate, CPC, cost per purchase, each as the last 14 days
+   against the 14 before.
+   FALSE FATIGUE MATTERS AS MUCH AS THE REAL THING. Real fatigue means the SAME people are seeing
+   it more and responding less: frequency up AND CPM up AND CTR down together. A CTR fall with
+   frequency and CPM flat is the audience changing underneath the ad, and making four new
+   executions will not fix it. The two get different verdicts here on purpose. */
+function fatigueScore(a,W){
+ const d=a.d||{}; const n=(W&&W.n)||60;
+ const half=14; const e=n-1, m=n-half, m0=Math.max(0,n-2*half);
+ const S=(k,i0,i1)=>{let t=0;for(let i=i0;i<=i1;i++)t+=((d[k]||[])[i]||0);return t;};
+ const now={sp:S('sp',m,e), im:S('im',m,e), rch:S('rch',m,e), clk:S('clk',m,e), pu:S('pu',m,e)+S('op',m,e), vv:S('vv',m,e)};
+ const prv={sp:S('sp',m0,m-1), im:S('im',m0,m-1), rch:S('rch',m0,m-1), clk:S('clk',m0,m-1), pu:S('pu',m0,m-1)+S('op',m0,m-1), vv:S('vv',m0,m-1)};
+ if(now.sp<1500||prv.sp<1500||!now.im||!prv.im)return null;   // not enough recent life to judge
+ const R=o=>({frq:o.rch?o.im/o.rch:null, cpm:o.im?o.sp/o.im*1000:null, ctr:o.im?o.clk/o.im:null,
+              hook:o.im?o.vv/o.im:null, cpc:o.clk?o.sp/o.clk:null, cpp:o.pu?o.sp/o.pu:null});
+ const A=R(now), B=R(prv);
+ const dl=(c,p)=>(c==null||p==null||!p)?null:(c/p-1);
+ const sig={frq:dl(A.frq,B.frq), cpm:dl(A.cpm,B.cpm), ctr:dl(A.ctr,B.ctr),
+            hook:dl(A.hook,B.hook), cpc:dl(A.cpc,B.cpc), cpp:dl(A.cpp,B.cpp)};
+ /* each signal contributes 0..100 in its BAD direction, then a weighted mean */
+ const pos=v=>v==null?null:Math.max(0,Math.min(1,v/0.5));    // +50% = full
+ const neg=v=>v==null?null:Math.max(0,Math.min(1,-v/0.5));   // -50% = full
+ /* cost per purchase is deliberately NOT in the fatigue score. It is an outcome, not a sign of
+    attention decay, and folding it in let five calm attention signals outvote a CPP that had
+    tripled -- which produced ads labelled "healthy, leave alone" while their economics collapsed.
+    It is scored at zero weight so it still displays, and it drives its own verdict below. */
+ const parts=[['Frequency',sig.frq,pos(sig.frq),0.24],['CPM',sig.cpm,pos(sig.cpm),0.18],
+              ['CTR',sig.ctr,neg(sig.ctr),0.28],['Hook rate',sig.hook,neg(sig.hook),0.16],
+              ['CPC',sig.cpc,pos(sig.cpc),0.14],['Cost per purchase',sig.cpp,pos(sig.cpp),0]];
+ const live=parts.filter(p=>p[2]!=null);
+ const wsum=live.reduce((a,p)=>a+p[3],0)||1;
+ const score=wsum?Math.round(live.reduce((a,p)=>a+p[2]*p[3],0)/wsum*100):null;
+ /* the discriminator */
+ /* Fatigue has a definition and it is not "some numbers got worse": the SAME people are seeing
+    it MORE and responding LESS. Rising frequency is therefore required. Without it, a falling CTR
+    or hook is the audience or the delivery changing underneath the ad, and new executions are the
+    wrong spend. Costs blowing out is a third, separate thing. */
+ const freqUp=(sig.frq!=null&&sig.frq>0.10), cpmUp=(sig.cpm!=null&&sig.cpm>0.10);
+ const ctrDown=(sig.ctr!=null&&sig.ctr<-0.10), hookDown=(sig.hook!=null&&sig.hook<-0.15);
+ const cppUp=(sig.cpp!=null&&sig.cpp>0.40);
+ let band,cls;
+ if(score==null)cls='INSUFFICIENT DATA',band='#9aa3b5';
+ else if(freqUp&&(ctrDown||hookDown||cpmUp)){
+  if(score>=70)cls='SEVERE FATIGUE',band='#e23a63';
+  else if(score>=50)cls='HIGH FATIGUE',band='#e23a63';
+  else cls='EMERGING FATIGUE',band='#ff8b42';}
+ else if(ctrDown||hookDown)cls='AUDIENCE / DELIVERY CHANGE',band='#3a9bff';
+ else if(cppUp)cls='COSTS UP',band='#ff8b42';
+ else if(score>=50)cls='WATCH',band='#ff8b42';
+ else cls='HEALTHY',band='#12a06e';
+ return {score,cls,band,sig,A,B,now,prv,parts:live};
+}
+function creativeFatigue(g){
+ const ADS=(O.mads||[]).filter(a=>a.d&&a.sp>0);
+ if(!ADS.length)return;
+ const W=O.madsW||{n:60};
+ const scored=ADS.map(a=>({a, f:fatigueScore(a,W)})).filter(x=>x.f);
+ if(!scored.length){pnlCard(g,'meta','Creative fatigue','No ad has enough spend in both halves of the window to judge.','');return;}
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const P=(v,d)=>v==null?'—':((v>=0?'+':'−')+Math.abs(v*100).toFixed(0)+'%');
+ const tired=scored.filter(x=>/FATIGUE/.test(x.f.cls)).sort((a,b)=>b.f.score-a.f.score);
+ const mixed=scored.filter(x=>x.f.cls==='AUDIENCE / DELIVERY CHANGE').sort((a,b)=>b.a.sp-a.a.sp);
+ const costly=scored.filter(x=>x.f.cls==='COSTS UP').sort((a,b)=>(b.f.sig.cpp||0)-(a.f.sig.cpp||0));
+ const fresh=scored.filter(x=>x.f.cls==='HEALTHY'||x.f.cls==='WATCH').sort((a,b)=>b.a.sp-a.a.sp);
+ const tiredSp=tired.reduce((a,x)=>a+x.a.sp,0);
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const sigChips=f=>f.parts.map(p=>{
+   const bad=p[2]>0.25;
+   return '<span style="display:inline-block;font-size:10px;margin:1px 3px 1px 0;padding:1px 5px;border-radius:3px;background:'
+     +(bad?'#ffe9ef':'#eef1f6')+';color:'+(bad?'#c0143c':'#5b6478')+'">'+p[0]+' '+P(p[1])+'</span>';}).join('');
+ const tbl=(list,ttl,note,showScore)=>{
+  if(!list.length)return '<div style="font-size:12px;color:#8a93a6;margin:10px 0">'+ttl+' — none.</div>';
+  let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
+   +(note?'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">'+note+'</div>':'')
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Ad</th><th style="'+TH+'">Spend 14d</th>'
+   +(showScore?'<th style="'+TH+'">Score</th>':'')+'<th style="'+TH+';text-align:left">What moved</th></tr>';
+  list.slice(0,10).forEach(x=>{
+   h+='<tr><td style="'+TD+';text-align:left;max-width:290px;overflow:hidden;text-overflow:ellipsis"><b>'+x.a.n+'</b>'
+    +'<div style="font-size:10.5px;color:#8a93a6">'+(x.a.cmp||'')+'</div></td>'
+    +'<td style="'+TD+';font-weight:700">'+M(x.f.now.sp)+'</td>'
+    +(showScore?'<td style="'+TD+';font-weight:800;color:'+x.f.band+'">'+x.f.score+'</td>':'')
+    +'<td style="'+TD+';text-align:left;white-space:normal">'+sigChips(x.f)+'</td></tr>';});
+  return h+'</table></div>';};
+ let body='<div style="display:flex;gap:22px;flex-wrap:wrap;margin:2px 0 8px">'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">TIRED</div><div style="font-size:19px;font-weight:800;color:#e23a63">'+tired.length+'</div><div style="font-size:10.5px;color:#8a93a6">'+M(tiredSp)+' lifetime spend behind them</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">NOT FATIGUE</div><div style="font-size:19px;font-weight:800;color:#3a9bff">'+mixed.length+'</div><div style="font-size:10.5px;color:#8a93a6">attention fell, frequency did not rise</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">COSTS BLEW OUT</div><div style="font-size:19px;font-weight:800;color:#ff8b42">'+costly.length+'</div><div style="font-size:10.5px;color:#8a93a6">attention fine, cost per purchase up</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">HEALTHY</div><div style="font-size:19px;font-weight:800;color:#12a06e">'+fresh.length+'</div><div style="font-size:10.5px;color:#8a93a6">no deterioration signal</div></div>'
+  +'<div><div style="font-size:10px;font-weight:800;color:#64748B">JUDGED</div><div style="font-size:19px;font-weight:800;color:#0F172A">'+scored.length+' of '+ADS.length+'</div><div style="font-size:10.5px;color:#8a93a6">rest lack spend in both halves</div></div></div>';
+ body+=tbl(tired,'FATIGUED — the same people, seeing it more, responding less','Frequency and CPM rising while CTR and hook fall. Keep the concept, change the execution: new opening, new footage, same angle.',true);
+ body+=tbl(mixed,'NOT FATIGUE — do NOT remake these','CTR or hook fell WITHOUT frequency rising meaningfully. The same people are not being shown it more, so the creative has not worn out — what it is being shown to, or where, has changed. New executions will not fix a targeting, placement or auction shift. Where the cost-per-purchase chip is red, the economics moved too: judge that in the desk below.',false);
+ body+=tbl(costly,'COSTS UP — attention held, the economics did not','Frequency, CTR and hook are steady, so this is not a creative problem and new executions will not fix it. Cost per purchase rose anyway — the offer, the landing page, the audience price or the product mix moved. Judge these on the money in the desk below.',false);
+ body+=tbl(fresh,'HEALTHY — leave alone','No deterioration in attention and no cost blow-out. These are the ones to scale, not to touch.',false);
+ const notes=[['#e23a63','<b>Every ad is judged against its own previous 14 days</b>, never an account average &mdash; a CTR that is fine for one format is fatal for another, so cross-ad league tables produce false verdicts.'],
+  ['#3a9bff','<b>Fatigue and audience change look identical on CTR alone.</b> Real fatigue needs frequency AND CPM rising with it. That test is what separates the two lists above, and it is the difference between commissioning new creative and fixing targeting.'],
+  ['#ff8b42','<b>Cost per purchase is shown but deliberately excluded from the fatigue score.</b> It is an outcome, not a sign of attention decay &mdash; folding it in let five calm attention signals outvote a cost per purchase that had tripled, and produced ads marked "leave alone" while their economics collapsed. It drives its own list instead.'],
+  ['#7c869c','Ads with under E£1,500 in either half are not scored. Thin spend produces confident nonsense, and killing an untested ad is the expensive mistake.'],
+  ['#7c869c','Hook rate is video views over impressions from the ads feed. Three-second and ThruPlay breakdowns are <b>UNAVAILABLE FROM SOURCE</b> in this sync, so hold-rate depth is not scored.']];
+ pnlCard(g,'meta','Which creative is actually tired &mdash; and which only looks it'+INFO('Six signals per ad against its own prior fortnight, weighted into a 0-100 fatigue score, with a separate verdict for ads whose CTR fell without frequency or CPM moving.'),
+  'Last 14 days against the 14 before, per ad, from the '+((W.n)||60)+'-day ad feed starting '+(W.start||'—')+'. Does not follow the date filter.',
+  body+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 
 function rActionsCentre(g){
@@ -7673,7 +7862,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-170611';
+const BUILD='20260829-171514';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
