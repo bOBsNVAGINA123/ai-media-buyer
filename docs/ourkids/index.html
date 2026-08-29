@@ -4207,13 +4207,23 @@ function gAudObs(g){
   .sort((a,b)=>b.cv-a.cv);
  const crm=rows.filter(r=>r.crm);
  /* the recognised slice against the campaigns those lists actually run on */
- let recog=null;
+ let recog=null, recogExact=false;
  if(crm.length){
   let obsV=0, totV=0;
   const camps=new Set();
   crm.forEach(r=>Object.keys(r.cmp).forEach(c=>camps.add(c)));
   crm.forEach(r=>{obsV+=r.cv;});
-  (O.gads||[]).forEach(c=>{if(camps.has(c.n))totV+=c.pv||0;});
+  /* The observed slice is a 30-day pull, so the denominator must be the SAME 30 days. Using the
+     campaign's lifetime total against it understated recognition by roughly half and made a
+     signal-loss problem look worse than it is. Summed from the daily series over 30 days; falls
+     back to the lifetime total only if no daily series exists, and says so when it does. */
+  const GW=O.gadsW; let exact=false;
+  if(GW&&GW.n>=30){
+   exact=true;
+   (O.gads||[]).forEach(c=>{if(!camps.has(c.n))return;
+    const d=c.d||{}; for(let i=Math.max(0,GW.n-30);i<GW.n;i++)totV+=((d.pv||[])[i]||0);});
+  } else {(O.gads||[]).forEach(c=>{if(camps.has(c.n))totV+=c.pv||0;});}
+  recogExact=exact;
   if(totV>0)recog={obsV,totV,pct:obsV/totV*100,camps:camps.size};
  }
  let body='';
@@ -4227,7 +4237,7 @@ function gAudObs(g){
   body+='<div style="border:1px solid #e6e9f0;border-left:3px solid #ff8b42;background:#fffaf2;border-radius:8px;padding:10px 12px;margin:4px 0 10px">'
    +'<div style="font-size:12.5px;font-weight:800;color:#0F172A">Observation is on and working &mdash; but it cannot tell you your customer mix</div>'
    +'<div style="font-size:12.5px;color:#0F172A;margin-top:4px">'
-   +'Your customer list is attached to <b>'+recog.camps+' campaigns</b> in observation mode. Across those campaigns Google recognised <b>'+M(recog.obsV)+'</b> of <b>'+M(recog.totV)+'</b> in conversion value as coming from someone already on the list &mdash; <b>'+recog.pct.toFixed(1)+'%</b>. '
+   +'Your customer list is attached to <b>'+recog.camps+' campaigns</b> in observation mode. Across those campaigns over the same 30 days, Google recognised <b>'+M(recog.obsV)+'</b> of <b>'+M(recog.totV)+'</b> in conversion value as coming from someone already on the list &mdash; <b>'+recog.pct.toFixed(1)+'%</b>'+(recogExact?'':' (denominator is the campaigns&rsquo; full run, not 30 days, so this rate is understated)')+'. '
    +'Read naively that says <b>'+impliedNew.toFixed(0)+'% of your Google value is new customers</b>'
    +(odooNew!=null?', while your own ledger says the business runs at <b>'+odooNew.toFixed(0)+'% new</b>. Both cannot be right.':'.')
    +'</div>'
@@ -9076,7 +9086,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-185709';
+const BUILD='20260829-190012';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
