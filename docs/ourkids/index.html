@@ -1500,6 +1500,7 @@ DCS.gp=o=>{if(!o.gp||!o.gp[1]||!o.net||!o.net[1])return '';const m0=o.gp[1]/o.ne
 DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const parts=dcLog([['revenue',o.net[0],o.net[1]],['spend',o.sp[1],o.sp[0]]]);parts[1].pc=dcPct(o.sp[0],o.sp[1]);
  return dcHtml('Why MER moved '+dcFmt(dcPct(o.net[0]/o.sp[0],o.net[1]/o.sp[1]))+' (Odoo net revenue ÷ spend):',parts,'red on spend means spend went UP.');};
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
+ try{alertBand(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
  /* The control room is whatever page you land on. The diagnosis belongs above the
@@ -3125,11 +3126,19 @@ function mdSignif(ent,W,pf,curRoas){
  const med=srt[Math.floor(srt.length/2)];
  const dev=srt.map(x=>Math.abs(x-med)).sort((a,b)=>a-b);
  const mad=dev[Math.floor(dev.length/2)]*1.4826;
- if(!(mad>0.01))return {n:pts.length,med,mad,z:null,band:'FLAT HISTORY'};
- const z=(curRoas-med)/mad;
- const a=Math.abs(z);
- const band = a>=3?'WELL OUTSIDE NORMAL' : a>=2?'OUTSIDE NORMAL' : a>=1?'EDGE OF NORMAL' : 'WITHIN NORMAL SWING';
- return {n:pts.length,med,mad,z,band};
+ if(!(mad>0.01)||!(med>0))return {n:pts.length,med,mad,diff:null,swing:null,band:'FLAT HISTORY'};
+ /* Everything below is expressed as PERCENTAGE CHANGE, never in deviations or points.
+    diff  = how far this window is from this entity's own normal level, as a % change.
+    swing = how much this entity normally moves week to week, also as a % of its normal.
+    An entity is only unusual when the move is large RELATIVE TO ITS OWN usual swing, which is
+    why a 77% drop on something that routinely swings 90% is not news. */
+ const diff=(curRoas/med-1)*100;
+ const swing=(mad/med)*100;
+ const ratio=swing>0?Math.abs(diff)/swing:null;
+ const band = ratio==null?'FLAT HISTORY'
+   : ratio>=3?'FAR OUTSIDE ITS NORMAL' : ratio>=2?'OUTSIDE ITS NORMAL'
+   : ratio>=1?'AT THE EDGE OF NORMAL' : 'WITHIN ITS NORMAL SWING';
+ return {n:pts.length,med,mad,diff,swing,ratio,band};
 }
 
 function mdScore(r,gpOn,be){
@@ -3189,7 +3198,7 @@ function moneyDesk(g){
     that is both expensive and far outside that entity's own normal is the one worth the morning.
     An entity with too little history to test keeps a neutral 1.0 multiplier so it is neither
     promoted nor buried by the absence of evidence. */
- const zof=r=>(r.sig&&r.sig.z!=null)?Math.min(4,Math.abs(r.sig.z)):null;
+ const zof=r=>(r.sig&&r.sig.ratio!=null)?Math.min(4,r.sig.ratio):null;
  const rank=r=>Math.abs(r.gp)*(1+(zof(r)==null?0.5:Math.min(1.5,zof(r)/2)));
  const cuts=graded.filter(r=>r.v==='CUT').sort((a,b)=>rank(b)-rank(a));
  const trims=graded.filter(r=>r.v==='TRIM').sort((a,b)=>rank(b)-rank(a));
@@ -3224,13 +3233,14 @@ function moneyDesk(g){
   +'</div>';
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
- const SIGC={'WELL OUTSIDE NORMAL':'#e23a63','OUTSIDE NORMAL':'#ff8b42','EDGE OF NORMAL':'#5b6478','WITHIN NORMAL SWING':'#9aa3b5','FLAT HISTORY':'#9aa3b5'};
+ const SIGC={'FAR OUTSIDE ITS NORMAL':'#e23a63','OUTSIDE ITS NORMAL':'#ff8b42','AT THE EDGE OF NORMAL':'#5b6478','WITHIN ITS NORMAL SWING':'#9aa3b5','FLAT HISTORY':'#9aa3b5'};
  const sigCell=r=>{const s2=r.sig;
   if(!s2)return '<span style="color:#b9c0cc" title="fewer than 10 days of its own history to compare against">no history</span>';
-  if(s2.z==null)return '<span style="color:#9aa3b5">'+s2.band.toLowerCase()+'</span>';
-  const dirn=s2.z>=0?'better':'worse';
-  return '<span style="font-weight:700;color:'+SIGC[s2.band]+'" title="'+Math.abs(s2.z).toFixed(1)+' robust deviations '+dirn+' than its own median of '+s2.med.toFixed(2)+'x across '+s2.n+' active days">'
-   +Math.abs(s2.z).toFixed(1)+'&sigma; '+dirn+'</span><div style="font-size:9.5px;color:#8a93a6">'+s2.band.toLowerCase()+'</div>';};
+  if(s2.diff==null)return '<span style="color:#9aa3b5">'+s2.band.toLowerCase()+'</span>';
+  const dirn=s2.diff>=0?'better':'worse';
+  return '<span style="font-weight:700;color:'+SIGC[s2.band]+'" title="Its own normal is '+s2.med.toFixed(2)+'x across '+s2.n+' active days, and it usually moves about '+s2.swing.toFixed(0)+'% either side of that.">'
+   +Math.abs(s2.diff).toFixed(0)+'% '+dirn+' than normal</span>'
+   +'<div style="font-size:9.5px;color:#8a93a6">'+s2.band.toLowerCase()+' &middot; usually moves '+s2.swing.toFixed(0)+'%</div>';};
  const tbl=(list,ttl,note)=>{
   if(!list.length)return '<div style="font-size:12px;color:#8a93a6;margin:8px 0">'+ttl+' — none at this level.</div>';
   let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
@@ -3271,7 +3281,7 @@ function moneyDesk(g){
   body+='<div style="margin-top:12px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px">'
    +'<div style="font-size:11.5px;font-weight:800;color:#5b6478">'+thin.length+(thin.length===1?' entity':' entities')+' held out as INSUFFICIENT DATA ('+M(thinSp)+' spend)</div>'
    +'<div style="font-size:11.5px;color:#7c869c;margin-top:2px">Under '+M(MD_MIN_SP)+' spend or under '+MD_MIN_PUR+' purchases in this window. They are not losers &mdash; they have not been tested. Give them budget or stop them for a reason other than this table.</div></div>';}
- const notes=[['#5a5bf0','<b>Ranked by money AND how unusual it is</b>, not money alone. Each entity is compared with its own daily history &mdash; median and median-absolute-deviation, which a single huge in-store matched day cannot inflate the way a standard deviation would. &sigma; here means robust deviations from that entity&rsquo;s own median, so a 3&sigma; break on a steady earner outranks a bigger swing on something that always swings. It is deliberately not a p-value: daily ad performance is neither independent nor normal, and a precise probability would be false precision.'],
+ const notes=[['#5a5bf0','<b>Ranked by money AND how unusual it is</b>, not money alone. Each entity is compared with its own daily history: <b>how far this window sits from its own normal level</b>, against <b>how much it normally moves anyway</b>. A 77% fall on something that routinely swings 90% is not news; a 40% fall on something that never moves more than 10% is. Both are shown as percentage change, and the comparison uses the middle of the entity&rsquo;s own range so one huge in-store matched day cannot widen it and hide a real break.'],
   ['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. Anything under that is selling at a loss no matter how the platform reports it.'],
   ['#3a9bff','<b>Website and in-store value are discounted differently.</b> Website carries the platform&rsquo;s measured incremental rate; Meta in-store carries '+(((O.attr||{}).metaOff||{}).incr||0).toFixed(3)+', because that number is mostly Meta recognising a shop buyer it had already reached, not sales it created. An ad can look strong on total value and still appear here as a CUT.'],
   ['#7c869c','<b>The swing figure assumes the PUMP list holds its current rate on new money.</b> It will not hold perfectly &mdash; that is what a staged scale test is for. Treat it as the size of the prize, not a forecast.'],
@@ -4011,6 +4021,105 @@ function gadsNewRet(g){
  pnlCard(g,'google','New versus returning customers at Google'+INFO('Google Ads new_versus_returning_customers segment over the last 30 days, by campaign, on conversion value.'),
   'Last 30 days, pulled '+(G.pulled||'—')+'. Conversion value only &mdash; Google does not segment cost this way.',
   head+bar+leg+gNewRetBench(tot,tv,newV,known)+tb+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+}
+
+/* v9.34 THE ALERT BAND. Everything here exists because it was found in the platform UI and not in
+   this tool. The rule is simple: if a number would make you open Google Ads or Ads Manager, it
+   belongs at the top of this page instead.
+   Ordered by money at stake, and every alert names the exact entity, the exact move as a
+   percentage change, and the one thing to do about it. Silence is a valid output -- an empty band
+   means nothing crossed a threshold, not that nothing was checked. */
+function alertBand(g){
+ const A=[];
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const PC=(c,p)=>(p==null||!p||!isFinite(c/p))?null:((c/p-1)*100);
+ const pct=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(0)+'%';
+ const G=O.gops||{};
+ /* ---- 1. capacity you are paying to lose: impression share lost to BUDGET ---- */
+ const IN=G.isNow||{}, IP=G.isPrev||{};
+ Object.keys(IN).forEach(n=>{
+  const a=IN[n], b=IP[n]||{};
+  if(a.bl==null)return;
+  const blNow=a.bl*100, blPrev=(b.bl!=null)?b.bl*100:null;
+  const move=(blPrev!=null&&blPrev>0)?PC(blNow,blPrev):null;
+  if(blNow<40)return;                                  // under 40% is a trim, not an alarm
+  const worse=(move==null||move>0);
+  A.push({sev:blNow>=70?0:1, money:a.sp||0,
+   ttl:n+' is losing '+blNow.toFixed(0)+'% of its available searches to its BUDGET CAP',
+   body:'It spent '+M(a.sp||0)+' this week and still only showed on '+((a.is||0)*100).toFixed(0)+'% of the searches it could have. '
+     +(blPrev!=null?'A week ago it was losing '+blPrev.toFixed(0)+'%, so this is '+(move>=0?'worse by ':'better by ')+Math.abs(move).toFixed(0)+'%. ':'')
+     +'This is not an auction problem and not a creative problem &mdash; you are choosing not to buy this traffic.',
+   act:'Check its return in the Money desk first. If it clears breakeven, raise the cap. If it does not, the cap is the only thing protecting you and the fix is the campaign, not the budget.',
+   tag:'GOOGLE · BUDGET CAP'});
+ });
+ /* ---- 2. losing the auction: impression share lost to RANK, and moving ---- */
+ Object.keys(IN).forEach(n=>{
+  const a=IN[n], b=IP[n]||{};
+  if(a.rl==null||b.rl==null)return;
+  const rlNow=a.rl*100, rlPrev=b.rl*100;
+  const move=PC(rlNow,rlPrev);
+  if(rlNow<25||move==null||move<60)return;             // must be big AND materially worse
+  A.push({sev:1, money:a.sp||0,
+   ttl:n+' is being outranked far more than a week ago',
+   body:'Share lost to rank went from '+rlPrev.toFixed(0)+'% to '+rlNow.toFixed(0)+'%, a '+pct(move)+' change, on '+M(a.sp||0)+' of spend. '
+     +'Rank is bid, quality and relevance together, so this is competitors bidding up, your quality slipping, or both.',
+   act:'Look at the auction rivals and the query mix in the Google chain below before touching bids &mdash; raising a bid into a relevance problem just costs more per click.',
+   tag:'GOOGLE · AUCTION'});
+ });
+ /* ---- 3. money losing money right now, from the desk's own scoring ---- */
+ try{
+  const {rows,gpOn}=mdRows(); const be=gpOn>0?1/gpOn:3.5;
+  const R=mdRoll(rows,'ad').map(r=>Object.assign(r,mdScore(r,gpOn,be)));
+  const cuts=R.filter(r=>!r.thin&&r.v==='CUT');
+  const bleed=cuts.reduce((a,r)=>a+r.gp,0);
+  if(cuts.length&&bleed<-8000){
+   const worst=cuts.slice().sort((a,b)=>a.gp-b.gp)[0];
+   A.push({sev:0, money:Math.abs(bleed),
+    ttl:M(bleed)+' of gross profit is being burned by '+cuts.length+' ad'+(cuts.length>1?'s':'')+' below breakeven',
+    body:'Worst single one is <b>'+worst.n+'</b> at '+M(worst.gp)+' on '+M(worst.sp)+' of spend, returning '+(worst.iroas!=null?worst.iroas.toFixed(2):'—')+'&times; against a '+be.toFixed(2)+'&times; breakeven'
+      +(worst.why?'. '+worst.why:'.'),
+    act:'Open the Money desk. The cut list is ranked by money and by how far outside its own normal each one is, so the top of that list is the morning&rsquo;s work.',
+    tag:'SPEND · BELOW BREAKEVEN'});
+  }
+ }catch(e){}
+ /* ---- 4. the site eating the traffic you bought ---- */
+ try{
+  const C=O.clarity||{}; const B=(C.byBrowser||[]).filter(r=>r&&r.Browser);
+  const num=(r,m,f)=>{const v=r[m+':'+f];return typeof v==='number'?v:0;};
+  const sess=r=>num(r,'Traffic','totalSessionCount')||num(r,'ScriptErrorCount','sessionsCount')||0;
+  const isApp=n=>/App$/i.test(n)||/FacebookApp|InstagramApp|GoogleApp|TikTok/i.test(n);
+  const rows2=B.map(r=>({n:r.Browser,s:sess(r),e:num(r,'ScriptErrorCount','subTotal')})).filter(r=>r.s>=300);
+  const app=rows2.filter(r=>isApp(r.n)), real=rows2.filter(r=>!isApp(r.n));
+  const w=(a)=>{const t=a.reduce((x,r)=>x+r.s,0);return t?a.reduce((x,r)=>x+r.e,0)/t:0;};
+  const ae=w(app), re=w(real), as=app.reduce((a,r)=>a+r.s,0), rs=real.reduce((a,r)=>a+r.s,0);
+  if(ae>0&&re>0&&ae/re>=5&&as>1000){
+   A.push({sev:1, money:0,
+    ttl:'In-app browsers are throwing '+(ae/re).toFixed(0)+'&times; the JavaScript errors of real ones',
+    body:'<b>'+Math.round(as).toLocaleString()+'</b> sessions arrived inside the Facebook, Instagram or TikTok in-app browser and hit '+ae.toFixed(2)+' errors each, against '+re.toFixed(3)+' for the '+Math.round(rs).toLocaleString()+' in Safari or Chrome. '
+      +'That is '+(as/(as+rs)*100).toFixed(0)+'% of measured traffic on the worse experience, and it is the traffic your ads pay for.',
+    act:'Rule this out before blaming creative or targeting for any conversion fall on paid social. The detail is in the site friction card on this tab.',
+    tag:'SITE · TECHNICAL'});
+  }
+ }catch(e){}
+ if(!A.length){
+  pnlCard(g,'ins','Nothing needs you right now'+INFO('The alert band checks budget caps, auction share, spend below breakeven and site errors. It stays silent when nothing crosses a threshold.'),
+   'Budget caps, auction share, below-breakeven spend and site errors were all checked and none crossed its threshold.',
+   '<div style="font-size:12.5px;color:#5b6478;padding:4px 0">This is a real all-clear, not an empty card. If a threshold had been crossed it would be at the top of this page with the exact entity and the exact move.</div>');
+  return;
+ }
+ A.sort((a,b)=>(a.sev-b.sev)||(b.money-a.money));
+ const COL=['#e23a63','#ff8b42'];
+ let body='';
+ A.slice(0,8).forEach(x=>{
+  const c=COL[Math.min(1,x.sev)];
+  body+='<div style="border:1px solid #e6e9f0;border-left:4px solid '+c+';background:'+(x.sev===0?'#fff5f7':'#fffaf2')+';border-radius:8px;padding:11px 13px;margin:8px 0">'
+   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.5px;color:'+c+'">'+x.tag+'</div>'
+   +'<div style="font-size:14.5px;font-weight:800;color:#0F172A;margin:3px 0 4px;line-height:1.35">'+x.ttl+'</div>'
+   +'<div style="font-size:12.5px;color:#334155;line-height:1.55">'+x.body+'</div>'
+   +'<div style="font-size:12.5px;font-weight:700;color:#0F172A;margin-top:7px">&rarr; '+x.act+'</div></div>';});
+ pnlCard(g,'ins','What needs you today'+INFO('Budget caps, auction share, spend below breakeven and site errors, ranked by money at stake. Every alert names the exact entity, the exact move and the one thing to do.'),
+  A.length+' thing'+(A.length>1?'s':'')+' crossed a threshold. Ranked by money at stake &mdash; you should not need to open Google Ads or Ads Manager to find any of these.',
+  body);
 }
 
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
@@ -5713,7 +5822,7 @@ function SIGX(){
      grp:'Revenue movement',tab:'vz',chart:'Revenue by branch',
      t:x.n+' moved '+(dev<0?'WORSE':'BETTER')+' than the estate in '+lm,
      num:pc(x.p)+' against a network '+pc(TP),
-     why:'Every branch fell or rose together this month, so the interesting number is not '+x.n+'&rsquo;s '+pc(x.p)+' &mdash; it is the '+Math.abs(dev).toFixed(0)+' percentage points between that and the network&rsquo;s '+pc(TP)+'. Both percentages divide by each party&rsquo;s OWN '+pm+' revenue: '+x.n+' by its own '+sg(x.a)+', the network by its own '+sg(TA)+'. In cash, '+x.n+' went from '+sg(x.a)+' to '+sg(x.b)+'.',
+     why:'Every branch fell or rose together this month, so the interesting number is not '+x.n+'&rsquo;s '+pc(x.p)+' &mdash; it is that it sits '+(dev>=0?'above':'below')+' the network by '+(TP?Math.abs(x.p/TP-1)*100:0).toFixed(0)+'%, against a network '+pc(TP)+'. Both percentages divide by each party&rsquo;s OWN '+pm+' revenue: '+x.n+' by its own '+sg(x.a)+', the network by its own '+sg(TA)+'. In cash, '+x.n+' went from '+sg(x.a)+' to '+sg(x.b)+'.',
      act:dev<0?'This is the one branch-level read worth acting on this month: it lost ground on top of the network move. Compare its footfall and its stock cover against a branch that held.':'It beat the network in a bad month. Find out what it did before the effect is forgotten.'});});
   }else{
    rows.forEach(x=>{if(Math.abs(x.p)<8)return;
@@ -8709,7 +8818,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-182806';
+const BUILD='20260829-183650';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -9120,6 +9229,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
    '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Campaign</th><th>Impr share</th><th>LY</th><th>Rank lost</th><th>Rank lost YoY</th><th>Budget lost</th></tr>'+rws+'</table></div>');}
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
+ try{alertBand(g);}catch(e){}
  try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
