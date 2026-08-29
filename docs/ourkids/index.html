@@ -2659,6 +2659,300 @@ function adsOffline(g){
   hero+tb+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 
+/* v9.26 PER-PLATFORM DIAGNOSIS TREE.
+   The Actions Centre decomposed Shopify revenue into sessions x CVR x AOV with spend as one
+   blended pool, so a platform could be quietly rotting while the blend looked flat. This walks
+   each platform on its own funnel instead: attributed value = clicks x CVR x AOV, decomposed by
+   the same closed-form Shapley used elsewhere, so the three contributions sum exactly to the
+   actual move and the order they are considered in does not change the answer.
+   Every verdict is judged on INCREMENTAL value against the real breakeven from the ledger, not on
+   the platform's own reported number -- the platforms mark their own homework, and the measured
+   incremental multipliers on this account (Google 0.68, Meta 0.80, TikTok 0.12) are large enough
+   that a "profitable" reported ROAS can be a loss. */
+const PFDEF=[
+ {k:'meta',   n:'META',   at:'meta',  c:'#3a9bff', sp:'mspend', im:'mimp', cl:'mclk', cv:'mpur',  vl:'mecomrev'},
+ {k:'google', n:'GOOGLE', at:'google',c:'#5a5bf0', sp:'gspend', im:'gimp', cl:'gclk', cv:'gconv', vl:'gecomrev'},
+ {k:'tiktok', n:'TIKTOK', at:'tt',    c:'#ff5da2', sp:'tspend', im:'timp', cl:'tclk', cv:'tpur',  vl:'ttValue'}];
+
+function platformTree(g){
+ const A=O.ad; if(!A||!A.n)return;
+ const t0=new Date(A.start+'T00:00:00Z').getTime();
+ const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ const cut=O.partial||null; let s=ST.s,e=ST.e; if(cut&&e>=cut)e=addD(cut,-1);
+ const pw=cmpWr(s,e);
+ const sum=(k,a,b)=>{let t=0;for(let i=Math.max(0,ix(a));i<=Math.min(A.n-1,ix(b));i++)t+=(A[k]||[])[i]||0;return t;};
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v>=0?'+':'−')+M(v);
+ const PC=(c,p)=>(p==null||!p||!isFinite(c/p))?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
+ const CO=(c,p,good)=>{if(p==null||!p||!isFinite(c/p))return '#9aa3b5';const up=c>=p;return (good===false?!up:up)?'#12a06e':'#e23a63';};
+ const {gpOn}=_gpPct();
+ const be=gpOn>0?1/gpOn:3.5;   // breakeven ROAS on the real online gross margin
+ const days=Math.max(1,span(s,e));
+ const rows=[],cards=[];
+ PFDEF.forEach(P=>{
+  const f=(k,a,b)=>sum(P[k],a,b);
+  const cur={sp:f('sp',s,e), cl:f('cl',s,e), cv:f('cv',s,e), vl:f('vl',s,e), im:f('im',s,e)};
+  const prv={sp:f('sp',pw[0],pw[1]), cl:f('cl',pw[0],pw[1]), cv:f('cv',pw[0],pw[1]), vl:f('vl',pw[0],pw[1]), im:f('im',pw[0],pw[1])};
+  if(!cur.sp&&!prv.sp){cards.push({P,dead:true});return;}
+  const rate=o=>({cpc:o.cl?o.sp/o.cl:null, cvr:o.cl?o.cv/o.cl:null, aov:o.cv?o.vl/o.cv:null,
+                  roas:o.sp?o.vl/o.sp:null, cpa:o.cv?o.sp/o.cv:null});
+  const rc=rate(cur),rp=rate(prv);
+  /* value = clicks x CVR x AOV -- the three contributions sum to the actual move in EGP */
+  let sh=null,tie=false;
+  if(prv.cl&&cur.cl&&rp.cvr&&rc.cvr&&rp.aov&&rc.aov){
+   sh=shapley3(prv.cl,rp.cvr,rp.aov, cur.cl,rc.cvr,rc.aov);
+   tie=Math.abs(sh.total-sh.actual)<Math.max(1,Math.abs(sh.actual)*0.005);
+  }
+  const inc=(O.attr&&O.attr[P.at]&&O.attr[P.at].incr)||null;
+  const incRoas=(rc.roas!=null&&inc)?rc.roas*inc:null;
+  cards.push({P,cur,prv,rc,rp,sh,tie,inc,incRoas});
+  rows.push({P,cur,prv,rc,rp,sh,incRoas});
+ });
+ if(!cards.length)return;
+ /* ---- the tree: name the dominant driver, then the action that follows from it ---- */
+ function verdict(c){
+  const {P,cur,prv,rc,rp,sh,incRoas}=c;
+  const spUp=cur.sp>prv.sp, vlDn=cur.vl<prv.vl;
+  const parts=sh?[['clicks',sh.S],['CVR',sh.C],['AOV',sh.A]]:[];
+  const worst=parts.filter(x=>x[1]<0).sort((a,b)=>a[1]-b[1])[0]||null;
+  const best=parts.filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1])[0]||null;
+  let head,act,sev;
+  const belowBE=(incRoas!=null&&incRoas<be);
+  if(!worst){head='Nothing deteriorated'+(best?' — '+best[0]+' carried '+SG(best[1]):'')+'.';
+   act='Hold. Nothing in this funnel is asking to be touched this week.';sev='ok';}
+  else if(worst[0]==='CVR'){
+   head='The traffic got worse, not smaller. '+(spUp?'Spend rose '+PC(cur.sp,prv.sp)+' and clicks rose '+PC(cur.cl,prv.cl)+', but':'Clicks moved '+PC(cur.cl,prv.cl)+' and')
+    +' the click&rarr;buy rate fell '+PC(rc.cvr,rp.cvr)+', costing '+M(worst[1])+' of value.';
+   act=P.k==='google'
+    ? 'Pull the search-term and PMax asset-group report for these days and find what the extra spend bought. Expansion into non-converting queries is the usual cause of this exact shape. Do NOT negative 3M, Smiggle or Glossy Bird terms — those are brands you stock.'
+    : 'Check the placement and audience split for these days. A CVR fall this size with clicks flat or up is usually expansion into cheaper, worse inventory — or a landing page that broke for one browser.';
+   sev=belowBE?'bad':'warn';}
+  else if(worst[0]==='AOV'){
+   head='People still bought — they bought smaller. Basket fell '+PC(rc.aov,rp.aov)+', costing '+M(worst[1])+', '
+    +(best?'partly offset by '+best[0]+' at '+SG(best[1])+'.':'with nothing offsetting it.');
+   act='This is a mix and discount question, not a media one. Check what the ads are pointing at and how deep the promo ran before you touch budgets.';
+   sev='warn';}
+  else{
+   head='Volume came down. Clicks fell '+PC(cur.cl,prv.cl)+', costing '+M(worst[1])+' of value'
+    +(best?', though '+best[0]+' improved '+SG(best[1])+'.':'.');
+   act='Efficiency held; this is a budget or auction-share question. Check whether the budget was capped or the auction got more expensive.';
+   sev='warn';}
+  /* the money verdict is separate from the driver diagnosis: WHAT deteriorated and WHETHER the
+     spend paid for itself are different questions, and stapling one onto the other read as a
+     contradiction ("cut this" + "this is not a media question"). */
+  let pnl=null;
+  if(incRoas!=null){
+   const net=cur.sp*(incRoas*gpOn-1);   // gross profit on incremental value, less the ad cost
+   pnl={net, line:'At the measured incremental rate this spend returned <b>'+incRoas.toFixed(2)+'&times;</b> against a <b>'
+    +be.toFixed(2)+'&times;</b> breakeven, so the '+M(cur.sp)+' spent here '
+    +(net>=0?'cleared <b style="color:#12a06e">'+M(net)+'</b> of gross profit after paying for itself.'
+            :'lost <b style="color:#e23a63">'+M(net)+'</b> after the goods were paid for.')};
+   if(net<0)sev='bad';
+  }
+  return {head,act,sev,worst,best,pnl};
+ }
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let tb='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Platform</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Δ</th>'
+  +'<th style="'+TH+'">Value it claims</th><th style="'+TH+'">Δ</th><th style="'+TH+'">Reported ROAS</th>'
+  +'<th style="'+TH+'">At measured incremental</th><th style="'+TH+'">vs breakeven '+be.toFixed(2)+'×</th></tr>';
+ cards.forEach(c=>{
+  if(c.dead){tb+='<tr><td style="'+TD+';text-align:left;font-weight:800;color:'+c.P.c+'">'+c.P.n+'</td>'
+   +'<td style="'+TD+';color:#9aa3b5" colspan="7">No spend in this window or the one before it.</td></tr>';return;}
+  const okI=c.incRoas!=null;
+  tb+='<tr><td style="'+TD+';text-align:left;font-weight:800;color:'+c.P.c+'">'+c.P.n+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(c.cur.sp)+'</td>'
+   +'<td style="'+TD+';font-weight:700;color:'+CO(c.cur.sp,c.prv.sp,false)+'">'+PC(c.cur.sp,c.prv.sp)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(c.cur.vl)+'</td>'
+   +'<td style="'+TD+';font-weight:700;color:'+CO(c.cur.vl,c.prv.vl)+'">'+PC(c.cur.vl,c.prv.vl)+'</td>'
+   +'<td style="'+TD+'">'+(c.rc.roas!=null?c.rc.roas.toFixed(2)+'×':'—')+' <span style="font-size:10.5px;color:#8a93a6">was '+(c.rp.roas!=null?c.rp.roas.toFixed(2)+'×':'—')+'</span></td>'
+   +'<td style="'+TD+';font-weight:800">'+(okI?c.incRoas.toFixed(2)+'×':'—')+' <span style="font-size:10px;color:#8a93a6">×'+(c.inc?c.inc.toFixed(2):'—')+'</span></td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(okI?(c.incRoas>=be?'#12a06e':'#e23a63'):'#9aa3b5')+'">'
+   +(okI?(c.incRoas>=be?'clears':'BELOW')+' '+(c.incRoas/be).toFixed(2)+'×':'—')+'</td></tr>';});
+ tb+='</table></div>';
+ /* per-platform decomposition + the action */
+ let det='';
+ cards.filter(c=>!c.dead).forEach(c=>{
+  const v=verdict(c);
+  const bg=v.sev==='bad'?'#fff5f7':(v.sev==='ok'?'#f3fbf7':'#fffaf2');
+  const bd=v.sev==='bad'?'#e23a63':(v.sev==='ok'?'#12a06e':'#ff8b42');
+  let bars='';
+  if(c.sh){
+   const P3=[['More/less clicks',c.sh.S],['Click→buy rate',c.sh.C],['Basket size',c.sh.A]];
+   const mx=Math.max(...P3.map(x=>Math.abs(x[1])),1);
+   bars=P3.map(x=>{const w=Math.abs(x[1])/mx*50, neg=x[1]<0;
+    return '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:11.5px">'
+     +'<div style="width:118px;color:#5b6478">'+x[0]+'</div>'
+     +'<div style="flex:1;display:flex;height:13px"><div style="width:50%;display:flex;justify-content:flex-end">'
+     +(neg?'<div style="width:'+w+'%;background:#e23a63;border-radius:2px 0 0 2px"></div>':'')+'</div>'
+     +'<div style="width:50%">'+(!neg?'<div style="width:'+w+'%;background:#12a06e;border-radius:0 2px 2px 0"></div>':'')+'</div></div>'
+     +'<div style="width:98px;text-align:right;font-weight:800;color:'+(neg?'#e23a63':'#12a06e')+'">'+SG(x[1])+'</div></div>';}).join('');
+   bars+='<div style="font-size:10.5px;color:#8a93a6;margin-top:4px">Sums to '+SG(c.sh.total)+', the actual move'+(c.tie?'':' (rounding aside)')+'.</div>';
+  }
+  det+='<div style="border:1px solid #e6e9f0;border-left:3px solid '+bd+';background:'+bg+';border-radius:8px;padding:10px 12px;margin:8px 0">'
+   +'<div style="font-weight:800;color:'+c.P.c+';font-size:12px;letter-spacing:.3px">'+c.P.n
+   +' <span style="color:#5b6478;font-weight:600">· CPC '+(c.rc.cpc!=null?'E£'+c.rc.cpc.toFixed(2):'—')+' ('+PC(c.rc.cpc,c.rp.cpc)+')'
+   +' · CVR '+(c.rc.cvr!=null?(c.rc.cvr*100).toFixed(2)+'%':'—')+' ('+PC(c.rc.cvr,c.rp.cvr)+')'
+   +' · CPA '+(c.rc.cpa!=null?'E£'+Math.round(c.rc.cpa).toLocaleString():'—')+' ('+PC(c.rc.cpa,c.rp.cpa)+')</span></div>'
+   +'<div style="font-size:12.5px;color:#0F172A;margin:5px 0 7px">'+v.head+'</div>'
+   +bars
+   +(v.pnl?'<div style="margin-top:8px;font-size:12px;color:#334155;padding-top:7px;border-top:1px dashed #e2e6ef">'+v.pnl.line+'</div>':'')
+   +'<div style="margin-top:7px;font-size:12.5px;font-weight:700;color:#0F172A">&rarr; '+v.act+'</div></div>';});
+ const notes=[['#e23a63','<b>Judged on incremental, not reported.</b> Breakeven here is '+be.toFixed(2)+'× on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
+  ['#7c869c','<b>Value = clicks × click→buy rate × basket.</b> The three contributions are a Shapley split, so they sum exactly to the actual move and no factor gets credit for being considered first. Spend sits outside that split — it is what the move cost, not part of it.'],
+  ['#7c869c','Each platform is measured on the value <i>it</i> claims, so these do not add up to Shopify revenue and are not meant to. Cross-platform double-counting is the whole reason the ledger view exists.']];
+ pnlCard(g,'ins','Platform diagnosis — what each channel did, and what to do'+INFO('Per-platform funnel decomposition. Attributed value is split into clicks, click-to-buy rate and basket size by closed-form Shapley, then each platform is judged on incremental value against the real breakeven from the ledger.'),
+  'Meta, Google and TikTok each on their own funnel, '+s+' &rarr; '+e+' against '+pw[0]+' &rarr; '+pw[1]+' ('+days+' days).',
+  tb+det+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+}
+
+/* v9.26 GOOGLE DIAGNOSIS CHAIN. Google is not Meta and must not be diagnosed like it: the
+   question is never "is the creative tired", it is demand -> could we capture it -> what did the
+   money actually buy. So this walks four layers and refuses to stop at the first one.
+   Every line is tagged OBSERVED / INFERRED / HYPOTHESIS. Impression share and auction rivals
+   support a competitive READING; they do not license a claim that a competitor cost us N pounds,
+   and nothing here makes one.
+   NOTE ON WINDOW: the search-term and impression-share pulls have their own fixed window from the
+   Google API and do NOT follow the dashboard date filter. That window is printed on the card
+   rather than silently letting the reader assume it matches the range they picked. */
+function googleChain(g){
+ const S=O.searchIntel; if(!S||!S.terms||!S.terms.length)return;
+ const W=S.win||[], w0=W[0]||'?', w1=W[1]||'?';
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v>=0?'+':'−')+M(v);
+ const PC=(c,p)=>(p==null||!p||!isFinite(c/p))?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
+ const T=S.terms.filter(x=>x&&x.t);
+ const tot=T.reduce((a,x)=>({im:a.im+(x.im||0), imL:a.imL+(x.imL||0), ck:a.ck+(x.ck||0), ckL:a.ckL+(x.ckL||0),
+   cn:a.cn+(x.cn||0), cnL:a.cnL+(x.cnL||0), cv:a.cv+(x.cv||0), cvL:a.cvL+(x.cvL||0), sp:a.sp+(x.sp||0)}),
+   {im:0,imL:0,ck:0,ckL:0,cn:0,cnL:0,cv:0,cvL:0,sp:0});
+ const dCv=tot.cv-tot.cvL;
+ const cvrNow=tot.ck?tot.cn/tot.ck:null, cvrPrev=tot.ckL?tot.cnL/tot.ckL:null;
+ const aovNow=tot.cn?tot.cv/tot.cn:null, aovPrev=tot.cnL?tot.cvL/tot.cnL:null;
+ /* LAYER 1 -- demand. Impressions are the closest thing the account has to "how much of this was
+    even available to us"; Search Console is not in this sync, so this is Google-side demand only. */
+ /* a 4% impression dip while clicks and value climb is not a shrinking market -- it is a tighter
+    mix. Demand only counts as falling when the pool moves materially AND the clicks follow it. */
+ const impMove=tot.imL?(tot.im/tot.imL-1):0;
+ const ckMove=tot.ckL?(tot.ck/tot.ckL-1):0;
+ const demandDown = impMove<=-0.10 && ckMove<0;
+ const demandUp = !demandDown;
+ /* LAYER 2 -- capture. bl = share lost to budget, rl = share lost to rank. */
+ const IS=S.is||{};
+ const isRows=Object.entries(IS).map(([n,v])=>({n, is:v.is||0, bl:v.bl||0, rl:v.rl||0}))
+   .sort((a,b)=>(b.bl+b.rl)-(a.bl+a.rl));
+ const budgetBound=isRows.filter(r=>r.bl>=0.25);
+ const rankBound=isRows.filter(r=>r.rl>=0.25);
+ /* LAYER 3 -- query mix. Each term's contribution to the value move, exact terms named. */
+ const qs=T.map(x=>({t:x.t, d:(x.cv||0)-(x.cvL||0), cv:x.cv||0, cvL:x.cvL||0, ck:x.ck||0, ckL:x.ckL||0,
+    cn:x.cn||0, cnL:x.cnL||0, sp:x.sp||0,
+    cvr:(x.ck?x.cn/x.ck:null), cvrL:(x.ckL?x.cnL/x.ckL:null)}));
+ const losers=qs.filter(q=>q.d<0).sort((a,b)=>a.d-b.d).slice(0,8);
+ const winners=qs.filter(q=>q.d>0).sort((a,b)=>b.d-a.d).slice(0,5);
+ const lossTot=qs.filter(q=>q.d<0).reduce((a,q)=>a+q.d,0);
+ /* spend with nothing to show for it: real cost, zero conversions, this window */
+ /* non-converting spend here is a long tail, not a few big offenders: median term spend is around
+    E£80, so a high per-term floor finds nothing and hides the aggregate. Report the whole tail and
+    name only the terms big enough to be worth an individual decision. */
+ const wasteAll=qs.filter(q=>q.cn<0.5&&q.sp>0);
+ const wasteSpAll=wasteAll.reduce((a,q)=>a+q.sp,0);
+ const waste=wasteAll.slice().sort((a,b)=>b.sp-a.sp).slice(0,8).filter(q=>q.sp>=100);
+ const wasteSp=waste.reduce((a,q)=>a+q.sp,0);
+ /* LAYER 4 -- verdict */
+ const clicksUp=tot.ck>=tot.ckL, cvrDown=(cvrNow!=null&&cvrPrev!=null&&cvrNow<cvrPrev);
+ let cls,why;
+ if(dCv>=0){cls='NO MATERIAL PROBLEM';why='Google value is up over this window; the layers below are for where it came from, not a fault hunt.';}
+ else if(demandDown){cls='DEMAND DECLINE';why='Impressions fell as well, so a shrinking pool is part of this and bids alone will not fix it.';}
+ else if(clicksUp&&cvrDown){cls='QUERY MIX / TRAFFIC QUALITY DETERIORATION';why='Impressions and clicks both rose while the click&rarr;conversion rate fell. The money bought more traffic of a worse kind.';}
+ else if(!clicksUp&&demandUp){cls='CLICK CAPTURE / DELIVERY PROBLEM';why='The impressions were there and we took fewer of them.';}
+ else {cls='CONVERSION OR BASKET PROBLEM';why='Traffic held its shape; the deterioration is after the click.';}
+ const conf=(Math.abs(dCv)>20000&&T.length>=50)?'MODERATE — enough query volume to rank causes, not enough to prove them'
+   :(T.length>=20?'DIRECTIONAL — thin query coverage':'INSUFFICIENT DATA');
+ const TAG=(k)=>{const c={OBSERVED:'#12a06e',INFERRED:'#3a9bff',HYPOTHESIS:'#ff8b42'}[k];
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;color:#fff;background:'+c+';padding:1px 5px;border-radius:3px;vertical-align:2px;margin-right:6px">'+k+'</span>';};
+ const L=(k,txt)=>'<div style="margin:5px 0;font-size:12.5px;color:#0F172A;line-height:1.55">'+TAG(k)+txt+'</div>';
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:5px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ /* ---- layer 1+2 block ---- */
+ let body='<div style="border:1px solid #e6e9f0;border-radius:8px;padding:10px 12px;margin:6px 0;background:#fbfcfe">'
+  +'<div style="font-size:11px;font-weight:800;color:#5a5bf0;letter-spacing:.4px">LAYER 1 &mdash; WAS THE DEMAND THERE?</div>'
+  +L('OBSERVED','Impressions '+Math.round(tot.im).toLocaleString()+' vs '+Math.round(tot.imL).toLocaleString()+' ('+PC(tot.im,tot.imL)+'), clicks '
+    +Math.round(tot.ck).toLocaleString()+' vs '+Math.round(tot.ckL).toLocaleString()+' ('+PC(tot.ck,tot.ckL)+'), value '+M(tot.cv)+' vs '+M(tot.cvL)+' ('+PC(tot.cv,tot.cvL)+').')
+  +L('INFERRED', demandDown
+    ? 'Impressions fell '+Math.abs(impMove*100).toFixed(0)+'% and clicks fell with them, so a smaller pool is part of this and bids alone will not fix it.'
+    : (impMove<0
+       ? 'Impressions are down '+Math.abs(impMove*100).toFixed(0)+'% but clicks are '+(ckMove>=0?'up '+(ckMove*100).toFixed(0)+'%':'down only '+Math.abs(ckMove*100).toFixed(0)+'%')
+         +' &mdash; fewer impressions converting into more clicks is a tighter mix, not a shrinking market. This is not a demand story.'
+       : 'The pool did not shrink &mdash; impressions were flat or up, so a demand story does not explain this.'))
+  +'<div style="font-size:10.5px;color:#8a93a6;margin-top:4px">Search Console is not in this sync, so this is Google-side demand only &mdash; broader organic demand is <b>UNAVAILABLE FROM SOURCE</b>.</div>'
+  +'</div>';
+ body+='<div style="border:1px solid #e6e9f0;border-radius:8px;padding:10px 12px;margin:6px 0;background:#fbfcfe">'
+  +'<div style="font-size:11px;font-weight:800;color:#5a5bf0;letter-spacing:.4px">LAYER 2 &mdash; DID WE CAPTURE IT?</div>';
+ if(isRows.length){
+  body+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">'
+   +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Impression share</th><th style="'+TH+'">Lost to budget</th><th style="'+TH+'">Lost to rank</th><th style="'+TH+'">Reading</th></tr>';
+  isRows.slice(0,8).forEach(r=>{
+   const rd=r.bl>=0.25?'budget-capped':(r.rl>=0.25?'outranked':'holding');
+   const col=r.bl>=0.25?'#ff8b42':(r.rl>=0.25?'#e23a63':'#12a06e');
+   body+='<tr><td style="'+TD+';text-align:left">'+r.n+'</td>'
+    +'<td style="'+TD+';font-weight:700">'+(r.is*100).toFixed(0)+'%</td>'
+    +'<td style="'+TD+';color:'+(r.bl>=0.25?'#ff8b42':'#5b6478')+';font-weight:'+(r.bl>=0.25?'800':'400')+'">'+(r.bl*100).toFixed(0)+'%</td>'
+    +'<td style="'+TD+';color:'+(r.rl>=0.25?'#e23a63':'#5b6478')+';font-weight:'+(r.rl>=0.25?'800':'400')+'">'+(r.rl*100).toFixed(0)+'%</td>'
+    +'<td style="'+TD+';font-weight:700;color:'+col+'">'+rd+'</td></tr>';});
+  body+='</table></div>';
+  if(budgetBound.length)body+=L('INFERRED','<b>'+budgetBound.length+' campaign'+(budgetBound.length>1?'s are':' is')+' losing more than a quarter of available impressions to budget</b> &mdash; '
+    +budgetBound.slice(0,3).map(r=>r.n+' ('+(r.bl*100).toFixed(0)+'%)').join(', ')+'. That is capacity you are choosing not to buy, and it is the cheapest thing on this page to change.');
+  if(rankBound.length)body+=L('HYPOTHESIS','<b>'+rankBound.slice(0,3).map(r=>r.n+' ('+(r.rl*100).toFixed(0)+'% lost to rank)').join(', ')
+    +'</b> is being outranked rather than out-budgeted. Auction pressure is a plausible contributor; rivals visible on your terms are '
+    +((S.comp&&S.comp.rivals)||[]).slice(0,2).map(r=>'<b>'+r.n+'</b>').join(' and ')+'. This does NOT establish that they cost you a specific sum.');
+ } else body+='<div style="font-size:12px;color:#8a93a6">Impression share is <b>UNAVAILABLE FROM SOURCE</b> for this window.</div>';
+ body+='</div>';
+ /* ---- layer 3: exact queries ---- */
+ body+='<div style="border:1px solid #e6e9f0;border-radius:8px;padding:10px 12px;margin:6px 0;background:#fbfcfe">'
+  +'<div style="font-size:11px;font-weight:800;color:#5a5bf0;letter-spacing:.4px">LAYER 3 &mdash; WHAT DID THE MONEY ACTUALLY BUY?</div>'
+  +L('OBSERVED','Across '+T.length+' search terms, value moved '+SG(dCv)+'. '
+    +(dCv>=0?'That is a net figure: '+M(lossTot)+' of ground was still lost underneath it, and those terms are named below.'
+            :'The terms that lost ground account for '+M(lossTot)+' of it.'));
+ const qTable=(rows,ttl,pos)=>{
+  if(!rows.length)return '';
+  let h='<div style="font-size:10.5px;font-weight:800;color:#64748B;margin:8px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+   +'<tr><th style="'+TH+';text-align:left">Search term</th><th style="'+TH+'">Value now</th><th style="'+TH+'">Value before</th><th style="'+TH+'">Change</th><th style="'+TH+'">Share of the '+(pos?'gain':'loss')+'</th><th style="'+TH+'">Clicks</th><th style="'+TH+'">Conv. rate</th></tr>';
+  rows.forEach(q=>{
+   const base=pos?qs.filter(x=>x.d>0).reduce((a,x)=>a+x.d,0):lossTot;
+   h+='<tr><td style="'+TD+';text-align:left;font-weight:700;direction:auto">'+q.t+'</td>'
+    +'<td style="'+TD+'">'+M(q.cv)+'</td><td style="'+TD+';color:#8a93a6">'+M(q.cvL)+'</td>'
+    +'<td style="'+TD+';font-weight:800;color:'+(q.d<0?'#e23a63':'#12a06e')+'">'+SG(q.d)+'</td>'
+    +'<td style="'+TD+';font-weight:700">'+(base?Math.abs(q.d/base*100).toFixed(0)+'%':'—')+'</td>'
+    +'<td style="'+TD+'">'+Math.round(q.ck).toLocaleString()+' <span style="color:#8a93a6;font-size:10.5px">'+PC(q.ck,q.ckL)+'</span></td>'
+    +'<td style="'+TD+'">'+(q.cvr!=null?(q.cvr*100).toFixed(1)+'%':'—')+' <span style="color:#8a93a6;font-size:10.5px">'+PC(q.cvr,q.cvrL)+'</span></td></tr>';});
+  return h+'</table></div>';};
+ body+=qTable(losers,'THE EXACT TERMS THAT LOST THE MONEY',false);
+ body+=qTable(winners,'AND THE ONES THAT GAINED',true);
+ if(wasteAll.length)body+='<div style="margin-top:9px;padding:8px 10px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:6px">'
+   +'<div style="font-size:11.5px;font-weight:800;color:#e23a63">'+M(wasteSpAll)+' spent across '+wasteAll.length+' terms that converted essentially nothing this window</div>'
+   +'<div style="font-size:11.5px;color:#5b6478;margin-top:2px">A long tail, not a handful &mdash; the median term here spends under E&pound;100, so this is cleared by pattern and match type, not one negative at a time.'+(waste.length?' The '+waste.length+' worth an individual look ('+M(wasteSp)+' of it):':'')+'</div>'
+   +(waste.length?'<div style="font-size:12px;color:#334155;margin-top:3px;direction:auto">'+waste.map(q=>q.t+' ('+M(q.sp)+')').join(' · ')+'</div>':'')
+   +'<div style="font-size:11px;color:#7c869c;margin-top:4px">Check each against the catalogue before negativing. <b>3M, Smiggle and Glossy Bird are brands you stock</b> &mdash; their terms are not waste even when a single window looks thin.</div></div>';
+ body+='</div>';
+ /* ---- verdict ---- */
+ const bd=dCv<0?'#e23a63':'#12a06e';
+ body+='<div style="border:1px solid #e6e9f0;border-left:3px solid '+bd+';border-radius:8px;padding:11px 13px;margin:8px 0;background:'+(dCv<0?'#fff5f7':'#f3fbf7')+'">'
+  +'<div style="font-size:11px;font-weight:800;color:#64748B;letter-spacing:.4px">VERDICT</div>'
+  +'<div style="font-size:15px;font-weight:800;color:'+bd+';margin:3px 0 4px">'+cls+'</div>'
+  +'<div style="font-size:12.5px;color:#0F172A;line-height:1.55">'+why+'</div>'
+  +'<div style="font-size:11.5px;color:#5b6478;margin-top:6px"><b>Confidence:</b> '+conf+'</div>'
+  +'<div style="margin-top:8px;font-size:12.5px;font-weight:700;color:#0F172A">&rarr; '
+  +(budgetBound.length?'Raise the cap on '+budgetBound[0].n+' before touching bids &mdash; it is losing '+(budgetBound[0].bl*100).toFixed(0)+'% of its impressions to budget, which is the one loss here you control outright. '
+   :(cls.indexOf('QUERY MIX')===0?'Work the loser list above term by term, not the campaign as a whole. '
+   :'Start from the loser list above rather than the campaign totals. '))
+  +(wasteAll.length?'Then work the '+M(wasteSpAll)+' of non-converting terms by match type and pattern, checking each against the catalogue first.':'')
+  +'</div></div>';
+ pnlCard(g,'google','Why Google did what it did &mdash; demand, capture, then the exact terms'+INFO('Four layers: was the demand there, did we capture it, what did the money buy, and what to do. Every line is labelled OBSERVED, INFERRED or HYPOTHESIS so a reading is never mistaken for a measurement.'),
+  '<b>This card uses Google&rsquo;s own search-term window, '+w0+' &rarr; '+w1+', and does NOT follow the date filter above.</b> Each term is compared with its own prior equivalent period.',
+  body);
+}
+
 function rActionsCentre(g){
  const R=actionEngine(g); if(!R)return;
  const {C,P,dRev,pct,band,material,sh,cover,s,e,pw,len,M,SGN,PC}=R;
@@ -7237,7 +7531,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-163300';
+const BUILD='20260829-165245';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -7648,7 +7942,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
    '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Campaign</th><th>Impr share</th><th>LY</th><th>Rank lost</th><th>Rank lost YoY</th><th>Budget lost</th></tr>'+rws+'</table></div>');}
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
- try{rActions(g);}catch(e){}budgetBoard(g);
+ try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
