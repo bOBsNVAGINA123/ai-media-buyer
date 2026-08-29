@@ -764,16 +764,23 @@ function auCvrBlocks() {
   const M = auRoute();
   if (!M) return '<div class="card full" style="padding:14px 17px;font-size:13px;color:#8a93a6">Landing-page CVR is not in this sync yet — it arrives with the Shopify routing pull.</div>';
   const C = M.C, days = C.days || 14, site = C.keptSess ? 0 : 0;
+  /* This block reads the Shopify routing pull, which the collector fixes at its own window --
+     it does NOT follow the date picker at the top of the page. Saying so beats letting the
+     header imply a range it never applied. */
+  const winNote = 'Fixed ' + days + '-day window from the routing pull &mdash; this block does not follow the date picker.';
   const T = auByType(M), tot = T.reduce((a, b) => a + b.sessions, 0) || 1;
   const site_cvr = T.reduce((a, b) => a + b.orders, 0) / tot;
   const pf = v => (v * 100).toFixed(2) + '%';
-  const pp = v => (v * 100).toFixed(2) + 'pp';
+  /* v9.46: percentage CHANGE, not percentage points. 'PDP CVR 0.31pp' reads as noise; the same
+     move said as '-24%' is a quarter of the conversion rate gone. dCvrP is null when the page
+     had no prior period, and auArrow already renders null as 'new'. */
+  const pp = v => (v * 100).toFixed(0) + '%';
 
   /* 1. CVR by landing-page type, vs the window before */
   let h = auCard('Conversion by where the visit lands',
     'Last ' + days + ' days against the ' + days + ' before it. Site average is ' + pf(site_cvr) +
-    '. A page type below that average is being subsidised by the ones above it.',
-    T.slice(0, 5).map(x => auKpi(x.type, pf(x.cvr), auK(x.sessions) + ' sessions · ' + auArrow(x.dCvr, pp))).join(''),
+    '. A page type below that average is being subsidised by the ones above it. ' + winNote,
+    T.slice(0, 5).map(x => auKpi(x.type, pf(x.cvr), auK(x.sessions) + ' sessions · ' + auArrow(x.dCvrP, pp))).join(''),
     '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
     ['Landing page type', 'Pages', 'Sessions', 'Share', 'Session→cart', 'Cart→checkout', 'Checkout→order', 'CVR', 'vs prev', 'Orders', 'Sessions Δ']
       .map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' +
@@ -781,7 +788,7 @@ function auCvrBlocks() {
       '<td>' + auK(x.sessions) + '</td><td>' + auP(x.sessions / tot * 100) + '</td>' +
       '<td>' + pf(x.atc) + '</td><td>' + pf(x.atc2chk) + '</td><td>' + pf(x.chk2buy) + '</td>' +
       '<td style="font-weight:800;color:' + (x.cvr >= site_cvr ? '#12a06e' : '#e23a63') + '">' + pf(x.cvr) + '</td>' +
-      '<td>' + auArrow(x.dCvr, pp) + '</td><td>' + auK(x.orders) + '</td><td>' + auArrow(x.dSessP, v => (v * 100).toFixed(0) + '%') + '</td></tr>').join('') +
+      '<td>' + auArrow(x.dCvrP, pp) + '</td><td>' + auK(x.orders) + '</td><td>' + auArrow(x.dSessP, v => (v * 100).toFixed(0) + '%') + '</td></tr>').join('') +
     '</tbody></table></div>');
 
   /* 2. collections league table */
@@ -806,7 +813,7 @@ function auCvrBlocks() {
         '<td>' + auArrow(x.dSessP, y => (y * 100).toFixed(0) + '%') + '</td>' +
         '<td>' + pf(x.atc) + '</td><td>' + pf(x.atc2chk) + '</td>' +
         '<td style="font-weight:800;color:' + v[1] + '">' + pf(x.cvr) + '</td>' +
-        '<td>' + auArrow(x.dCvr, pp) + '</td><td>' + x.orders + '</td>' +
+        '<td>' + auArrow(x.dCvrP, pp) + '</td><td>' + x.orders + '</td>' +
         '<td style="color:' + v[1] + ';font-weight:700">' + v[0] + '</td></tr>';
     }).join('') + '</tbody></table></div>');
   return h;
