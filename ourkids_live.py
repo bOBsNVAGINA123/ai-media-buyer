@@ -1653,8 +1653,127 @@ def pull_gads_ops(prev=None):
         e[0] += float(m.get("conversions", 0) or 0)
         e[1] += float(m.get("conversionsValue", 0) or 0)
     out["newRet"] = {c: {k: [round(v[0], 1), round(v[1])] for k, v in d.items()} for c, d in nr.items()}
+
+    # ---- impression share, CURRENT vs PRIOR, per campaign ----
+    # This is the number that was missing. A static snapshot of impression share cannot tell you
+    # that a campaign went from losing half its impressions to budget to losing four fifths -- and
+    # that is exactly the kind of move that silently caps a whole channel. PMax reports these
+    # fields too, so it is queried the same way rather than being left out.
+    def isq(a, b):
+        d = {}
+        for r in q("SELECT campaign.name, campaign.advertising_channel_type, "
+                   "metrics.search_impression_share, metrics.search_budget_lost_impression_share, "
+                   "metrics.search_rank_lost_impression_share, metrics.cost_micros "
+                   "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' AND metrics.cost_micros > 0" % (a, b)):
+            c = (r.get("campaign") or {}); m = r.get("metrics") or {}
+            n = (c.get("name") or "")[:70]
+            if not n: continue
+            g = lambda k: (float(m[k]) if m.get(k) is not None else None)
+            d[n] = {"is": g("searchImpressionShare"), "bl": g("searchBudgetLostImpressionShare"),
+                    "rl": g("searchRankLostImpressionShare"),
+                    "sp": round(float(m.get("costMicros") or 0) / 1e6),
+                    "t": c.get("advertisingChannelType", "")}
+        return d
+    e1 = END; s1 = END - datetime.timedelta(days=6)
+    e0 = s1 - datetime.timedelta(days=1); s0 = e0 - datetime.timedelta(days=6)
+    out["isNow"] = isq(s1.isoformat(), e1.isoformat())
+    out["isPrev"] = isq(s0.isoformat(), e0.isoformat())
+    out["isWin"] = [s1.isoformat(), e1.isoformat(), s0.isoformat(), e0.isoformat()]
+    log("gads ops :: impression share %d campaigns now, %d prior" % (len(out["isNow"]), len(out["isPrev"])))
+
     log("gads ops ok: %d changes (%d budget), %d campaigns with new/returning"
         % (len(chg), len(out["budgetChanges"]), len(out["newRet"])))
+    return out
+
+
+def pull_order_truth(days=30, prev=None):
+    """WHO placed each order, and WHERE it came from -- from Shopify's own checkout.
+
+    This exists because Google can only label a conversion new-or-returning when it can identify
+    the customer, and it cannot for a large share (modelled conversions, consent loss, no customer
+    data attached). Shopify has no such problem: the person placed the order in its checkout, so
+    customerOrderIndex is populated on EVERY order -- 1 means first ever, above 1 means returning.
+    Pairing that with the visit's utm parameters gives a per-order channel AND new/returning split
+    that needs no modelling and no inference.
+
+    utm medium 'cpc' with source 'google' is Google PAID specifically, which the referrer-based
+    breakdown cannot separate from organic Google. The campaign field carries the Google Ads
+    campaign ID, so these rows join straight onto the campaign tables.
+    """
+    store = os.environ.get("SHOPIFY_STORE", "").strip()
+    tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
+    if not (store and tok): return (prev or {}).get("otruth") or {}
+    host = store if ".myshopify.com" in store else store + ".myshopify.com"
+    ver = os.environ.get("SHOPIFY_API_VERSION", "").strip() or "2025-07"
+    since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    q = """query($c:String){ orders(first:250, after:$c, query:"created_at:>=%s", sortKey:CREATED_AT){
+             pageInfo{ hasNextPage endCursor }
+             edges{ node{ createdAt
+               currentTotalPriceSet{ shopMoney{ amount } }
+               customerJourneySummary{ customerOrderIndex daysToConversion
+                 lastVisit{ source utmParameters{ source medium campaign } } } } } } }""" % since
+    cur, pages, rows = None, 0, []
+    try:
+        while pages < 40:
+            d = http_json("https://%s/admin/api/%s/graphql.json" % (host, ver),
+                          {"query": q, "variables": {"c": cur}}, {"X-Shopify-Access-Token": tok})
+            o = (((d or {}).get("data") or {}).get("orders") or {})
+            edges = o.get("edges") or []
+            if not edges: break
+            rows += [e.get("node") or {} for e in edges]
+            pi = o.get("pageInfo") or {}
+            pages += 1
+            if not pi.get("hasNextPage"): break
+            cur = pi.get("endCursor")
+    except Exception as e:
+        log("order truth fail", str(e)[:140]); return (prev or {}).get("otruth") or {}
+    if not rows:
+        log("order truth: no orders returned"); return (prev or {}).get("otruth") or {}
+
+    def bucket(n):
+        j = (n.get("customerJourneySummary") or {})
+        lv = (j.get("lastVisit") or {}) or {}
+        u = (lv.get("utmParameters") or {}) or {}
+        src = (u.get("source") or "").lower()
+        med = (u.get("medium") or "").lower()
+        if src == "google" and med in ("cpc", "ppc", "paid"): return "GOOGLE PAID", u.get("campaign") or ""
+        if src == "google": return "GOOGLE OTHER", ""
+        if src in ("fb", "facebook"): return "META - FACEBOOK", u.get("campaign") or ""
+        if src in ("ig", "instagram"): return "META - INSTAGRAM", u.get("campaign") or ""
+        if src in ("tiktok", "tt"): return "TIKTOK", u.get("campaign") or ""
+        s2 = (lv.get("source") or "").lower()
+        if "google" in s2: return "GOOGLE ORGANIC/UNTAGGED", ""
+        if "facebook" in s2 or "instagram" in s2: return "META UNTAGGED", ""
+        if s2 == "direct" or not s2: return "DIRECT / NONE", ""
+        return "OTHER", ""
+
+    ch, camp, unlab = {}, {}, 0
+    for n in rows:
+        j = (n.get("customerJourneySummary") or {})
+        idx = j.get("customerOrderIndex")
+        if idx is None:
+            unlab += 1
+            continue
+        amt = 0.0
+        try: amt = float((((n.get("currentTotalPriceSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
+        except Exception: pass
+        isnew = (idx == 1)
+        k, cid = bucket(n)
+        e = ch.setdefault(k, {"n": 0, "nv": 0.0, "r": 0, "rv": 0.0})
+        if isnew: e["n"] += 1; e["nv"] += amt
+        else: e["r"] += 1; e["rv"] += amt
+        if k == "GOOGLE PAID" and cid:
+            c = camp.setdefault(cid, {"n": 0, "nv": 0.0, "r": 0, "rv": 0.0})
+            if isnew: c["n"] += 1; c["nv"] += amt
+            else: c["r"] += 1; c["rv"] += amt
+    for d in (ch, camp):
+        for v in d.values():
+            v["nv"] = round(v["nv"]); v["rv"] = round(v["rv"])
+    out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
+           "since": since, "orders": len(rows), "unlabelled": unlab,
+           "byChannel": ch, "googlePaidByCampaign": camp}
+    log("order truth ok: %d orders, %d channels, %d google-paid campaigns, %d without an order index"
+        % (len(rows), len(ch), len(camp), unlab))
     return out
 
 
@@ -4523,6 +4642,7 @@ def build():
     # first time; otherwise the last two months are refreshed and merged over what is stored.
     clarity = safe(lambda: pull_clarity(prev=prev)) or (prev.get("clarity") or {})
     gops = safe(lambda: pull_gads_ops(prev=prev)) or (prev.get("gops") or {})
+    otruth = safe(lambda: pull_order_truth(prev=prev)) or (prev.get("otruth") or {})
     _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
     bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
     if (prev.get("bosta") or {}).get("months"):
@@ -4735,7 +4855,7 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
