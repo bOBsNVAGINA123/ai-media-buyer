@@ -1494,6 +1494,9 @@ DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const part
 function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
  document.getElementById('bn').innerHTML='<b>Attribution</b> — Meta: '+ST.att.meta+' · Google: '+ST.att.google+' · TikTok: '+ST.att.tt+'. <b>Compare:</b> '+(ST.cmp==='prev'?'previous period overlaid dashed on charts.':'off.')+' Financials = full Odoo daily history from '+O.fin.start+'. Ad metrics daily '+O.aw[0]+' → '+O.aw[1]+(o.ad?'':' — <b style="color:#c0392b">selected range has no ad data.</b>')+' Click ⤢ on any card to expand.';
+ /* The control room is whatever page you land on. The diagnosis belongs above the
+    scoreboard, not one tab away: the first question is what to do, not what the numbers are. */
+ try{rActions(g);}catch(e){}
  try{ovCard(g);}catch(e){}
  try{paceCard(g);}catch(e){}
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
@@ -2597,6 +2600,33 @@ function actProductMix(){
  return {push,starve,bleed,P};
 }
 
+/* Clarity is the only source that can say WHERE a checkout failure lives. It is read per browser
+   and device, so an error rate is compared against the account's own other browsers rather than
+   an invented benchmark: an in-app browser throwing errors thirty times more often than Safari is
+   evidence; "JS errors exist" is not. */
+function clarityEvidence(){
+ const C=O.clarity; if(!C||!C.byBrowser||!C.byBrowser.length)return null;
+ const pick=(r,frag)=>{for(const k in r){if(k.toLowerCase().indexOf(frag)>=0&&typeof r[k]==='number')return r[k];}return null;};
+ const rows=C.byBrowser.map(r=>{
+  const sess=pick(r,'sessioncount')||pick(r,'totalsessions')||pick(r,'sessions');
+  return {b:r.Browser||'?',dev:r.Device||'',sess:sess,
+   js:pick(r,'javascripterror'),rage:pick(r,'rageclick'),dead:pick(r,'deadclick'),qb:pick(r,'quickback')};
+ }).filter(r=>r.sess&&r.sess>200);
+ if(!rows.length)return null;
+ rows.forEach(r=>{r.jsRate=r.js!=null?r.js/r.sess:null;r.qbRate=r.qb!=null?r.qb/r.sess:null;});
+ const withJs=rows.filter(r=>r.jsRate!=null).sort((a,b)=>b.jsRate-a.jsRate);
+ if(withJs.length<2)return null;
+ const worst=withJs[0];
+ /* Comparator is the MEDIAN of browsers carrying real traffic, not the single cleanest one:
+    one error across 813 sessions makes any ratio look enormous and stop meaning anything. */
+ const big=withJs.filter(r=>r.sess>=1000).map(r=>r.jsRate).sort((a,b)=>a-b);
+ const baseline=big.length?big[Math.floor(big.length/2)]:null;
+ const best=withJs.filter(r=>r.sess>=1000).slice(-1)[0]||withJs[withJs.length-1];
+ const ratio=(baseline&&baseline>0)?worst.jsRate/baseline:null;
+ const totSess=rows.reduce((a,r)=>a+r.sess,0);
+ return {rows,worst,best,baseline,ratio,totSess,pulled:C.pulled,days:C.days,
+  share:worst.sess/totSess*100};
+}
 function rActions(g){
  const V=rActionsCentre(g); if(!V)return;
  const {head,deco,stage,R,TAG,OBS,INF,HYP,REC}=V;
@@ -2670,6 +2700,17 @@ function rActions(g){
     conf:h?'High':'Moderate',col:'#12a06e',
     test:'Put it in a dedicated ad set rather than adding it to a mixed one, so its own return is readable.'});});
  }
+ /* Behaviour evidence must be pushed BEFORE the list is rendered, not after it. */
+ const CE=clarityEvidence();
+ if(CE&&CE.ratio&&CE.ratio>3){
+  acts.push({p:'P0',a:'INVESTIGATE',ent:CE.worst.b+' ('+CE.worst.dev+')',
+   why:'This browser fails far more often than the ones carrying comparable traffic, and it is where a large share of your visitors land. A checkout that works in Safari can still be broken here.',
+   ev:CE.worst.b+' throws '+CE.worst.jsRate.toFixed(2)+' JavaScript errors per session against a median of '+CE.baseline.toFixed(2)
+     +' across browsers with real traffic \u2014 '+CE.ratio.toFixed(0)+'\u00d7 \u2014 over '+Math.round(CE.worst.sess).toLocaleString()+' sessions, '
+     +CE.share.toFixed(0)+'% of measured traffic. Microsoft Clarity, last '+CE.days+' days.',
+   conf:'High',col:'#e23a63',
+   test:'Open the checkout in that in-app browser on a real handset before changing any targeting or budget. If it fails there, no media change fixes it.'});
+ }
  let actHtml='';
  if(acts.length){
   actHtml=acts.map(a=>'<div style="border:1px solid #e8ebf2;border-left:3px solid '+a.col+';border-radius:8px;padding:9px 12px;margin-bottom:8px">'
@@ -2684,9 +2725,9 @@ function rActions(g){
  }
  /* ---------- what is NOT here, stated rather than faked ---------- */
  const gaps=[];
- if(!(O.gsc))gaps.push('Search Console (organic demand)');
- if(!(O.clarity))gaps.push('Clarity (rage clicks, JS errors, device/browser behaviour)');
- if(!(O.ga4dev))gaps.push('GA4 device and browser breakdown');
+ if(!(O.gsc))gaps.push('Search Console (organic demand and query-level visibility)');
+ if(!(O.clarity))gaps.push('Clarity');
+ if(!(O.ga4dev))gaps.push('GA4 device and browser breakdown for paid sessions');
  const gapHtml=gaps.length?'<div class="ins" style="margin-top:10px"><div class="row"><span class="dot" style="background:#b8860b"></span><span>'
   +'<b>UNAVAILABLE FROM SOURCE, so not diagnosed:</b> '+gaps.join(' &middot; ')+'. '
   +'Without them this engine can tell you that checkout completion fell, but not that it fell on one browser, and it cannot separate a demand fall from a visibility fall. '
@@ -2697,6 +2738,19 @@ function rActions(g){
   head
   +'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">HOW MUCH EACH FACTOR MOVED IT</div>'+deco
   +(stage?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">WHERE IT BROKE</div>'+stage:'')
+  +((function(){const CE=clarityEvidence();if(!CE)return '';
+    const r=CE.rows.slice().sort((a,b)=>(b.jsRate||0)-(a.jsRate||0)).slice(0,6);
+    return '<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">HOW THE SITE BEHAVED, BY BROWSER</div>'
+     +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+     +'<tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Browser</th>'
+     +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Sessions</th>'
+     +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">JS errors per session</th>'
+     +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Quick-backs per session</th></tr>'
+     +r.map(function(x){return '<tr><td style="padding:5px 8px;border-bottom:1px solid #eef0f5;font-weight:700">'+x.b+' <span style="color:#8a93a6;font-weight:600">'+x.dev+'</span></td>'
+      +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right">'+Math.round(x.sess).toLocaleString()+'</td>'
+      +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:800;color:'+((x.jsRate||0)>0.2?'#e23a63':'#0F172A')+'">'+(x.jsRate!=null?x.jsRate.toFixed(2):'—')+'</td>'
+      +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right">'+(x.qbRate!=null?x.qbRate.toFixed(2):'—')+'</td></tr>';}).join('')
+     +'</table><div style="font-size:11px;color:#8a93a6;margin-top:5px">Microsoft Clarity, last '+CE.days+' days, pulled '+(CE.pulled||'')+'. Browsers under 200 sessions are left out.</div>';})())
   +(prod?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">EXACTLY WHICH PRODUCTS</div>'+prod:'')
   +(actHtml?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:18px 0 6px">WHAT TO DO</div>'+actHtml:'')
   +gapHtml);
@@ -6930,7 +6984,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-095747';
+const BUILD='20260829-114417';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
