@@ -1476,6 +1476,79 @@ def pull_bosta(months_back=13, fee_sample=150, prev=None):
         log("bosta fail", str(e)[:150])
         return (prev or {}).get("bosta") or {}
 
+
+# ============================ MICROSOFT CLARITY (READ ONLY) ============================
+# The behaviour layer. Without it the engine can say "checkout completion fell" but not "it fell
+# in the Facebook in-app browser, which is throwing errors at thirty times the rate of Safari".
+# One secret, CLARITY_TOKEN, already on this repo. The API caps numOfDays at 3, so this is a
+# rolling recent read, not history -- stored per pull date so a series builds up over time.
+CLARITY_TOKEN = os.environ.get("CLARITY_TOKEN", "").strip()
+CLARITY_URL = "https://www.clarity.ms/export-data/api/v1/project-live-insights"
+
+
+def _clarity_call(params, tries=3):
+    import urllib.request, urllib.parse, urllib.error
+    url = CLARITY_URL + "?" + urllib.parse.urlencode(params)
+    for a in range(tries):
+        try:
+            rq = urllib.request.Request(url, headers={"Authorization": "Bearer %s" % CLARITY_TOKEN})
+            with urllib.request.urlopen(rq, timeout=45) as r:
+                return json.loads(r.read().decode())
+        except Exception as e:
+            log("  clarity retry", str(e)[:90]); time.sleep(3 * (a + 1))
+    return None
+
+
+def _cl_rows(raw):
+    """Clarity returns a list of {metricName, information:[{...}]}; flatten to one row per
+    dimension combination with every metric on it."""
+    out = {}
+    for block in (raw or []):
+        mn = block.get("metricName") or "?"
+        for it in (block.get("information") or []):
+            key = tuple((it.get(k) or "") for k in ("Browser", "Device", "OS", "URL", "Country"))
+            row = out.setdefault(key, {k: it.get(k) for k in ("Browser", "Device", "OS", "URL", "Country") if it.get(k)})
+            for mk, mv in it.items():
+                if mk in ("Browser", "Device", "OS", "URL", "Country"):
+                    continue
+                try:
+                    row[mn + ":" + mk] = float(mv)
+                except Exception:
+                    row[mn + ":" + mk] = mv
+    return list(out.values())
+
+
+def pull_clarity(days=3, prev=None):
+    """Frustration signals split by browser and device, plus the worst pages. READ ONLY."""
+    if not CLARITY_TOKEN:
+        log("clarity skipped - no CLARITY_TOKEN in env")
+        return (prev or {}).get("clarity") or {}
+    try:
+        d = max(1, min(3, int(days)))
+        bro = _clarity_call({"numOfDays": d, "dimension1": "Browser", "dimension2": "Device"})
+        pages = _clarity_call({"numOfDays": d, "dimension1": "URL"})
+        out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
+               "days": d,
+               "byBrowser": _cl_rows(bro)[:40],
+               "byPage": _cl_rows(pages)[:40]}
+        # keep a short history so a change in error rate is visible, not just today's level
+        hist = ((prev or {}).get("clarity") or {}).get("hist") or {}
+        today = datetime.date.today().isoformat()
+        tot = {}
+        for r in out["byBrowser"]:
+            for k, v in r.items():
+                if isinstance(v, (int, float)):
+                    tot[k] = tot.get(k, 0) + v
+        hist[today] = tot
+        for k in sorted(hist)[:-60]:
+            hist.pop(k, None)
+        out["hist"] = hist
+        log("clarity ok: %d browser rows, %d page rows" % (len(out["byBrowser"]), len(out["byPage"])))
+        return out
+    except Exception as e:
+        log("clarity fail", str(e)[:140])
+        return (prev or {}).get("clarity") or {}
+
 def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
@@ -4339,6 +4412,7 @@ def build():
     # Bosta needs prev in hand, so it runs after the previous payload is parsed. A full
     # 13-month crawl is ~9 minutes of paging, so it only happens on a forced crawl or the
     # first time; otherwise the last two months are refreshed and merged over what is stored.
+    clarity = safe(lambda: pull_clarity(prev=prev)) or (prev.get("clarity") or {})
     _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
     bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
     if (prev.get("bosta") or {}).get("months"):
@@ -4551,7 +4625,7 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
