@@ -1865,6 +1865,69 @@ def pull_order_truth(days=30, prev=None):
     return out
 
 
+def pull_stock(tmpl_ids):
+    """Per-VARIANT stock for the products the dashboard ranks, plus what those variants used to sell.
+
+    The product card could already say a product collapsed; it could not say why. The single most
+    common why in this catalogue is that the sizes people actually bought went to zero, and that is
+    invisible in a template-level revenue number -- a product with eight variants can lose most of
+    its sales while its headline stock still reads "in stock".
+
+    So two things are pulled: current availability per variant, and the units each variant sold over
+    the last 90 days. The useful number is the second divided by the first -- what share of a
+    product's recent sales came from variants that are now unavailable. A product down 80% whose
+    dead variants were 80% of its sales is a supply problem, not a media one, and no amount of
+    creative or bidding work will fix it.
+    """
+    if not tmpl_ids: return {}
+    ids = [int(t) for t in tmpl_ids if t][:400]
+    out = {}
+    try:
+        var = oexec("product.product", "search_read",
+                    [[["product_tmpl_id", "in", ids]],
+                     ["id", "product_tmpl_id", "default_code", "qty_available"]],
+                    {"limit": 8000})
+    except Exception as e:
+        log("stock variants fail", str(e)[:140]); return {}
+    by_v = {}
+    for v in var:
+        t = (v.get("product_tmpl_id") or [0])[0]
+        if not t: continue
+        by_v[v["id"]] = t
+        e = out.setdefault(t, {"u": 0.0, "n": 0, "oos": 0, "dead": [], "sold": 0.0, "deadSold": 0.0})
+        q = float(v.get("qty_available") or 0)
+        e["u"] += q; e["n"] += 1
+        if q <= 0:
+            e["oos"] += 1
+            c = (v.get("default_code") or "").strip()
+            if c and len(e["dead"]) < 6: e["dead"].append(c[:28])
+    # what those variants were worth before they ran out
+    try:
+        since = (datetime.date.today() - datetime.timedelta(days=90)).isoformat()
+        g = oexec("sale.order.line", "read_group",
+                  [[["order_id.state", "in", ["sale", "done"]], ["display_type", "=", False],
+                    ["product_id", "in", list(by_v.keys())],
+                    ["order_id.date_order", ">=", since + " 00:00:00"]],
+                   ["product_uom_qty:sum"], ["product_id"]], {"lazy": False, "limit": 100000})
+    except Exception as e:
+        log("stock sales fail", str(e)[:140]); g = []
+    zero = {v["id"] for v in var if float(v.get("qty_available") or 0) <= 0}
+    for r in g:
+        pid = (r.get("product_id") or [0])[0]
+        t = by_v.get(pid)
+        if not t: continue
+        q = float(r.get("product_uom_qty") or 0)
+        out[t]["sold"] += q
+        if pid in zero: out[t]["deadSold"] += q
+    for t, e in out.items():
+        e["u"] = round(e["u"]); e["sold"] = round(e["sold"]); e["deadSold"] = round(e["deadSold"])
+        # share of the last 90 days' units that came from variants now unavailable
+        e["deadShare"] = round(e["deadSold"] / e["sold"] * 100) if e["sold"] > 0 else None
+    log("stock: %d templates, %d variants, %d fully out"
+        % (len(out), len(var), sum(1 for e in out.values() if e["n"] and e["oos"] == e["n"])))
+    return out
+
+
 def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
@@ -4814,6 +4877,14 @@ def build():
         for vr in vend["rows"]:
             if vr["v"] in pv: vr["mon"] = pv[vr["v"]]
     pmon = XTRA.get("pmon", {})
+    try:
+        _stk = safe(lambda: pull_stock([r.get("t") for r in (prodv.get("rows") or [])])) or {}
+        if _stk:
+            for _r in (prodv.get("rows") or []):
+                _e = _stk.get(_r.get("t"))
+                if _e: _r["st"] = _e
+    except Exception as _e2:
+        log("stock attach skipped", str(_e2)[:120])
     if pmon and prodv.get("rows"):
         for pr in prodv["rows"]:
             mm = pmon.get(pr.get("t"))
