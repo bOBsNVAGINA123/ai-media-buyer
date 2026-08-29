@@ -22,7 +22,14 @@ today = datetime.datetime.now(CAIRO).date()
 # flagged in the payload (O.partial) so the frontend can mark it.
 END = today
 FULLEND = today - datetime.timedelta(days=1)
-AD_START = END - datetime.timedelta(days=364)
+# v9.46: was 364 days, i.e. EXACTLY one year, which meant every "vs last year" row that needed
+# ad spend fell one day off the front of the feed and rendered as a dash -- MER, aMER, ROAS and
+# CAC all had an empty year column while the data sat in the APIs unread. 460 days covers a
+# year-ago comparison for every window up to 90 days (the L7D/MTD/30d/60d/90d buttons). Windows
+# longer than that still cannot compare year-on-year and the dashboard says so rather than
+# silently truncating. Cost is ~26% more days on the Meta and Google daily pulls, which are
+# already chunked, so it stays inside the job's time budget.
+AD_START = END - datetime.timedelta(days=460)
 BL_START = END - datetime.timedelta(days=119)          # branches: 120d so compare works
 # v9.8.2: wall-clock guard. The GitHub job is capped at 75 minutes; the audience/CRM
 # uploads only get to start if the read phase finished inside this budget, so a long
@@ -1928,6 +1935,49 @@ def pull_stock(tmpl_ids):
     return out
 
 
+def pull_product_urls(codes):
+    """Resolve each product's bracket code to its live storefront URL.
+
+    The dashboard names products but had no way to open one. The code in square brackets on an
+    Odoo template name is the same string Shopify carries as the variant SKU (it is a barcode for
+    most of the catalogue), so a variant lookup returns the product handle and its onlineStoreUrl
+    directly -- no guessing at slugs from titles, which breaks on the Arabic names.
+
+    onlineStoreUrl is null for a product that is not published; those are returned as None rather
+    than a fabricated /products/<guess> that would 404 in front of whoever clicked it.
+    """
+    store = os.environ.get("SHOPIFY_STORE", "").strip()
+    tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
+    if not (store and tok) or not codes: return {}
+    host = store if ".myshopify.com" in store else store + ".myshopify.com"
+    ver = os.environ.get("SHOPIFY_API_VERSION", "").strip() or "2025-07"
+    url = "https://%s/admin/api/%s/graphql.json" % (host, ver)
+    out, uniq = {}, []
+    seen = set()
+    for c in codes:
+        c = (c or "").strip()
+        if c and c not in seen:
+            seen.add(c); uniq.append(c)
+    q = ("query($q:String!){ productVariants(first:100, query:$q){ edges{ node{ sku barcode "
+         "product{ handle onlineStoreUrl } } } } }")
+    B = 20                                    # the search grammar chokes on very long OR chains
+    for i in range(0, len(uniq), B):
+        chunk = uniq[i:i + B]
+        term = " OR ".join('sku:%s' % c for c in chunk)
+        try:
+            d = http_json(url, {"query": q, "variables": {"q": term}}, {"X-Shopify-Access-Token": tok})
+            for e in ((((d or {}).get("data") or {}).get("productVariants") or {}).get("edges") or []):
+                n = e.get("node") or {}
+                pr = n.get("product") or {}
+                key = (n.get("sku") or n.get("barcode") or "").strip()
+                if key and pr.get("onlineStoreUrl"):
+                    out[key] = pr["onlineStoreUrl"]
+        except Exception as e:
+            log("product urls chunk fail", str(e)[:120])
+    log("product urls: %d of %d codes resolved to a live page" % (len(out), len(uniq)))
+    return out
+
+
 def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
@@ -3026,64 +3076,173 @@ def pull_meta_ads(tok):
             except Exception: pass
         return out
 
-def _classify_adset(targeting):
+def _meta_audience_lookup(tok, acct):
+    """id -> {name, subtype, rule} for every custom audience on ONE account.
+
+    v9.46: the /adsets edge returns targeting.custom_audiences as bare {id, name} refs --
+    it does NOT carry `rule`, `subtype` or `customer_file_source`, which is exactly what
+    _classify_adset used to test. Every audience whose NAME happened not to contain the word
+    "purchase"/"buyer"/"customer" therefore fell through to "new", so a retargeting set like
+    "All products retention" (E£57.5k at frequency 22) and both "Offline Winners" sets were
+    reported as prospecting and the whole account read as 100% new audience. Resolving the ids
+    against the account's own audience list gets the real subtype and rule."""
+    out = {}
+    try:
+        p = {"fields": "id,name,subtype,rule,retention_days,customer_file_source",
+             "limit": 200, "access_token": tok}
+        url = "%s/%s/customaudiences?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
+        pages = 0
+        while url and pages < 15:
+            d = http_json(url); pages += 1
+            if not d or d.get("error"): break
+            for r in (d.get("data") or []):
+                out[str(r.get("id"))] = r
+            url = (d.get("paging") or {}).get("next")
+    except Exception as e:
+        log("meta audience lookup fail", acct, str(e)[:120])
+    return out
+
+def _classify_adset(targeting, lookup=None):
     """Audience intent of ONE ad set, from its INCLUDED custom audiences (targeting.custom_audiences).
     existing = includes a purchaser / customer-list audience; engaged = includes an engagement /
     view / cart audience (warm, not bought); new = broad / interest / lookalike / no inclusion
     (prospecting -- the 'abo' sets target broad and EXCLUDE purchasers). Verified against the live
-    account 2026-08-18 (broad 'abo' sets vs 'school existing customers' including Purchase audiences)."""
+    account 2026-08-18 (broad 'abo' sets vs 'school existing customers' including Purchase audiences).
+
+    v9.46: each included audience is resolved through `lookup` (the account's real custom-audience
+    list) before classifying, because the targeting spec itself carries only id and name."""
     cas = (targeting or {}).get("custom_audiences") or []
     if not cas:
         return "new"
-    has_purchase = has_engage = has_lal = False
+    has_purchase = has_engage = False
     for ca in cas:
-        if ca.get("is_lookalike_container") or ca.get("subtype") == "LOOKALIKE" or (ca.get("lookalike_type") not in (None, "None", "")):
-            has_lal = True; continue
-        low = (str(ca.get("rule") or "") + " " + str(ca.get("name") or "")).lower()
-        if ca.get("customer_file_source") == "USER_PROVIDED_ONLY" or "purchase" in low or "buyer" in low or "customer" in low:
+        full = (lookup or {}).get(str(ca.get("id"))) or {}
+        # prefer the resolved record; fall back to whatever the targeting spec inlined
+        sub = str(full.get("subtype") or ca.get("subtype") or "")
+        if sub == "LOOKALIKE" or ca.get("is_lookalike_container") or (ca.get("lookalike_type") not in (None, "None", "")):
+            continue                      # a lookalike of buyers is still prospecting
+        low = " ".join(str(x).lower() for x in
+                       (full.get("rule"), full.get("name"), ca.get("rule"), ca.get("name")) if x)
+        src = full.get("customer_file_source") or ca.get("customer_file_source")
+        if src == "USER_PROVIDED_ONLY":
+            has_purchase = True
+        elif any(k in low for k in ("purchase", "buyer", "customer", "retention", "winner",
+                                    "existing", "repeat", "past client", "offline")):
             has_purchase = True
         elif any(k in low for k in ("viewcontent", "view_content", "addtocart", "add_to_cart",
                                     "initiatecheckout", "pageview", "page_view", "engage", "video",
-                                    "visit", "\"lead\"", "subscribe")):
+                                    "visit", "\"lead\"", "subscribe", "didn't purchase", "didnt purchase",
+                                    "cart", "checkout", "ig_business", "instagram", "page_engaged")):
             has_engage = True
     if has_purchase: return "existing"
     if has_engage: return "engaged"
     return "new"
 
 def pull_meta_audiences(tok, mads):
-    """Per-CAMPAIGN audience mix (new / engaged / existing) as SHARE OF SPEND. Pulls each active
-    ad set's targeting, classifies it, weights by the ad-set's spend (from mads), rolls up to the
-    campaign. Server-side so only the compact {cid:{n,e,x}} shares reach data.js. Meta only."""
-    out = {}
+    """Meta audience mix -- new (prospecting) / engaged (warm, no purchase) / existing (buyers).
+
+    v9.46: returns ABSOLUTE spend, reach, purchases and value per class, not only the per-campaign
+    share of spend it used to. "New audience spend" and "new audience reach" were both unanswerable
+    from shares alone. Reach comes from an ad-set-level insights call over the same window as the
+    ad pull; ad-set reach is deduplicated WITHIN a set but not BETWEEN sets, so the class totals are
+    a sum of set reach and are labelled as such rather than passed off as unique people.
+    Shape: {"cmp": {cid:{n,e,x}} <- the old spend shares, unchanged for existing callers,
+            "tot": {cls: {sp,rch,imp,pur,val,sets}}, "sets": [top ad sets by spend],
+            "win": {start,end,n}, "cov": share of account spend that got classified}"""
+    out = {"cmp": {}, "tot": {}, "sets": [], "win": {}, "cov": 0}
     if not tok: return out
     try:
-        sp_by_as = {}
+        w = XTRA.get("madsW") or {}
+        c0 = w.get("start") or (END - datetime.timedelta(days=59)).isoformat()
+        c1 = END.isoformat()
+        out["win"] = {"start": c0, "end": c1, "n": w.get("n") or 60}
+
+        # ad-set spend from the ad pull (kept: it is already window-matched and account-tagged)
+        sp_by_as, nm_by_as = {}, {}
         for a in (mads or []):
             if a.get("pf") != "meta": continue
             k = str(a.get("asid"))
             sp_by_as[k] = sp_by_as.get(k, 0) + (a.get("sp") or 0)
-        agg = {}   # cid -> {"n":,"e":,"x":}
+            nm_by_as.setdefault(k, a.get("as") or "")
+
+        agg = {}                                    # cid -> spend by class
+        tot = {c: {"sp": 0.0, "rch": 0, "imp": 0, "pur": 0.0, "val": 0.0, "sets": 0}
+               for c in ("new", "engaged", "existing")}
+        rows = []
+        seen_sp = 0.0
+
         for acct in (meta_accounts(tok) or DEFAULT_ACCTS):
-            p = {"fields": "id,campaign_id,targeting", "limit": 200, "access_token": tok,
-                 "filtering": json.dumps([{"field": "effective_status", "operator": "IN", "value": ["ACTIVE"]}])}
+            look = _meta_audience_lookup(tok, acct)
+
+            # ad-set level reach/impressions/purchases over the ad window
+            ins = {}
+            try:
+                pi = {"level": "adset", "time_range": json.dumps({"since": c0, "until": c1}),
+                      "fields": "adset_id,spend,reach,impressions,actions,action_values",
+                      "limit": 300, "access_token": tok}
+                u = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(pi))
+                pg = 0
+                while u and pg < 20:
+                    d = http_json(u); pg += 1
+                    if not d or d.get("error"): break
+                    for r in (d.get("data") or []):
+                        pur = val = 0.0
+                        for t in (r.get("actions") or []):
+                            if t.get("action_type") in ("purchase", "omni_purchase"):
+                                pur = max(pur, float(t.get("value") or 0))
+                        for t in (r.get("action_values") or []):
+                            if t.get("action_type") in ("purchase", "omni_purchase"):
+                                val = max(val, float(t.get("value") or 0))
+                        ins[str(r.get("adset_id"))] = {
+                            "sp": float(r.get("spend") or 0), "rch": int(r.get("reach") or 0),
+                            "imp": int(r.get("impressions") or 0), "pur": pur, "val": val}
+                    u = (d.get("paging") or {}).get("next")
+            except Exception as e:
+                log("meta adset insights fail", acct, str(e)[:120])
+
+            # v9.46: ALL ad sets, not only currently-ACTIVE ones. The window is 60 days; an ad set
+            # paused last week still spent inside it, and dropping it silently understated whichever
+            # class it belonged to (retargeting sets get paused far more often than evergreen ones).
+            p = {"fields": "id,name,campaign_id,targeting,effective_status", "limit": 200, "access_token": tok}
             url = "%s/%s/adsets?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
             pages = 0
-            while url and pages < 20:
+            while url and pages < 40:
                 d = http_json(url); pages += 1
                 if not d or d.get("error"): break
                 for r in (d.get("data") or []):
+                    asid = str(r.get("id"))
                     cid = str(r.get("campaign_id") or "")
-                    if not cid: continue
-                    cls = _classify_adset(r.get("targeting"))
-                    sp = sp_by_as.get(str(r.get("id")), 0)
-                    o = agg.setdefault(cid, {"n": 0.0, "e": 0.0, "x": 0.0})
-                    o[{"new": "n", "engaged": "e", "existing": "x"}[cls]] += sp
+                    i = ins.get(asid) or {}
+                    sp = i.get("sp") or sp_by_as.get(asid, 0)
+                    if not sp: continue                       # no spend in window -> nothing to attribute
+                    cls = _classify_adset(r.get("targeting"), look)
+                    seen_sp += sp
+                    if cid:
+                        o = agg.setdefault(cid, {"n": 0.0, "e": 0.0, "x": 0.0})
+                        o[{"new": "n", "engaged": "e", "existing": "x"}[cls]] += sp
+                    t = tot[cls]
+                    t["sp"] += sp; t["rch"] += i.get("rch") or 0; t["imp"] += i.get("imp") or 0
+                    t["pur"] += i.get("pur") or 0; t["val"] += i.get("val") or 0; t["sets"] += 1
+                    rows.append({"id": asid, "n": r.get("name") or nm_by_as.get(asid, ""), "cid": cid,
+                                 "cls": cls, "st": r.get("effective_status") or "",
+                                 "sp": round(sp), "rch": i.get("rch") or 0, "imp": i.get("imp") or 0,
+                                 "pur": round(i.get("pur") or 0), "val": round(i.get("val") or 0)})
                 url = (d.get("paging") or {}).get("next")
+
         for cid, o in agg.items():
             t = o["n"] + o["e"] + o["x"]
             if t > 0:
-                out[cid] = {"n": round(o["n"] / t, 3), "e": round(o["e"] / t, 3), "x": round(o["x"] / t, 3)}
-        log("meta audiences :: campaigns", len(out))
+                out["cmp"][cid] = {"n": round(o["n"] / t, 3), "e": round(o["e"] / t, 3), "x": round(o["x"] / t, 3)}
+        for c, v in tot.items():
+            v["sp"] = round(v["sp"]); v["pur"] = round(v["pur"]); v["val"] = round(v["val"])
+        out["tot"] = tot
+        rows.sort(key=lambda r: -r["sp"])
+        out["sets"] = rows[:120]
+        msp = sum(a.get("sp") or 0 for a in (mads or []) if a.get("pf") == "meta")
+        out["cov"] = round(seen_sp / msp, 3) if msp else 0
+        log("meta audiences :: campaigns", len(out["cmp"]), "sets", len(rows),
+            "new sp", tot["new"]["sp"], "engaged sp", tot["engaged"]["sp"], "existing sp", tot["existing"]["sp"],
+            "cov", out["cov"])
     except Exception as e:
         log("meta audiences fail", str(e)[:150])
     return out
@@ -4877,6 +5036,21 @@ def build():
         for vr in vend["rows"]:
             if vr["v"] in pv: vr["mon"] = pv[vr["v"]]
     pmon = XTRA.get("pmon", {})
+    try:
+        import re as _re
+        _codes = []
+        for _r in (prodv.get("rows") or []):
+            _m = _re.match(r"\s*\[([^\]]+)\]", str(_r.get("n") or ""))
+            if _m: _codes.append(_m.group(1).strip())
+        _urls = safe(lambda: pull_product_urls(_codes)) or {}
+        if _urls:
+            for _r in (prodv.get("rows") or []):
+                _m = _re.match(r"\s*\[([^\]]+)\]", str(_r.get("n") or ""))
+                if _m:
+                    _u = _urls.get(_m.group(1).strip())
+                    if _u: _r["url"] = _u
+    except Exception as _e3:
+        log("product url attach skipped", str(_e3)[:120])
     try:
         _stk = safe(lambda: pull_stock([r.get("t") for r in (prodv.get("rows") or [])])) or {}
         if _stk:
