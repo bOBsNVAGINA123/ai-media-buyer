@@ -2407,6 +2407,301 @@ function ovCard(g){
                         booked to collect it. Charged twice, and the sale is refunded on top.
      EXCHANGE           a swap shipment.
      CANCELLED          never handed to the courier, so it costs nothing here. */
+/* ============================ ACTIONS CENTRE — DIAGNOSIS ENGINE (v10.0) ============================
+   Not a report. It answers, in order: what changed, how much each factor contributed, where exactly,
+   why, and what to do — or that there is nothing to do.
+
+   Rules it holds itself to:
+   - Contribution uses SHAPLEY, not sequential substitution. Revenue = Sessions x CVR x AOV is
+     multiplicative, so "hold the others constant and vary this one" hands every interaction term to
+     whichever factor happens to be computed first. The Shapley split is order-independent and the
+     three parts add back to the exact revenue change, which is asserted at runtime.
+   - A movement inside normal variance produces NO ACTION. The engine's job is the highest-value
+     recommendation, not the largest number of them.
+   - Claims are labelled OBSERVED / INFERRED / HYPOTHESIS and never blur into each other.
+   - Nothing is invented. A source that cannot answer is printed as UNAVAILABLE, not estimated. */
+
+/* Shapley for a product of three factors. Closed form: each factor's value is its own delta times
+   the average of the other two across every ordering. The three sum to the exact change. */
+function shapley3(s0,c0,a0,s1,c1,a1){
+ const ds=s1-s0, dc=c1-c0, da=a1-a0;
+ const S = ds*( (c0*a0)/3 + (c1*a0 + c0*a1)/6 + (c1*a1)/3 );
+ const C = dc*( (s0*a0)/3 + (s1*a0 + s0*a1)/6 + (s1*a1)/3 );
+ const A = da*( (s0*c0)/3 + (s1*c0 + s0*c1)/6 + (s1*c1)/3 );
+ return {S,C,A,total:S+C+A,actual:s1*c1*a1 - s0*c0*a0};
+}
+
+/* Is this move bigger than the noise? Uses the spread of the same-length window across history,
+   so "down 4%" against a series that routinely swings 7% is correctly called NO ACTION. */
+function normalBand(series,len,n){
+ const w=[];
+ for(let i=0;i+len<=n;i++){let t=0;for(let j=0;j<len;j++)t+=series[i+j]||0;w.push(t);}
+ if(w.length<6)return null;
+ const chg=[];
+ for(let i=len;i<w.length;i++){if(w[i-len])chg.push(Math.abs(w[i]/w[i-len]-1)*100);}
+ if(chg.length<5)return null;
+ chg.sort((a,b)=>a-b);
+ return {p50:chg[Math.floor(chg.length*0.5)],p80:chg[Math.floor(chg.length*0.8)],n:chg.length};
+}
+
+function actionEngine(g){
+ const A=O.ad,SH=O.shop;
+ if(!A||!A.n||!SH){pnlCard(g,'ins','Actions centre','The ad or Shopify daily feed is missing from this sync.','');return;}
+ const t0=new Date(A.start+'T00:00:00Z').getTime();
+ const aIx=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+ const fIx=d=>idxOf(d,1);
+ const cut=O.partial||null;
+ let s=ST.s,e=ST.e; if(cut&&e>=cut)e=addD(cut,-1);
+ const pw=cmpWr(s,e);
+ const len=Math.max(1,span(s,e));
+ const sum=(arr,a,b,cap)=>{let t=0;for(let i=Math.max(0,a);i<=Math.min((cap||arr.length)-1,b);i++)t+=arr[i]||0;return t;};
+ /* window aggregates: sessions from the ad panel, orders and revenue from the Odoo Shopify ledger */
+ function win(a,b){
+  const ia=aIx(a),ib=aIx(b);
+  const sess=(ia>=0&&ib<A.n)?sum(A.sessions||[],ia,ib,A.n):null;
+  const rev=fSum('rev',a,b)-fSum('refund',a,b);
+  const ord=fSum('orders',a,b);
+  const spend=(ia>=0&&ib<A.n)?sum(A.mspend||[],ia,ib,A.n)+sum(A.gspend||[],ia,ib,A.n)+sum(A.tspend||[],ia,ib,A.n):null;
+  const atc=(ia>=0&&ib<A.n)?aAvg('atcRatio',[ia,ib]):null;
+  const cko=(ia>=0&&ib<A.n)?aAvg('checkoutRatio',[ia,ib]):null;
+  return {sess,rev,ord,spend,atc,cko,cvr:(sess?ord/sess*100:null),aov:(ord?rev/ord:null)};
+ }
+ const C=win(s,e),P=win(pw[0],pw[1]);
+ if(!C.rev||!P.rev){pnlCard(g,'ins','Actions centre','No comparable window: the range or its comparison falls outside the data.','');return;}
+ const dRev=C.rev-P.rev, pct=(C.rev/P.rev-1)*100;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SGN=v=>(v>=0?'+':'−')+M(v);
+ const PC=v=>(v==null||!isFinite(v))?'—':((v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%');
+ const OUT=[];
+ /* ---------- is this even a real move? ---------- */
+ const revDaily=[];{const n=O.fin.n;for(let i=0;i<n;i++)revDaily.push(((O.shop.rev||[])[i]||0)*1000);}
+ const band=normalBand(revDaily,len,revDaily.length);
+ const material = !band || Math.abs(pct) > band.p80;
+ /* ---------- decomposition ---------- */
+ let sh=null,cover=null;
+ if(C.sess&&P.sess&&C.cvr&&P.cvr&&C.aov&&P.aov){
+  sh=shapley3(P.sess,P.cvr/100,P.aov, C.sess,C.cvr/100,C.aov);
+  cover=Math.abs(sh.total-sh.actual)<Math.max(1,Math.abs(sh.actual)*0.001);
+ }
+ return {C,P,dRev,pct,band,material,sh,cover,s,e,pw,len,M,SGN,PC,OUT};
+}
+
+/* The Actions Centre itself. Order is fixed and deliberate: what changed -> how much each factor
+   contributed -> where exactly -> what to do. Never the reverse. */
+var R_MASKED=[];
+function rActionsCentre(g){
+ const R=actionEngine(g); if(!R)return;
+ const {C,P,dRev,pct,band,material,sh,cover,s,e,pw,len,M,SGN,PC}=R;
+ const TAG=(t,c)=>'<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;color:#fff;background:'+c+';border-radius:4px;padding:1px 6px;margin-right:7px;vertical-align:middle">'+t+'</span>';
+ const OBS=TAG('OBSERVED','#0F172A'), INF=TAG('INFERRED','#3b7dd8'), HYP=TAG('HYPOTHESIS','#c9834a'), REC=TAG('ACTION','#12a06e');
+ const rows=[];
+ /* ---------- 1. WHAT CHANGED ---------- */
+ const dir=dRev>=0?'up':'down';
+ let head='<div style="font-size:26px;font-weight:800;color:'+(dRev>=0?'#12a06e':'#e23a63')+';letter-spacing:-.5px">'
+  +SGN(dRev)+' <span style="font-size:15px;color:#5a637a;font-weight:700">'+PC(pct)+'</span></div>'
+  +'<div style="font-size:12.5px;color:#5a637a;margin-top:2px">Online revenue, '+s+' &rarr; '+e+' ('+M(C.rev)+') against '
+  +pw[0]+' &rarr; '+pw[1]+' ('+M(P.rev)+').</div>';
+ /* A quiet TOTAL can hide loud DRIVERS. Revenue up 20% on traffic up 40% is not a good month,
+    it is a deteriorating one being carried by volume, and gating on the headline alone would
+    have printed NO ACTION over it. So the gate asks a second question: did any single driver
+    move more than half a normal window's worth of revenue in the wrong direction? */
+ let masked=[];
+ if(sh){const half=(band?band.p50:5)/2;
+  [['conversion rate',sh.C],['basket size',sh.A],['sessions',sh.S]].forEach(function(d){
+   if(d[1]<0 && Math.abs(d[1])/P.rev*100 > half) masked.push(d);});}
+ R_MASKED=masked;
+ if(!material&&band&&!masked.length){
+  head+='<div class="ins" style="margin-top:10px"><div class="row"><span class="dot" style="background:#12a06e"></span><span>'
+   +REC+'<b>NO ACTION.</b> A '+Math.abs(pct).toFixed(1)+'% move over '+len+' days is inside this account&rsquo;s normal range &mdash; '
+   +'across '+band.n+' comparable windows the typical swing is '+band.p50.toFixed(1)+'% and four in five land under '+band.p80.toFixed(1)+'%. '
+   +'No single driver moved against you either. Nothing here is worth touching.</span></div></div>';
+ }else if(!material&&band&&masked.length){
+  head+='<div class="ins" style="margin-top:10px"><div class="row"><span class="dot" style="background:#c9834a"></span><span>'
+   +INF+'<b>The headline is normal; what is underneath it is not.</b> Revenue moved '+Math.abs(pct).toFixed(1)+'%, inside the usual '
+   +band.p50.toFixed(1)+'% swing &mdash; but '+masked.map(function(d){return '<b>'+d[0]+'</b> took '+SGN(d[1])+' out';}).join(' and ')
+   +', and it is being covered by the other drivers. A month that grows only because traffic grew is not the same as a month that grew because it got better.</span></div></div>';
+ }else if(band){
+  head+='<div style="font-size:11.5px;color:#5a637a;margin-top:6px">'+OBS+'This is outside normal: comparable windows typically move '
+   +band.p50.toFixed(1)+'%, and 80% stay under '+band.p80.toFixed(1)+'%. This one moved '+Math.abs(pct).toFixed(1)+'%.</div>';
+ }
+ /* ---------- 2. HOW MUCH DID EACH FACTOR CONTRIBUTE ---------- */
+ let deco='';
+ if(sh){
+  const parts=[['Conversion rate',sh.C,C.cvr,P.cvr,'%',2],['Sessions',sh.S,C.sess,P.sess,'',0],['Basket size (AOV)',sh.A,C.aov,P.aov,'E£',0]]
+   .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  deco='<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px">'
+   +'<tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Driver</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Then &rarr; now</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Revenue impact</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Share of the move</th></tr>';
+  parts.forEach(p=>{
+   const fmt=v=>p[4]==='E£'?('E£'+Math.round(v).toLocaleString()):(p[4]==='%'?v.toFixed(2)+'%':Math.round(v).toLocaleString());
+   deco+='<tr><td style="padding:6px 8px;border-bottom:1px solid #eef0f5;font-weight:700">'+p[0]+'</td>'
+    +'<td style="padding:6px 8px;border-bottom:1px solid #eef0f5;text-align:right;color:#5a637a">'+fmt(p[3])+' &rarr; <b style="color:#0F172A">'+fmt(p[2])+'</b> <span style="color:'+(p[2]>=p[3]?'#12a06e':'#e23a63')+'">'+PC((p[2]/p[3]-1)*100)+'</span></td>'
+    +'<td style="padding:6px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:800;color:'+(p[1]>=0?'#12a06e':'#e23a63')+'">'+SGN(p[1])+'</td>'
+    +'<td style="padding:6px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:700">'+(dRev?Math.round(p[1]/dRev*100):0)+'%</td></tr>';});
+  deco+='<tr style="background:#f8f9fc;font-weight:800"><td style="padding:6px 8px">Net</td><td></td>'
+   +'<td style="padding:6px 8px;text-align:right">'+SGN(sh.total)+'</td><td style="padding:6px 8px;text-align:right">100%</td></tr></table>'
+   +'<div style="font-size:11px;color:#8a93a6;margin-top:6px">Revenue = sessions &times; conversion rate &times; basket size. Split by Shapley value, so the interaction between the three is shared rather than handed to whichever is calculated first'
+   +(cover?'; the three add back to the exact revenue change.':'; NOTE: the parts do not reconcile, treat with caution.')+'</div>';
+ }else{
+  deco='<div style="font-size:12px;color:#b8860b">'+TAG('INSUFFICIENT DATA','#b8860b')+'Sessions are not available for one of these windows, so the change cannot be split into traffic, conversion and basket size.</div>';
+ }
+ /* ---------- 3. WHERE: which funnel stage ---------- */
+ let stage='';
+ if(C.atc!=null&&P.atc!=null&&C.cko!=null&&P.cko!=null){
+  const dAtc=(C.atc/P.atc-1)*100, dCko=(C.cko/P.cko-1)*100, dCvr=(C.cvr/P.cvr-1)*100;
+  const worst=[['adding to cart',dAtc],['reaching checkout',dCko],['completing the purchase',dCvr]].sort((a,b)=>a[1]-b[1])[0];
+  stage='<div class="ins"><div class="row"><span class="dot" style="background:#0F172A"></span><span>'+OBS
+   +'Add-to-cart rate '+P.atc.toFixed(2)+'% &rarr; '+C.atc.toFixed(2)+'% ('+PC(dAtc)+'), reached checkout '+P.cko.toFixed(2)+'% &rarr; '+C.cko.toFixed(2)+'% ('+PC(dCko)+'), '
+   +'purchased '+P.cvr.toFixed(2)+'% &rarr; '+C.cvr.toFixed(2)+'% ('+PC(dCvr)+').</span></div>'
+   +'<div class="row"><span class="dot" style="background:#3b7dd8"></span><span>'+INF
+   +'The stage that gave way hardest is <b>'+worst[0]+'</b> ('+PC(worst[1])+'). '
+   +(worst[0]==='completing the purchase'&&dAtc>-3
+     ?'People are still adding to cart at close to the old rate and still reaching checkout, then not finishing &mdash; that pattern points at the checkout itself rather than at traffic quality or the ads.'
+     :(worst[0]==='adding to cart'?'The drop starts before the cart, which points at the product page, the price or the traffic being sent, not at checkout.'
+       :'The loss sits between cart and checkout.'))+'</span></div></div>';
+ }
+ return {head,deco,stage,R,TAG,OBS,INF,HYP,REC};
+}
+
+/* Exact products, from the Odoo order-line crawl. Never "the backpack category" -- the product
+   name, its vendor, what it did, and how much stock is behind it, because a product that is
+   selling less while its stock runs out is an availability problem and must never be sent to a
+   media buyer as creative fatigue. */
+function actProducts(){
+ const Y=O.why||{},w=(Y.win||{})[typeof whyAuto==='function'?whyAuto():'7'];
+ if(!w||!w.prods||!w.prods.length)return null;
+ const move=(w.cur.rev+(w.cur.disc||0))-(w.prv.rev+(w.prv.disc||0));
+ const rows=w.prods.map(p=>({...p,d:(p.r||0)-(p.pr||0)}))
+   .filter(p=>p.d!==0).sort((a,b)=>a.d-b.d);
+ const covered=rows.reduce((a,p)=>a+p.d,0);
+ const downSum=rows.filter(p=>p.d<0).reduce((a,p)=>a+p.d,0), upSum=rows.filter(p=>p.d>0).reduce((a,p)=>a+p.d,0);
+ return {w,move,down:rows.filter(p=>p.d<0).slice(0,8),up:rows.filter(p=>p.d>0).sort((a,b)=>b.d-a.d).slice(0,8),covered,downSum,upSum};
+}
+
+/* What to put money behind, from Odoo rather than from the ad platforms' own scoring: a product
+   is only worth advertising if it is actually moving, there is stock to sell, and the customers
+   its vendor brings in are worth having. hookV carries the lifetime-gross-profit lift of a
+   vendor's FIRST-purchase customers, which is the part a platform's ROAS can never see. */
+function actProductMix(){
+ const P=actProducts(); if(!P)return null;
+ const HV={}; ((O.hookV||{}).rows||[]).forEach(r=>{HV[r.v]=r;});
+ const push=P.up.map(p=>{
+  const h=HV[p.v]||null;
+  const cover=(p.st!=null&&p.q)?(p.st/(p.q/7)):null;   // days of stock at the current rate
+  return {...p,hook:h,cover};
+ }).filter(p=>p.st==null||p.st>0);
+ const starve=P.up.filter(p=>p.st!=null&&p.q&&(p.st/(p.q/7))<10);
+ const bleed=P.down.filter(p=>p.st!=null&&p.st<=3);
+ return {push,starve,bleed,P};
+}
+
+function rActions(g){
+ const V=rActionsCentre(g); if(!V)return;
+ const {head,deco,stage,R,TAG,OBS,INF,HYP,REC}=V;
+ const {M,SGN,PC,dRev,material}=R;
+ const PM=actProductMix();
+ let prod='';
+ if(PM){
+  const P=PM.P;
+  const cov=P.move?Math.abs(P.covered/P.move*100):null;
+  const line=p=>{
+   const nm=String(p.n||'').replace(/^\[[^\]]*\]\s*/,'').replace(/^\[[^\]]*\]\s*/,'').slice(0,58);
+   /* share is measured against the side it is on: a product that fell is shown as a share of
+      everything that fell, never as a share of a net figure it did not contribute to. */
+   const pool=p.d<0?P.downSum:P.upSum;
+   const share=pool?Math.abs(p.d/pool*100):null;
+   const stock=p.st==null?'<span style="color:#9aa3b5">stock unknown</span>'
+     :(p.st<=3?'<b style="color:#e23a63">'+p.st+' left</b>':(p.st<10?'<b style="color:#c9834a">'+p.st+' left</b>':p.st+' in stock'));
+   return '<tr><td style="padding:5px 8px;border-bottom:1px solid #eef0f5;font-weight:700">'+nm
+    +'<div style="font-size:10px;color:#8a93a6;font-weight:600">'+(p.vn||'')+(p.cat?' &middot; '+p.cat:'')+'</div></td>'
+    +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;color:#5a637a">'+(p.pq||0)+' &rarr; '+(p.q||0)+' units</td>'
+    +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:800;color:'+(p.d>=0?'#12a06e':'#e23a63')+'">'+SGN(p.d)+'</td>'
+    +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right">'+(share!=null?share.toFixed(1)+'%':'—')+'</td>'
+    +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-size:11.5px">'+stock+'</td></tr>';};
+  const TH='<tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Exact product</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Units</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Revenue move</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Share of its side</th>'
+   +'<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10px;color:#64748B;text-transform:uppercase">Stock</th></tr>';
+  prod='<div style="font-size:11.5px;color:#5a637a;margin-bottom:6px">'+OBS+'Comparing '+P.w.s+' &rarr; '+P.w.e+' against '+P.w.ps+' &rarr; '+P.w.pe+'. '
+   +'These are the biggest movers by name, not a category. They account for '+(cov!=null?cov.toFixed(0)+'%':'an unknown share')+' of the total move &mdash; the crawl keeps the top movers only, so the rest is spread thinly across the tail.</div>'
+   +'<div style="font-weight:800;font-size:12px;color:#e23a63;margin:10px 0 2px">LOSING THE MOST</div>'
+   +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+TH+PM.P.down.map(line).join('')+'</table>'
+   +'<div style="font-weight:800;font-size:12px;color:#12a06e;margin:14px 0 2px">GAINING THE MOST</div>'
+   +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+TH+PM.P.up.map(line).join('')+'</table>';
+ }
+ /* ---------- the actions ---------- */
+ const acts=[];
+ /* Only a genuinely quiet period earns NO ACTION. If a driver is deteriorating under a calm
+    headline, saying "no action" would contradict the diagnosis printed directly above it. */
+ if(!material&&!R_MASKED.length){
+  acts.push({p:'—',a:'NO ACTION',ent:'Whole account',why:'The move is inside normal variance for a window this length, and no single driver moved against you.',
+   ev:'Typical swing '+(R.band?R.band.p50.toFixed(1):'?')+'%, this one '+Math.abs(R.pct).toFixed(1)+'%.',conf:'High',col:'#12a06e'});
+ }
+ if(R_MASKED.length){
+  R_MASKED.forEach(function(d){
+   acts.push({p:'P1',a:'PROTECT THE MIX',ent:'Whole account — '+d[0],
+    why:'Revenue held up, but this driver moved against you and volume is hiding it. Left alone, it shows up as soon as traffic stops growing.',
+    ev:d[0]+' cost '+SGN(d[1])+' over the window while the headline stayed inside its normal range.',
+    conf:'Moderate',col:'#c9834a',
+    test:'Before spending more, check whether the mix shifted to cheaper products or heavier discounting — the product table below names which ones moved.'});});
+ }
+ if(PM&&PM.bleed.length){
+  PM.bleed.forEach(p=>acts.push({p:'P0',a:'FIX STOCK',ent:String(p.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,52),
+   why:'Selling less with almost nothing left on the shelf. This is availability, not creative.',
+   ev:(p.pq||0)+' &rarr; '+(p.q||0)+' units, '+SGN(p.d)+', '+p.st+(p.st===1?' unit':' units')+' of stock remaining.',
+   conf:'High',col:'#e23a63',test:'Do not cut its traffic. Restock or substitute the variant, then re-measure.'}));
+ }
+ if(PM&&PM.starve.length){
+  PM.starve.forEach(p=>acts.push({p:'P1',a:'RESTOCK BEFORE SCALING',ent:String(p.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,52),
+   why:'It is growing and it is about to run out. Spending harder on it now buys traffic you cannot fulfil.',
+   ev:(p.pq||0)+' &rarr; '+(p.q||0)+' units, '+SGN(p.d)+', roughly '+Math.round(p.st/(p.q/7))+' days of cover at the current rate.',
+   conf:'High',col:'#c9834a'}));
+ }
+ if(PM&&PM.push.length){
+  PM.push.slice(0,5).forEach(p=>{
+   const h=p.hook;
+   acts.push({p:'P1',a:'ADVERTISE THIS',ent:String(p.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,52),
+    why:'Growing on its own with stock behind it'+(h?', and its supplier brings in customers worth '+h.lift.toFixed(1)+'&times; the average first purchase':'')+'.',
+    ev:(p.pq||0)+' &rarr; '+(p.q||0)+' units, '+SGN(p.d)+', '+(p.st!=null?p.st+' in stock':'stock unknown')
+      +(h?'. First-time buyers of '+h.nm+' reach E£'+Math.round(h.ltgp).toLocaleString()+' lifetime gross profit against an account mean of E£'+Math.round(h.mean).toLocaleString():''),
+    conf:h?'High':'Moderate',col:'#12a06e',
+    test:'Put it in a dedicated ad set rather than adding it to a mixed one, so its own return is readable.'});});
+ }
+ let actHtml='';
+ if(acts.length){
+  actHtml=acts.map(a=>'<div style="border:1px solid #e8ebf2;border-left:3px solid '+a.col+';border-radius:8px;padding:9px 12px;margin-bottom:8px">'
+   +'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">'
+   +'<div><span style="font-size:10px;font-weight:800;color:#fff;background:'+a.col+';border-radius:4px;padding:1px 6px;margin-right:7px">'+a.p+'</span>'
+   +'<b style="font-size:13px">'+a.a+'</b> <span style="color:#5a637a">&mdash; '+a.ent+'</span></div>'
+   +'<span style="font-size:10.5px;color:#8a93a6;font-weight:700">confidence: '+a.conf+'</span></div>'
+   +'<div style="font-size:12px;color:#3b4256;margin-top:5px">'+a.why+'</div>'
+   +'<div style="font-size:11px;color:#5a637a;margin-top:4px"><b>Evidence:</b> '+a.ev+'</div>'
+   +(a.test?'<div style="font-size:11px;color:#5a637a;margin-top:3px"><b>Then:</b> '+a.test+'</div>':'')
+   +'</div>').join('');
+ }
+ /* ---------- what is NOT here, stated rather than faked ---------- */
+ const gaps=[];
+ if(!(O.gsc))gaps.push('Search Console (organic demand)');
+ if(!(O.clarity))gaps.push('Clarity (rage clicks, JS errors, device/browser behaviour)');
+ if(!(O.ga4dev))gaps.push('GA4 device and browser breakdown');
+ const gapHtml=gaps.length?'<div class="ins" style="margin-top:10px"><div class="row"><span class="dot" style="background:#b8860b"></span><span>'
+  +'<b>UNAVAILABLE FROM SOURCE, so not diagnosed:</b> '+gaps.join(' &middot; ')+'. '
+  +'Without them this engine can tell you that checkout completion fell, but not that it fell on one browser, and it cannot separate a demand fall from a visibility fall. '
+  +'Those three connectors are the next build, and nothing here pretends to cover them.</span></div></div>':'';
+
+ pnlCard(g,'ins','What changed, and what to do about it'+INFO('Revenue is split into traffic, conversion and basket size by Shapley value, so the three add back to the exact change instead of one of them absorbing every interaction. Anything inside the account&rsquo;s normal range returns NO ACTION on purpose.'),
+  'Online revenue for the range above, against your selected comparison window. Products come from the Odoo order-line crawl, by exact name.',
+  head
+  +'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">HOW MUCH EACH FACTOR MOVED IT</div>'+deco
+  +(stage?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">WHERE IT BROKE</div>'+stage:'')
+  +(prod?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:16px 0 4px">EXACTLY WHICH PRODUCTS</div>'+prod:'')
+  +(actHtml?'<div style="font-weight:800;font-size:12px;color:#64748B;letter-spacing:.4px;margin:18px 0 6px">WHAT TO DO</div>'+actHtml:'')
+  +gapHtml);
+}
+
 function parcelTaxonomy(g){
  const B=window.O&&O.bosta;if(!B||!B.months)return;
  const m=(ST.e||'').slice(0,7);const v=B.months[m]||B.months[Object.keys(B.months).sort().pop()];
@@ -6635,7 +6930,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-094843';
+const BUILD='20260829-095747';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -7036,7 +7331,8 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
   pnlCard(g,'blend','Competitive pressure &mdash; impression share vs last year','Rank-lost share = auctions you lost on AD RANK (competitors outbidding/outscoring you). Rising rank-lost YoY = someone is pushing into your terms. Budget-lost = you capped yourself.',
    '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Campaign</th><th>Impr share</th><th>LY</th><th>Rank lost</th><th>Rank lost YoY</th><th>Budget lost</th></tr>'+rws+'</table></div>');}
 }
-function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';budgetBoard(g);
+function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
+ try{rActions(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
