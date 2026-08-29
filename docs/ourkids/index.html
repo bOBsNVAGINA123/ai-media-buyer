@@ -630,6 +630,10 @@ function trCanon(path,type){const p=trStrip(path);
 function trFin(u){u.cvr=u.sessions>0?u.orders/u.sessions:0;
  u.atc=u.sessions>0?u.atcW/u.sessions:0;u.checkout=u.sessions>0?u.chkW/u.sessions:0;
  u.pCvr=u.pSessions>0?u.pOrders/u.pSessions:0;u.dCvr=u.cvr-u.pCvr;
+ // v9.46: percentage CHANGE, not percentage points -- "0.31pp" tells you nothing about whether
+ // that is a rounding wobble or a third of the conversion rate. Null when there is no prior
+ // period to divide by, so a brand-new page reads "new" instead of a fabricated jump.
+ u.dCvrP=u.pCvr>0?(u.cvr-u.pCvr)/u.pCvr:null;
  // sessions trend vs the same window before it -- new pages have no prior period, so they
  // read as null (shown as "new") rather than a fake +100%
  u.dSess=u.sessions-u.pSessions;u.dSessP=u.pSessions>0?(u.sessions-u.pSessions)/u.pSessions:null;
@@ -2386,7 +2390,7 @@ function whyWaterfall(g,W){
  if(eDisc<0&&eOrd>0)notes.push([C.orange,'<b>Discounting gave back '+M(eDisc)+' of the '+M(eOrd)+' the extra orders brought in</b> &mdash; '+Math.abs(eDisc/eOrd*100).toFixed(0)+'% of the volume gain. Orders bought with a deeper discount are not the same win as orders bought at list.']);
  notes.push(['#7c869c','<b>How to read the order of the bars.</b> Volume is applied first, then basket size, then price, then discount &mdash; each one measured on the mix that the earlier ones already produced. Any chained decomposition has to pick an order; a different order would shift value between the middle bars without changing the total or the end columns.']);
  pnlCard(g,'odoo','What moved the money'+INFO('The left column is last period’s net revenue and the right column is this period’s. Each bar in between starts where the last one finished and shows one driver: more or fewer orders, bigger or smaller baskets, higher or lower price per item, and finally the change in discounts given. Green adds, red takes away.'),
-  'Shopify order lines, this window against the one immediately before it. Revenue = orders × items per order × price per item, with the discount line applied last; the bars close on the end column exactly.',
+  (window.WHYSCOPE==='off'?'POS receipt lines from the seven shops':'Shopify order lines')+', this window against the one immediately before it. Revenue = orders × items per order × price per item, with the discount line applied last; the bars close on the end column exactly.',
   '<div style="position:relative;height:280px"><canvas id="wfC"></canvas></div>'
   +'<div class="ins" style="margin-top:8px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
  const VL={id:'wfVal',afterDatasetsDraw(cc){const m=cc.getDatasetMeta(0);if(!m)return;const t=cc.ctx;t.save();
@@ -9605,7 +9609,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-231833'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-232858'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
@@ -9747,11 +9751,26 @@ function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28')
   +body+'</table></div>');
 }
 
+/* Scope switch for the WHY tab. Two different businesses, one renderer. */
+function whyScopeChips(){const off=window.WHYSCOPE==='off';const on='background:#0f172a;color:#fff;border-color:#0f172a';
+ return '<span class="chip" style="'+(off?'':on)+'" onclick="window.WHYSCOPE=\'shop\';rWHY()">SHOPIFY</span>'
+  +'<span class="chip" style="'+(off?on:'')+'" onclick="window.WHYSCOPE=\'off\';rWHY()">THE SEVEN SHOPS</span>'
+  +'<span style="width:9px;display:inline-block"></span>';}
 function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27');g.innerHTML='';
  if(!window.WHYPIN)window.WHYW=whyAuto();
- const Y=O.why||{};const W=(Y.win||{})[window.WHYW];
- document.getElementById('bn27').innerHTML='<b>WHY</b> — each number broken into the parts that moved it, down to vendors, products and stock. Shopify order lines from Odoo (confirmed orders, shipping line excluded), refreshed every sync'+(Y.pulled?' (pulled '+Y.pulled+')':'')+'.';
- if(!W){pnlCard(g,'odoo','Why tab','Root-cause data arrives on the next collector sync (v9.7.17). Check back within 3 hours.','');return;}
+ /* v9.46: "what caused it" used to exist for Shopify ONLY, because the pull behind it reads the
+    Shopify sales team out of sale.order.line. The seven shops are a different table entirely
+    (report.pos.order) and had no root-cause view at all. Same renderer, two payloads: the branch
+    one carries gross profit and a per-shop split, and has no session/refund series, so those two
+    nodes are swapped rather than faked. */
+ const OFFM=window.WHYSCOPE==='off';
+ const Y=(OFFM?O.whyOff:O.why)||{};const W=(Y.win||{})[window.WHYW];
+ document.getElementById('bn27').innerHTML='<b>WHY</b> — each number broken into the parts that moved it, down to vendors, products and stock. '
+  +(OFFM?'<b>THE SEVEN SHOPS</b> — POS receipt lines from Odoo, gross profit included.':'<b>SHOPIFY</b> — webstore order lines from Odoo (confirmed orders, shipping line excluded).')
+  +' Refreshed every sync'+(Y.pulled?' (pulled '+Y.pulled+')':'')+'.';
+ if(!W){pnlCard(g,'odoo','Why tab &mdash; '+(OFFM?'the seven shops':'Shopify'),
+   (OFFM?'The in-store root-cause pull ships with the next collector sync. ':'Root-cause data arrives on the next collector sync. ')+'Check back within 3 hours.',
+   '<div style="padding:0 14px 12px">'+whyScopeChips()+'</div>');return;}
  const M=v=>'E£ '+Math.round(Math.abs(v)).toLocaleString();const SM=v=>(v>=0?'+':'−')+M(v);const col=v=>v>=0?'#12a06e':'#e23a63';
  const pc=(c,p)=>(p?((c/p-1)*100):null);const fp=v=>v==null?'—':((v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%');
  const pickD=Math.max(1,span(ST.s,ST.e));
@@ -9761,7 +9780,9 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
  // returns from the daily finance panel (K£), same windows
  const F=O.fin||{};const tF=F.start?new Date(F.start+'T00:00:00Z').getTime():null;const ixF=d=>Math.round((new Date(d+'T00:00:00Z')-tF)/864e5);
  const sumF=(arr,a,b)=>{if(!tF||!arr)return 0;let t=0;for(let i=ixF(a);i<=ixF(b);i++)t+=(arr[i]||0);return t*1000;};
- const retC=sumF(F.refund,W.s,W.e),retP=sumF(F.refund,W.ps,W.pe);
+ // POS receipts carry no credit-note series of their own, so in-store "net" IS the receipt total.
+ // Showing a zero returns line there would read as "nothing came back", which is not what it means.
+ const retC=OFFM?0:sumF(F.refund,W.s,W.e),retP=OFFM?0:sumF(F.refund,W.ps,W.pe);
  const netC=C.rev-retC,netP=P.rev-retP;
  // new / returning from the daily ad panel
  const A=O.ad||{};const tA=A.start?new Date(A.start+'T00:00:00Z').getTime():null;const ixA=d=>Math.round((new Date(d+'T00:00:00Z')-tA)/864e5);
@@ -9794,23 +9815,29 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
     prodBars(gainers.map(function(x){return Object.assign({},x,{d:(x.r||0)-(x.pr||0)});}),
              {key:'wg',pool:gainers.reduce(function(a,x){return a+((x.r||0)-(x.pr||0));},0)})));
  // ---- tree ----
- const tree=node(0,'Net revenue — '+W.s+' &rarr; '+W.e+' vs '+W.ps+' &rarr; '+W.pe,M(netP)+' → <b>'+M(netC)+'</b> <span style="color:'+col(netC-netP)+'">'+SM(netC-netP)+' · '+fp(pc(netC,netP))+'</span>','Net = gross order lines − posted credit notes (returns). Shopify channel.',
+ const tree=node(0,'Net revenue — '+W.s+' &rarr; '+W.e+' vs '+W.ps+' &rarr; '+W.pe,M(netP)+' → <b>'+M(netC)+'</b> <span style="color:'+col(netC-netP)+'">'+SM(netC-netP)+' · '+fp(pc(netC,netP))+'</span>',(OFFM?'Receipt lines from the seven shops&rsquo; POS journals. No credit-note series exists per shop, so this is the receipt total, not net of returns.':'Net = gross order lines − posted credit notes (returns). Shopify channel.'),
    node(1,'Gross sales (order lines, excl. shipping)',M(P.rev)+' → <b>'+M(C.rev)+'</b> <span style="color:'+col(C.rev-P.rev)+'">'+SM(C.rev-P.rev)+' · '+fp(pc(C.rev,P.rev))+'</span>','Gross = orders &times; AOV &nbsp;&rarr;&nbsp; '+shareLine(share([['orders',C.ord,P.ord],['AOV',aovC,aovP]])),
-     node(2,'Orders',P.ord.toLocaleString()+' → <b>'+C.ord.toLocaleString()+'</b> <span style="color:'+col(C.ord-P.ord)+'">'+fp(pc(C.ord,P.ord))+'</span>','Orders = new customers + returning customers (customer-type counts from the Shopify daily panel; can differ by a few orders from the Odoo order count)',
-       node(3,'New customers',ncP.toLocaleString()+' → <b>'+ncC.toLocaleString()+'</b> <span style="color:'+col(ncC-ncP)+'">'+fp(pc(ncC,ncP))+'</span>',(ncC+rcC)?Math.round(ncC/(ncC+rcC)*100)+'% of orders · first-ever order in the chain':'')
-      +node(3,'Returning customers',rcP.toLocaleString()+' → <b>'+rcC.toLocaleString()+'</b> <span style="color:'+col(rcC-rcP)+'">'+fp(pc(rcC,rcP))+'</span>',''))
+     node(2,'Orders',P.ord.toLocaleString()+' → <b>'+C.ord.toLocaleString()+'</b> <span style="color:'+col(C.ord-P.ord)+'">'+fp(pc(C.ord,P.ord))+'</span>',(OFFM?'Distinct receipts, split by shop below. A shop whose receipts fell while its revenue held was selling fewer, bigger baskets.':'Orders = new customers + returning customers (customer-type counts from the Shopify daily panel; can differ by a few orders from the Odoo order count)'),
+       (OFFM?(W.brs||[]).map(b=>node(3,esc(b.n),b.pord.toLocaleString()+' → <b>'+b.ord.toLocaleString()+'</b> receipts <span style="color:'+col(b.ord-b.pord)+'">'+fp(pc(b.ord,b.pord))+'</span>',
+          M(b.pr)+' → <b>'+M(b.r)+'</b> revenue <span style="color:'+col(b.r-b.pr)+'">'+fp(pc(b.r,b.pr))+'</span> · gross profit '+M(b.gp)+(b.r?' ('+Math.round(b.gp/b.r*100)+'% margin)':''))).join('')
+        :node(3,'New customers',ncP.toLocaleString()+' → <b>'+ncC.toLocaleString()+'</b> <span style="color:'+col(ncC-ncP)+'">'+fp(pc(ncC,ncP))+'</span>',(ncC+rcC)?Math.round(ncC/(ncC+rcC)*100)+'% of orders · first-ever order in the chain':'')
+         +node(3,'Returning customers',rcP.toLocaleString()+' → <b>'+rcC.toLocaleString()+'</b> <span style="color:'+col(rcC-rcP)+'">'+fp(pc(rcC,rcP))+'</span>','')))
     +node(2,'AOV (gross per order)',M(aovP)+' → <b>'+M(aovC)+'</b> <span style="color:'+col(aovC-aovP)+'">'+fp(pc(aovC,aovP))+'</span>','AOV = units per order &times; price per unit &nbsp;&rarr;&nbsp; '+shareLine(share([['units/order',upoC,upoP],['price/unit',ppuC,ppuP]])),
        node(3,'Units per order',upoP.toFixed(2)+' → <b>'+upoC.toFixed(2)+'</b> <span style="color:'+col(upoC-upoP)+'">'+fp(pc(upoC,upoP))+'</span>','Bigger baskets = cross-sell working; smaller = single-item buyers')
       +mix))
-  +node(1,'Returns (credit notes posted in window)',M(retP)+' → <b>'+M(retC)+'</b> <span style="color:'+col(retP-retC)+'">'+fp(pc(retC,retP))+'</span>','Posted credit notes lag the order by days — a returns spike usually belongs to LAST window&rsquo;s orders.'));
+  +(OFFM
+    ?node(1,'Gross profit on those receipts',M(P.gp||0)+' → <b>'+M(C.gp||0)+'</b> <span style="color:'+col((C.gp||0)-(P.gp||0))+'">'+SM((C.gp||0)-(P.gp||0))+' · '+fp(pc(C.gp,P.gp))+'</span>','Margin from the POS report itself, not a blended assumption. '+(C.rev?Math.round((C.gp||0)/C.rev*100)+'% of receipts this window':'')+(P.rev?', was '+Math.round((P.gp||0)/P.rev*100)+'%':'')+'.')
+    :node(1,'Returns (credit notes posted in window)',M(retP)+' → <b>'+M(retC)+'</b> <span style="color:'+col(retP-retC)+'">'+fp(pc(retC,retP))+'</span>','Posted credit notes lag the order by days — a returns spike usually belongs to LAST window&rsquo;s orders.')));
  // ---- verdict ----
  const sh1=share([['orders',C.ord,P.ord],['AOV',aovC,aovP]]),sh2=share([['units/order',upoC,upoP],['price/unit',ppuC,ppuP]]);
  const vmov=vend.slice(0,3).map(v=>v.n+' '+SM(v.r-v.pr)).join(', ');
+ const bMov=OFFM?(W.brs||[]).slice(0,3).map(b=>b.n+' '+SM(b.r-b.pr)).join(', '):'';
  const verdict='<div style="font-size:13px;line-height:1.6"><b>Net revenue '+fp(pc(netC,netP))+'.</b> Gross '+fp(pc(C.rev,P.rev))+' — '+sh1.map(x=>x.l+' '+fp(x.pc)+' ('+Math.round(x.sh)+'%)').join(', ')+'. AOV moved because '+sh2.map(x=>x.l+' '+fp(x.pc)+' ('+Math.round(x.sh)+'%)').join(' and ')+'. '
   +(oosLoss>totAbs*0.1?'<b style="color:#e23a63">Stock-outs explain '+Math.round(oosLoss/totAbs*100)+'% of all product movement ('+oos.length+' items at &le;3 units — restock list below).</b> ':'')
   +(Math.abs(C.disc)<=Math.abs(P.disc)?'Discounting fell, so price moves are mix, not promo. ':'Discounting rose. ')
-  +'Returns '+fp(pc(retC,retP))+'. Vendors driving it: '+vmov+'.</div>';
- pnlCard(g,'odoo','The verdict','<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div>',winBanner+verdict);
+  +(OFFM?'Gross profit '+fp(pc(C.gp,P.gp))+(bMov?'. Shops moving it: '+bMov:'')+'. ':'Returns '+fp(pc(retC,retP))+'. ')
+  +'Vendors driving it: '+vmov+'.</div>';
+ pnlCard(g,'odoo','The verdict &mdash; '+(OFFM?'the seven shops':'Shopify'),'<div style="margin:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">'+whyScopeChips()+chips+'</div>',winBanner+verdict);
  try{whyWaterfall(g,W);}catch(e){}
  pnlCard(g,'odoo','Root-cause tree','Read it top-down: each box is explained by the boxes indented under it. Percentages in grey = share of the parent&rsquo;s move.',tree);
 }
