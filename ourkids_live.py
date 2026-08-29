@@ -3711,6 +3711,93 @@ def pull_why():
         log("why", d, "d :: prods", len(rows), ":: orders", tc.get("ord"), "vs", tp.get("ord"))
     return {"pulled": END.isoformat(), "win": out}
 
+def pull_why_offline():
+    """v9.46: the WHY decomposition for THE SEVEN SHOPS.
+
+    "What caused it" only ever worked for Shopify, because pull_why reads sale.order.line filtered
+    to the Shopify sales team. Branch retail is a different table entirely -- report.pos.order --
+    so the whole in-store side of the business had no root-cause view at all.
+
+    Same shape as pull_why so the front end can share one renderer: 1 / 7 / 28-day windows against
+    the window before, decomposed into orders, units per order and price per unit, then down to
+    product and vendor. Two things the online twin cannot do come free here: MARGIN is on the POS
+    report, and every row carries the branch, so a fall can be traced to one shop.
+    Read-only read_group only."""
+    TV = tmpl_vendor_map() or {}; PT = prod_tmpl_map() or {}; NM = vendor_names() or {}
+    ST = [["state", "in", ["paid", "done", "invoiced"]]]
+
+    def _br(cfg):
+        nm = (cfg or [0, ""])[1] or ""
+        return next((b for k, b in POS_CFG if k in nm), None)
+
+    def agg(a, b):
+        P = {}; BR = {}
+        tot = {"units": 0.0, "rev": 0.0, "disc": 0.0, "ship": 0, "ord": 0, "gp": 0.0}
+        dom = [["date", ">=", a + " 00:00:00"], ["date", "<=", b + " 23:59:59"]] + ST
+        for r in ogroup("report.pos.order", dom,
+                        ["product_qty", "price_total", "total_discount", "margin", "order_id:count_distinct"],
+                        ["product_id"]):
+            pr = r.get("product_id") or [0, ""]; pid = pr[0]; nm = pr[1] or ""
+            if not pid: continue      # POS has no shipping/discount pseudo-products; those are Shopify-only
+            q = float(r.get("product_qty") or 0); v = float(r.get("price_total") or 0)
+            tot["units"] += q; tot["rev"] += v
+            tot["disc"] += float(r.get("total_discount") or 0)
+            tot["gp"] += float(r.get("margin") or 0)
+            P[pid] = {"n": nm[:60], "q": q, "r": v, "gp": float(r.get("margin") or 0)}
+        # distinct receipts, and the same split per branch, on one more read_group
+        for r in ogroup("report.pos.order", dom,
+                        ["price_total", "margin", "product_qty", "order_id:count_distinct"], ["config_id"]):
+            br = _br(r.get("config_id"))
+            n = int(r.get("order_id") or r.get("__count") or 0)
+            tot["ord"] += n
+            if not br: continue
+            e = BR.setdefault(br, {"n": br, "r": 0.0, "gp": 0.0, "q": 0.0, "ord": 0})
+            e["r"] += float(r.get("price_total") or 0); e["gp"] += float(r.get("margin") or 0)
+            e["q"] += float(r.get("product_qty") or 0); e["ord"] += n
+        return P, BR, tot
+
+    out = {}
+    for d in (1, 7, 28):
+        e = END - datetime.timedelta(days=1); s = e - datetime.timedelta(days=d - 1)
+        pe = s - datetime.timedelta(days=1); ps = pe - datetime.timedelta(days=d - 1)
+        Pc, Bc, tc = agg(s.isoformat(), e.isoformat())
+        Pp, Bp, tp = agg(ps.isoformat(), pe.isoformat())
+        rows = []
+        for pid in set(Pc) | set(Pp):
+            c = Pc.get(pid) or {"n": (Pp.get(pid) or {}).get("n", ""), "q": 0, "r": 0, "gp": 0}
+            pv = Pp.get(pid) or {"q": 0, "r": 0, "gp": 0}
+            tid = PT.get(pid); vt = TV.get(tid, ("", "", "")) if tid else ("", "", "")
+            rows.append({"id": pid, "n": c["n"], "v": vt[0], "vn": (NM.get(vt[0], vt[0]) or "")[:30], "cat": vt[1],
+                         "q": round(c["q"]), "r": round(c["r"]), "gp": round(c.get("gp") or 0),
+                         "pq": round(pv["q"]), "pr": round(pv["r"]), "pgp": round(pv.get("gp") or 0)})
+        rows.sort(key=lambda x: -abs(x["r"] - x["pr"]))
+        top = rows[:80]
+        st = {}
+        try:
+            for r in ogroup("stock.quant", [["product_id", "in", [x["id"] for x in top]],
+                                            ["location_id.usage", "=", "internal"]], ["quantity"], ["product_id"]):
+                st[(r.get("product_id") or [0])[0]] = round(float(r.get("quantity") or 0))
+        except Exception as ex: log("why-off stock fail", str(ex)[:120])
+        for x in top: x["st"] = st.get(x["id"])
+        V = {}
+        for x in rows:
+            k = x["v"] or "?"
+            e2 = V.setdefault(k, {"v": k, "n": x["vn"] or "(no vendor on file)", "r": 0, "pr": 0, "q": 0, "pq": 0})
+            e2["r"] += x["r"]; e2["pr"] += x["pr"]; e2["q"] += x["q"]; e2["pq"] += x["pq"]
+        vend = sorted(V.values(), key=lambda z: -abs(z["r"] - z["pr"]))[:40]
+        brs = []
+        for b in set(Bc) | set(Bp):
+            c = Bc.get(b) or {"r": 0, "gp": 0, "q": 0, "ord": 0}; pv = Bp.get(b) or {"r": 0, "gp": 0, "q": 0, "ord": 0}
+            brs.append({"n": b, "r": round(c["r"]), "pr": round(pv["r"]), "gp": round(c["gp"]), "pgp": round(pv["gp"]),
+                        "q": round(c["q"]), "pq": round(pv["q"]), "ord": c["ord"], "pord": pv["ord"]})
+        brs.sort(key=lambda z: -abs(z["r"] - z["pr"]))
+        out[str(d)] = {"s": s.isoformat(), "e": e.isoformat(), "ps": ps.isoformat(), "pe": pe.isoformat(),
+                       "cur": {k: round(v) for k, v in tc.items()}, "prv": {k: round(v) for k, v in tp.items()},
+                       "prods": top, "vend": vend, "brs": brs, "nprod": len(rows)}
+        log("why-offline", d, "d :: prods", len(rows), ":: receipts", tc.get("ord"), "vs", tp.get("ord"),
+            ":: rev", round(tc.get("rev", 0)), "vs", round(tp.get("rev", 0)))
+    return {"pulled": END.isoformat(), "win": out}
+
 def pull_budget_events(tok):
     """v8.3: every budget change in the last 60 days from the account activity feed.
     CBO arrives as update_campaign_budget, ABO as update_ad_set_budget. extra_data
@@ -5198,7 +5285,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": safe(pull_why) or prev.get("why") or {},
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": safe(pull_why) or prev.get("why") or {}, "whyOff": safe(pull_why_offline) or prev.get("whyOff") or {},
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
