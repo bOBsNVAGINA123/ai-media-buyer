@@ -1718,6 +1718,57 @@ def pull_gads_ops(prev=None):
     out["lists"] = sorted(lists, key=lambda x: -x["size"])
     log("gads ops :: %d enabled conversion actions, %d audience lists" % (len(conv), len(lists)))
 
+    # ---- audience attachment + what observation actually reports ----
+    # Observation mode attaches a list without restricting delivery, so Google reports performance
+    # for the slice it RECOGNISES as list members. That recognition happens at ad-serve time and is
+    # far weaker than the upload match rate: a list can be 100% matched on upload and still be
+    # recognised on only a few percent of converting sessions. The numbers are recorded here so the
+    # dashboard can show the gap rather than mistaking a recognition rate for a customer mix.
+    obs = {}
+    for r in q("SELECT campaign.name, campaign_criterion.user_list.user_list, metrics.cost_micros, "
+               "metrics.conversions, metrics.conversions_value, metrics.clicks "
+               "FROM campaign_audience_view WHERE segments.date DURING LAST_30_DAYS"):
+        uid = ((((r.get("campaignCriterion") or {}).get("userList") or {}).get("userList")) or "").rsplit("/", 1)[-1]
+        if not uid: continue
+        c = ((r.get("campaign") or {}).get("name") or "")[:70]
+        m = r.get("metrics") or {}
+        e = obs.setdefault(uid, {"cmp": {}, "sp": 0.0, "cn": 0.0, "cv": 0.0})
+        sp = float(m.get("costMicros") or 0) / 1e6
+        cn = float(m.get("conversions") or 0); cv = float(m.get("conversionsValue") or 0)
+        e["sp"] += sp; e["cn"] += cn; e["cv"] += cv
+        d = e["cmp"].setdefault(c, [0.0, 0.0, 0.0])
+        d[0] += sp; d[1] += cn; d[2] += cv
+    for e in obs.values():
+        e["sp"] = round(e["sp"]); e["cn"] = round(e["cn"], 1); e["cv"] = round(e["cv"])
+        e["cmp"] = {k: [round(v[0]), round(v[1], 1), round(v[2])] for k, v in e["cmp"].items()}
+    out["obs"] = obs
+
+    # which lists are attached where, and whether it is observation or hard targeting
+    att = {}
+    for r in q("SELECT campaign.name, campaign_criterion.user_list.user_list, campaign_criterion.negative "
+               "FROM campaign_criterion WHERE campaign_criterion.type = 'USER_LIST' AND campaign.status = 'ENABLED'"):
+        uid = ((((r.get("campaignCriterion") or {}).get("userList") or {}).get("userList")) or "").rsplit("/", 1)[-1]
+        if not uid: continue
+        att.setdefault(uid, []).append(((r.get("campaign") or {}).get("name") or "")[:70])
+    out["aud"] = {k: sorted(set(v)) for k, v in att.items()}
+    mode = {}
+    for r in q("SELECT campaign.name, campaign.targeting_setting.target_restrictions "
+               "FROM campaign WHERE campaign.status = 'ENABLED'"):
+        tr = ((r.get("campaign") or {}).get("targetingSetting") or {}).get("targetRestrictions") or []
+        for x in (tr if isinstance(tr, list) else [tr]):
+            if x.get("targetingDimension") == "AUDIENCE":
+                mode[((r.get("campaign") or {}).get("name") or "")[:70]] = "OBSERVATION" if x.get("bidOnly") else "TARGETING"
+    out["audMode"] = mode
+    # carry ids so the dashboard can name a list without a second lookup
+    out["listIds"] = {}
+    for r in q("SELECT user_list.id, user_list.name, user_list.type, user_list.size_for_search, "
+               "user_list.match_rate_percentage FROM user_list WHERE user_list.size_for_search > 0"):
+        u = r.get("userList") or {}
+        out["listIds"][str(u.get("id"))] = {"n": (u.get("name") or "")[:60], "t": u.get("type", ""),
+                                            "size": int(u.get("sizeForSearch") or 0),
+                                            "match": u.get("matchRatePercentage")}
+    log("gads ops :: %d observed audiences, %d campaigns with an audience mode" % (len(obs), len(mode)))
+
     log("gads ops ok: %d changes (%d budget), %d campaigns with new/returning"
         % (len(chg), len(out["budgetChanges"]), len(out["newRet"])))
     return out
