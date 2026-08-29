@@ -2998,51 +2998,132 @@ var MDLVL='ad', MDPF='all';
 function mdSet(k,v){if(k==='lvl')MDLVL=v;else MDPF=v;rMD();}
 const MD_MIN_SP=3000, MD_MIN_PUR=5;   // floor for any CUT / PUMP call
 
+/* v9.31 The desk now follows the date filter, the comparison period and the attribution
+   selector, instead of ranking whole-lifetime totals. Lifetime made a long-dead winner outrank
+   something losing money this week, which is the opposite of what a "what do I do today" tab is
+   for. Entities with no daily series (TikTok ships totals only) are held out of the windowed view
+   and said so, rather than silently carrying a lifetime number into a weekly ranking. */
+function mdWin(){
+ const cut=O.partial||null; let s=ST.s,e=ST.e; if(cut&&e>=cut)e=addD(cut,-1);
+ return {s,e,pw:cmpWr(s,e)};
+}
+function mdDaily(d,W,keys,a,b){
+ if(!W||!W.start||!W.n)return null;
+ const t0=new Date(W.start+'T00:00:00Z').getTime();
+ const ix=x=>Math.round((new Date(x+'T00:00:00Z')-t0)/864e5);
+ const i0=ix(a), i1=ix(b);
+ if(i1<0||i0>W.n-1)return null;                 // range sits outside this feed entirely
+ const lo=Math.max(0,i0), hi=Math.min(W.n-1,i1);
+ const o={};
+ keys.forEach(k=>{let t=0;for(let i=lo;i<=hi;i++)t+=((d[k]||[])[i]||0);o[k]=t;});
+ o._days=hi-lo+1; o._want=i1-i0+1;
+ return o;
+}
 function mdRows(){
  const {gpOn}=_gpPct();
  const AT=O.attr||{};
  const iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1;
  const iG=(AT.google&&AT.google.incr)||1, iT=(AT.tt&&AT.tt.incr)||1;
- const out=[];
- const push=(o)=>{if(o.sp>0)out.push(o);};
- (O.mads||[]).forEach(a=>push({pf:'meta', id:a.id, n:a.n, cmp:a.cmp, as:a.as, cid:a.cid, asid:a.asid,
-   st:a.st, sp:a.sp||0, pur:(a.pur||0)+(a.op||0), web:a.pv||0, off:a.ofv||0, nc:a.nc||0, ncv:a.ncv||0,
-   inc:(a.pv||0)*iM+(a.ofv||0)*iMo, th:a.th, pl:a.pl}));
- (O.gads||[]).forEach(a=>push({pf:'google', id:a.id, n:a.n, cmp:a.n, as:a.cmp||'—', cid:a.id, asid:a.id,
-   st:a.st, sp:a.sp||0, pur:(a.pur||0)+(a.opur||0), web:a.pv||0, off:a.ofv||0, nc:0, ncv:0,
-   inc:(a.pv||0)*iG+(a.ofv||0)*iG}));
- (O.tads||[]).forEach(a=>push({pf:'tiktok', id:a.id, n:a.n, cmp:a.cmp, as:a.cmp||'—', cid:a.cmp, asid:a.cmp,
-   st:a.st, sp:a.sp||0, pur:(a.pur||0)+(a.opur||0), web:a.pv||0, off:a.ofv||0, nc:0, ncv:0,
-   inc:(a.pv||0)*iT+(a.ofv||0)*iT}));
- return {rows:out.filter(r=>MDPF==='all'||r.pf===MDPF), gpOn};
+ /* the REPORTED column follows whatever the attribution selector is set to, so changing it
+    actually changes what you are looking at; the incremental column never does */
+ const rM=(typeof af==='function')?af('meta'):1, rMo=(typeof afo==='function')?afo():1;
+ const rG=(typeof af==='function')?af('google'):1, rT=(typeof af==='function')?af('tt'):1;
+ const W=mdWin(), MW=O.madsW, GW=O.gadsW;
+ const out=[]; let noWin=0, noWinSp=0, partial=false;
+ const mk=(pf,a,cur,prv,inc,rep,extra)=>Object.assign({pf, id:a.id, n:a.n, cmp:a.cmp||a.n, as:a.as||a.cmp||'—',
+   cid:a.cid||a.id, asid:a.asid||a.id, st:a.st, th:a.th, pl:a.pl,
+   sp:cur.sp, pur:cur.pur, web:cur.web, off:cur.off, inc, rep,
+   clk:cur.clk||0, imp:cur.imp||0, prev:prv}, extra||{});
+ (O.mads||[]).forEach(a=>{
+  const d=a.d||{};
+  /* daily keys are NOT the entity-total keys: offline value is `fv` here, clicks are `oc` */
+  const MK=['sp','pv','fv','pu','op','oc','im'];
+  const c=mdDaily(d,MW,MK,W.s,W.e);
+  const p=mdDaily(d,MW,MK,W.pw[0],W.pw[1]);
+  if(!c){if((a.sp||0)>0){noWin++;noWinSp+=a.sp||0;}return;}
+  if(c._days<c._want)partial=true;
+  const cur={sp:c.sp,web:c.pv,off:c.fv,pur:c.pu+c.op,clk:c.oc,imp:c.im};
+  const prv=p?{sp:p.sp,web:p.pv,off:p.fv,pur:p.pu+p.op,clk:p.oc,imp:p.im}:null;
+  if(cur.sp<=0)return;
+  out.push(mk('meta',a,cur,prv,cur.web*iM+cur.off*iMo,cur.web*rM+cur.off*rMo,
+    {prevInc:prv?prv.web*iM+prv.off*iMo:null, nc:0, ncv:0}));});
+ (O.gads||[]).forEach(a=>{
+  const d=a.d||{};
+  const c=mdDaily(d,GW,['sp','pv','pur','clk','imp'],W.s,W.e);
+  const p=mdDaily(d,GW,['sp','pv','pur','clk','imp'],W.pw[0],W.pw[1]);
+  if(!c){if((a.sp||0)>0){noWin++;noWinSp+=a.sp||0;}return;}
+  if(c._days<c._want)partial=true;
+  const cur={sp:c.sp,web:c.pv,off:0,pur:c.pur,clk:c.clk,imp:c.imp};
+  const prv=p?{sp:p.sp,web:p.pv,off:0,pur:p.pur,clk:p.clk,imp:p.imp}:null;
+  if(cur.sp<=0)return;
+  out.push(mk('google',Object.assign({},a,{cmp:a.n,as:a.cmp||'—'}),cur,prv,cur.web*iG,cur.web*rG,
+    {prevInc:prv?prv.web*iG:null, nc:0, ncv:0}));});
+ /* TikTok ships entity totals with no daily series, so it cannot be windowed at all */
+ let ttHeld=0, ttSp=0;
+ (O.tads||[]).forEach(a=>{if((a.sp||0)>0){ttHeld++;ttSp+=a.sp||0;}});
+ return {rows:out.filter(r=>MDPF==='all'||r.pf===MDPF), gpOn, W, noWin, noWinSp, ttHeld, ttSp, partial};
 }
-/* roll ads up to ad set or campaign -- Google and TikTok have no ad-level rows here, so they
-   simply appear once at whatever level is asked for rather than vanishing from the ranking */
+/* roll ads up to ad set or campaign */
 function mdRoll(rows,lvl){
  if(lvl==='ad')return rows.slice();
  const key=r=>r.pf+'|'+(lvl==='set'?r.asid:r.cid);
  const m={};
  rows.forEach(r=>{const k=key(r);
   if(!m[k])m[k]={pf:r.pf,id:(lvl==='set'?r.asid:r.cid),n:(lvl==='set'?r.as:r.cmp),cmp:r.cmp,as:r.as,
-    sp:0,pur:0,web:0,off:0,inc:0,nc:0,ncv:0,kids:0,st:r.st};
-  const o=m[k];o.sp+=r.sp;o.pur+=r.pur;o.web+=r.web;o.off+=r.off;o.inc+=r.inc;o.nc+=r.nc;o.ncv+=r.ncv;o.kids++;});
+    sp:0,pur:0,web:0,off:0,inc:0,rep:0,clk:0,imp:0,prevInc:0,kids:0,st:r.st,
+    prev:{sp:0,web:0,off:0,pur:0,clk:0,imp:0}};
+  const o=m[k];
+  ['sp','pur','web','off','inc','rep','clk','imp'].forEach(f=>{o[f]+=r[f]||0;});
+  o.prevInc+=r.prevInc||0;
+  if(r.prev)['sp','web','off','pur','clk','imp'].forEach(f=>{o.prev[f]+=r.prev[f]||0;});
+  o.kids++;});
  return Object.values(m);
 }
 function mdScore(r,gpOn,be){
- const roas=r.sp?(r.web+r.off)/r.sp:null;          // what the platform reports
+ const rep=r.rep!=null?r.rep:(r.web+r.off);
+ const roas=r.sp?rep/r.sp:null;                    // at the attribution setting you picked
  const iroas=r.sp?r.inc/r.sp:null;                 // after the measured incremental haircut
  const gp=r.sp*((iroas||0)*gpOn-1);                // gross profit left after the ad is paid for
  const thin=(r.sp<MD_MIN_SP||r.pur<MD_MIN_PUR);
+ const P=r.prev, pInc=r.prevInc;
+ const pRoas=(P&&P.sp)?(pInc/P.sp):null;           // prior period, same incremental basis
+ const dRoas=(pRoas!=null&&iroas!=null&&pRoas)?(iroas/pRoas-1):null;
+ const pGp=(P&&P.sp)?P.sp*((pRoas||0)*gpOn-1):null;
+ const dGp=(pGp!=null)?gp-pGp:null;
  let v;
  if(thin)v='INSUFFICIENT DATA';
  else if(iroas>=be*1.35)v='PUMP';
  else if(iroas>=be*1.05)v='HOLD';
  else if(iroas>=be*0.75)v='TRIM';
  else v='CUT';
- return {roas,iroas,gp,thin,v};
+ /* THE MAIN REASON. A verdict without a cause is an instruction to guess, so this names the one
+    thing most responsible -- checked in order of how actionable it is, not how large it is. */
+ let why=null;
+ const offShare=(r.web+r.off)?r.off/(r.web+r.off):0;
+ const cvr=r.clk?r.pur/r.clk:null, pCvr=(P&&P.clk)?P.pur/P.clk:null;
+ /* basket must be compared on the SAME basis at both ends: `rep` is attribution-adjusted and the
+    prior side is raw, so mixing them would turn a change of attribution setting into a fake
+    "basket shrank". Raw both sides. */
+ const aov=r.pur?(r.web+r.off)/r.pur:null, pAov=(P&&P.pur)?((P.web+P.off)/P.pur):null;
+ const ctr=r.imp?r.clk/r.imp:null, pCtr=(P&&P.imp)?P.clk/P.imp:null;
+ const dn=(c,p,t)=>(c!=null&&p!=null&&p>0&&(c/p-1)<=-t);
+ if(v==='CUT'||v==='TRIM'){
+  if(offShare>=0.6)why='Most of its value is in-store matching, which carries the 0.217 haircut — it looks profitable on the platform number and is not.';
+  else if(dn(cvr,pCvr,0.25))why='Clicks stopped converting: click→buy '+(pCvr*100).toFixed(1)+'% → '+(cvr*100).toFixed(1)+'%.';
+  else if(dn(aov,pAov,0.20))why='Basket shrank: E£'+Math.round(pAov).toLocaleString()+' → E£'+Math.round(aov).toLocaleString()+' per order.';
+  else if(dn(ctr,pCtr,0.25))why='Attention fell: CTR '+(pCtr*100).toFixed(2)+'% → '+(ctr*100).toFixed(2)+'%.';
+  else if(pRoas!=null&&pRoas<be)why='It has not cleared breakeven in either period — this is not a dip.';
+  else if(dRoas!=null&&dRoas<=-0.2)why='Return fell '+Math.abs(dRoas*100).toFixed(0)+'% against the prior period with no single funnel stage to blame.';
+  else why='Below breakeven at current spend, with no deterioration against the prior period — it simply does not pay at this price.';
+ } else if(v==='PUMP'){
+  if(dRoas!=null&&dRoas>=0.15)why='Improving as well as profitable: return up '+(dRoas*100).toFixed(0)+'% on the prior period.';
+  else if(pRoas!=null&&pRoas>=be)why='Cleared breakeven in both periods — a stable earner, not a one-week spike.';
+  else why='Clears breakeven now; it did not in the prior period, so raise in steps and re-read.';
+ }
+ return {roas,iroas,gp,thin,v,pRoas,dRoas,dGp,why,offShare};
 }
 function moneyDesk(g){
- const {rows,gpOn}=mdRows();
+ const {rows,gpOn,W,noWin,noWinSp,ttHeld,ttSp,partial}=mdRows();
  if(!rows.length){pnlCard(g,'ins','Money desk','No ad entities in this sync.','');return;}
  const be=gpOn>0?1/gpOn:3.5;
  const R=mdRoll(rows,MDLVL).map(r=>Object.assign(r,mdScore(r,gpOn,be)));
@@ -3090,7 +3171,7 @@ function moneyDesk(g){
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
    +'<tr><th style="'+TH+';text-align:left">Do</th><th style="'+TH+';text-align:left">Entity</th>'
    +'<th style="'+TH+'">Spend</th><th style="'+TH+'">Reported</th><th style="'+TH+'">Incremental</th>'
-   +'<th style="'+TH+'">GP after ad cost</th><th style="'+TH+'">Purch.</th></tr>';
+   +'<th style="'+TH+'">vs prior</th><th style="'+TH+'">GP after ad cost</th><th style="'+TH+'">Purch.</th></tr>';
   list.slice(0,18).forEach(r=>{
    h+='<tr><td style="'+TD+';text-align:left"><span style="display:inline-block;font-size:9.5px;font-weight:800;color:#fff;background:'+VC[r.v]+';padding:2px 7px;border-radius:4px">'+r.v+'</span></td>'
     +'<td style="'+TD+';text-align:left;max-width:330px;overflow:hidden;text-overflow:ellipsis"><b>'+(r.n||'—')+'</b>'
@@ -3098,13 +3179,25 @@ function moneyDesk(g){
     +'<td style="'+TD+';font-weight:700">'+M(r.sp)+'</td>'
     +'<td style="'+TD+';color:#8a93a6">'+(r.roas!=null?r.roas.toFixed(2)+'×':'—')+'</td>'
     +'<td style="'+TD+';font-weight:700">'+(r.iroas!=null?r.iroas.toFixed(2)+'×':'—')+'</td>'
+    +'<td style="'+TD+';font-weight:700;color:'+(r.dRoas==null?'#9aa3b5':(r.dRoas>=0?'#12a06e':'#e23a63'))+'">'
+    +(r.dRoas==null?'—':((r.dRoas>=0?'+':'−')+Math.abs(r.dRoas*100).toFixed(0)+'%'))
+    +(r.pRoas!=null?'<div style="font-size:10px;color:#8a93a6;font-weight:400">was '+r.pRoas.toFixed(2)+'×</div>':'')+'</td>'
     +'<td style="'+TD+';font-weight:800;color:'+(r.gp>=0?'#12a06e':'#e23a63')+'">'+SG(r.gp)+'</td>'
-    +'<td style="'+TD+'">'+Math.round(r.pur).toLocaleString()+'</td></tr>';});
+    +'<td style="'+TD+'">'+Math.round(r.pur).toLocaleString()+'</td></tr>'
+    +(r.why?'<tr><td></td><td colspan="7" style="padding:0 7px 7px;border-bottom:1px solid #eef0f5;font-size:11.5px;color:#5b6478;text-align:left"><b style="color:'+VC[r.v]+'">Why:</b> '+r.why+'</td></tr>':'');});
   return h+'</table></div>';};
  let body=ctl+hero
   +tbl(cuts,'CUT — losing money after the goods are paid for','Ranked by how much gross profit each is destroying. Freeing this spend is the first move, before any scaling.')
   +tbl(trims,'TRIM — not paying its way, but close','Below breakeven and above three-quarters of it. Halve rather than kill, and re-read in a week.')
   +tbl(pumps,'PUMP — where the freed money should go','Clearing breakeven by 35% or more on incremental value. Raise in steps and re-check; none of these are guaranteed to hold their rate at double the spend.');
+ if(ttHeld||noWin){
+  body+='<div style="margin-top:12px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px">'
+   +'<div style="font-size:11.5px;font-weight:800;color:#5b6478">Not rankable in this window</div>'
+   +'<div style="font-size:11.5px;color:#7c869c;margin-top:2px">'
+   +(ttHeld?'<b>'+ttHeld+' TikTok entities ('+M(ttSp)+')</b> ship totals with no daily series, so they cannot be cut to a date range at all and are excluded rather than carried in at a lifetime figure. ':'')
+   +(noWin?'<b>'+noWin+' entities ('+M(noWinSp)+')</b> have no spend inside the selected range. ':'')
+   +'</div></div>';}
+ if(partial)body+='<div style="margin-top:8px;font-size:11.5px;color:#ff8b42"><b>Your range extends beyond the ad feed.</b> Only the overlapping days are counted, so totals here are lighter than the range implies.</div>';
  if(thin.length){
   const thinSp=thin.reduce((a,r)=>a+r.sp,0);
   body+='<div style="margin-top:12px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px">'
@@ -3115,7 +3208,7 @@ function moneyDesk(g){
   ['#7c869c','<b>The swing figure assumes the PUMP list holds its current rate on new money.</b> It will not hold perfectly &mdash; that is what a staged scale test is for. Treat it as the size of the prize, not a forecast.'],
   ['#7c869c','Meta windows are the last '+((O.madsW&&O.madsW.n)||60)+' days from '+((O.madsW&&O.madsW.start)||'—')+'. This card reads whole-entity totals from the ad platforms and does <b>not</b> follow the date filter above.']];
  pnlCard(g,'ins','Where to cut, and where the next pound goes'+INFO('Every ad, ad set and campaign ranked by gross profit after ad cost, using measured incremental value and your real margin. Thin entities are held out rather than ranked.'),
-  'Ranked by money, not ROAS. Level and platform switch below; breakeven '+be.toFixed(2)+'&times;.',
+  '<b>'+W.s+' &rarr; '+W.e+'</b> against <b>'+W.pw[0]+' &rarr; '+W.pw[1]+'</b>. Reported value follows your attribution selector; incremental never does. Breakeven '+be.toFixed(2)+'&times;. Ranked by money, not ROAS.',
   body+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 function rMD(){if(TAB!=='md')return;dCh();const g=document.getElementById('g25');g.innerHTML='';
@@ -3478,13 +3571,29 @@ function testLibrary(g){
    Labels are deliberately sparse -- only the outliers that carry real money get named, because a
    chart with 120 labels is a chart nobody reads. */
 function creMatrix(g){
- const ADS=(O.mads||[]).filter(a=>(a.sp||0)>=2000&&(a.imp||0)>=20000&&(a.clk||0)>=100);
- if(ADS.length<5)return;
+ /* windowed like the desk: a matrix built on lifetime totals plots ads that stopped running
+    weeks ago next to what is live now, and the quadrant you act on has to be the current one.
+    Falls back to lifetime only if the selected range has no overlap with the ad feed at all. */
  const AT=O.attr||{}, iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1;
  const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
- const R=ADS.map(a=>{const inc=(a.pv||0)*iM+(a.ofv||0)*iMo;
-   return {a, ctr:a.clk/a.imp*100, roas:inc/a.sp, sp:a.sp,
-           cvr:a.clk?((a.pur||0)+(a.opur||0))/a.clk*100:0, hook:a.imp?a.vv/a.imp*100:0};});
+ const CW=mdWin(), MW=O.madsW;
+ let winMode=true;
+ let R=(O.mads||[]).map(a=>{
+   const c=mdDaily(a.d||{},MW,['sp','pv','fv','pu','op','oc','im','vv'],CW.s,CW.e);
+   if(!c)return null;
+   return {a, sp:c.sp, imp:c.im, clk:c.oc, pur:c.pu+c.op, web:c.pv, off:c.fv, vv:c.vv};})
+  .filter(Boolean)
+  .filter(x=>x.sp>=2000&&x.imp>=20000&&x.clk>=100);
+ if(R.length<5){   // range too narrow to plot anything honest -- fall back and say so
+   winMode=false;
+   R=(O.mads||[]).filter(a=>(a.sp||0)>=2000&&(a.imp||0)>=20000&&(a.clk||0)>=100)
+     .map(a=>({a, sp:a.sp, imp:a.imp, clk:a.clk, pur:(a.pur||0)+(a.opur||0), web:a.pv||0, off:a.ofv||0, vv:a.vv||0}));
+ }
+ if(R.length<5)return;
+ const ADS=R.map(x=>x.a);
+ R=R.map(x=>{const inc=x.web*iM+x.off*iMo;
+   return {a:x.a, ctr:x.clk/x.imp*100, roas:inc/x.sp, sp:x.sp,
+           cvr:x.clk?x.pur/x.clk*100:0, hook:x.imp?x.vv/x.imp*100:0};});
  const med=arr=>{const s=arr.slice().sort((x,y)=>x-y);return s[Math.floor(s.length/2)];};
  const mCtr=med(R.map(r=>r.ctr)), mRoas=be;
  const mxSp=Math.max.apply(null,R.map(r=>r.sp));
@@ -3496,7 +3605,9 @@ function creMatrix(g){
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Attention against return &mdash; every live creative</div>'
   +'<div class="cs">Horizontal: click-through rate. Vertical: incremental ROAS. Bubble: spend. The lines are the median CTR ('
   +mCtr.toFixed(2)+'%) and your '+be.toFixed(2)+'&times; breakeven, so the four quadrants are real thresholds, not decoration. '
-  +ADS.length+' creatives with at least E£2,000 spend and 100 clicks.</div></div></div>'
+  +R.length+' creatives with at least E£2,000 spend, 20,000 impressions and 100 clicks '
+  +(winMode?'over <b>'+CW.s+' &rarr; '+CW.e+'</b>, so this follows the date filter.'
+          :'over their whole run &mdash; <b>the selected range was too narrow to plot</b>, so this fell back to lifetime totals.')+'</div></div></div>'
   +'<div style="position:relative;height:330px"><canvas id="crmx"></canvas></div>'
   +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:#5b6478">'
   +'<div><b style="color:#12a06e">Top right</b> &mdash; earns attention and money. Scale, and make more of it.</div>'
@@ -3590,6 +3701,96 @@ function creMatrix(g){
   +'<div class="cs">Leaders on each job, the ads that are good at one and bad at another, and derivative briefs for the proven winners.</div></div></div>'
   +body+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>';
  g.appendChild(el2);
+}
+
+/* v9.31 SITE FRICTION -- where the traffic you paid for is being lost.
+   Clarity is the only source here that sees what happens AFTER the click, so when conversion
+   falls this is the layer that says whether it was the ads or the site.
+   Rates, never totals: a page with ten times the sessions will always have more errors, and
+   ranking on raw counts just re-discovers the busiest page. Everything below is per session.
+   The parser feeding this had a case bug -- Clarity returns "Url" while the reader looked for
+   "URL" -- which collapsed every page into one row. Rows that still carry that shape are shown
+   as unavailable rather than rendered as if they were real. */
+function clFrict(g){
+ const C=O.clarity; if(!C)return;
+ const B=(C.byBrowser||[]).filter(r=>r&&r.Browser);
+ const P=(C.byPage||[]).filter(r=>r&&r.Url);
+ const num=(r,m,f)=>{const v=r[m+':'+f];return typeof v==='number'?v:0;};
+ const sess=r=>num(r,'Traffic','totalSessionCount')||num(r,'ScriptErrorCount','sessionsCount')
+   ||num(r,'QuickbackClick','sessionsCount')||num(r,'DeadClickCount','sessionsCount')||0;
+ const met=(r,m)=>num(r,m,'subTotal');
+ const stale=(!P.length&&(C.byPage||[]).length>0);
+ const M=v=>Math.round(v).toLocaleString();
+ const rows=B.map(r=>{const s=sess(r);
+   return {n:r.Browser+(r.Device&&r.Device!=='Mobile'?' · '+r.Device:''), dev:r.Device, s,
+     err:met(r,'ScriptErrorCount'), qb:met(r,'QuickbackClick'), dead:met(r,'DeadClickCount'),
+     rage:met(r,'RageClickCount'),
+     errR:s?met(r,'ScriptErrorCount')/s:0, qbR:s?met(r,'QuickbackClick')/s:0, deadR:s?met(r,'DeadClickCount')/s:0};})
+  .filter(r=>r.s>=300).sort((a,b)=>b.s-a.s);
+ if(!rows.length&&!P.length)return;
+ /* in-app browsers are where paid social lands; real browsers are the control group */
+ const isApp=n=>/App$/i.test(n)||/FacebookApp|InstagramApp|GoogleApp|TikTok/i.test(n);
+ const app=rows.filter(r=>isApp(r.n)), real=rows.filter(r=>!isApp(r.n));
+ const wsum=(a,k)=>{const t=a.reduce((x,r)=>x+r.s,0);return t?a.reduce((x,r)=>x+r[k]*r.s,0)/t:0;};
+ const appErr=wsum(app,'errR'), realErr=wsum(real,'errR');
+ const appSess=app.reduce((a,r)=>a+r.s,0), realSess=real.reduce((a,r)=>a+r.s,0);
+ const mult=(realErr>0)?appErr/realErr:null;
+ const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let body='';
+ if(mult!=null&&appSess&&realSess){
+  body+='<div style="border:1px solid #e6e9f0;border-left:3px solid #e23a63;background:#fff5f7;border-radius:8px;padding:10px 12px;margin:4px 0 10px">'
+   +'<div style="font-size:15px;font-weight:800;color:#e23a63">In-app browsers throw '+mult.toFixed(0)+'× the JavaScript errors of real ones</div>'
+   +'<div style="font-size:12.5px;color:#0F172A;margin-top:4px">'
+   +'<b>'+M(appSess)+'</b> sessions arrived inside the Facebook, Instagram, Google or TikTok in-app browser and hit <b>'+appErr.toFixed(2)+'</b> errors each. '
+   +'<b>'+M(realSess)+'</b> sessions in Safari or Chrome hit <b>'+realErr.toFixed(3)+'</b>. '
+   +'That is <b>'+(appSess/(appSess+realSess)*100).toFixed(0)+'%</b> of measured traffic landing on the worse experience &mdash; and it is exactly the traffic your ads pay for, because a tap on a Meta ad opens in Meta&rsquo;s own browser.</div>'
+   +'<div style="font-size:11.5px;color:#7c869c;margin-top:5px">This is an OBSERVED gap in error rate, not a measured revenue loss. It does not by itself prove the errors are what stopped a purchase &mdash; but it is the first thing to rule out before blaming creative or targeting for a conversion fall on paid social.</div></div>';
+ }
+ if(rows.length){
+  body+='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:10px 0 3px;letter-spacing:.3px">BY BROWSER — PER SESSION, NOT TOTALS</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Browser</th><th style="'+TH+'">Sessions</th>'
+   +'<th style="'+TH+'">JS errors / session</th><th style="'+TH+'">Quick-backs / session</th>'
+   +'<th style="'+TH+'">Dead clicks / session</th><th style="'+TH+'">Rage clicks</th></tr>';
+  rows.slice(0,10).forEach(r=>{
+   const hot=r.errR>=realErr*5&&realErr>0;
+   body+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.n+'</td>'
+    +'<td style="'+TD+'">'+M(r.s)+'</td>'
+    +'<td style="'+TD+';font-weight:800;color:'+(hot?'#e23a63':'#334155')+'">'+r.errR.toFixed(2)+'</td>'
+    +'<td style="'+TD+';color:'+(r.qbR>=0.45?'#e23a63':'#334155')+'">'+(r.qbR*100).toFixed(0)+'%</td>'
+    +'<td style="'+TD+'">'+r.deadR.toFixed(2)+'</td>'
+    +'<td style="'+TD+'">'+M(r.rage)+'</td></tr>';});
+  body+='</table></div>';
+ }
+ if(P.length){
+  const pr=P.map(r=>{const s=sess(r);
+    return {u:String(r.Url||'').replace(/^https?:\/\/[^/]+/,'').split('?')[0]||'/', s,
+      err:met(r,'ScriptErrorCount'), qb:met(r,'QuickbackClick'), dead:met(r,'DeadClickCount'),
+      errR:s?met(r,'ScriptErrorCount')/s:0, qbR:s?met(r,'QuickbackClick')/s:0};})
+   .filter(r=>r.s>=200).sort((a,b)=>b.qbR-a.qbR).slice(0,10);
+  if(pr.length){
+   body+='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:14px 0 3px;letter-spacing:.3px">WORST PAGES — RANKED BY PEOPLE BOUNCING STRAIGHT BACK</div>'
+    +'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">A quick-back is someone arriving and immediately hitting back. Per session, so the busiest page does not win by default.</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+    +'<tr><th style="'+TH+';text-align:left">Page</th><th style="'+TH+'">Sessions</th>'
+    +'<th style="'+TH+'">Quick-backs / session</th><th style="'+TH+'">JS errors / session</th></tr>';
+   pr.forEach(r=>{
+    body+='<tr><td style="'+TD+';text-align:left;max-width:360px;overflow:hidden;text-overflow:ellipsis">'+r.u+'</td>'
+     +'<td style="'+TD+'">'+M(r.s)+'</td>'
+     +'<td style="'+TD+';font-weight:800;color:'+(r.qbR>=1?'#e23a63':(r.qbR>=0.5?'#ff8b42':'#334155'))+'">'+(r.qbR*100).toFixed(0)+'%</td>'
+     +'<td style="'+TD+'">'+r.errR.toFixed(2)+'</td></tr>';});
+   body+='</table></div>';
+  }
+ } else {
+  body+='<div style="margin-top:12px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px;font-size:11.5px;color:#5b6478">'
+   +'<b>Per-page frustration is not in this sync yet.</b> '
+   +(stale?'The stored rows came from a parser that read Clarity&rsquo;s <code>Url</code> field as <code>URL</code> and collapsed every page into a single row. That is fixed in the collector; this table fills in on the next sync.'
+          :'No page rows were returned.')+'</div>';
+ }
+ pnlCard(g,'ins','Where the site loses the traffic you paid for'+INFO('Clarity frustration signals per session, split by browser and by page, with in-app browsers compared against real ones.'),
+  'Microsoft Clarity, last '+(C.days||3)+' day'+((C.days||3)>1?'s':'')+', pulled '+(C.pulled||'—')+'. Rates per session throughout. Does not follow the date filter &mdash; Clarity&rsquo;s API window is fixed.',
+  body);
 }
 
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
@@ -8276,7 +8477,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-173734';
+const BUILD='20260829-180133';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -8687,7 +8888,7 @@ function rSI(){if(TAB!=='si')return;dCh();const g=document.getElementById('g26')
    '<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11.5px;text-align:right"><tr><th style="text-align:left">Campaign</th><th>Impr share</th><th>LY</th><th>Rank lost</th><th>Rank lost YoY</th><th>Budget lost</th></tr>'+rws+'</table></div>');}
 }
 function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23');g.innerHTML='';
- try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}budgetBoard(g);
+ try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
