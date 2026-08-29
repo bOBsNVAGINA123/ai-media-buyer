@@ -1681,6 +1681,43 @@ def pull_gads_ops(prev=None):
     out["isWin"] = [s1.isoformat(), e1.isoformat(), s0.isoformat(), e0.isoformat()]
     log("gads ops :: impression share %d campaigns now, %d prior" % (len(out["isNow"]), len(out["isPrev"])))
 
+    # ---- account plumbing: is what we configured actually RECEIVING anything? ----
+    # A conversion action can be enabled, primary, and completely starved. The offline store-sale
+    # feeds are the case that matters here: they exist per branch and are marked primary, so every
+    # status check says "fine", while the volume arriving is near zero. Configuration and delivery
+    # are different questions and this records both.
+    conv = {}
+    for r in q("SELECT conversion_action.name, conversion_action.type, conversion_action.category, "
+               "conversion_action.status, conversion_action.primary_for_goal "
+               "FROM conversion_action WHERE conversion_action.status = 'ENABLED'"):
+        ca = r.get("conversionAction") or {}
+        n = (ca.get("name") or "")[:70]
+        if not n: continue
+        conv[n] = {"t": ca.get("type", ""), "cat": ca.get("category", ""),
+                   "pri": bool(ca.get("primaryForGoal")), "cn": 0.0, "cv": 0.0}
+    for r in q("SELECT segments.conversion_action_name, metrics.all_conversions, "
+               "metrics.all_conversions_value FROM customer WHERE segments.date DURING LAST_30_DAYS"):
+        n = ((r.get("segments") or {}).get("conversionActionName") or "")[:70]
+        m = r.get("metrics") or {}
+        if n in conv:
+            conv[n]["cn"] += float(m.get("allConversions") or 0)
+            conv[n]["cv"] += float(m.get("allConversionsValue") or 0)
+    for v in conv.values():
+        v["cn"] = round(v["cn"], 1); v["cv"] = round(v["cv"])
+    out["conv"] = conv
+
+    lists = []
+    for r in q("SELECT user_list.name, user_list.type, user_list.size_for_search, "
+               "user_list.membership_status, user_list.match_rate_percentage "
+               "FROM user_list WHERE user_list.size_for_search > 0"):
+        u = r.get("userList") or {}
+        lists.append({"n": (u.get("name") or "")[:60], "t": u.get("type", ""),
+                      "size": int(u.get("sizeForSearch") or 0),
+                      "match": u.get("matchRatePercentage"),
+                      "st": u.get("membershipStatus", "")})
+    out["lists"] = sorted(lists, key=lambda x: -x["size"])
+    log("gads ops :: %d enabled conversion actions, %d audience lists" % (len(conv), len(lists)))
+
     log("gads ops ok: %d changes (%d budget), %d campaigns with new/returning"
         % (len(chg), len(out["budgetChanges"]), len(out["newRet"])))
     return out
