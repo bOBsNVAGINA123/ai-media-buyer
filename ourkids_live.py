@@ -1576,6 +1576,88 @@ def pull_clarity(days=3, prev=None):
         log("clarity fail", str(e)[:140])
         return (prev or {}).get("clarity") or {}
 
+def pull_gads_ops(prev=None):
+    """Google's OWN change history plus the new-vs-returning customer split.
+
+    Change history matters because inferring a budget move from a step in daily spend is a guess:
+    Google records the exact old and new amount, who made it, and through which client. Where both
+    exist the recorded change wins and the inferred one is dropped.
+
+    new_versus_returning_customers is a CONVERSION-side segment: it splits conversions and their
+    value by whether the converter was new to the business, not the spend. Cost therefore cannot be
+    segmented this way and is deliberately not requested -- a per-segment CAC from this would be
+    fabricated. A large UNKNOWN bucket is normal (Google cannot classify every converter) and is
+    reported rather than redistributed.
+    """
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not (dev and cid): return (prev or {}).get("gops") or {}
+    try:
+        at, hd = _gads_hdr()
+    except Exception as e:
+        log("gads ops :: token fail", str(e)[:120]); return (prev or {}).get("gops") or {}
+    if not at: return (prev or {}).get("gops") or {}
+    base = "https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid)
+
+    def q(gql):
+        try:
+            req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=90) as r:
+                d = json.loads(r.read())
+            rows = []
+            for b2 in (d if isinstance(d, list) else [d]):
+                rows += b2.get("results", [])
+            return rows
+        except urllib.error.HTTPError as e2:
+            log("gads ops :: query fail ::", e2.code, e2.read().decode("utf-8", "ignore")[:300]); return []
+        except Exception as e:
+            log("gads ops :: query fail ::", str(e)[:140]); return []
+
+    out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")}
+
+    # ---- exact change history (Google caps this resource at 30 days) ----
+    chg = []
+    rows = q("SELECT change_event.change_date_time, change_event.change_resource_type, "
+             "change_event.changed_fields, change_event.old_resource, change_event.new_resource, "
+             "change_event.user_email, change_event.client_type, campaign.name "
+             "FROM change_event WHERE change_event.change_date_time DURING LAST_14_DAYS "
+             "ORDER BY change_event.change_date_time DESC LIMIT 500")
+    for r in rows:
+        ce = r.get("changeEvent", {}) or {}
+        kind = ce.get("changeResourceType", "")
+        rec = {"d": (ce.get("changeDateTime") or "")[:16], "t": kind,
+               "cmp": ((r.get("campaign") or {}).get("name") or "")[:70],
+               "f": (ce.get("changedFields") or "")[:120],
+               "who": (ce.get("userEmail") or "")[:60], "via": ce.get("clientType", "")}
+        if kind == "CAMPAIGN_BUDGET":
+            try:
+                o = ((ce.get("oldResource") or {}).get("campaignBudget") or {}).get("amountMicros")
+                n = ((ce.get("newResource") or {}).get("campaignBudget") or {}).get("amountMicros")
+                if o is not None and n is not None:
+                    rec["old"] = round(float(o) / 1e6); rec["new"] = round(float(n) / 1e6)
+            except Exception:
+                pass
+        chg.append(rec)
+    out["changes"] = chg
+    out["budgetChanges"] = [c for c in chg if c.get("t") == "CAMPAIGN_BUDGET" and "new" in c]
+
+    # ---- new vs returning, by campaign ----
+    nr = {}
+    for r in q("SELECT campaign.name, segments.new_versus_returning_customers, "
+               "metrics.conversions, metrics.conversions_value FROM campaign "
+               "WHERE segments.date DURING LAST_30_DAYS AND metrics.conversions > 0"):
+        c = (r.get("campaign") or {}).get("name") or "?"
+        seg = (r.get("segments") or {}).get("newVersusReturningCustomers") or "UNKNOWN"
+        m = r.get("metrics") or {}
+        d = nr.setdefault(c[:70], {})
+        e = d.setdefault(seg, [0.0, 0.0])
+        e[0] += float(m.get("conversions", 0) or 0)
+        e[1] += float(m.get("conversionsValue", 0) or 0)
+    out["newRet"] = {c: {k: [round(v[0], 1), round(v[1])] for k, v in d.items()} for c, d in nr.items()}
+    log("gads ops ok: %d changes (%d budget), %d campaigns with new/returning"
+        % (len(chg), len(out["budgetChanges"]), len(out["newRet"])))
+    return out
+
+
 def pull_pos_branches():
     """REAL per-branch monthly revenue + margin + orders from report.pos.order (readable POS reporting view)."""
     out = {}
@@ -4440,6 +4522,7 @@ def build():
     # 13-month crawl is ~9 minutes of paging, so it only happens on a forced crawl or the
     # first time; otherwise the last two months are refreshed and merged over what is stored.
     clarity = safe(lambda: pull_clarity(prev=prev)) or (prev.get("clarity") or {})
+    gops = safe(lambda: pull_gads_ops(prev=prev)) or (prev.get("gops") or {})
     _bfull = os.environ.get("FORCE_CRAWL") == "1" or not (prev.get("bosta") or {}).get("months")
     bosta = safe(lambda: pull_bosta(months_back=(13 if _bfull else 2), prev=prev)) or (prev.get("bosta") or {})
     if (prev.get("bosta") or {}).get("months"):
@@ -4652,7 +4735,7 @@ def build():
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
