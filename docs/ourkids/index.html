@@ -5071,16 +5071,16 @@ function rShip2(g,mons,T,F,SH){
      the free-delivery line. Straight from Bosta's own shipment records. */
   null,
   {n:'FAILED DELIVERY &mdash; parcels refused or undeliverable',f:m=>bFailN(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Bosta &ldquo;Return to Origin&rdquo;. COD on these is zero &mdash; nothing was ever collected, so there is no refund. The customer refused at the door or could not be reached.'},
-  {n:'  courier cost, out and back',f:m=>bFailCost(m)?-bFailCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'The return leg plus the outbound leg you had already paid for. No revenue was ever recognised against it.'},
+  {n:'  what Bosta charged for it',f:m=>bFailCost(m)?-bFailCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'A refused parcel is ONE shipment on Bosta\u2019s books, not two: the record that went out is the same one that came back (oldType SEND plus a changed-to-RTO date), carrying a single fee for the whole round trip. Nothing was ever collected on it, so the entire charge is a loss.'},
   {n:'CUSTOMER RETURNED IT &mdash; refunded orders',f:m=>bRefN(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Bosta &ldquo;Customer Return Pickup&rdquo;. COD on these is NEGATIVE &mdash; money going back to the customer. They received it, paid, and sent it back.'},
-  {n:'  courier cost, out and back',f:m=>bRefCost(m)?-bRefCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Both legs again. The refunded sale itself is in the Refunds line, not here.'},
+  {n:'  what Bosta charged for it, both shipments',f:m=>bRefCost(m)?-bRefCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Genuinely two shipments: the order was delivered and charged for, then a SECOND shipment was booked to collect it back (its COD is negative \u2014 money going out). The refunded sale itself sits in the Refunds line, not here.'},
   {n:'COURIER COST OF FAILED + RETURNED',f:m=>{const v=bRetTotal(m);return v?-v:null;},fmt:SIG,sh:1,b:1,gd:-1,tt:'A BREAKDOWN of the courier bill above, not an extra charge on top of it \u2014 do not add the two together. This is the share of what you already paid Bosta that moved parcels which earned nothing.'},
   {n:'  &hellip; as a share of the whole courier bill',f:m=>{const v=bRetTotal(m),c=s2('cost',m);return (v&&c)?v/c*100:null;},fmt:F.PCT,sh:1,gd:-1,tt:'How much of everything you pay the courier is spent moving parcels that came back.'},
   /* The per-event cost is the number that actually changes behaviour: it is what one more failed
      delivery costs, and it is knowable exactly because both legs are priced. The lost SALE on a
      refund is deliberately not added here -- it is already carried in the P&L, which scales gross
      profit down by the refund rate, and adding it again would double-count it. */
-  {n:'  what ONE typical failed delivery costs to ship',f:m=>bFailN(m)?(bMed('Return to Origin')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back. Return leg: '+(bIsExact(ST.e.slice(0,7),'Return to Origin')?('EXACT \u2014 every one of the month\u2019s return parcels priced from Bosta\u2019s own record'):('measured average, '+bSpread('Return to Origin')))+'. Outbound leg: '+bSpread('Send')+' (it cannot be tied to its own record, so it stays an average). The median is used because the fee is right-skewed, so the average describes almost no real parcel. Nothing was ever collected on these, so it is a pure loss.'},
+  {n:'  what ONE typical refused parcel costs',f:m=>bFailN(m)?bMed('Return to Origin'):null,fmt:F.POS,sh:1,gd:-1,tt:'One shipment, one fee \u2014 the parcel that went out is the same record that came back. '+(bIsExact(ST.e.slice(0,7),'Return to Origin')?'EXACT: every refused parcel this month priced from Bosta\u2019s own record.':('Measured: '+bSpread('Return to Origin')))},
   {n:'  what ONE typical refunded order costs to ship',f:m=>bRefN(m)?(bMed('Customer Return Pickup')+bMed('Send')):null,fmt:F.POS,sh:1,gd:-1,tt:'Out and back at the MEDIAN fee. Customer Return Pickup: '+bSpread('Customer Return Pickup')+'. On top of this you refund the sale itself, which the Shopify P&L already deducts by scaling gross profit down by the month\u2019s refund rate; it is not repeated here.'},
   {n:'Courier cost per confirmed order',f:m=>s2('conf',m)&&s2('cost',m)?s2('cost',m)/s2('conf',m):null,fmt:F.POS,sh:1,gd:-1},
   {n:'Courier cost per DELIVERED (kept) order',f:m=>s2('kept',m)&&s2('cost',m)?s2('cost',m)/s2('kept',m):null,fmt:F.POS,sh:1,gd:-1,tt:'The bill divided only by the orders that stuck. Higher than the row above by exactly the return rate -- the returned orders are billed too, they just leave no revenue behind.'},
@@ -5248,9 +5248,15 @@ function bRefN(m){return bCnt(m,'Customer Return Pickup');}
 /* Both legs. The return leg is exact where priced; the outbound leg cannot be matched to its
    own shipment record (the courier reference joins only ~15% of the time), so it stays at the
    measured Send fee and the tooltip says which half is which. */
+/* A REFUSED parcel is ONE shipment, not two. Its record carries oldType:"SEND" and a
+   changedToRTODate -- the delivery that went out is the same record that came back, with a
+   single shipmentFees for the whole round trip. Adding an outbound leg on top of that, which
+   this did until the record was actually read, double-counted about E47k a month.
+   A CUSTOMER RETURN is the opposite: oldType is null and the COD is negative, so it is a NEW
+   shipment booked to collect goods already delivered and already charged for. Both legs real. */
 function bFailCost(m){const n=bFailN(m);if(!n)return 0;
  const e=bEx(m,'Return to Origin');
- return (e?e.total:n*bFee('Return to Origin'))+n*bFee('Send');}
+ return e?e.total:n*bFee('Return to Origin');}
 function bRefCost(m){const n=bRefN(m);if(!n)return 0;
  const e=bEx(m,'Customer Return Pickup');
  return (e?e.total:n*bFee('Customer Return Pickup'))+n*bFee('Send');}
@@ -6558,7 +6564,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260828-223704';
+const BUILD='20260829-093413';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
