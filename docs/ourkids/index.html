@@ -3061,7 +3061,7 @@ function mdRows(){
   const prv=p?{sp:p.sp,web:p.pv,off:p.fv,pur:p.pu+p.op,clk:p.oc,imp:p.im}:null;
   if(cur.sp<=0)return;
   out.push(mk('meta',a,cur,prv,cur.web*iM+cur.off*iMo,cur.web*rM+cur.off*rMo,
-    {prevInc:prv?prv.web*iM+prv.off*iMo:null, nc:0, ncv:0}));});
+    {prevInc:prv?prv.web*iM+prv.off*iMo:null, nc:0, ncv:0, _ent:a, _W:MW}));});
  (O.gads||[]).forEach(a=>{
   const d=a.d||{};
   const c=mdDaily(d,GW,['sp','pv','pur','clk','imp'],W.s,W.e);
@@ -3072,7 +3072,7 @@ function mdRows(){
   const prv=p?{sp:p.sp,web:p.pv,off:0,pur:p.pur,clk:p.clk,imp:p.imp}:null;
   if(cur.sp<=0)return;
   out.push(mk('google',Object.assign({},a,{cmp:a.n,as:a.cmp||'—'}),cur,prv,cur.web*iG,cur.web*rG,
-    {prevInc:prv?prv.web*iG:null, nc:0, ncv:0}));});
+    {prevInc:prv?prv.web*iG:null, nc:0, ncv:0, _ent:a, _W:GW}));});
  /* TikTok ships entity totals with no daily series, so it cannot be windowed at all */
  let ttHeld=0, ttSp=0;
  (O.tads||[]).forEach(a=>{if((a.sp||0)>0){ttHeld++;ttSp+=a.sp||0;}});
@@ -3089,11 +3089,49 @@ function mdRoll(rows,lvl){
     prev:{sp:0,web:0,off:0,pur:0,clk:0,imp:0}};
   const o=m[k];
   ['sp','pur','web','off','inc','rep','clk','imp'].forEach(f=>{o[f]+=r[f]||0;});
+  /* significance is only meaningful against ONE entity's own history; a rolled-up group has no
+     single series to test, so the handle is dropped rather than tested against an arbitrary child */
+  o._ent=(o.kids===0)?r._ent:null; o._W=r._W;
   o.prevInc+=r.prevInc||0;
   if(r.prev)['sp','web','off','pur','clk','imp'].forEach(f=>{o.prev[f]+=r.prev[f]||0;});
   o.kids++;});
  return Object.values(m);
 }
+/* v9.33 SIGNIFICANCE. Ranking purely by money puts a wildly volatile ad that always swings at the
+   top of the list every single week, and buries a steady earner that has genuinely just broken.
+   So each entity is measured against ITS OWN history, not the account's.
+   Median and MAD, not mean and standard deviation: ad-level daily ROAS is skewed and one huge
+   in-store matched day would otherwise inflate the spread and hide every real break. MAD is
+   rescaled by 1.4826 so the result reads on a normal-distribution scale.
+   The result is deliberately NOT a p-value. Daily ad performance is not independent or normal, so
+   a precise probability would be false precision; this is "how unusual for this entity", banded. */
+function mdSignif(ent,W,pf,curRoas){
+ const d=ent&&ent.d; if(!d||!W||!W.n)return null;
+ const iM=((O.attr||{}).meta||{}).incr||1, iMo=((O.attr||{}).metaOff||{}).incr||1;
+ const iG=((O.attr||{}).google||{}).incr||1;
+ const SP=d.sp||[], WEB=d.pv||[], OFF=(pf==='google')?[]:(d.fv||[]);
+ /* one point per day the entity actually ran, up to the day before the current window */
+ const t0=new Date(W.start+'T00:00:00Z').getTime();
+ const ix=x=>Math.round((new Date(x+'T00:00:00Z')-t0)/864e5);
+ const cut=Math.max(0,Math.min(W.n, ix(ST.s)));
+ const pts=[];
+ for(let i=0;i<cut;i++){
+  const sp=SP[i]||0; if(sp<150)continue;                 // a near-zero day is noise, not a data point
+  const inc=(pf==='google')?((WEB[i]||0)*iG):((WEB[i]||0)*iM+(OFF[i]||0)*iMo);
+  pts.push(inc/sp);
+ }
+ if(pts.length<10||curRoas==null)return null;            // too little history to call anything unusual
+ const srt=pts.slice().sort((a,b)=>a-b);
+ const med=srt[Math.floor(srt.length/2)];
+ const dev=srt.map(x=>Math.abs(x-med)).sort((a,b)=>a-b);
+ const mad=dev[Math.floor(dev.length/2)]*1.4826;
+ if(!(mad>0.01))return {n:pts.length,med,mad,z:null,band:'FLAT HISTORY'};
+ const z=(curRoas-med)/mad;
+ const a=Math.abs(z);
+ const band = a>=3?'WELL OUTSIDE NORMAL' : a>=2?'OUTSIDE NORMAL' : a>=1?'EDGE OF NORMAL' : 'WITHIN NORMAL SWING';
+ return {n:pts.length,med,mad,z,band};
+}
+
 function mdScore(r,gpOn,be){
  const rep=r.rep!=null?r.rep:(r.web+r.off);
  const roas=r.sp?rep/r.sp:null;                    // at the attribution setting you picked
@@ -3135,7 +3173,8 @@ function mdScore(r,gpOn,be){
   else if(pRoas!=null&&pRoas>=be)why='Cleared breakeven in both periods — a stable earner, not a one-week spike.';
   else why='Clears breakeven now; it did not in the prior period, so raise in steps and re-read.';
  }
- return {roas,iroas,gp,thin,v,pRoas,dRoas,dGp,why,offShare};
+ const sig=(r._ent&&r._W)?mdSignif(r._ent,r._W,r.pf,iroas):null;
+ return {roas,iroas,gp,thin,v,pRoas,dRoas,dGp,why,offShare,sig};
 }
 function moneyDesk(g){
  const {rows,gpOn,W,noWin,noWinSp,ttHeld,ttSp,partial}=mdRows();
@@ -3146,9 +3185,15 @@ function moneyDesk(g){
  const SG=v=>(v>=0?'+':'−')+M(v);
  const VC={PUMP:'#12a06e',HOLD:'#3a9bff',TRIM:'#ff8b42',CUT:'#e23a63','INSUFFICIENT DATA':'#9aa3b5'};
  const graded=R.filter(r=>!r.thin), thin=R.filter(r=>r.thin);
- const cuts=graded.filter(r=>r.v==='CUT').sort((a,b)=>a.gp-b.gp);
- const trims=graded.filter(r=>r.v==='TRIM').sort((a,b)=>a.gp-b.gp);
- const pumps=graded.filter(r=>r.v==='PUMP').sort((a,b)=>b.gp-a.gp);
+ /* Rank on money AND unusualness. Money alone re-lists the same volatile ads every week; a break
+    that is both expensive and far outside that entity's own normal is the one worth the morning.
+    An entity with too little history to test keeps a neutral 1.0 multiplier so it is neither
+    promoted nor buried by the absence of evidence. */
+ const zof=r=>(r.sig&&r.sig.z!=null)?Math.min(4,Math.abs(r.sig.z)):null;
+ const rank=r=>Math.abs(r.gp)*(1+(zof(r)==null?0.5:Math.min(1.5,zof(r)/2)));
+ const cuts=graded.filter(r=>r.v==='CUT').sort((a,b)=>rank(b)-rank(a));
+ const trims=graded.filter(r=>r.v==='TRIM').sort((a,b)=>rank(b)-rank(a));
+ const pumps=graded.filter(r=>r.v==='PUMP').sort((a,b)=>rank(b)-rank(a));
  const freed=cuts.reduce((a,r)=>a+r.sp,0);
  const bleeding=cuts.reduce((a,r)=>a+r.gp,0);          // negative
  const trimSp=trims.reduce((a,r)=>a+r.sp,0), trimBleed=trims.reduce((a,r)=>a+r.gp,0);
@@ -3179,6 +3224,13 @@ function moneyDesk(g){
   +'</div>';
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const SIGC={'WELL OUTSIDE NORMAL':'#e23a63','OUTSIDE NORMAL':'#ff8b42','EDGE OF NORMAL':'#5b6478','WITHIN NORMAL SWING':'#9aa3b5','FLAT HISTORY':'#9aa3b5'};
+ const sigCell=r=>{const s2=r.sig;
+  if(!s2)return '<span style="color:#b9c0cc" title="fewer than 10 days of its own history to compare against">no history</span>';
+  if(s2.z==null)return '<span style="color:#9aa3b5">'+s2.band.toLowerCase()+'</span>';
+  const dirn=s2.z>=0?'better':'worse';
+  return '<span style="font-weight:700;color:'+SIGC[s2.band]+'" title="'+Math.abs(s2.z).toFixed(1)+' robust deviations '+dirn+' than its own median of '+s2.med.toFixed(2)+'x across '+s2.n+' active days">'
+   +Math.abs(s2.z).toFixed(1)+'&sigma; '+dirn+'</span><div style="font-size:9.5px;color:#8a93a6">'+s2.band.toLowerCase()+'</div>';};
  const tbl=(list,ttl,note)=>{
   if(!list.length)return '<div style="font-size:12px;color:#8a93a6;margin:8px 0">'+ttl+' — none at this level.</div>';
   let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
@@ -3186,7 +3238,7 @@ function moneyDesk(g){
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
    +'<tr><th style="'+TH+';text-align:left">Do</th><th style="'+TH+';text-align:left">Entity</th>'
    +'<th style="'+TH+'">Spend</th><th style="'+TH+'">Reported</th><th style="'+TH+'">Incremental</th>'
-   +'<th style="'+TH+'">vs prior</th><th style="'+TH+'">GP after ad cost</th><th style="'+TH+'">Purch.</th></tr>';
+   +'<th style="'+TH+'">vs prior</th><th style="'+TH+'">GP after ad cost</th><th style="'+TH+'">How unusual</th><th style="'+TH+'">Purch.</th></tr>';
   list.slice(0,18).forEach(r=>{
    h+='<tr><td style="'+TD+';text-align:left"><span style="display:inline-block;font-size:9.5px;font-weight:800;color:#fff;background:'+VC[r.v]+';padding:2px 7px;border-radius:4px">'+r.v+'</span></td>'
     +'<td style="'+TD+';text-align:left;max-width:330px;overflow:hidden;text-overflow:ellipsis"><b>'+(r.n||'—')+'</b>'
@@ -3198,8 +3250,9 @@ function moneyDesk(g){
     +(r.dRoas==null?'—':((r.dRoas>=0?'+':'−')+Math.abs(r.dRoas*100).toFixed(0)+'%'))
     +(r.pRoas!=null?'<div style="font-size:10px;color:#8a93a6;font-weight:400">was '+r.pRoas.toFixed(2)+'×</div>':'')+'</td>'
     +'<td style="'+TD+';font-weight:800;color:'+(r.gp>=0?'#12a06e':'#e23a63')+'">'+SG(r.gp)+'</td>'
+    +'<td style="'+TD+'">'+sigCell(r)+'</td>'
     +'<td style="'+TD+'">'+Math.round(r.pur).toLocaleString()+'</td></tr>'
-    +(r.why?'<tr><td></td><td colspan="7" style="padding:0 7px 7px;border-bottom:1px solid #eef0f5;font-size:11.5px;color:#5b6478;text-align:left"><b style="color:'+VC[r.v]+'">Why:</b> '+r.why+'</td></tr>':'');});
+    +(r.why?'<tr><td></td><td colspan="8" style="padding:0 7px 7px;border-bottom:1px solid #eef0f5;font-size:11.5px;color:#5b6478;text-align:left"><b style="color:'+VC[r.v]+'">Why:</b> '+r.why+'</td></tr>':'');});
   return h+'</table></div>';};
  let body=ctl+hero
   +tbl(cuts,'CUT — losing money after the goods are paid for','Ranked by how much gross profit each is destroying. Freeing this spend is the first move, before any scaling.')
@@ -3218,7 +3271,8 @@ function moneyDesk(g){
   body+='<div style="margin-top:12px;padding:8px 10px;background:#f6f7fa;border-left:3px solid #9aa3b5;border-radius:6px">'
    +'<div style="font-size:11.5px;font-weight:800;color:#5b6478">'+thin.length+(thin.length===1?' entity':' entities')+' held out as INSUFFICIENT DATA ('+M(thinSp)+' spend)</div>'
    +'<div style="font-size:11.5px;color:#7c869c;margin-top:2px">Under '+M(MD_MIN_SP)+' spend or under '+MD_MIN_PUR+' purchases in this window. They are not losers &mdash; they have not been tested. Give them budget or stop them for a reason other than this table.</div></div>';}
- const notes=[['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. Anything under that is selling at a loss no matter how the platform reports it.'],
+ const notes=[['#5a5bf0','<b>Ranked by money AND how unusual it is</b>, not money alone. Each entity is compared with its own daily history &mdash; median and median-absolute-deviation, which a single huge in-store matched day cannot inflate the way a standard deviation would. &sigma; here means robust deviations from that entity&rsquo;s own median, so a 3&sigma; break on a steady earner outranks a bigger swing on something that always swings. It is deliberately not a p-value: daily ad performance is neither independent nor normal, and a precise probability would be false precision.'],
+  ['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. Anything under that is selling at a loss no matter how the platform reports it.'],
   ['#3a9bff','<b>Website and in-store value are discounted differently.</b> Website carries the platform&rsquo;s measured incremental rate; Meta in-store carries '+(((O.attr||{}).metaOff||{}).incr||0).toFixed(3)+', because that number is mostly Meta recognising a shop buyer it had already reached, not sales it created. An ad can look strong on total value and still appear here as a CUT.'],
   ['#7c869c','<b>The swing figure assumes the PUMP list holds its current rate on new money.</b> It will not hold perfectly &mdash; that is what a staged scale test is for. Treat it as the size of the prize, not a forecast.'],
   ['#7c869c','Meta windows are the last '+((O.madsW&&O.madsW.n)||60)+' days from '+((O.madsW&&O.madsW.start)||'—')+'. This card reads whole-entity totals from the ad platforms and does <b>not</b> follow the date filter above.']];
@@ -3864,6 +3918,48 @@ function gadsChanges(g){
    to show and none is shown. The UNKNOWN bucket is large by nature -- Google cannot classify every
    converter -- and it is reported as its own share rather than being redistributed across the
    others, which would silently invent precision. */
+/* RESOLVE THE UNCLASSIFIED RATHER THAN SHRUG AT IT.
+   Google cannot label every converter, but the Odoo ledger labels 100% of online orders as new or
+   returning -- it simply does not know which channel they came from. So the ledger cannot assign
+   Google's unclassified conversions one by one, but it CAN say whether Google's classified sample
+   is representative. If Google's classified new-rate sits on top of the whole business's true
+   rate, the unclassified almost certainly splits the same way, and the honest answer is a narrow
+   estimate with hard bounds rather than a 39% hole. */
+function gNewRetBench(tot,tv,newV,known){
+ const NRm=O.nr||{}; const ms=Object.keys(NRm).sort().slice(-3);
+ if(ms.length<3)return '';
+ let nrev=0,rrev=0;
+ ms.forEach(m=>{const v=NRm[m]||{}; nrev+=v.nrev||0; rrev+=v.rrev||0;});
+ const tot2=nrev+rrev; if(!tot2||!tv||!known)return '';
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const odooNew=nrev/tot2*100;
+ const gClass=newV/known*100;
+ const unkV=(tot['UNKNOWN']||[0,0])[1];
+ const loEst=newV/tv*100;                     // every unclassified is returning
+ const hiEst=(newV+unkV)/tv*100;              // every unclassified is new
+ const proRata=(newV+unkV*(newV/known))/tv*100;
+ const gap=Math.abs(gClass-odooNew);
+ const close=gap<=5;
+ const col=close?'#12a06e':'#ff8b42';
+ const K=(l,v,sub,c)=>'<div><div style="font-size:10px;font-weight:800;color:#64748B">'+l+'</div>'
+  +'<div style="font-size:19px;font-weight:800;color:'+(c||'#334155')+'">'+v+'</div>'
+  +'<div style="font-size:10.5px;color:#8a93a6">'+sub+'</div></div>';
+ return '<div style="border:1px solid #e6e9f0;border-left:3px solid '+col+';background:'+(close?'#f3fbf7':'#fffaf2')+';border-radius:8px;padding:10px 12px;margin:10px 0">'
+  +'<div style="font-size:12.5px;font-weight:800;color:#0F172A">The ledger can bound what Google cannot classify</div>'
+  +'<div style="font-size:12.5px;color:#0F172A;margin-top:4px">Odoo labels <b>100%</b> of online orders. Over '
+  +ms[0]+' &rarr; '+ms[2]+' the whole online business ran at <b>'+odooNew.toFixed(1)+'% new</b> by revenue ('+M(nrev)+' of '+M(tot2)+'). '
+  +'Google&rsquo;s classified sample reads <b>'+gClass.toFixed(1)+'% new</b>'
+  +(close?' &mdash; within '+gap.toFixed(1)+' points of it, so that sample is representative and the unclassified almost certainly splits the same way.'
+         :' &mdash; <b>'+gap.toFixed(1)+' points away</b>, so its classified sample is NOT representative of the business and the estimate below is weak.')
+  +'</div><div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:9px">'
+  +K('BEST ESTIMATE',proRata.toFixed(0)+'% new','unclassified split pro-rata',col)
+  +K('HARD FLOOR',loEst.toFixed(0)+'%','if every unclassified were returning')
+  +K('HARD CEILING',hiEst.toFixed(0)+'%','if every unclassified were new')
+  +K('ODOO, WHOLE BUSINESS',odooNew.toFixed(0)+'%','100% classified, every channel','#5a5bf0')
+  +'</div>'
+  +'<div style="font-size:11px;color:#7c869c;margin-top:7px">An inference from a representative sample, not a per-conversion match. Odoo carries no channel on its orders (medium_id is empty on all 9,548 in the last 30 days) and Shopify channel data is not in this sync, so no single order can be tied to a Google click. The floor and ceiling are arithmetic and hold regardless; only the best estimate rests on the sample being representative.</div></div>';
+}
+
 function gadsNewRet(g){
  const G=O.gops; if(!G||!G.newRet||!Object.keys(G.newRet).length)return;
  const NR=G.newRet;
@@ -3910,11 +4006,11 @@ function gadsNewRet(g){
    +'<td style="'+TD+';color:#8a93a6">'+r.unk.toFixed(0)+'%</td></tr>';});
  tb+='</table></div>';
  const notes=[['#7c869c','<b>Google segments the conversions, not the spend.</b> There is no cost breakdown by new versus returning, so a per-segment cost per acquisition cannot be computed from this and is not shown. Anything claiming one would be inventing it.'],
-  ['#9aa3b5','<b>The unclassified share is real, not a gap to be filled.</b> Google cannot identify every converter as new or returning, so the honest denominator is stated twice above &mdash; once across classified value only, once across everything.'],
+  ['#9aa3b5','<b>The unclassified share is bounded, not filled in.</b> Google cannot identify every converter; the ledger can say whether the ones it did identify are representative. The floor and ceiling hold regardless &mdash; only the best estimate depends on that.'],
   ['#3a9bff','A campaign that looks weak on immediate return but carries a high new-customer share is buying future customers, not this week&rsquo;s revenue. Read it against the Money desk before cutting it &mdash; those two answers are allowed to disagree, and the disagreement is the decision.']];
  pnlCard(g,'google','New versus returning customers at Google'+INFO('Google Ads new_versus_returning_customers segment over the last 30 days, by campaign, on conversion value.'),
   'Last 30 days, pulled '+(G.pulled||'—')+'. Conversion value only &mdash; Google does not segment cost this way.',
-  head+bar+leg+tb+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+  head+bar+leg+gNewRetBench(tot,tv,newV,known)+tb+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
@@ -8613,7 +8709,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-181732';
+const BUILD='20260829-182806';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
