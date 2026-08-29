@@ -1660,6 +1660,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
     scoreboard, not one tab away: the first question is what to do, not what the numbers are. */
  try{rActions(g);}catch(e){}
  try{ovCard(g);}catch(e){}
+ try{offAudit(g);}catch(e){}
  try{paceCard(g);}catch(e){}
  let ord=ST.ord.slice();const by=id=>CARDS.find(c=>c.id===id);const sm=document.getElementById('so').value;
  if(sm!=='def'){const sc=id=>{const c=by(id);if(c.full||c.ins)return -1e9;let k;try{k=c.k(o)[0];}catch(e){return -1e9;}if(!k)return -1e9;const d=dl(k[1],k[2],k[4]!==0);return isFinite(d.p)?d.p:-1e9;};ord=ord.filter(id=>!by(id).full).sort((a,b)=>sm==='gain'?sc(b)-sc(a):sc(a)-sc(b)).concat(ord.filter(id=>by(id).full));}
@@ -1850,6 +1851,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const rows=mons.map(m=>({m:m,nc:NR[m].nord||0,rc:NR[m].rord||0,sp:spM[m]!=null?spM[m]:null,mtd:m===curM}));
   const yoy=(m,k)=>{const ly=(+m.slice(0,4)-1)+m.slice(4);const a=NR[m]?NR[m][k]:null,b=NR[ly]?NR[ly][k]:null;return (a!=null&&b)?a/b-1:null;};
   const lastFull=rows.filter(r=>!r.mtd).slice(-1)[0];
+  /* The running month is excluded from the YoY verdict on purpose -- a part-month against a whole
+     one is not a comparison. But dropping it from the card entirely meant the headline could read
+     "SHRINKING" off July while August was running far ahead of it, which is misleading by
+     omission. It is shown separately, labelled MTD, with a pace figure rather than pretending the
+     part-month is comparable. */
+  const mtdRow=rows.filter(r=>r.mtd).slice(-1)[0]||null;
+  const elapsedD=mtdRow?Math.max(1,+(O.today||'').slice(8,10)-1):0;
+  const dimMtd=mtdRow?new Date(Date.UTC(+mtdRow.m.slice(0,4),+mtdRow.m.slice(5,7),0)).getUTCDate():0;
+  const mtdPace=(mtdRow&&elapsedD)?Math.round(mtdRow.nc*dimMtd/elapsedD):null;
+  const vsPrev=(mtdRow&&lastFull&&lastFull.nc)?(mtdRow.nc/lastFull.nc-1):null;
   const yN=yoy(lastFull.m,'nord'),yR=yoy(lastFull.m,'rord');
   const l3=rows.filter(r=>!r.mtd).slice(-3),p3=rows.filter(r=>!r.mtd).slice(-6,-3);
   const trN=(p3.reduce((s,r)=>s+r.nc,0))?l3.reduce((s,r)=>s+r.nc,0)/p3.reduce((s,r)=>s+r.nc,0)-1:null;
@@ -1860,9 +1871,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    +'<div class="cs">Follows the date filter ('+mons[0]+' &rarr; '+mons[mons.length-1]+', min 6 months). Monthly count of Shopify orders from NEW customers (first ever order) vs RETURNING, with <b>ad spend on its own panel above</b>, sharing the same months. Spend is money and customers are a count, so they never share a scale &mdash; a shared axis would set the crossing point arbitrarily and could invent a link that is not there. Compare the <i>shapes</i>: if the spend bars step up and the NEW line does not follow, the extra spend did not buy customers. YoY = same calendar month last year, so seasonality cancels out. Last point is MTD. Per-branch versions live on the Branches tab.</div></div>'
    +'<div class="kpis"><div class="kpi"><div class="l">NC '+lastFull.m+'</div><div class="v">'+lastFull.nc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yN)+'">'+fmt(yN)+' YoY</span></div></div>'
    +'<div class="kpi"><div class="l">RC '+lastFull.m+'</div><div class="v">'+lastFull.rc.toLocaleString()+' <span style="font-size:10.5px;font-weight:800;color:'+col(yR)+'">'+fmt(yR)+' YoY</span></div></div>'
+   +(mtdRow?'<div class="kpi"><div class="l">NC '+mtdRow.m+' so far</div><div class="v">'+mtdRow.nc.toLocaleString()
+     +' <span style="font-size:10.5px;font-weight:800;color:'+col(vsPrev)+'">'+fmt(vsPrev)+' vs '+lastFull.m+'</span></div>'
+     +'<div style="font-size:10px;color:#5b6478">'+(mtdPace?'on pace for '+mtdPace.toLocaleString():'')+'</div></div>':'')
    +'<div class="kpi"><div class="l">NC trend (3mo vs prior 3)</div><div class="v" style="color:'+col(trN)+'">'+fmt(trN)+'</div></div></div></div>'
    +'<div id="nrcT" style="padding:0 12px 4px"></div>'
-   +'<div class="rtNote" style="padding:0 12px 10px">Verdict: new-customer acquisition is <b style="color:'+col(yN)+'">'+(yN==null?'unmeasured':(yN>=0.05?'GROWING':(yN<=-0.05?'SHRINKING':'FLAT')))+'</b> vs last year'+(yN!=null?' ('+fmt(yN)+' in '+lastFull.m+')':'')+'; returning base '+(yR==null?'—':(yR>=0.05?'growing':(yR<=-0.05?'shrinking':'flat'))+' ('+fmt(yR)+')')+'. Counts are orders by customer type from Odoo (Shopify channel), the same nrev/rrev split the P&amp;L uses.</div>'+(function(){const lm=lastFull.m;const yr=lm.slice(0,4);const ms2=Object.keys(NR).filter(x=>x.slice(0,4)===yr&&x<=lm);const ly2=ms2.map(x=>String(+yr-1)+x.slice(4));const S2=(a,k)=>a.reduce((t,x)=>t+((NR[x]||{})[k]||0),0);const nc1=S2(ms2,'nord'),nc0=S2(ly2,'nord'),rv1=S2(ms2,'nrev'),rv0=S2(ly2,'nrev');if(!nc0)return '';const pcv=(a,b)=>((a/b-1)*100).toFixed(0);return '<div class="rtNote" style="padding:0 12px 10px"><b>Year so far ('+yr+'-01 → '+lm+'):</b> new customers <b style="color:'+(nc1>=nc0?'#12a06e':'#e23a63')+'">'+nc1.toLocaleString()+' vs '+nc0.toLocaleString()+' ('+(nc1>=nc0?'+':'')+pcv(nc1,nc0)+'%)</b> · NC revenue <b style="color:'+(rv1>=rv0?'#12a06e':'#e23a63')+'">E£ '+Math.round(rv1/1e6)+'M vs E£ '+Math.round(rv0/1e6)+'M ('+(rv1>=rv0?'+':'')+pcv(rv1,rv0)+'%)</b> — read the monthly dip against this.</div>';})();
+   +'<div class="rtNote" style="padding:0 12px 10px">Verdict: new-customer acquisition is <b style="color:'+col(yN)+'">'+(yN==null?'unmeasured':(yN>=0.05?'GROWING':(yN<=-0.05?'SHRINKING':'FLAT')))+'</b> vs last year'+(yN!=null?' ('+fmt(yN)+' in '+lastFull.m+')':'')+'; returning base '+(yR==null?'—':(yR>=0.05?'growing':(yR<=-0.05?'shrinking':'flat'))+' ('+fmt(yR)+')')+'. <b>That verdict reads the last COMPLETE month ('+lastFull.m+')</b> &mdash; a part-month cannot be compared with a whole one.'
+   +(mtdRow?' The running month, <b>'+mtdRow.m+'</b>, is at <b>'+mtdRow.nc.toLocaleString()+'</b> new customers after '+elapsedD+' days'
+     +(mtdPace?', on pace for <b>'+mtdPace.toLocaleString()+'</b>':'')
+     +(vsPrev!=null?' &mdash; <b style="color:'+col(vsPrev)+'">'+fmt(vsPrev)+'</b> against '+lastFull.m+'. Read the verdict and this together, not either alone.':'.'):'')
+   +' Counts are orders by customer type from Odoo (Shopify channel), the same nrev/rrev split the P&amp;L uses.</div>'+(function(){const lm=lastFull.m;const yr=lm.slice(0,4);const ms2=Object.keys(NR).filter(x=>x.slice(0,4)===yr&&x<=lm);const ly2=ms2.map(x=>String(+yr-1)+x.slice(4));const S2=(a,k)=>a.reduce((t,x)=>t+((NR[x]||{})[k]||0),0);const nc1=S2(ms2,'nord'),nc0=S2(ly2,'nord'),rv1=S2(ms2,'nrev'),rv0=S2(ly2,'nrev');if(!nc0)return '';const pcv=(a,b)=>((a/b-1)*100).toFixed(0);return '<div class="rtNote" style="padding:0 12px 10px"><b>Year so far ('+yr+'-01 → '+lm+'):</b> new customers <b style="color:'+(nc1>=nc0?'#12a06e':'#e23a63')+'">'+nc1.toLocaleString()+' vs '+nc0.toLocaleString()+' ('+(nc1>=nc0?'+':'')+pcv(nc1,nc0)+'%)</b> · NC revenue <b style="color:'+(rv1>=rv0?'#12a06e':'#e23a63')+'">E£ '+Math.round(rv1/1e6)+'M vs E£ '+Math.round(rv0/1e6)+'M ('+(rv1>=rv0?'+':'')+pcv(rv1,rv0)+'%)</b> — read the monthly dip against this.</div>';})();
   const _anc3=document.getElementById('gpcacT');const _ac3=_anc3?_anc3.closest('.card'):null;_ac3?_ac3.insertAdjacentElement('afterend',el):g.appendChild(el);
   splitPanel('nrcT',rows.map(r=>r.m.slice(2)+(r.mtd?' MTD':'')),
    {type:'bar',h:96,fmt:v=>v>=1e6?'E£'+(v/1e6).toFixed(1)+'M':'E£'+Math.round(v/1000)+'k',
@@ -4504,6 +4522,83 @@ function gAudObs(g){
   body);
 }
 
+/* v9.42 THE SHOPS' OWN WEEKLY AUDIT -- the twin of the Shopify one, on the same rows.
+   Built because the weekly audit is Shopify-only and the shops are the larger half of the
+   business, so reading one without the other gives a picture of about a fifth of the company.
+   WHAT IS DELIBERATELY ABSENT: MER, aMER and CAC. Ad spend cannot be split between the webstore
+   and the shops -- one budget works on both -- so any per-scope return here would be an
+   allocation dressed up as a measurement. The combined figures live on The whole business, where
+   the whole budget sits against the whole revenue and nothing has to be invented. */
+function offAudit(g){
+ const BD=O.bnrD, W=BD&&BD._w, POS=O.pos||{};
+ if(!BD||!W)return;
+ const names=Object.keys(BD).filter(k=>k!=='_w');
+ if(!names.length)return;
+ const cut=O.partial||null; let s=ST.s,e=ST.e; if(cut&&e>=cut)e=addD(cut,-1);
+ const pw=cmpWr(s,e);
+ const bi=d=>Math.round((new Date(d+'T00:00:00Z')-new Date(W.start+'T00:00:00Z'))/864e5);
+ const win=(a,b)=>{const i0=Math.max(0,bi(a)),i1=Math.min(W.n-1,bi(b));
+  if(bi(b)<0||bi(a)>W.n-1)return null;
+  const o={nc:0,rc:0,nrev:0,rrev:0};
+  names.forEach(n=>{const z=BD[n]||{};for(let i=i0;i<=i1;i++){
+   o.nc+=(z.nc||[])[i]||0;o.rc+=(z.rc||[])[i]||0;o.nrev+=(z.nrev||[])[i]||0;o.rrev+=(z.rrev||[])[i]||0;}});
+  o.rev=o.nrev+o.rrev; o.ord=o.nc+o.rc;
+  o.ncAov=o.nc?o.nrev/o.nc:null; o.rcAov=o.rc?o.rrev/o.rc:null;
+  o.aov=o.ord?o.rev/o.ord:null;
+  return o;};
+ const C=win(s,e), P=win(pw[0],pw[1]);
+ if(!C)return;
+ /* month + year columns come from the monthly POS ledger, which reaches back further than the
+    daily series and carries margin the daily series does not */
+ const mSum=(ms)=>{let rev=0,gp=0,ord=0,any=false;
+  ms.forEach(m=>names.forEach(n=>{const c=(POS[n]||{})[m];if(c){any=true;rev+=c[0]||0;gp+=c[1]||0;ord+=c[2]||0;}}));
+  return any?{rev,gp,ord}:null;};
+ const curM=(O.today||'').slice(0,7), yr=curM.slice(0,4), mm=+curM.slice(5,7);
+ const monthsOf=(y,upto)=>{const o=[];for(let k=1;k<=upto;k++)o.push(y+'-'+String(k).padStart(2,'0'));return o;};
+ const lyM=(+yr-1)+curM.slice(4);
+ const mNow=mSum([curM]), mLy=mSum([lyM]);
+ const yNow=mSum(monthsOf(yr,mm)), yLy=mSum(monthsOf(String(+yr-1),mm));
+ const M=v=>v==null?'—':'E£ '+Math.round(v).toLocaleString();
+ const N=v=>v==null?'—':Math.round(v).toLocaleString();
+ const P1=v=>v==null?'—':v.toFixed(2)+'%';
+ const pc=(a,b)=>(a==null||b==null||!b)?null:(a/b-1)*100;
+ const dc=(v,good)=>v==null?'<td style="color:#c2c8d4">—</td>'
+   :'<td style="font-weight:800;color:'+(((v>=0)===!!good)?'#12a06e':'#e23a63')+'">'+(v>=0?'▲ +':'▼ −')+Math.abs(v).toFixed(0)+'%</td>';
+ const R=[
+  ['Revenue (POS)', M(C.rev), M(P&&P.rev), pc(C.rev,P&&P.rev),1, M(mNow&&mNow.rev), pc(mNow&&mNow.rev,mLy&&mLy.rev), M(yNow&&yNow.rev), pc(yNow&&yNow.rev,yLy&&yLy.rev)],
+  ['Receipts (orders)', N(C.ord), N(P&&P.ord), pc(C.ord,P&&P.ord),1, N(mNow&&mNow.ord), pc(mNow&&mNow.ord,mLy&&mLy.ord), N(yNow&&yNow.ord), pc(yNow&&yNow.ord,yLy&&yLy.ord)],
+  ['New customers', N(C.nc), N(P&&P.nc), pc(C.nc,P&&P.nc),1, '—',null,'—',null],
+  ['Returning customers', N(C.rc), N(P&&P.rc), pc(C.rc,P&&P.rc),1, '—',null,'—',null],
+  ['NC revenue', M(C.nrev), M(P&&P.nrev), pc(C.nrev,P&&P.nrev),1, '—',null,'—',null],
+  ['RC revenue', M(C.rrev), M(P&&P.rrev), pc(C.rrev,P&&P.rrev),1, '—',null,'—',null],
+  ['AOV — new customers', M(C.ncAov), M(P&&P.ncAov), pc(C.ncAov,P&&P.ncAov),1, '—',null,'—',null],
+  ['AOV — returning', M(C.rcAov), M(P&&P.rcAov), pc(C.rcAov,P&&P.rcAov),1, '—',null,'—',null],
+  ['AOV — all', M(C.aov), M(P&&P.aov), pc(C.aov,P&&P.aov),1, '—',null,'—',null],
+  ['Gross profit', '—','—',null,1, M(mNow&&mNow.gp), pc(mNow&&mNow.gp,mLy&&mLy.gp), M(yNow&&yNow.gp), pc(yNow&&yNow.gp,yLy&&yLy.gp)],
+  ['GP %', '—','—',null,1,
+   (mNow&&mNow.rev)?P1(mNow.gp/mNow.rev*100):'—', pc(mNow&&mNow.rev?mNow.gp/mNow.rev:null, mLy&&mLy.rev?mLy.gp/mLy.rev:null),
+   (yNow&&yNow.rev)?P1(yNow.gp/yNow.rev*100):'—', pc(yNow&&yNow.rev?yNow.gp/yNow.rev:null, yLy&&yLy.rev?yLy.gp/yLy.rev:null)]
+ ];
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Metric</th><th style="'+TH+'">This period</th><th style="'+TH+'">Previous</th><th style="'+TH+'">Δ</th>'
+  +'<th style="'+TH+'">Month '+curM+'</th><th style="'+TH+'">vs LY</th><th style="'+TH+'">YTD</th><th style="'+TH+'">vs LY</th></tr>';
+ R.forEach(r=>{
+  h+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r[0]+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+r[1]+'</td>'
+   +'<td style="'+TD+';color:#5b6478">'+r[2]+'</td>'+dc(r[3],r[4])
+   +'<td style="'+TD+'">'+r[5]+'</td>'+dc(r[6],1)
+   +'<td style="'+TD+'">'+r[7]+'</td>'+dc(r[8],1)+'</tr>';});
+ h+='</table></div>';
+ const notes=[['#e23a63','<b>No MER, aMER or CAC here, and that is deliberate.</b> One ad budget works on the webstore and the shops at the same time and cannot be split between them, so any per-scope return would be an allocation presented as a measurement. For a return on the whole budget use <b>The whole business</b>, where the entire spend sits against the entire revenue.'],
+  ['#3a9bff','<b>The period block is the daily POS series; the month and year blocks are the monthly ledger.</b> The daily feed starts '+W.start+' and carries customers, so new-versus-returning only exists in the left block. The monthly ledger reaches further back and carries margin, which the daily feed does not &mdash; hence the dashes.'],
+  ['#7c869c','Walk-in receipts have no identity attached, so a shop &ldquo;new customer&rdquo; means the first time that registered customer appears in the POS ledger. Anonymous cash buyers are in the revenue and not in the customer counts.']];
+ pnlCard(g,'odoo','Weekly audit &mdash; THE SEVEN SHOPS'+INFO('The offline twin of the Shopify weekly audit, on the same rows, from the POS ledger.'),
+  '<b>SHOPS ONLY</b> &mdash; the seven branches, '+s+' &rarr; '+e+' against '+pw[0]+' &rarr; '+pw[1]+'. The webstore is not in any figure here; that is the Shopify table above.',
+  h+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
+}
+
 function alertBand(g){
  const A=[];
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -5226,7 +5321,8 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   +rows.map(tr).join('')+'</table></div>');}
 
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';
- try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
+ try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}
+ try{offAudit(g);}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
@@ -9314,7 +9410,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-202705';
+const BUILD='20260829-203450';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
