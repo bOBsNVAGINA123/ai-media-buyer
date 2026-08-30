@@ -15,6 +15,10 @@ on:
         description: "1 = let Google check the payload without recording it"
         required: false
         default: "0"
+      report:
+        description: "1 = just print conversions per action for the last 30 days"
+        required: false
+        default: "0"
 
 permissions:
   contents: read
@@ -45,4 +49,5 @@ jobs:
           GOOGLE_CUSTOMER_ID:     ${{ secrets.GOOGLE_CUSTOMER_ID }}
           DAYS:          ${{ github.event.inputs.days || '7' }}
           VALIDATE_ONLY: ${{ github.event.inputs.validate_only || '0' }}
+          REPORT:        ${{ github.event.inputs.report || '0' }}
         run: python google_offline_upload.py
