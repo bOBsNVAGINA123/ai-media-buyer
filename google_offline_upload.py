@@ -303,6 +303,7 @@ def main():
             "destinationReferences": [dest_ref[name]],
             "transactionId": str(o["ref"]),
             "eventTimestamp": o["t"].replace(" ", "T") + "Z",
+            "eventSource": "IN_STORE",      # POS purchase, not web or app
             "currency": "EGP",
             "conversionValue": round(o["v"], 2),
             "userData": {"userIdentifiers": ids},
