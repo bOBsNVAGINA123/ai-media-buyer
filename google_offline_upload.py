@@ -253,6 +253,32 @@ def report():
     if not rows:
         log("  (nothing reported)")
 
+    # How each action is actually defined - type tells you where it comes from
+    # (STORE_SALES / UPLOAD_CLICKS / GOOGLE_ATTRIBUTED_* etc).
+    q2 = ("SELECT conversion_action.id, conversion_action.name, conversion_action.type, "
+          "conversion_action.category, conversion_action.status, conversion_action.origin, "
+          "conversion_action.primary_for_goal, conversion_action.counting_type "
+          "FROM conversion_action")
+    req2 = urllib.request.Request(
+        f"{GADS_HOST}/{ver}/customers/{cid}/googleAds:search",
+        data=json.dumps({"query": q2}).encode(), headers=_gads_headers(token))
+    try:
+        with urllib.request.urlopen(req2, timeout=120) as r:
+            res2 = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        log("action-config query failed:", e.read().decode("utf-8", "ignore")[:400])
+        return
+    log("--- how each action is built (store/in-store/local only) ---")
+    for row in res2.get("results", []):
+        ca = row.get("conversionAction", {})
+        nm = ca.get("name", "?")
+        if not any(k in nm.lower() for k in ("store", "in-store", "local", "direction")):
+            continue
+        log("  %-44s type=%-26s origin=%-18s cat=%-16s status=%-9s primary=%s" %
+            (nm[:44], ca.get("type", "?"), ca.get("origin", "?"),
+             ca.get("category", "?"), ca.get("status", "?"),
+             ca.get("primaryForGoal", "?")))
+
 
 # --------------------------------------------------------------------- main
 def main():
