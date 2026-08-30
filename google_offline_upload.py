@@ -3,28 +3,39 @@
 Push Our Kids in-store (POS) purchases into Google Ads as offline conversions.
 
 Runs in GitHub Actions off the same secrets ourkids_live.py already uses.
-Odoo POS -> aggregate to orders -> hash the customer identifier -> upload to the
-per-branch conversion action via uploadClickConversions.
+Odoo POS -> aggregate to orders -> hash the customer identifier -> ingest against
+the per-branch conversion action.
+
+Uses the Data Manager API (datamanager.googleapis.com). The older
+ConversionUploadService.UploadClickConversions now rejects new integrations
+outright - every row comes back "New integrations for uploading click
+conversions should use the Data Manager API".
 
 Branch rides in the conversion action name ("In-store Purchase - Smouha"),
-because Google's upload schema has no store-code field. Same shape as the Meta
-side, where the 15 custom conversions split on custom_data.content_category.
+because the upload schema has no store-code field. Same shape as the Meta side,
+where the 15 custom conversions split on custom_data.content_category.
 
 Env:
   ODOO_SERVER ODOO_DB ODOO_LOGIN ODOO_APIKEY
   GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN
   GOOGLE_DEVELOPER_TOKEN GOOGLE_LOGIN_CID GOOGLE_CUSTOMER_ID
-  DAYS          how far back to pull (default 7; use 90 for the backfill)
+  DAYS          how far back to pull (default 7; 90 for a backfill)
   VALIDATE_ONLY "1" to let Google check the payload without recording anything
+
+NOTE: the refresh token must carry BOTH scopes:
+  https://www.googleapis.com/auth/adwords          (to read conversion actions)
+  https://www.googleapis.com/auth/datamanager      (to ingest events)
+A token minted for adwords alone will 401/403 on the ingest call.
 """
 import os, sys, json, time, hashlib, datetime, re
 import urllib.request, urllib.parse, urllib.error
 
 GADS_HOST = "https://googleads.googleapis.com"
-_VER = {"v": ""}          # resolved once per run by probe_version()
+DM_INGEST = "https://datamanager.googleapis.com/v1/events:ingest"
+_VER = {"v": ""}
 DAYS = int(os.environ.get("DAYS", "7"))
 VALIDATE_ONLY = os.environ.get("VALIDATE_ONLY", "").strip() in ("1", "true", "yes")
-BATCH = 2000                      # Google's per-request cap
+BATCH = 2000
 ODOO_PAGE = 5000
 
 BRANCHES = [
@@ -46,6 +57,10 @@ def env(k):
     if not v:
         sys.exit("missing env: " + k)
     return v
+
+
+def digits(s):
+    return re.sub(r"\D", "", s or "")
 
 
 # --------------------------------------------------------------------- Odoo
@@ -85,7 +100,7 @@ def norm_email(e):
 
 
 def norm_phone(p):
-    d = re.sub(r"\D", "", str(p or ""))
+    d = digits(str(p or ""))
     if d.startswith("00"):
         d = d[2:]
     if d.startswith("20") and len(d) == 12:
@@ -108,6 +123,10 @@ def branch_of(ref):
     return None
 
 
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 # ------------------------------------------------------------------- Google
 def access_token():
     body = urllib.parse.urlencode({
@@ -118,29 +137,34 @@ def access_token():
     }).encode()
     req = urllib.request.Request("https://oauth2.googleapis.com/token", data=body)
     with urllib.request.urlopen(req, timeout=60) as r:
-        return json.load(r)["access_token"]
+        tok = json.load(r)
+    scopes = tok.get("scope", "")
+    log("token scopes:", scopes or "(not reported)")
+    if scopes and "datamanager" not in scopes:
+        log("WARNING: refresh token has no datamanager scope - ingest will fail. "
+            "Re-mint it with adwords + datamanager.")
+    return tok["access_token"]
 
 
-def _headers(token):
+def _gads_headers(token):
     return {
         "Authorization": "Bearer " + token,
         "developer-token": env("GOOGLE_DEVELOPER_TOKEN"),
-        "login-customer-id": env("GOOGLE_LOGIN_CID"),
+        "login-customer-id": digits(env("GOOGLE_LOGIN_CID")),
         "Content-Type": "application/json",
     }
 
 
 def probe_version(token):
-    """Google sunsets API versions without warning - v21 died mid-Aug 2026 and
-    404s. Same newest-first probe ourkids_live.py uses, cached for the run."""
+    """Google sunsets API versions without warning - v21 died mid-Aug 2026."""
     if _VER["v"]:
         return _VER["v"]
-    cid = env("GOOGLE_CUSTOMER_ID")
+    cid = digits(env("GOOGLE_CUSTOMER_ID"))
     for v in ("v22", "v23", "v24", "v25", "v21"):
         req = urllib.request.Request(
             f"{GADS_HOST}/{v}/customers/{cid}/googleAds:search",
             data=json.dumps({"query": "SELECT customer.id FROM customer LIMIT 1"}).encode(),
-            headers=_headers(token))
+            headers=_gads_headers(token))
         try:
             with urllib.request.urlopen(req, timeout=60):
                 _VER["v"] = v
@@ -150,40 +174,51 @@ def probe_version(token):
             body = e.read().decode("utf-8", "ignore")
             if e.code == 404 or "UNSUPPORTED_VERSION" in body:
                 continue
-            # a real error (auth, permission) on a live version - surface it
             raise SystemExit("google %s on %s: %s" % (e.code, v, body[:1200]))
         except Exception:
             continue
     raise SystemExit("no live Google Ads API version found among v21-v25")
 
 
-def gads(path, payload, token):
-    cid = env("GOOGLE_CUSTOMER_ID")
+def conversion_action_ids(token):
+    """branch conversion action name -> numeric id (Data Manager wants the id)."""
+    cid = digits(env("GOOGLE_CUSTOMER_ID"))
     ver = probe_version(token)
+    q = ("SELECT conversion_action.id, conversion_action.name "
+         "FROM conversion_action "
+         "WHERE conversion_action.name LIKE 'In-store Purchase%'")
     req = urllib.request.Request(
-        f"{GADS_HOST}/{ver}/customers/{cid}{path}",
-        data=json.dumps(payload).encode(),
-        headers=_headers(token))
+        f"{GADS_HOST}/{ver}/customers/{cid}/googleAds:search",
+        data=json.dumps({"query": q}).encode(),
+        headers=_gads_headers(token))
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise SystemExit("gaql %s: %s" % (e.code, e.read().decode("utf-8", "ignore")[:1200]))
+    out = {}
+    for row in res.get("results", []):
+        ca = row["conversionAction"]
+        out[ca["name"]] = str(ca["id"])
+    return out
+
+
+def ingest(destinations, events, token):
+    payload = {
+        "destinations": destinations,
+        "events": events,
+        "encoding": "HEX",
+        "validateOnly": VALIDATE_ONLY,
+    }
+    req = urllib.request.Request(DM_INGEST, data=json.dumps(payload).encode(),
+                                 headers={"Authorization": "Bearer " + token,
+                                          "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=180) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
-        raise SystemExit("google %s: %s" % (e.code, e.read().decode("utf-8", "ignore")[:1500]))
-
-
-def conversion_actions(token):
-    """name -> resource name, for the 7 branch actions."""
-    q = ("SELECT conversion_action.resource_name, conversion_action.name "
-         "FROM conversion_action "
-         "WHERE conversion_action.name LIKE 'In-store Purchase%' "
-         "AND conversion_action.status = 'ENABLED'")
-    # No pageSize: v22 returns PAGE_SIZE_NOT_SUPPORTED, responses are fixed at 10k rows.
-    res = gads("/googleAds:search", {"query": q}, token)
-    out = {}
-    for row in res.get("results", []):
-        ca = row["conversionAction"]
-        out[ca["name"]] = ca["resourceName"]
-    return out
+        raise SystemExit("datamanager %s: %s"
+                         % (e.code, e.read().decode("utf-8", "ignore")[:1800]))
 
 
 # --------------------------------------------------------------------- main
@@ -192,8 +227,6 @@ def main():
              - datetime.timedelta(days=DAYS)).strftime("%Y-%m-%d %H:%M:%S")
     log("window since", since, "| validate_only", VALIDATE_ONLY)
 
-    # POS lines -> orders. pos.order itself is not readable by the API user,
-    # so everything is derived from pos.order.line.
     orders, offset = {}, 0
     while True:
         batch = odoo("pos.order.line", "search_read", [[["create_date", ">=", since]]],
@@ -225,12 +258,25 @@ def main():
     log("customers", len(contacts))
 
     token = access_token()
-    actions = conversion_actions(token)
+    actions = conversion_action_ids(token)
     log("conversion actions found", len(actions))
     if not actions:
         sys.exit("no 'In-store Purchase - *' conversion actions in the account")
 
-    rows, no_branch, no_contact, no_action = [], 0, 0, 0
+    operating = {"product": "GOOGLE_ADS", "accountId": digits(env("GOOGLE_CUSTOMER_ID"))}
+    login = {"product": "GOOGLE_ADS", "accountId": digits(env("GOOGLE_LOGIN_CID"))}
+    destinations, dest_ref = [], {}
+    for name, aid in actions.items():
+        ref = slug(name)
+        dest_ref[name] = ref
+        destinations.append({
+            "reference": ref,
+            "loginAccount": login,
+            "operatingAccount": operating,
+            "productDestinationId": aid,
+        })
+
+    events, no_branch, no_contact, no_action = [], 0, 0, 0
     for o in orders.values():
         br = branch_of(o["ref"])
         if not br:
@@ -238,8 +284,8 @@ def main():
             continue
         if o["v"] <= 0:
             continue
-        rn = actions.get("In-store Purchase - " + br)
-        if not rn:
+        name = "In-store Purchase - " + br
+        if name not in dest_ref:
             no_action += 1
             continue
         c = contacts.get(o["pid"]) or {}
@@ -247,51 +293,44 @@ def main():
         ph = norm_phone(c.get("mobile") or c.get("phone"))
         ids = []
         if em:
-            ids.append({"hashedEmail": sha(em)})
+            ids.append({"emailAddress": sha(em)})
         if ph:
-            ids.append({"hashedPhoneNumber": sha(ph)})
+            ids.append({"phoneNumber": sha(ph)})
         if not ids:
             no_contact += 1
             continue
-        rows.append({
-            "conversionAction": rn,
-            "conversionDateTime": o["t"] + "+00:00",
+        events.append({
+            "destinationReferences": [dest_ref[name]],
+            "transactionId": str(o["ref"]),
+            "eventTimestamp": o["t"].replace(" ", "T") + "Z",
+            "currency": "EGP",
             "conversionValue": round(o["v"], 2),
-            "currencyCode": "EGP",
-            "orderId": str(o["ref"]),
-            "userIdentifiers": ids,
+            "userData": {"userIdentifiers": ids},
         })
 
-    log("uploadable", len(rows), "| dropped: refund/no-branch", no_branch,
+    log("uploadable", len(events), "| dropped: refund/no-branch", no_branch,
         "no-contact", no_contact, "no-action", no_action)
-    if not rows:
+    if not events:
         log("nothing to send")
         return
 
     sent = failed = 0
-    seen_errors = {}
-    for i in range(0, len(rows), BATCH):
-        chunk = rows[i:i + BATCH]
-        res = gads(":uploadClickConversions",
-                   {"conversions": chunk,
-                    "partialFailure": True,
-                    "validateOnly": VALIDATE_ONLY}, token)
-        pf = res.get("partialFailureError")
+    for i in range(0, len(events), BATCH):
+        chunk = events[i:i + BATCH]
+        res = ingest(destinations, chunk, token)
+        # Data Manager reports per-request counts rather than per-row rejects.
         bad = 0
-        if pf:
-            for d in pf.get("details", []):
-                for e in d.get("errors", []):
-                    msg = e.get("message", "?")[:130]
-                    seen_errors[msg] = seen_errors.get(msg, 0) + 1
-                    bad += 1
+        for k in ("errors", "failures", "eventErrors"):
+            if res.get(k):
+                bad = len(res[k])
+                log("errors in batch:", json.dumps(res[k])[:600])
         sent += len(chunk) - bad
         failed += bad
-        log("batch %d-%d: ok %d, rejected %d" % (i, i + len(chunk), len(chunk) - bad, bad))
+        log("batch %d-%d: sent %d, errors %d | resp %s"
+            % (i, i + len(chunk), len(chunk) - bad, bad, json.dumps(res)[:300]))
         time.sleep(1)
 
-    log("TOTAL accepted", sent, "rejected", failed)
-    for msg, n in sorted(seen_errors.items(), key=lambda x: -x[1])[:10]:
-        log("  x%-6d %s" % (n, msg))
+    log("TOTAL sent", sent, "errors", failed)
     if VALIDATE_ONLY:
         log("validate-only run: nothing was actually recorded")
 
