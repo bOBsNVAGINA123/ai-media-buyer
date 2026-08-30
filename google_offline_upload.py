@@ -177,7 +177,8 @@ def conversion_actions(token):
          "FROM conversion_action "
          "WHERE conversion_action.name LIKE 'In-store Purchase%' "
          "AND conversion_action.status = 'ENABLED'")
-    res = gads("/googleAds:search", {"query": q, "pageSize": 200}, token)
+    # No pageSize: v22 returns PAGE_SIZE_NOT_SUPPORTED, responses are fixed at 10k rows.
+    res = gads("/googleAds:search", {"query": q}, token)
     out = {}
     for row in res.get("results", []):
         ca = row["conversionAction"]
