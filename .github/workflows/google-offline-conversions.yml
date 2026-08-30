@@ -1,0 +1,48 @@
+name: Google Ads offline conversions
+
+# Pushes Odoo POS purchases into Google Ads as per-branch offline conversions.
+# Same secrets the dashboard workflow already uses. Laptop off.
+on:
+  schedule:
+    - cron: "20 4 * * *"       # daily, 04:20 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days back to pull (90 for a backfill)"
+        required: false
+        default: "7"
+      validate_only:
+        description: "1 = let Google check the payload without recording it"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gads-offline-conversions
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Upload in-store conversions
+        env:
+          ODOO_SERVER: ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:     ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:  ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY: ${{ secrets.ODOO_APIKEY }}
+          GOOGLE_CLIENT_ID:       ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:   ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:   ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
+          GOOGLE_LOGIN_CID:       ${{ secrets.GOOGLE_LOGIN_CID }}
+          GOOGLE_CUSTOMER_ID:     ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          DAYS:          ${{ github.event.inputs.days || '7' }}
+          VALIDATE_ONLY: ${{ github.event.inputs.validate_only || '0' }}
+        run: python google_offline_upload.py
