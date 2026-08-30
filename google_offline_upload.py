@@ -221,8 +221,44 @@ def ingest(destinations, events, token):
                          % (e.code, e.read().decode("utf-8", "ignore")[:1800]))
 
 
+# ------------------------------------------------------------------- report
+def report():
+    """REPORT=1: print conversions + value per conversion action, last 30 days.
+    Use it to see what the offline upload actually matched, and to size the
+    local-action signal (Get directions) before pointing bidding at it."""
+    token = access_token()
+    cid = digits(env("GOOGLE_CUSTOMER_ID"))
+    ver = probe_version(token)
+    q = ("SELECT segments.conversion_action_name, metrics.all_conversions, "
+         "metrics.all_conversions_value FROM customer "
+         "WHERE segments.date DURING LAST_30_DAYS")
+    req = urllib.request.Request(
+        f"{GADS_HOST}/{ver}/customers/{cid}/googleAds:search",
+        data=json.dumps({"query": q}).encode(), headers=_gads_headers(token))
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise SystemExit("gaql %s: %s" % (e.code, e.read().decode("utf-8", "ignore")[:1200]))
+    rows = []
+    for row in res.get("results", []):
+        name = row.get("segments", {}).get("conversionActionName", "?")
+        m = row.get("metrics", {})
+        rows.append((float(m.get("allConversions", 0) or 0),
+                     float(m.get("allConversionsValue", 0) or 0), name))
+    rows.sort(reverse=True)
+    log("--- conversions by action, last 30 days ---")
+    for c, v, name in rows:
+        log("  %10.1f  %14.2f  %s" % (c, v, name))
+    if not rows:
+        log("  (nothing reported)")
+
+
 # --------------------------------------------------------------------- main
 def main():
+    if os.environ.get("REPORT", "").strip() in ("1", "true", "yes"):
+        report()
+        return
     since = (datetime.datetime.now(datetime.timezone.utc)
              - datetime.timedelta(days=DAYS)).strftime("%Y-%m-%d %H:%M:%S")
     log("window since", since, "| validate_only", VALIDATE_ONLY)
