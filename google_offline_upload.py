@@ -20,7 +20,8 @@ Env:
 import os, sys, json, time, hashlib, datetime, re
 import urllib.request, urllib.parse, urllib.error
 
-API = "https://googleads.googleapis.com/v21"
+GADS_HOST = "https://googleads.googleapis.com"
+_VER = {"v": ""}          # resolved once per run by probe_version()
 DAYS = int(os.environ.get("DAYS", "7"))
 VALIDATE_ONLY = os.environ.get("VALIDATE_ONLY", "").strip() in ("1", "true", "yes")
 BATCH = 2000                      # Google's per-request cap
@@ -120,17 +121,49 @@ def access_token():
         return json.load(r)["access_token"]
 
 
+def _headers(token):
+    return {
+        "Authorization": "Bearer " + token,
+        "developer-token": env("GOOGLE_DEVELOPER_TOKEN"),
+        "login-customer-id": env("GOOGLE_LOGIN_CID"),
+        "Content-Type": "application/json",
+    }
+
+
+def probe_version(token):
+    """Google sunsets API versions without warning - v21 died mid-Aug 2026 and
+    404s. Same newest-first probe ourkids_live.py uses, cached for the run."""
+    if _VER["v"]:
+        return _VER["v"]
+    cid = env("GOOGLE_CUSTOMER_ID")
+    for v in ("v22", "v23", "v24", "v25", "v21"):
+        req = urllib.request.Request(
+            f"{GADS_HOST}/{v}/customers/{cid}/googleAds:search",
+            data=json.dumps({"query": "SELECT customer.id FROM customer LIMIT 1"}).encode(),
+            headers=_headers(token))
+        try:
+            with urllib.request.urlopen(req, timeout=60):
+                _VER["v"] = v
+                log("api version probe picked", v)
+                return v
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "ignore")
+            if e.code == 404 or "UNSUPPORTED_VERSION" in body:
+                continue
+            # a real error (auth, permission) on a live version - surface it
+            raise SystemExit("google %s on %s: %s" % (e.code, v, body[:1200]))
+        except Exception:
+            continue
+    raise SystemExit("no live Google Ads API version found among v21-v25")
+
+
 def gads(path, payload, token):
     cid = env("GOOGLE_CUSTOMER_ID")
+    ver = probe_version(token)
     req = urllib.request.Request(
-        f"{API}/customers/{cid}{path}",
+        f"{GADS_HOST}/{ver}/customers/{cid}{path}",
         data=json.dumps(payload).encode(),
-        headers={
-            "Authorization": "Bearer " + token,
-            "developer-token": env("GOOGLE_DEVELOPER_TOKEN"),
-            "login-customer-id": env("GOOGLE_LOGIN_CID"),
-            "Content-Type": "application/json",
-        })
+        headers=_headers(token))
     try:
         with urllib.request.urlopen(req, timeout=180) as r:
             return json.loads(r.read())
