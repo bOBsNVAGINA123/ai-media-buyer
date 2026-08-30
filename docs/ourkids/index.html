@@ -1245,7 +1245,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -6070,7 +6070,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj')rCJ();else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt')rRT();else if(t==='lt')rLT();else if(t==='tr')rTR();else if(t==='tk')rTK();else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si')rSI();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -9746,7 +9746,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260829-235024'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260830-032550'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
@@ -10384,6 +10384,203 @@ function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19')
   +'<div class="pwarn" style="margin-top:10px"><b>How to use this for the next OurKids brief:</b> offer-first banners, price-anchor and sale-announcement hooks, and product-image-with-text assets are the scale patterns in the data; unboxing, Post-it, meme and quiz formats are the high-hit-rate test patterns for Fashion &amp; Apparel. These are BFCM-window associations, not guarantees &mdash; test them, judge them on the Launches tab by profit after ad spend.</div>';
  pnlCard(g,'ins','What to test next — Motion’s format / hook / asset leaderboards','Straight from the report. Hit rate = how often a format produced a winner; spend use = whether it earns more spend than its usage share.',lb);
 }
+/* v9.46 TAB VERDICTS.
+   Seven tabs rendered their tables and stopped there: Site routing, Search demand, Retention,
+   Journeys, Incrementality, TikTok and Campaigns all showed the working and left the reader to
+   do the concluding. Each function below computes its lines from the SAME data the tab draws,
+   so a verdict can never drift from the table above it, and each says the number it is standing
+   on. Where the data cannot support a call, the line says that instead of inventing one. */
+const VC={good:'#12a06e',bad:'#e23a63',warn:'#ff8b42',info:'#5a5bf0',mute:'#8a93a6'};
+function _vM(v){return 'E£'+Math.round(Math.abs(v)).toLocaleString();}
+function _vP(v){return (v>=0?'+':'−')+Math.abs(v).toFixed(0)+'%';}
+
+/* ---- Site routing: which landing types carry the traffic and which waste it ---- */
+function vTR(g){try{
+ const M=trModel(); if(!M||!M.pages||!M.pages.length)return;
+ const T=(typeof auByType==='function')?auByType(M):null; if(!T||!T.length)return;
+ const tot=T.reduce((a,b)=>a+b.sessions,0)||1;
+ const site=T.reduce((a,b)=>a+b.orders,0)/tot;
+ const best=T.slice().sort((a,b)=>b.cvr-a.cvr)[0];
+ const worst=T.filter(x=>!/checkout|cart|account|login|order|thank/i.test(x.type||'')&&x.sessions>=tot*0.05).sort((a,b)=>a.cvr-b.cvr)[0];
+ const L=[];
+ if(best&&worst&&worst!==best){
+  L.push([VC.info,'<b>'+esc(best.type)+' converts at '+(best.cvr*100).toFixed(2)+'%, '+esc(worst.type)+' at '+(worst.cvr*100).toFixed(2)+'%</b> — a '+(worst.cvr?(best.cvr/worst.cvr).toFixed(1):'—')+'&times; gap on the same traffic. Site average is '+(site*100).toFixed(2)+'%.']);
+  const lift=worst.sessions*(site-worst.cvr);
+  if(lift>0)L.push([VC.warn,'<b>'+esc(worst.type)+' carries '+Math.round(worst.sessions/tot*100)+'% of sessions and converts below the site average.</b> Bringing it merely to average would add about '+Math.round(lift)+' orders over this window. That is the single biggest routing prize on the page.']);}
+ // Checkout, Cart and Account are steps inside a purchase, not places you send traffic --
+ // scoring them as landing pages produced a "Checkout converts badly" line, which is meaningless.
+ const LAND=x=>!/checkout|cart|account|login|order|thank/i.test(x.type||'');
+ const dead=T.filter(x=>LAND(x)&&x.sessions>=300&&x.cvr<site*0.5);
+ if(dead.length)L.push([VC.bad,'<b>'+dead.length+' page type'+(dead.length>1?'s convert':' converts')+' at under half the site average</b> — '+dead.map(x=>esc(x.type)).join(', ')+'. Traffic sent here is subsidised by everything else.']);
+ const falling=T.filter(x=>x.dCvrP!=null&&x.dCvrP<-0.15&&x.sessions>=500).sort((a,b)=>a.dCvrP-b.dCvrP)[0];
+ if(falling)L.push([VC.bad,'<b>'+esc(falling.type)+' conversion fell '+_vP(falling.dCvrP*100)+' against the window before</b>, on '+Math.round(falling.sessions).toLocaleString()+' sessions. That is a change, not a level — worth looking at what shipped.']);
+ if(!L.length)L.push([VC.mute,'No landing-page type is far enough from the site average, or moved far enough against the prior window, to call anything out.']);
+ conclCard(g,'What the routing says',L,'Computed from the landing-page table on this tab. Sessions and orders are Shopify’s own; the window is the routing pull’s, which does not follow the date picker.');
+}catch(e){}}
+
+/* ---- Search demand: are we losing ground on the terms we already rank for ---- */
+function vSI(g){try{
+ const S=O.searchIntel||{}; const IS=S.is||{}, LY=S.isLY||{}; const L=[];
+ /* is[campaign] = {is: impression share, bl: share lost to BUDGET, rl: share lost to RANK}.
+    Budget-lost and rank-lost are different problems with opposite fixes: budget-lost is demand
+    you already win the auction for and decline to buy; rank-lost is demand you are losing on
+    relevance or bid. Blending them into "impression share" hides which lever to pull. */
+ const rows=Object.keys(IS).map(k=>({k,...IS[k]})).filter(r=>r.is!=null);
+ if(rows.length){
+  const bud=rows.filter(r=>(r.bl||0)>=0.3).sort((a,b)=>b.bl-a.bl);
+  if(bud.length)L.push([VC.bad,'<b>'+bud.length+' campaign'+(bud.length>1?'s are':' is')+' losing 30%+ of available impressions to BUDGET, not to rank</b> — worst is '+esc(bud[0].k)+' at '+Math.round(bud[0].bl*100)+'%. That is demand you are already winning the auction for and choosing not to buy. Raising the cap converts it directly; nothing needs fixing first.']);
+  const rank=rows.filter(r=>(r.rl||0)>=0.6).sort((a,b)=>b.rl-a.rl);
+  if(rank.length)L.push([VC.warn,'<b>'+rank.length+' campaign'+(rank.length>1?'s lose':' loses')+' 60%+ of impressions to RANK</b> — worst is '+esc(rank[0].k)+' at '+Math.round(rank[0].rl*100)+'%. More budget will not buy these; it is bid, relevance or the feed.']);
+  const yoy=rows.filter(r=>LY[r.k]&&LY[r.k].is>0).map(r=>({k:r.k,now:r.is,then:LY[r.k].is,d:r.is/LY[r.k].is-1}));
+  const fell=yoy.filter(x=>x.d<-0.15).sort((a,b)=>a.d-b.d);
+  if(fell.length)L.push([VC.bad,'<b>'+fell.length+' campaign'+(fell.length>1?'s hold':' holds')+' materially less of the auction than a year ago</b> — '+esc(fell[0].k)+' is on '+(fell[0].now*100).toFixed(0)+'% of impressions against '+(fell[0].then*100).toFixed(0)+'% last year. That is ground lost to somebody, not demand that vanished.']);
+  else if(yoy.length)L.push([VC.good,'<b>No campaign has given up meaningful impression share against last year.</b>']);}
+ /* terms[i] = {t, im, ck, cn, cv, sp} with imL/ckL/cnL/cvL as the same term a year ago. */
+ const T=(S.terms||[]).filter(t=>t&&t.sp>0);
+ if(T.length){
+  const dead=T.filter(t=>!(t.cn>0));
+  const waste=dead.reduce((a,t)=>a+t.sp,0), tot=T.reduce((a,t)=>a+t.sp,0);
+  if(waste>0)L.push([waste>tot*0.15?VC.bad:VC.warn,'<b>'+dead.length+' of '+T.length+' search terms converted zero times</b>, '+_vM(waste)+' between them ('+Math.round(waste/tot*100)+'% of term spend). Individually each is too small to bother with, which is exactly why nobody ever cuts them; as one line it is the cheapest saving on this page.']);
+  const grow=T.filter(t=>t.imL>0&&t.im/t.imL>=1.3&&t.cn>0).sort((a,b)=>(b.im-b.imL)-(a.im-a.imL))[0];
+  if(grow)L.push([VC.good,'<b>"'+esc(grow.t)+'" is up '+Math.round((grow.im/grow.imL-1)*100)+'% in impressions on last year</b> and converting ('+Math.round(grow.cn)+' conversions, '+_vM(grow.cv)+'). Rising demand you are already winning.']);
+  const shrink=T.filter(t=>t.imL>500&&t.im/t.imL<=0.6).sort((a,b)=>(a.im-a.imL)-(b.im-b.imL))[0];
+  if(shrink)L.push([VC.warn,'<b>"'+esc(shrink.t)+'" has '+Math.round((1-shrink.im/shrink.imL)*100)+'% fewer impressions than a year ago.</b> Either the demand went or somebody else took it — worth knowing which before assuming the market shrank.']);}
+ if(!L.length)return;
+ conclCard(g,'What the search data says',L,'Impression share, budget-lost and rank-lost come from Google Ads per campaign; terms are this account’s own search-term report with the same term a year earlier beside it.');
+}catch(e){}}
+
+/* ---- Retention: does anybody come back, and where ---- */
+function vRT(g){try{
+ const C=((O.rtCohPack||{}).coh)||{}; const names=Object.keys(C); if(!names.length)return;
+ /* coh[scope][month] = [new customers acquired, how many bought again inside 30 days].
+    THE TRAILING MONTH IS NOT COMPARABLE: a customer acquired three days ago has not had thirty
+    days to come back, so including it drags every rate down and invents a collapse that is only
+    the calendar. Only months whose last day is at least 30 days behind today are counted. */
+ const now=new Date();
+ const mature=m=>{const [y,mo]=m.split('-').map(Number);
+  const end=new Date(Date.UTC(y,mo,0));                    // last day of that month
+  return (now-end)/864e5>=30;};
+ const rate=n=>{const c=C[n]||{};
+  const ms=Object.keys(c).filter(mature).sort().slice(-3);  // last three mature months
+  let nw=0,rp=0; ms.forEach(m=>{const v=c[m]||[0,0];nw+=v[0]||0;rp+=v[1]||0;});
+  return nw>=100?{v:rp/nw,n:nw,ms}:null;};
+ const rows=names.map(n=>({n,r:rate(n)})).filter(x=>x.r).map(x=>({n:x.n,v:x.r.v,cnt:x.r.n,ms:x.r.ms}));
+ if(!rows.length)return;
+ const win=rows[0].ms, per=win.length?win[0]+' to '+win[win.length-1]:'';
+ const on=rows.find(x=>/^shopify$|online/i.test(x.n));
+ const shops=rows.filter(x=>!/shopify|online|blended|all stores|events/i.test(x.n)).sort((a,b)=>b.v-a.v);
+ const L=[];
+ if(on)L.push([VC.info,'<b>Shopify: '+(on.v*100).toFixed(1)+'% of new customers buy again within 30 days</b> — '+Math.round(on.v*100)+' of every hundred, across '+on.cnt.toLocaleString()+' customers acquired in '+per+'.']);
+ if(shops.length>1){const bt=shops[0],wt=shops[shops.length-1];
+  L.push([VC.info,'<b>'+esc(bt.n)+' retains best at '+(bt.v*100).toFixed(1)+'%, '+esc(wt.n)+' worst at '+(wt.v*100).toFixed(1)+'%.</b> Same brand, same catalogue, a '+(wt.v?(bt.v/wt.v).toFixed(1):'—')+'&times; spread — that difference is the shop, not the products.']);}
+ if(on&&shops.length){const sA=shops.reduce((a,x)=>a+x.v*x.cnt,0)/shops.reduce((a,x)=>a+x.cnt,0);
+  L.push([sA>on.v?VC.warn:VC.good, sA>on.v
+   ?'<b>The shops retain better than the website</b> ('+(sA*100).toFixed(1)+'% against '+(on.v*100).toFixed(1)+'%). A pound spent acquiring online buys a customer measurably less likely to return than one who walks into a branch — worth knowing before setting one CAC ceiling for both.'
+   :'<b>The website retains better than the shops</b> ('+(on.v*100).toFixed(1)+'% against '+(sA*100).toFixed(1)+'%).']);}
+ const D=(O.rtCohPack||{}).delRate||{};
+ const dm=Object.keys(D).sort().filter(mature).slice(-3);
+ if(dm.length){const dv=dm.reduce((a,m)=>a+(D[m]||0),0)/dm.length;
+  if(dv<0.9)L.push([VC.bad,'<b>Only '+(dv*100).toFixed(0)+'% of online first orders are delivered and kept</b> — about '+Math.round((1-dv)*100)+' in every hundred are returned or never land. Retention measured on orders overstates the customer base by roughly that much.']);}
+ conclCard(g,'What retention says',L,'Repeat rate is measured on real Odoo per-customer order history. Only cohort months old enough to have had a full 30 days are counted, so the current month is deliberately excluded.');
+}catch(e){}}
+
+/* ---- Journeys: what a first purchase turns into ---- */
+function vCJ(g){try{
+ const J=O.jour||{}; const SC=J.scopes||{}; const L=[];
+ /* Every node here carries {n, rep (% who ever bought again), ltv, ltgp (lifetime GROSS PROFIT),
+    oyr (orders per year), med2 (median DAYS to the second order)}. med2 is the one nobody reads
+    and it is the most directly actionable: it is how long a win-back window should actually be. */
+ const sc=Object.keys(SC).map(k=>({k,...SC[k]})).filter(x=>x.n>=500&&x.rep!=null);
+ if(sc.length>1){
+  const s1=sc.slice().sort((x,y)=>y.rep-x.rep);
+  L.push([VC.info,'<b>'+esc(s1[0].k)+' produces the most repeat-prone first buyer at '+s1[0].rep.toFixed(1)+'%, '+esc(s1[s1.length-1].k)+' the least at '+s1[s1.length-1].rep.toFixed(1)+'%.</b> A first order is not worth the same everywhere, so one blended CAC ceiling over-pays in the weak scopes and under-buys in the strong ones.']);
+  const g1=sc.filter(x=>x.ltgp!=null).sort((x,y)=>y.ltgp-x.ltgp);
+  if(g1.length>1)L.push([VC.good,'<b>Lifetime gross profit per customer runs from '+_vM(g1[0].ltgp)+' ('+esc(g1[0].k)+') down to '+_vM(g1[g1.length-1].ltgp)+' ('+esc(g1[g1.length-1].k)+') — a '+(g1[g1.length-1].ltgp?(g1[0].ltgp/g1[g1.length-1].ltgp).toFixed(1):'—')+'&times; spread.</b> That is what a per-scope CAC ceiling should be built from, not revenue.']);}
+ const on=SC.SHOPIFY, st=SC['ALL STORES'];
+ if(on&&st&&on.ltgp&&st.ltgp)L.push([st.ltgp>on.ltgp?VC.warn:VC.info,
+  '<b>A shop customer is worth '+_vM(st.ltgp)+' in lifetime gross profit against '+_vM(on.ltgp)+' online</b> ('+(st.ltgp/on.ltgp).toFixed(1)+'&times;), and repeats '+st.rep.toFixed(0)+'% of the time against '+on.rep.toFixed(0)+'%. '
+  +(st.ltgp>on.ltgp?'Online acquisition is buying the cheaper customer — which is fine only if it is costing proportionally less.':'')]);
+ const med=(on&&on.med2)||(st&&st.med2);
+ if(med)L.push([VC.info,'<b>Half of the customers who come back do it within '+Math.round(med)+' days.</b> That is the real length of a win-back window &mdash; a flow that waits 90 days is talking to people who already decided.']);
+ const C=J.catON||J.cat||{};
+ const cats=Object.keys(C).map(k=>({k,...C[k]})).filter(x=>x.n>=300&&x.ltgp!=null);
+ if(cats.length>1){const c1=cats.sort((x,y)=>y.ltgp-x.ltgp);
+  L.push([VC.good,'<b>A first purchase in '+esc(c1[0].k)+' is worth '+_vM(c1[0].ltgp)+' in lifetime gross profit; one in '+esc(c1[c1.length-1].k)+' is worth '+_vM(c1[c1.length-1].ltgp)+'.</b> Cold traffic should be pointed at the first list, whatever the immediate return on the ad looks like.']);
+  const nx=(c1[0].next||[]).filter(x=>x[0]!==c1[0].k)[0];
+  if(nx)L.push([VC.info,'<b>After a first '+esc(c1[0].k)+' order, the next thing they buy most is '+esc(nx[0])+'.</b> That is the cross-sell the second email should carry.']);}
+ if(!L.length)return;
+ conclCard(g,'What the journeys say',L,'Built from per-customer Odoo order history across POS and Shopify: the first order, what followed it, and the gross profit earned since. Repeat rate is ever-repeated, not 30-day.');
+}catch(e){}}
+
+/* ---- Incrementality: what survives once the multiplier is applied ---- */
+function vIC(g){try{
+ const A=O.attr||{}; const AD=O.ad||{}; if(!AD.n)return;
+ const W=Math.max(1,span(ST.s,ST.e)); const a0=Math.max(0,AD.n-W);
+ const sum=arr=>{if(!arr)return 0;let t=0;for(let i=a0;i<AD.n;i++)t+=arr[i]||0;return t;};
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const PF=[['meta','Meta',sum(AD.mspend),sum(AD.mecomrev)],
+           ['google','Google',sum(AD.gspend),sum(AD.gecomrev)],
+           ['tt','TikTok',sum(AD.tspend),sum(AD.ttValue)]];
+ const L=[];
+ PF.forEach(([k,lbl,sp,val])=>{
+  if(!sp||!val)return;
+  const m=(A[k]||{}).incr; if(m==null)return;
+  const rep=val/sp, inc=rep*m;
+  const meas=(k==='meta');
+  L.push([inc>=be?VC.good:VC.bad,
+   '<b>'+lbl+' reports '+rep.toFixed(2)+'&times;; at its incremental multiplier that is '+inc.toFixed(2)+'&times;</b> against a '+be.toFixed(2)+'&times; breakeven — '
+   +(inc>=be?'still clears it, by '+_vM((val*m)*gpOn-sp)+' of gross profit over this window.'
+            :'below it, losing about '+_vM(sp-(val*m)*gpOn)+' of gross profit over this window.')
+   +(meas?' This multiplier was measured on your account.':' <b>This multiplier is assumed, not measured</b> — the verdict is only as good as it.')]);});
+ if(!L.length)return;
+ L.push([VC.mute,'<b>Reported return is not a lie, it is a different question.</b> It answers "what did people who saw an ad go on to buy"; incremental answers "what would not have happened otherwise". Only the second one justifies the next pound.']);
+ conclCard(g,'What incrementality says',L,'Multipliers come from O.attr and are labelled measured or assumed. Breakeven is 1 ÷ your real online gross margin.');
+}catch(e){}}
+
+/* ---- TikTok: is it a channel yet ---- */
+function vTK(g){try{
+ const T=(O.tads||[]).filter(a=>a.sp);
+ if(!T.length){conclCard(g,'What TikTok says',[[VC.mute,'<b>No TikTok ad spend in this payload.</b> The Marketing API app is unapproved on this account, so what is here comes from Shopify referrer tagging and a bridge file — treat any absence as missing data, not as zero spend.']]);return;}
+ const sp=T.reduce((a,x)=>a+(x.sp||0),0), val=T.reduce((a,x)=>a+(x.pv||x.ov||0),0);
+ const pur=T.reduce((a,x)=>a+(x.pur||0),0);
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const roas=sp?val/sp:0, m=((O.attr||{}).tt||{}).incr;
+ const L=[[roas>=be?VC.good:VC.bad,
+  '<b>'+_vM(sp)+' spent across '+T.length+' ads returned '+_vM(val)+' — '+roas.toFixed(2)+'&times; reported</b>, against a '+be.toFixed(2)+'&times; breakeven'+(pur?' on '+Math.round(pur)+' purchases':'')+'.']];
+ if(m!=null)L.push([roas*m>=be?VC.good:VC.bad,
+  '<b>At the incremental floor of '+m.toFixed(3)+' that is '+(roas*m).toFixed(2)+'&times;</b> — '+(roas*m>=be?'still above breakeven.':'well below breakeven. This is a FLOOR, not a measurement: the true figure is somewhere above it, so treat this as the worst case rather than the verdict.')]);
+ const best=T.slice().sort((a,b)=>((b.pv||b.ov||0)/(b.sp||1))-((a.pv||a.ov||0)/(a.sp||1)))[0];
+ if(best&&best.sp>=500)L.push([VC.info,'<b>Best ad is '+esc(best.n)+'</b> at '+(((best.pv||best.ov||0)/best.sp)).toFixed(2)+'&times; on '+_vM(best.sp)+'. If TikTok gets another pound it goes here.']);
+ L.push([VC.mute,'<b>TikTok online revenue is read from Shopify’s referrer tagging, not from TikTok.</b> Anything TikTok drove that arrived untagged, or in-store, is not in these numbers — so this is a lower bound on the channel.']);
+ conclCard(g,'What TikTok says',L,'');
+}catch(e){}}
+
+/* ---- Campaigns: where the money sits and whether it is earning ---- */
+function vCE(g){try{
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const fON=af('meta'),fOFF=afo(),fG=af('google');
+ const C=[];
+ const mc={};
+ (O.mads||[]).forEach(a=>{if(!a.cid)return;const e=mc[a.cid]||(mc[a.cid]={n:a.cmp||a.cid,pf:'Meta',sp:0,val:0});
+  e.sp+=a.sp||0; e.val+=((a.pv||0)*fON)+((a.ofv||0)*fOFF);});
+ Object.values(mc).forEach(x=>C.push(x));
+ (O.gads||[]).forEach(a=>C.push({n:a.n||a.id,pf:'Google',sp:a.sp||0,val:(a.pv||0)*fG}));
+ const R=C.filter(x=>x.sp>=1000); if(!R.length)return;
+ R.forEach(x=>{x.roas=x.sp?x.val/x.sp:0; x.pas=x.val*gpOn-x.sp;});
+ R.sort((a,b)=>b.sp-a.sp);
+ const tot=R.reduce((a,x)=>a+x.sp,0);
+ const top=R.slice(0,3), share=top.reduce((a,x)=>a+x.sp,0)/tot;
+ const losing=R.filter(x=>x.pas<0).sort((a,b)=>a.pas-b.pas);
+ const L=[];
+ L.push([share>0.6?VC.warn:VC.info,'<b>The top '+top.length+' campaigns hold '+Math.round(share*100)+'% of the spend</b> ('+top.map(x=>esc(x.n)).join(', ')+'). '
+  +(share>0.6?'That is a concentrated book — if one of them turns, there is nothing else carrying the number.':'Spend is reasonably spread.')]);
+ if(losing.length)L.push([VC.bad,'<b>'+losing.length+' campaign'+(losing.length>1?'s are':' is')+' below breakeven, '+_vM(losing.reduce((a,x)=>a+(-x.pas),0))+' of gross profit '+(losing.length>1?'between them':'gone')+'.</b> '+(losing.length>1?'Worst is ':'It is ')+esc(losing[0].n)+' at '+losing[0].roas.toFixed(2)+'&times; against a '+be.toFixed(2)+'&times; bar.']);
+ else L.push([VC.good,'<b>Every campaign over E£1,000 is clearing the '+be.toFixed(2)+'&times; breakeven.</b> The question here is allocation, not survival.']);
+ const bestR=R.filter(x=>x.sp>=tot*0.03).sort((a,b)=>b.roas-a.roas)[0];
+ if(bestR)L.push([VC.good,'<b>'+esc(bestR.n)+' returns '+bestR.roas.toFixed(2)+'&times; on '+_vM(bestR.sp)+'</b> — the highest return among campaigns big enough for the number to hold. Check what is capping it before funding anything new.']);
+ conclCard(g,'What the campaign book says',L,'Value is at the attribution window selected on this page; profit after ad cost uses your real online gross margin.');
+}catch(e){}}
+function vSafe(f,id){try{const e=document.getElementById(id);if(e&&typeof f==='function')f(e);}catch(e){}}
 function conclCard(g,title,lines,note){if(!lines||!lines.length)return;
  const el=document.createElement('div');el.className='card full';el.dataset.a='odoo';
  el.innerHTML='<div class="chead"><div><div class="ct">'+title+'</div><div class="cs">Computed from the table below — not written by hand. Re-reads every sync.</div></div></div>'
