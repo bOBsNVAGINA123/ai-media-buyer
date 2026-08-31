@@ -3152,6 +3152,57 @@ def _classify_adset(targeting, lookup=None):
     if has_engage: return "engaged"
     return "new"
 
+def pull_meta_netnew(tok):
+    """NET NEW REACH -- the share of this week's reach that had never seen you before.
+
+    The deck's leading indicator, and the API does expose it, just not as a field. Meta dedupes
+    reach WITHIN whatever date range you ask for, so asking for a longer window and subtracting
+    its older part leaves exactly the people who are new to the recent part:
+
+        people new this week  =  reach(last 14d)  -  reach(days 8-14)
+        net new reach %       =  that  /  reach(last 7d)
+
+    The same subtraction against a 56-day baseline answers the stricter question -- new to the
+    account in two months, not merely new since last week -- and the two are reported separately
+    because they say different things. Five account-level insights calls, no per-ad fan-out.
+
+    Returned reach figures are Meta's own deduplicated numbers for each range, never a sum of
+    daily reach, which would double-count anyone who saw an ad on more than one day."""
+    out = {}
+    if not tok: return out
+    def rng(d0, d1):
+        tot = 0
+        for acct in (meta_accounts(tok) or DEFAULT_ACCTS):
+            p = {"level": "account", "fields": "reach,spend", "access_token": tok,
+                 "time_range": json.dumps({"since": d0.isoformat(), "until": d1.isoformat()})}
+            d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+            if not d or d.get("error"): continue
+            for r in (d.get("data") or []):
+                tot += int(float(r.get("reach") or 0))
+        return tot
+    try:
+        E = END
+        W = lambda a, b: (E - datetime.timedelta(days=a), E - datetime.timedelta(days=b))
+        r7   = rng(*W(6, 0))          # the week being judged
+        p7   = rng(*W(13, 7))         # the week before it
+        r14  = rng(*W(13, 0))         # both weeks, deduplicated
+        p56  = rng(*W(55, 7))         # eight weeks, excluding the week being judged
+        r56  = rng(*W(55, 0))         # eight weeks including it
+        newWk = max(0, r14 - p7)
+        new8w = max(0, r56 - p56)
+        out = {"r7": r7, "p7": p7, "r14": r14, "p56": p56, "r56": r56,
+               "newWk": newWk, "new8w": new8w,
+               "pctWk": round(newWk / r7, 4) if r7 else None,
+               "pct8w": round(new8w / r7, 4) if r7 else None,
+               "end": E.isoformat()}
+        log("meta net new reach :: r7", r7, "new vs last wk", newWk,
+            "(%s)" % (("%.0f%%" % (out["pctWk"] * 100)) if out["pctWk"] is not None else "n/a"),
+            "new vs 8wk", new8w,
+            "(%s)" % (("%.0f%%" % (out["pct8w"] * 100)) if out["pct8w"] is not None else "n/a"))
+    except Exception as e:
+        log("meta net new reach fail", str(e)[:150])
+    return out
+
 def pull_meta_audiences(tok, mads):
     """Meta audience mix -- new (prospecting) / engaged (warm, no purchase) / existing (buyers).
 
@@ -5318,7 +5369,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
