@@ -1,0 +1,38 @@
+name: Ourkids revenue rank
+
+# Keeps custom.rev_7d fresh on every product so the "Best Earners" smart collection
+# reflects money earned, not units shifted. Runs on GitHub's servers -- no laptop,
+# no app open, no person. Shopify cannot sort a collection by revenue, so storing the
+# figure on the product and letting a smart collection rebuild itself is the only
+# native route.
+on:
+  schedule:
+    # 04:20 UTC Monday = 07:20 Cairo. Off the :00 minute deliberately: GitHub throttles
+    # crons set to exactly :00 and silently drops them.
+    - cron: "20 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Rolling window in days (default 7)"
+        required: false
+        default: "7"
+
+concurrency:
+  group: revenue-rank
+  cancel-in-progress: false
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Rank products by revenue and write it back to Shopify
+        env:
+          SHOPIFY_STORE:       ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:       ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          REV_WINDOW_DAYS:     ${{ github.event.inputs.window_days || '7' }}
+        run: python3 ourkids_revenue_rank.py
