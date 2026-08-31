@@ -5337,15 +5337,28 @@ def build():
                 "meta": _lastnz(meta.get("mspend")), "google": _lastnz(goog.get("gspend")),
                 "tiktok": (_lastnz(tik.get("tspend")) if _ttok else "off")}
     def _isstale(k, v):
-        # v7.8: STALE now means the pipe is broken, not that the account is idle.
-        # If the API answered and simply had no spend to report, that is a business
-        # fact, not a sync failure -- it gets logged as idle and left off the alarm.
+        # v7.8: STALE means the pipe is broken, not that the account is idle. If the API answered
+        # and simply had no spend to report, that is a business fact, not a sync failure.
+        #
+        # v9.54: that let TikTok sit 21 days behind while reporting healthy. TikTok has no API on
+        # this account -- it is read from a bridge file another agent publishes -- so SRCOK holds
+        # the BRIDGE'S OWN pulled date, not proof that anything answered today. Treating any
+        # truthy value as "the API is fine" meant a bridge that had stopped publishing looked
+        # identical to an account that had stopped spending. Where SRCOK carries a date, that date
+        # has to be current for the source to count as merely idle.
         if v == "off": return False
-        if not v: return not SRCOK.get(k)
+        ok = SRCOK.get(k)
+        if isinstance(ok, str) and len(ok) >= 10:
+            try:
+                if (today - datetime.date.fromisoformat(ok[:10])).days > 2:
+                    return True                       # the feed itself has stopped arriving
+            except Exception:
+                return True
+        if not v: return not ok
         try: fresh = (today - datetime.date.fromisoformat(v)).days <= 2
         except Exception: return True
         if fresh: return False
-        return not SRCOK.get(k)
+        return not ok
     stalelist = [k for k, v in freshmap.items() if _isstale(k, v)]
     idlelist = [k for k, v in freshmap.items()
                 if v not in ("off", None) and k not in stalelist and SRCOK.get(k)
@@ -5353,6 +5366,7 @@ def build():
     for k in idlelist:
         log("IDLE source: %s -- API answered fine, no activity recorded since %s. "
             "Not a sync failure; nothing was spent/tracked." % (k, freshmap[k]))
+    XTRA["srcAsOf"] = {k: (v if isinstance(v, str) else None) for k, v in SRCOK.items()}
     log("freshness", freshmap)
     log("STALE sources: " + (",".join(stalelist) if stalelist else "none - all fresh to date"))
     jour = XTRA.get("jour") or {}
