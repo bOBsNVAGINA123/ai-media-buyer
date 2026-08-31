@@ -2771,13 +2771,81 @@ function pLink(name,url,style){
   +'onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9aa3b5;'+(style||'')+'" '
   +'title="Open on shop-ourkids.com">'+safe+'</a>';
 }
+/* v9.48 PRODUCT ROWS: link to the site, and get out as a spreadsheet.
+
+   The mover lists come from the order-line crawl (why.prods), which carries the Odoo product id
+   but no storefront URL, so those rows were dead text while the vendor tables built from prodv --
+   which does carry a url -- were clickable. Both print the barcode in front of the name,
+   "[8051708031126] Panini ...", so the barcode is the join key and the whole page becomes
+   clickable with no collector change. */
+let OKPMAP=null;
+function okpMap(){
+ if(OKPMAP)return OKPMAP;
+ OKPMAP={};
+ ((O.prodv||{}).rows||[]).forEach(r=>{
+  const m=/^\[([^\]]+)\]/.exec(String(r.n||''));
+  if(!m)return;
+  OKPMAP[m[1].trim()]={url:r.url||'',vn:r.vn||'',cat:r.cat||'',st:(r.st&&r.st.u!=null)?r.st.u:null};
+ });
+ return OKPMAP;
+}
+function okBar(n){const m=/^\[([^\]]+)\]/.exec(String(n||''));return m?m[1].trim():'';}
+function okpUrl(n){const e=okpMap()[okBar(n)];return e&&e.url?e.url:'';}
+
+/* Export what is on screen with the identifiers a buyer acts on -- barcode first, because that is
+   what the warehouse and the supplier both speak. */
+function okCsv(rows,name,win){
+ const H=['Barcode','Product','Vendor','Category','Stock on hand','Days of stock left',
+          'Units '+((win&&win.p)||'prev'),'Units '+((win&&win.c)||'now'),'Units change',
+          'Revenue '+((win&&win.p)||'prev'),'Revenue '+((win&&win.c)||'now'),'Revenue change','URL'];
+ const q=v=>{const t=v==null?'':String(v);return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+ const body=rows.map(r=>{
+  const bc=okBar(r.n), e=okpMap()[bc]||{};
+  const st=r.st!=null?r.st:(e.st!=null?e.st:'');
+  const days=(st!==''&&r.q)?Math.round(st/Math.max(0.1,r.q/7)):'';
+  return [bc,String(r.n||'').replace(/^\[[^\]]*\]\s*/,''),r.vn||e.vn||'',r.cat||e.cat||'',st,days,
+          r.pq||0,r.q||0,(r.q||0)-(r.pq||0),
+          Math.round(r.pr||0),Math.round(r.r||0),Math.round((r.r||0)-(r.pr||0)),
+          e.url||''].map(q).join(',');
+ });
+ const a2=document.createElement('a');
+ a2.href=URL.createObjectURL(new Blob(['﻿'+H.join(',')+'\n'+body.join('\n')],{type:'text/csv;charset=utf-8'}));
+ a2.download=(name||'products')+'.csv'; document.body.appendChild(a2); a2.click();
+ setTimeout(()=>{URL.revokeObjectURL(a2.href);a2.remove();},400);
+}
+window.__okCsvStore={};
+function okCsvGo(k){const e=window.__okCsvStore[k];if(e)okCsv(e.rows,e.name,e.win);}
+
 function prodBars(rows,opt){
  opt=opt||{};
  if(!rows||!rows.length)return '<div style="font-size:12px;color:#8a93a6">Nothing moved materially in this window.</div>';
  const mx=Math.max.apply(null,rows.map(r=>Math.abs(r.d)))||1;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const clean=n=>String(n||'').replace(/^\[[^\]]*\]\s*/,'').replace(/^\[[^\]]*\]\s*/,'');
- return '<div style="margin-top:6px">'+rows.map((r,i)=>{
+ /* Lead with the number a buyer acts on: how much of the fall is sitting on shelves that are
+    already empty. A list of losers reads as a demand problem until you see most of it cannot be
+    bought at any price. */
+ const fell=rows.filter(r=>r.d<0), lostAll=fell.reduce((a,r)=>a+Math.abs(r.d),0);
+ const stOf=r=>{const e=okpMap()[okBar(r.n)]||{};return r.st!=null?r.st:(e.st!=null?e.st:null);};
+ const outOf=fell.filter(r=>{const v=stOf(r);return v!=null&&v<=3;});
+ const lostOut=outOf.reduce((a,r)=>a+Math.abs(r.d),0);
+ const ven={};outOf.forEach(r=>{const e=okpMap()[okBar(r.n)]||{};const v=r.vn||e.vn||'(no vendor)';ven[v]=(ven[v]||0)+Math.abs(r.d);});
+ const topV=Object.keys(ven).sort((x,y)=>ven[y]-ven[x]).slice(0,3);
+ const ck='ok'+(opt.key||'p')+Math.floor(Math.random()*1e6);
+ window.__okCsvStore[ck]={rows:rows,name:opt.exportName||'products',win:opt.win};
+ const btn='<button type="button" onclick="okCsvGo(\''+ck+'\')" style="flex:0 0 auto;font:inherit;font-size:12px;'
+  +'font-weight:700;padding:7px 13px;border-radius:8px;cursor:pointer;border:1px solid #5a5bf0;background:#fff;color:#5a5bf0">Export CSV</button>';
+ const hot=lostAll>0&&lostOut/lostAll>=0.5;
+ const headline=(lostAll>0&&lostOut>0)
+  ? '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:9px 11px;'
+    +'border-radius:10px;background:'+(hot?'#fff6f9':'#f7f9fc')+';border:1px solid '+(hot?'#fbe0e8':'#e6eaf2')+';margin-bottom:8px">'
+    +'<div style="font-size:12.5px;color:#3D4763;line-height:1.5;flex:1;min-width:240px">'
+    +'<b style="color:'+(hot?'#a3271a':'#26313f')+';font-size:14px">'+Math.round(lostOut/lostAll*100)+'% of the money that fell</b>'
+    +' is on items with 3 or fewer units left &mdash; '+M(lostOut)+' across '+outOf.length+' product'+(outOf.length===1?'':'s')+'. '
+    +(topV.length?'Worst suppliers: <b>'+topV.map(v=>esc(v)).join('</b>, <b>')+'</b>. ':'')
+    +'That part is not a demand problem and no ad fixes it.</div>'+btn+'</div>'
+  : '<div style="text-align:right;margin-bottom:6px">'+btn+'</div>';
+ return headline+'<div style="margin-top:6px">'+rows.map((r,i)=>{
   const k=(opt.key||'p')+i;
   const w=Math.max(2,Math.abs(r.d)/mx*100);          // now a % of its own half-width cell
   const neg=r.d<0, col=neg?'#e23a63':'#12a06e';
@@ -2787,7 +2855,7 @@ function prodBars(rows,opt){
   return '<div style="border-bottom:1px solid #f1f3f8">'
    +'<div onclick="pdToggle(\''+k+'\')" style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer">'
      +'<span id="pa_'+k+'" style="width:10px;color:#9aa3b5;font-size:10px">'+(window.PDOPEN[k]?'▾':'▸')+'</span>'
-     +'<div style="width:230px;flex:0 0 230px;padding-right:10px;box-sizing:border-box;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+pLink(clean(r.n),r.url)+'</div>'
+     +'<div style="width:230px;flex:0 0 230px;padding-right:10px;box-sizing:border-box;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+pLink(clean(r.n),r.url||okpUrl(r.n))+'</div>'
      /* Was absolutely positioned just past the end of the bar, which works until the bar is the
         longest one: the offset then reaches the container edge and the number printed on top of
         the product name. Rebuilt as two half-width flex cells -- [label][bar] on the losing side,
@@ -9862,7 +9930,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-143040'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-145545'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
