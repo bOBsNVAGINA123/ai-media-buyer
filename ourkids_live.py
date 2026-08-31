@@ -5068,6 +5068,102 @@ def pull_salaries():
     return out
 
 
+def pull_promos():
+    """Discount-code usage, online and in the shops.
+
+    ONLINE comes from Shopify, not Odoo. Odoo's loyalty tables look like the obvious
+    source and are a trap on this database: `sale.order.line.is_reward_line` is set true
+    on ordinary product lines (49,699 of them in 60 days, including the Shopify shipping
+    line), and every `reward_id` / `coupon_id` on those lines is null. Grouping by reward
+    therefore returns one bucket called False. Shopify's own `discount_code` dimension is
+    clean and carries orders, gross, discount and net per code.
+
+    IN STORE there is genuinely nothing to read. Across the same window Odoo holds ZERO
+    pos.order.line rows with a coupon_id, zero with a reward_id, zero with discount > 0
+    and zero negative-value lines. That is not a query that failed -- it is four
+    independent ways of recording a till discount all returning nothing, which means the
+    branches are not putting these codes through the POS at all. We re-check it every run
+    rather than baking the claim in, so the card starts reporting store usage by itself if
+    that ever changes.
+    """
+    out = {"codes": [], "ly": {}, "pos": None, "win": None}
+    d1 = today
+    d0 = d1 - datetime.timedelta(days=59)
+    l1 = d1 - datetime.timedelta(days=365)
+    l0 = d0 - datetime.timedelta(days=365)
+    out["win"] = [d0.isoformat(), d1.isoformat()]
+    out["lyWin"] = [l0.isoformat(), l1.isoformat()]
+
+    def grab(a, b, tag):
+        ql = ("FROM sales SHOW orders, gross_sales, discounts, net_sales "
+              "GROUP BY discount_code ORDER BY discounts ASC LIMIT 60 "
+              "SINCE %s UNTIL %s" % (a.isoformat(), b.isoformat()))
+        rows = shopify_ql(ql, tag) or []
+        o = {}
+        for r in rows:
+            c = (r.get("discount_code") or "").strip()
+            if not c:            # the no-code bucket is the rest of the store, kept separately
+                o["__none__"] = {"ord": int(float(r.get("orders") or 0)),
+                                 "gross": float(r.get("gross_sales") or 0),
+                                 "disc": abs(float(r.get("discounts") or 0)),
+                                 "net": float(r.get("net_sales") or 0)}
+                continue
+            o[c] = {"ord": int(float(r.get("orders") or 0)),
+                    "gross": float(r.get("gross_sales") or 0),
+                    "disc": abs(float(r.get("discounts") or 0)),
+                    "net": float(r.get("net_sales") or 0)}
+        return o
+
+    cur = grab(d0, d1, "promo")
+    ly = grab(l0, l1, "promoLY")
+    if not cur:
+        log("promos: shopify returned nothing")
+        return
+    none_now = cur.pop("__none__", None)
+    none_ly = ly.pop("__none__", None)
+    rows = []
+    for c, v in cur.items():
+        p = ly.get(c) or {}
+        rows.append({"c": c, "ord": v["ord"], "gross": round(v["gross"]),
+                     "disc": round(v["disc"]), "net": round(v["net"]),
+                     "aov": round(v["gross"] / v["ord"]) if v["ord"] else 0,
+                     "rate": round(v["disc"] / v["gross"] * 100, 1) if v["gross"] else 0,
+                     "lyOrd": p.get("ord"), "lyGross": round(p["gross"]) if p.get("gross") else None})
+    rows.sort(key=lambda r: -r["disc"])
+    out["codes"] = rows
+    out["none"] = ({"ord": none_now["ord"], "gross": round(none_now["gross"]),
+                    "disc": round(none_now["disc"]), "net": round(none_now["net"]),
+                    "aov": round(none_now["gross"] / none_now["ord"]) if none_now["ord"] else 0}
+                   if none_now else None)
+    out["lyTotal"] = {"ord": sum(v["ord"] for v in ly.values()),
+                      "disc": round(sum(v["disc"] for v in ly.values()))} if ly else None
+
+    # in-store: prove there is nothing rather than assume it
+    try:
+        since = d0.isoformat() + " 00:00:00"
+        probes = {}
+        for label, dom in (
+            ("coupon", [["coupon_id", "!=", False]]),
+            ("reward", [["reward_id", "!=", False]]),
+            ("discount", [["discount", ">", 0]]),
+            ("negative", [["price_subtotal_incl", "<", 0]])):
+            probes[label] = oexec("pos.order.line", "search_count",
+                                  [dom + [["order_id.date_order", ">=", since]]]) or 0
+        tot = oexec("pos.order.line", "search_count",
+                    [[["order_id.date_order", ">=", since]]]) or 0
+        out["pos"] = {"probes": probes, "lines": tot,
+                      "any": any(v > 0 for v in probes.values())}
+        log("promos: pos probes", probes, "of", tot, "lines")
+    except Exception as e:
+        out["pos"] = {"error": str(e)[:120]}
+        log("promos: pos probe failed", str(e)[:120])
+
+    XTRA["promo"] = out
+    log("promos: %d codes online, E\u00a3%s discounted, in-store usage %s"
+        % (len(rows), round(sum(r["disc"] for r in rows)),
+           "PRESENT" if (out.get("pos") or {}).get("any") else "none recorded"))
+
+
 def build():
     ts = datetime.datetime.now(CAIRO).strftime("%Y-%m-%d %H:%M Cairo")
     log("collector v9.7.23 (Shopify OWN order attribution by referrer per window (shopch) for the Incrementality tab; BRAND GAP: Egypt demand per brand vs our Odoo range vs what we already pay for, with the move stated; COMPETITOR keyword intel via Keyword Planner site seeds — what each rival site ranks for in Egypt, its volume and top-of-page bid range, and which of those we are absent from; LIVE acquisition-hook brands from first-ever purchase (replaces the baked D1 snapshot); comparable customer brackets: identical value bands per scope, lifetime + 30/90/180/365d windows; assets query self-heals across Google API versions; v9.7.17 WHY tab: 1/7/28d product+vendor+stock+discount decomposition; Keyword Planner ideas EG/ar + search windows 7/28/90d + weekly-momentum trending + gift seeds; trends cookie-prime+retry; Egypt Google Trends + new-signals feed; Search Advisor intel: YoY search terms + weekly demand + impression share; repurchase = later-day only, same-visit double receipts no longer count; v9.7.10 FIX: cohort-pack fn shadowed the original pull_cohorts and emptied O.nr/O.coh — renamed; nightly cohort crawl replaces baked RT_COH/delivered/walk-ins; per-campaign audience mix new/engaged/existing from ad-set targeting; per-campaign DAILY Google+TikTok; per-ad reach CPMR)")
@@ -5384,6 +5480,9 @@ def build():
     jour = XTRA.get("jour") or {}
     if not jour.get("cat") and (prev.get("jour") or {}).get("cat"):
         pj = prev["jour"]; pj.setdefault("scopes", {}).update(jour.get("scopes") or {}); jour = pj
+    try: pull_promos()
+    except Exception as e: log("promos failed", str(e)[:160])
+
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
@@ -5410,6 +5509,7 @@ def build():
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
+              "promo": XTRA.get("promo") or prev.get("promo") or {},
               "ann": annotations(fin), "attr": ATTR, "src": SRC, "fresh": freshmap, "stale": stalelist, "idle": idlelist, "srcok": {k: bool(v) for k, v in SRCOK.items()}, "aw": [win[0], win[-1]]}
     offp = os.path.join(DOCS, "offline.json")
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
