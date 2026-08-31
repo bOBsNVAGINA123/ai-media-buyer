@@ -18,7 +18,11 @@ or printed in full -- the log shows counts and ranks, not the money column.
 """
 import json, os, sys, urllib.request
 
-STORE = os.environ["SHOPIFY_STORE"].replace("https://", "").rstrip("/")
+# The SHOPIFY_STORE secret holds the bare handle ("ourkids1"), not a hostname -- the other
+# scripts in this repo append the domain themselves. Do the same or DNS fails.
+STORE = os.environ["SHOPIFY_STORE"].strip().replace("https://", "").rstrip("/")
+if ".myshopify.com" not in STORE:
+    STORE += ".myshopify.com"
 TOKEN = os.environ["SHOPIFY_TOKEN"]
 VERSION = os.environ.get("SHOPIFY_API_VERSION", "2025-01")
 URL = f"https://{STORE}/admin/api/{VERSION}/graphql.json"
