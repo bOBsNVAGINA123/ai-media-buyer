@@ -5137,19 +5137,38 @@ def build():
         for vr in vend["rows"]:
             if vr["v"] in pv: vr["mon"] = pv[vr["v"]]
     pmon = XTRA.get("pmon", {})
+    # v9.48: computed here rather than inline in the payload below, because the URL attach that
+    # follows needs to reach into their product lists. Same call, just named.
+    why = safe(pull_why) or prev.get("why") or {}
+    whyOff = safe(pull_why_offline) or prev.get("whyOff") or {}
+
     try:
+        # v9.48: resolve URLs for the MOVER lists too, not just the vendor table.
+        # prodv is capped at the top ~200 products by revenue; the biggest movers in a given week
+        # are a different set, so a barcode join between the two only ever reached a handful of
+        # rows and most of the "which products moved" list stayed unclickable. Collect the codes
+        # from every list that renders a product name and resolve them in ONE lookup.
         import re as _re
+        _BR = lambda t: (_re.match(r"\s*\[([^\]]+)\]", str(t or "")) or [None, None])[1]
+        _srcs = [(prodv.get("rows") or [])]
+        for _w in ((why or {}).get("win") or {}).values():
+            _srcs.append(_w.get("prods") or [])
+        for _w in ((whyOff or {}).get("win") or {}).values():
+            _srcs.append(_w.get("prods") or [])
         _codes = []
-        for _r in (prodv.get("rows") or []):
-            _m = _re.match(r"\s*\[([^\]]+)\]", str(_r.get("n") or ""))
-            if _m: _codes.append(_m.group(1).strip())
+        for _lst in _srcs:
+            for _r in _lst:
+                _c = _BR(_r.get("n"))
+                if _c: _codes.append(_c.strip())
         _urls = safe(lambda: pull_product_urls(_codes)) or {}
+        log("product urls :: codes", len(set(_codes)), "resolved", len(_urls))
         if _urls:
-            for _r in (prodv.get("rows") or []):
-                _m = _re.match(r"\s*\[([^\]]+)\]", str(_r.get("n") or ""))
-                if _m:
-                    _u = _urls.get(_m.group(1).strip())
-                    if _u: _r["url"] = _u
+            for _lst in _srcs:
+                for _r in _lst:
+                    _c = _BR(_r.get("n"))
+                    if _c:
+                        _u = _urls.get(_c.strip())
+                        if _u: _r["url"] = _u
     except Exception as _e3:
         log("product url attach skipped", str(_e3)[:120])
     try:
@@ -5299,7 +5318,7 @@ def build():
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
-              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": safe(pull_why) or prev.get("why") or {}, "whyOff": safe(pull_why_offline) or prev.get("whyOff") or {},
+              "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
