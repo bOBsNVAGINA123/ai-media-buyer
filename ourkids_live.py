@@ -701,13 +701,25 @@ def pull_meta_reach(win, tok):
 
 def pull_shopify(win):
     out = {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
-    rows = shopify_ql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
-                      "sessions_that_reached_checkout, sessions_that_completed_checkout "
-                      "TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1), "sessions")
+    # v9.55: EGYPT ONLY. The store ships to Egypt, but 9.1% of sessions arrive from elsewhere and
+    # convert at 0.07% -- Singapore 24,777 sessions and zero checkouts, the United States 27,404
+    # and four. That traffic is bots and scrapers, it moves independently of anything anyone does
+    # here, and leaving it in both understated conversion (0.615% against a real 0.670%) and put
+    # noise into every session trend the diagnosis engine reads. Country is a first-class session
+    # dimension in ShopifyQL, so the filter costs nothing.
+    SESS_COLS = ("sessions, sessions_with_cart_additions, "
+                 "sessions_that_reached_checkout, sessions_that_completed_checkout")
+    EG = " WHERE session_country = 'Egypt' "
+    rows = shopify_ql("FROM sessions SHOW " + SESS_COLS + EG +
+                      "TIMESERIES day SINCE -%dd UNTIL today" % (len(win) + 1), "sessionsEG")
     if not rows:
-        rows = shopify_ql("FROM sessions SHOW sessions, sessions_with_cart_additions, "
-                          "sessions_that_reached_checkout, sessions_that_completed_checkout "
-                          "TIMESERIES day SINCE -90d UNTIL today", "sessions90")
+        rows = shopify_ql("FROM sessions SHOW " + SESS_COLS + EG +
+                          "TIMESERIES day SINCE -90d UNTIL today", "sessionsEG90")
+    if not rows:
+        # last resort: unfiltered, so a ShopifyQL change never blanks the funnel outright
+        log("sessions: Egypt filter returned nothing, falling back to all countries")
+        rows = shopify_ql("FROM sessions SHOW " + SESS_COLS +
+                          " TIMESERIES day SINCE -90d UNTIL today", "sessions90")
     for r in (rows or []):
         day = str(r.get("day"))[:10]
         if day not in out["sessions"]: continue
