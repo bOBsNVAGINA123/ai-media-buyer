@@ -7398,7 +7398,89 @@ function rAI(){if(TAB!=='ai')return;dCh();const g=document.getElementById('g13')
  qsweep('g13');}
 window.rAI=rAI;
 
-function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8');g.innerHTML='';
+/* v9.57 EXPLORE, ANSWERED FIRST.
+
+   This tab draws 41 cards and 101 charts. Every one is a legitimate view and together they are a
+   library, not an answer -- the reason "I need actionable insights, not a dashboard" is a fair
+   description of it. Nothing is deleted: the charts are the evidence and stay exactly where they
+   were. What goes on top is the handful of conclusions those charts support, each one costed, so
+   the library is what you consult after the answer rather than instead of it.
+
+   Read from the same monthly branch tables the charts below draw: POS revenue and gross profit,
+   the analytic-ledger rent and payroll, and the new-versus-returning split. Two most recent
+   COMPLETE months, because a part-month against a full one is not a comparison. */
+function vizActions(g){
+ const PS=O.pos||{}, BC=O.bcost||{}, BNR=O.bnr||{};
+ const names=Object.keys(PS); if(!names.length)return;
+ const ms=[...new Set([].concat(...names.map(n=>Object.keys(PS[n]))))].sort();
+ if(ms.length<3)return;
+ const cur=ms[ms.length-2], prv=ms[ms.length-3];
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const rows=[];
+ names.forEach(n=>{
+  const c=PS[n][cur], p=PS[n][prv]; if(!c)return;
+  const bc=(BC[n]||{})[cur]||{}, nb=(BNR[n]||{})[cur]||{}, pb=(BNR[n]||{})[prv]||{};
+  const rent=bc.rent||0, sal=bc.sal||0;
+  rows.push({b:n,rev:c[0],gp:c[1],rent,sal,contrib:c[1]-rent-sal,
+    gpP:p?p[1]:null,nc:nb.nc||0,ncP:pb.nc||0,
+    rentPct:c[0]?rent/c[0]*100:0, cPct:c[0]?(c[1]-rent-sal)/c[0]*100:0});
+ });
+ if(!rows.length)return;
+ rows.sort((a,b)=>a.contrib-b.contrib);
+ const acts=[];
+
+ /* 1. shops that do not clear their own rent and payroll */
+ rows.filter(r=>r.contrib<r.rev*0.02).forEach(r=>{
+  acts.push({p:r.contrib<=0?'P0':'P1',
+   t:r.b+(r.contrib<=0?' does not cover its own costs':' is within 2% of not covering its costs'),
+   w:M(r.gp)+' of gross profit against '+M(r.rent)+' rent and '+M(r.sal)+' payroll leaves <b>'
+     +(r.contrib>=0?'':'−')+M(r.contrib)+'</b> in '+cur+'. Rent alone is '+r.rentPct.toFixed(1)
+     +'% of its revenue. Renegotiate the lease or the shop has to grow into it.'});
+ });
+
+ /* 2. rent burden, ranked -- the lease is the only fixed cost anyone can actually renegotiate */
+ const heavy=rows.filter(r=>r.rentPct>=15).sort((a,b)=>b.rentPct-a.rentPct);
+ if(heavy.length){
+  const tot=heavy.reduce((t,r)=>t+r.rent,0), con=heavy.reduce((t,r)=>t+r.contrib,0);
+  acts.push({p:'P1',t:heavy.length+' shop'+(heavy.length>1?'s pay':' pays')+' 15%+ of revenue in rent',
+   w:heavy.map(r=>r.b+' '+r.rentPct.toFixed(0)+'%').join(', ')+' — '+M(tot)+' of rent a month between them, returning '+M(con)+' of contribution. That is the lease negotiation list, in order.'});
+ }
+
+ /* 3. new-customer decline, which is the leading indicator a shop is dying */
+ const dying=rows.filter(r=>r.ncP>=100&&r.nc<r.ncP*0.9).sort((a,b)=>(a.nc/a.ncP)-(b.nc/b.ncP));
+ dying.forEach(r=>acts.push({p:'P1',t:r.b+' is winning fewer new customers',
+  w:r.ncP.toLocaleString()+' new customers in '+prv+' down to '+r.nc.toLocaleString()+' in '+cur
+    +' ('+Math.round((r.nc/r.ncP-1)*100)+'%). Revenue can hold for months on returning buyers while this drains — it is the earliest number that turns.'}));
+
+ /* 4. margin outliers: same catalogue, so a gap is pricing or discounting, not mix */
+ const mg=rows.map(r=>({b:r.b,m:r.rev?r.gp/r.rev*100:0})).filter(x=>x.m>0).sort((a,b)=>a.m-b.m);
+ if(mg.length>2&&(mg[mg.length-1].m-mg[0].m)>=2){
+  acts.push({p:'P2',t:'Margin spread across the shops is '+(mg[mg.length-1].m-mg[0].m).toFixed(1)+' points',
+   w:mg[0].b+' runs at '+mg[0].m.toFixed(1)+'% while '+mg[mg.length-1].b+' runs at '+mg[mg.length-1].m.toFixed(1)
+     +'%. Same catalogue and same suppliers, so the gap is pricing, discounting or shrink — not product mix.'});
+ }
+ if(!acts.length)return;
+
+ const order={P0:0,P1:1,P2:2};
+ acts.sort((a,b)=>order[a.p]-order[b.p]);
+ const col={P0:['#a3271a','#fff6f9','#fbe0e8'],P1:['#a35a1a','#fff9f0','#f2e2c8'],P2:['#3d3fb8','#f5f6ff','#e0e3f7']};
+ const body=acts.slice(0,7).map(a=>{const c=col[a.p];
+  return '<div style="display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border:1px solid '+c[2]
+   +';background:'+c[1]+';border-radius:11px;margin-bottom:8px">'
+   +'<span style="flex:0 0 auto;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;background:'+c[0]+';color:#fff">'+a.p+'</span>'
+   +'<div style="flex:1"><div style="font-size:14px;font-weight:800;color:#161d2e;line-height:1.35">'+esc(a.t)+'</div>'
+   +'<div style="font-size:12.5px;color:#3D4763;line-height:1.55;margin-top:3px">'+a.w+'</div></div></div>';}).join('');
+
+ const el=document.createElement('div');
+ el.className='card full';
+ el.style.cssText='border:2px solid #5a5bf0;box-shadow:0 6px 24px -14px rgba(90,91,240,.55)';
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+  +'<div class="ct">What this tab is telling you — '+cur+' vs '+prv+'</div>'
+  +'<div class="cs">Read from the same monthly branch tables the charts below draw, using the two most recent COMPLETE months. '
+  +'The charts are the evidence and every one is still here; this is what they add up to.</div></div></div>'+body;
+ g.appendChild(el);
+}
+function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8');g.innerHTML='';try{vizActions(g);}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  document.getElementById('bn8').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; data complete through <b>'+O.aw[1]+'</b> (Cairo days; the day in progress is never charted as if it were finished). Read top-down: what changed &rarr; who leads &rarr; was it one branch or the market &rarr; who the customers are &rarr; what the company earned. <b>Every chart has an <span style="display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:#e6e9f2;color:#334155;font-size:9px;font-weight:800">i</span> next to its title &mdash; hover it for the definition and a worked example</b>, and a plain-English note underneath saying what it means. Warm-up months (POS go-live Aug&ndash;Nov 2024) are excluded from every trend number.';
  /* v6.2 SIGNIFICANCE SORT. "sort by most significant and most important reads AND you
@@ -10920,7 +11002,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-183318'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-185555'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
