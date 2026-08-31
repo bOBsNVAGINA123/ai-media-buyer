@@ -2163,6 +2163,13 @@ def pull_pos_customers():
         for pid, d, br, mg, oid, rv, qy in rows:
             if oid: ordNet[(pid, oid)] = ordNet.get((pid, oid), 0.0) + mg
         newSeen = set(); ordSeen = set()
+        # v9.47: distinct SHOPPERS per branch-month. "rc" below counts returning ORDERS -- it is
+        # incremented once per order, so nc + rc lands on the order total, not a headcount. There
+        # was therefore no way to answer "how many customers did this shop serve" for a branch,
+        # only how many receipts it rang. These two sets carry the actual people.
+        seenCust = {}
+        for pid, d, br, mg, oid, rv, qy in rows:
+            seenCust.setdefault((br, d[:7]), set()).add(pid)
         for pid, d, br, mg, oid, rv, qy in rows:
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
@@ -2185,6 +2192,13 @@ def pull_pos_customers():
                     c["rc"] += 1; cd["rc"] += 1
                     if ordNet.get((pid, oid), 0) > 0: c["rcx"] = c.get("rcx", 0) + 1
                 c["rg"] += round(mg)
+        # attach the headcounts: cust = distinct people who bought at that branch that month,
+        # rcust = those of them who were not first-time buyers. new customers stay as "nc".
+        for (br, m), pids in seenCust.items():
+            e = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
+            e["cust"] = len(pids)
+            e["rcust"] = max(0, len(pids) - int(e.get("nc", 0)))
+
         # branch cohorts: LTGP per customer acquired at each branch, by cohort month
         pm_ = {}
         for pid, d, br, mg, oid, rv, qy in rows: pm_.setdefault(pid, []).append((d, mg, rv))
