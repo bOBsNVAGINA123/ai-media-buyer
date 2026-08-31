@@ -1904,7 +1904,9 @@ function okCauses(o){
   const RM=okRevMoves(Math.max(3,Math.min(28,span(ST.s,ST.e))));
   if(RM){
    RM.died.slice(0,3).forEach(r=>out.rev.push(['bad',
-    '<b>'+esc(r.n)+'</b> ('+r.pf+') stopped working — ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7 on spend that barely moved ('+M(r.sp)+' &rarr; '+M(r.sc)+'). '+M(Math.abs(r.dv))+' of claimed value gone.']));
+    '<b>'+esc(r.n)+'</b> ('+r.pf+') stopped working — website ROAS '+r.orp.toFixed(1)+'\u00d7 &rarr; '+r.orc.toFixed(1)+'\u00d7 on spend that barely moved ('+M(r.sp)+' &rarr; '+M(r.sc)+'). Judged on website value only, because in-store conversions arrive late.']));
+   if((RM.lagged||[]).length)out.rev.push(['note',
+    '<b>'+RM.lagged.length+' campaign'+(RM.lagged.length>1?'s look':' looks')+' collapsed but earn most of their value in store</b>, and Meta backfills in-store conversions for about a fortnight — a day holds ~165 of them at three days old and ~600 by two weeks. Do not act on those yet.']);
    RM.lost.slice(0,2).filter(r=>!RM.died.some(x=>x.n===r.n&&x.pf===r.pf)).forEach(r=>out.rev.push(['bad',
     '<b>'+esc(r.n)+'</b> ('+r.pf+') fell '+M(Math.abs(r.dv))+' in claimed value, ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
    RM.won.slice(0,2).forEach(r=>out.rev.push(['good',
@@ -10036,25 +10038,40 @@ function okRevMoves(days){
  if(p0<0)return null;
  const sum=(x,i0,i1)=>{let t=0;for(let k=Math.max(0,i0);k<=i1;k++)t+=(x&&x[k])||0;return t;};
  const fON=af('meta'), fOFF=afo(), fG=af('google');
+ /* ONLINE value is tracked separately from blended, and the collapse detector uses online ONLY.
+    Meta's in-store conversions backfill for about a fortnight -- measured on this account, the
+    average day carries 165 offline purchases when it is 3 days old, 600 when it is two weeks old,
+    while online purchases sit flat at 126-183 across every age. Comparing a lag-starved week
+    against a filled-in one therefore manufactures a collapse on every offline-weighted campaign:
+    "Offline Winners 17.2x -> 3.4x" was mostly the calendar, not the ad. Blended value is still
+    shown, because it is what the platform claims, but nothing is CALLED broken on it. */
  const E=[];
  (O.mads||[]).filter(x=>x.d).forEach(x=>E.push({n:x.cmp||x.n,pf:'Meta',
   sc:sum(x.d.sp,a0,today), sp:sum(x.d.sp,p0,p1),
   vc:sum(x.d.pv,a0,today)*fON+sum(x.d.fv,a0,today)*fOFF,
-  vp:sum(x.d.pv,p0,p1)*fON+sum(x.d.fv,p0,p1)*fOFF}));
+  vp:sum(x.d.pv,p0,p1)*fON+sum(x.d.fv,p0,p1)*fOFF,
+  oc:sum(x.d.pv,a0,today)*fON, op_:sum(x.d.pv,p0,p1)*fON,
+  fc:sum(x.d.fv,a0,today)*fOFF, fp:sum(x.d.fv,p0,p1)*fOFF}));
  (O.gads||[]).filter(x=>x.d).forEach(x=>E.push({n:x.n,pf:'Google',
   sc:sum(x.d.sp,a0,today), sp:sum(x.d.sp,p0,p1),
-  vc:sum(x.d.pv,a0,today)*fG, vp:sum(x.d.pv,p0,p1)*fG}));
+  vc:sum(x.d.pv,a0,today)*fG, vp:sum(x.d.pv,p0,p1)*fG,
+  oc:sum(x.d.pv,a0,today)*fG, op_:sum(x.d.pv,p0,p1)*fG, fc:0, fp:0}));
  const R={};
- E.forEach(e=>{const k=e.pf+'|'+e.n; const r=R[k]||(R[k]={n:e.n,pf:e.pf,sc:0,sp:0,vc:0,vp:0});
-  r.sc+=e.sc;r.sp+=e.sp;r.vc+=e.vc;r.vp+=e.vp;});
+ E.forEach(e=>{const k=e.pf+'|'+e.n; const r=R[k]||(R[k]={n:e.n,pf:e.pf,sc:0,sp:0,vc:0,vp:0,oc:0,op_:0,fc:0,fp:0});
+  r.sc+=e.sc;r.sp+=e.sp;r.vc+=e.vc;r.vp+=e.vp;r.oc+=e.oc;r.op_+=e.op_;r.fc+=e.fc;r.fp+=e.fp;});
  const L=Object.values(R).map(r=>({...r,dv:r.vc-r.vp,ds:r.sc-r.sp,
-   rc:r.sc?r.vc/r.sc:0, rp:r.sp?r.vp/r.sp:0}));
+   rc:r.sc?r.vc/r.sc:0, rp:r.sp?r.vp/r.sp:0,
+   orc:r.sc?r.oc/r.sc:0, orp:r.sp?r.op_/r.sp:0,          // online-only ROAS, lag-free
+   offShare:r.vp?r.fp/r.vp:0}));
  return {days:d, all:L, tot:L.reduce((t,r)=>t+r.dv,0),
   lost:L.filter(r=>r.dv<0).sort((a,b)=>a.dv-b.dv),
   won :L.filter(r=>r.dv>0).sort((a,b)=>b.dv-a.dv),
   /* prior ROAS clear of breakeven, now under 60% of it, on spend within a quarter of where it was.
      The spend guard is what separates a broken ad from one you simply turned down. */
-  died:L.filter(r=>r.rp>=6&&r.sp>=8000&&r.rc<r.rp*0.6&&Math.abs(r.ds)<=r.sp*0.25)
+  /* judged on ONLINE ROAS only, so the offline backfill cannot fake a collapse */
+  died:L.filter(r=>r.orp>=2&&r.sp>=8000&&r.orc<r.orp*0.6&&Math.abs(r.ds)<=r.sp*0.25)
+        .sort((a,b)=>(a.oc-a.op_)-(b.oc-b.op_)),
+  lagged:L.filter(r=>r.offShare>=0.4&&r.sp>=8000&&r.rc<r.rp*0.6)
         .sort((a,b)=>a.dv-b.dv)};
 }
 
@@ -10067,24 +10084,37 @@ function okRevCard(g,pf,tabKey){
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
- const row=r=>'<tr><td style="'+TD+';text-align:left"><b>'+esc(r.n)+'</b>'
+ const row=(r,onlineOnly)=>'<tr><td style="'+TD+';text-align:left"><b>'+esc(r.n)+'</b>'
    +(pf?'':'<div style="font-size:10px;color:#8a93a6">'+r.pf+'</div>')+'</td>'
    +'<td style="'+TD+'">'+M(r.sp)+' &rarr; '+M(r.sc)+'</td>'
-   +'<td style="'+TD+'">'+M(r.vp)+' &rarr; <b>'+M(r.vc)+'</b></td>'
-   +'<td style="'+TD+';font-weight:800;color:'+(r.dv>=0?'#0f6e56':'#a3271a')+'">'+(r.dv>=0?'+':'−')+M(r.dv)+'</td>'
-   +'<td style="'+TD+'"><b>'+r.rp.toFixed(1)+'×</b> &rarr; <b style="color:'+(r.rc>=r.rp?'#0f6e56':'#a3271a')+'">'+r.rc.toFixed(1)+'×</b></td></tr>';
+   +(onlineOnly
+     ?'<td style="'+TD+'">'+M(r.op_)+' &rarr; <b>'+M(r.oc)+'</b></td>'
+      +'<td style="'+TD+';font-weight:800;color:'+((r.oc-r.op_)>=0?'#0f6e56':'#a3271a')+'">'+((r.oc-r.op_)>=0?'+':'−')+M(r.oc-r.op_)+'</td>'
+      +'<td style="'+TD+'"><b>'+r.orp.toFixed(1)+'×</b> &rarr; <b style="color:'+(r.orc>=r.orp?'#0f6e56':'#a3271a')+'">'+r.orc.toFixed(1)+'×</b></td>'
+     :'<td style="'+TD+'">'+M(r.vp)+' &rarr; <b>'+M(r.vc)+'</b></td>'
+      +'<td style="'+TD+';font-weight:800;color:'+(r.dv>=0?'#0f6e56':'#a3271a')+'">'+(r.dv>=0?'+':'−')+M(r.dv)+'</td>'
+      +'<td style="'+TD+'"><b>'+r.rp.toFixed(1)+'×</b> &rarr; <b style="color:'+(r.rc>=r.rp?'#0f6e56':'#a3271a')+'">'+r.rc.toFixed(1)+'×</b></td>')
+   +'</tr>';
+ const headOn='<tr><th style="'+TH+';text-align:left">'+(pf||'Entity')+'</th><th style="'+TH+'">Spend</th>'
+   +'<th style="'+TH+'">Website value</th><th style="'+TH+'">Change</th><th style="'+TH+'">Website ROAS</th></tr>';
  const head='<tr><th style="'+TH+';text-align:left">'+(pf||'Entity')+'</th><th style="'+TH+'">Spend</th>'
    +'<th style="'+TH+'">Claimed value</th><th style="'+TH+'">Change</th><th style="'+TH+'">ROAS</th></tr>';
  let body='';
- if(died.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#a3271a;margin:2px 0 4px">Was working, now isn’t — spend held, return collapsed</div>'
-   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+died.slice(0,8).map(row).join('')+'</table></div>';
+ if(died.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#a3271a;margin:2px 0 4px">Was working, now isn’t — website value only, spend held</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+headOn+died.slice(0,8).map(r=>row(r,true)).join('')+'</table></div>';
+ const lag=(RM.lagged||[]).filter(only).filter(r=>!died.some(d=>d.n===r.n&&d.pf===r.pf));
+ if(lag.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#a35a1a;margin:14px 0 4px">Looks collapsed, but it is mostly in-store backfill — do not act yet</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+lag.slice(0,6).map(r=>row(r,false)).join('')+'</table></div>'
+   +'<div style="font-size:11.5px;color:#6b5730;background:#fff9f0;border-left:3px solid #f0c07a;border-radius:0 8px 8px 0;padding:8px 11px;margin-top:6px;line-height:1.55">'
+   +'Each of these earns 40%+ of its value in store, and in-store conversions arrive late. Their website ROAS is the honest read until the backfill completes.</div>';
  if(lost.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B;margin:14px 0 4px">Biggest falls in claimed value</div>'
-   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+lost.slice(0,8).map(row).join('')+'</table></div>';
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+lost.slice(0,8).map(r=>row(r,false)).join('')+'</table></div>';
  if(won.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#0f6e56;margin:14px 0 4px">Biggest rises</div>'
-   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+won.slice(0,5).map(row).join('')+'</table></div>';
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+won.slice(0,5).map(r=>row(r,false)).join('')+'</table></div>';
  body+='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
   +'<b>These are the platform’s own claimed values, not the ledger.</b> They will not sum to Shopify net revenue and are not supposed to — the question is which entity changed. '
-  +'“Was working, now isn’t” requires spend to have stayed within a quarter of where it was, so an ad you deliberately turned down is never mistaken for one that broke.</div>';
+  +'“Was working, now isn’t” is judged on WEBSITE value only and requires spend to have stayed within a quarter of where it was — so neither an ad you turned down nor Meta’s in-store backfill can be mistaken for one that broke. '
+  +'Measured on this account, a day carries about 165 in-store purchases when it is three days old and 600 by two weeks old, while website purchases stay flat — so any recent week understates in-store by design.</div>';
  pnlCard(g,tabKey||'meta','Which ads moved the money'+INFO('Value gained and lost per entity against the previous window, plus the ads whose return collapsed on unchanged spend.'),
   'Last '+RM.days+' days against the '+RM.days+' before, at the attribution window selected on this page.', body);
 }
@@ -10890,7 +10920,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-182557'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-183318'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
