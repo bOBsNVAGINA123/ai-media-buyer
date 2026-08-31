@@ -1900,6 +1900,16 @@ function okCauses(o){
   if(dOrd!=null&&dAov!=null)out.rev.push(['note',
    'Orders '+(dOrd>=0?'+':'−')+Math.abs(dOrd).toFixed(1)+'% and basket '+(dAov>=0?'+':'−')+Math.abs(dAov).toFixed(1)+'% — '
    +(Math.abs(dOrd)>=Math.abs(dAov)?'volume moved the number.':'price per order moved the number.')]);
+  /* Name the entities, on both platforms, instead of leaving "revenue moved" as the whole answer. */
+  const RM=okRevMoves(Math.max(3,Math.min(28,span(ST.s,ST.e))));
+  if(RM){
+   RM.died.slice(0,3).forEach(r=>out.rev.push(['bad',
+    '<b>'+esc(r.n)+'</b> ('+r.pf+') stopped working — ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7 on spend that barely moved ('+M(r.sp)+' &rarr; '+M(r.sc)+'). '+M(Math.abs(r.dv))+' of claimed value gone.']));
+   RM.lost.slice(0,2).filter(r=>!RM.died.some(x=>x.n===r.n&&x.pf===r.pf)).forEach(r=>out.rev.push(['bad',
+    '<b>'+esc(r.n)+'</b> ('+r.pf+') fell '+M(Math.abs(r.dv))+' in claimed value, ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
+   RM.won.slice(0,2).forEach(r=>out.rev.push(['good',
+    '<b>'+esc(r.n)+'</b> ('+r.pf+') added '+M(r.dv)+', ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
+  }
  }catch(e){}
  return out;
 }
@@ -10004,6 +10014,80 @@ function rvWeeks(a,W){
  return out;
 }
 
+/* v9.56 WHICH ADS MOVED THE MONEY — and which ones stopped working.
+
+   The causes engine attributed SESSIONS to paid clicks but never attributed REVENUE to anything,
+   so "revenue fell" sat beside "orders and basket" and the obvious question — which ad was
+   carrying it, and what happened to it — went unanswered on both platforms.
+
+   Two questions, deliberately separated:
+     who moved the money   biggest value gain and loss between the windows, ranked
+     who stopped working   ROAS collapsed on SPEND THAT DID NOT MOVE. That is the dangerous one:
+                           the spend line looks untouched while the return halves, so nothing in a
+                           budget report flags it.
+
+   All of it is PLATFORM-CLAIMED value at the selected attribution window. It does not reconcile to
+   the Odoo ledger and is not meant to — the question is which entity changed, and the platform's
+   own number is the right instrument for that, as long as nobody reads the total as revenue. */
+function okRevMoves(days){
+ const W=O.madsW; if(!W||!W.n)return null;
+ const n=W.n, today=n-1, d=Math.max(3,Math.min(28,days||7));
+ const a0=today-d+1, p0=a0-d, p1=a0-1;
+ if(p0<0)return null;
+ const sum=(x,i0,i1)=>{let t=0;for(let k=Math.max(0,i0);k<=i1;k++)t+=(x&&x[k])||0;return t;};
+ const fON=af('meta'), fOFF=afo(), fG=af('google');
+ const E=[];
+ (O.mads||[]).filter(x=>x.d).forEach(x=>E.push({n:x.cmp||x.n,pf:'Meta',
+  sc:sum(x.d.sp,a0,today), sp:sum(x.d.sp,p0,p1),
+  vc:sum(x.d.pv,a0,today)*fON+sum(x.d.fv,a0,today)*fOFF,
+  vp:sum(x.d.pv,p0,p1)*fON+sum(x.d.fv,p0,p1)*fOFF}));
+ (O.gads||[]).filter(x=>x.d).forEach(x=>E.push({n:x.n,pf:'Google',
+  sc:sum(x.d.sp,a0,today), sp:sum(x.d.sp,p0,p1),
+  vc:sum(x.d.pv,a0,today)*fG, vp:sum(x.d.pv,p0,p1)*fG}));
+ const R={};
+ E.forEach(e=>{const k=e.pf+'|'+e.n; const r=R[k]||(R[k]={n:e.n,pf:e.pf,sc:0,sp:0,vc:0,vp:0});
+  r.sc+=e.sc;r.sp+=e.sp;r.vc+=e.vc;r.vp+=e.vp;});
+ const L=Object.values(R).map(r=>({...r,dv:r.vc-r.vp,ds:r.sc-r.sp,
+   rc:r.sc?r.vc/r.sc:0, rp:r.sp?r.vp/r.sp:0}));
+ return {days:d, all:L, tot:L.reduce((t,r)=>t+r.dv,0),
+  lost:L.filter(r=>r.dv<0).sort((a,b)=>a.dv-b.dv),
+  won :L.filter(r=>r.dv>0).sort((a,b)=>b.dv-a.dv),
+  /* prior ROAS clear of breakeven, now under 60% of it, on spend within a quarter of where it was.
+     The spend guard is what separates a broken ad from one you simply turned down. */
+  died:L.filter(r=>r.rp>=6&&r.sp>=8000&&r.rc<r.rp*0.6&&Math.abs(r.ds)<=r.sp*0.25)
+        .sort((a,b)=>a.dv-b.dv)};
+}
+
+function okRevCard(g,pf,tabKey){
+ let RM=null; try{RM=okRevMoves(Math.max(3,Math.min(28,span(ST.s,ST.e))));}catch(e){}
+ if(!RM)return;
+ const only=r=>!pf||r.pf===pf;
+ const died=RM.died.filter(only), lost=RM.lost.filter(only), won=RM.won.filter(only);
+ if(!died.length&&!lost.length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const row=r=>'<tr><td style="'+TD+';text-align:left"><b>'+esc(r.n)+'</b>'
+   +(pf?'':'<div style="font-size:10px;color:#8a93a6">'+r.pf+'</div>')+'</td>'
+   +'<td style="'+TD+'">'+M(r.sp)+' &rarr; '+M(r.sc)+'</td>'
+   +'<td style="'+TD+'">'+M(r.vp)+' &rarr; <b>'+M(r.vc)+'</b></td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(r.dv>=0?'#0f6e56':'#a3271a')+'">'+(r.dv>=0?'+':'−')+M(r.dv)+'</td>'
+   +'<td style="'+TD+'"><b>'+r.rp.toFixed(1)+'×</b> &rarr; <b style="color:'+(r.rc>=r.rp?'#0f6e56':'#a3271a')+'">'+r.rc.toFixed(1)+'×</b></td></tr>';
+ const head='<tr><th style="'+TH+';text-align:left">'+(pf||'Entity')+'</th><th style="'+TH+'">Spend</th>'
+   +'<th style="'+TH+'">Claimed value</th><th style="'+TH+'">Change</th><th style="'+TH+'">ROAS</th></tr>';
+ let body='';
+ if(died.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#a3271a;margin:2px 0 4px">Was working, now isn’t — spend held, return collapsed</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+died.slice(0,8).map(row).join('')+'</table></div>';
+ if(lost.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B;margin:14px 0 4px">Biggest falls in claimed value</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+lost.slice(0,8).map(row).join('')+'</table></div>';
+ if(won.length)body+='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#0f6e56;margin:14px 0 4px">Biggest rises</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+won.slice(0,5).map(row).join('')+'</table></div>';
+ body+='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+  +'<b>These are the platform’s own claimed values, not the ledger.</b> They will not sum to Shopify net revenue and are not supposed to — the question is which entity changed. '
+  +'“Was working, now isn’t” requires spend to have stayed within a quarter of where it was, so an ad you deliberately turned down is never mistaken for one that broke.</div>';
+ pnlCard(g,tabKey||'meta','Which ads moved the money'+INFO('Value gained and lost per entity against the previous window, plus the ads whose return collapsed on unchanged spend.'),
+  'Last '+RM.days+' days against the '+RM.days+' before, at the attribution window selected on this page.', body);
+}
 function rMETA(){
  if(TAB!=='mt')return; dCh();
  const g=document.getElementById('g31'); g.innerHTML='';
@@ -10170,6 +10254,8 @@ function rMETA(){
   +'<tr><th style="'+TH+';text-align:left">Role</th><th style="'+TH+'">Spend 7d</th><th style="'+TH+'">Share</th>'
   +'<th style="'+TH+'">Target</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+cb+'</table></div>');
 
+ try{okRevCard(g,'Meta','meta');}catch(e){}
+
  /* ---------- 5. triage, in the deck's order ---------- */
  const tri=[];
  const dCpm=pc(cur.cpm,prv.cpm), dCtr=pc(cur.ctr,prv.ctr), dCvr=pc(cur.cvr,prv.cvr), dAov=pc(cur.aov,prv.aov);
@@ -10312,6 +10398,8 @@ function rGOOG(){
    +'<tr><th style="'+TH+';text-align:left">Term</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Impr</th>'
    +'<th style="'+TH+'">Clicks</th><th style="'+TH+'">CPC</th><th style="'+TH+'">Impr vs LY</th></tr>'+tb+'</table></div>');
  }
+
+ try{okRevCard(g,'Google','google');}catch(e){}
 
  /* ---- 5. triage ---- */
  const tri=[];
@@ -10802,7 +10890,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-174928'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-182557'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
