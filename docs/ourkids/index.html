@@ -9881,9 +9881,29 @@ function rMETA(){
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">PEOPLE REACHED · 7d</div>'
    +'<div style="font-size:26px;font-weight:800;color:#161d2e;line-height:1.1;margin:2px 0">'+N(cur.rch)+'</div>'
    +'<div style="font-size:11.5px;color:#5b6478">'+sg(pc(cur.rch,prv.rch))+' vs prior 7d on '+sg(pc(cur.sp,prv.sp))+' spend.</div></div></div>'
-  +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
-  +'<b>Net new reach % is not in the Meta API.</b> The deck’s red-alert rule (&lt;20% new) needs the share of reach that has never seen you, which Meta does not expose per ad. '
-  +'CPMR moving against you is the closest readable proxy: it rises when the cheap, unseen audience runs out.</div>');
+  +(function(){
+    /* Net new reach, measured rather than proxied. Meta dedupes reach inside a requested range,
+       so reach(14d) - reach(the older 7d of it) is exactly the people who are new to this week.
+       Two baselines because they answer different questions: new since last week, and new in the
+       last eight weeks. The deck's red alert is the first one under 20%. */
+    const NN=O.netnew||{};
+    if(NN.pctWk==null)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+      +'<b>Net new reach lands on the next collector sync.</b> It is measured by asking Meta for reach over nested windows and subtracting \u2014 the API dedupes within a range, so the increment is the people who had not seen you.</div>';
+    const w=NN.pctWk*100, e=(NN.pct8w!=null)?NN.pct8w*100:null;
+    const red=w<20;
+    return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
+     +'<div style="flex:1;min-width:230px;padding:12px 14px;border-radius:12px;background:'+(red?'#fff6f9':'#f0fdf6')+';border:1px solid '+(red?'#fbe0e8':'#cdeede')+'">'
+      +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:'+(red?'#a3271a':'#0f6e56')+'">NET NEW REACH \u00b7 vs LAST WEEK'+(red?' \u00b7 RED ALERT':'')+'</div>'
+      +'<div style="font-size:26px;font-weight:800;color:'+(red?'#a3271a':'#0f6e56')+';line-height:1.1;margin:2px 0">'+w.toFixed(0)+'%</div>'
+      +'<div style="font-size:11.5px;color:#5b6478;line-height:1.5">'+N(NN.newWk)+' of the '+N(NN.r7)+' people reached this week had not seen you last week. '
+      +(red?'<b>Under 20% \u2014 you are hammering the same pool and growth is about to stall.</b> Ship fresh creative, widen the audience, check frequency caps.'
+           :'Above the 20% alert line \u2014 you are still finding new people.')+'</div></div>'
+     +(e!=null?'<div style="flex:1;min-width:230px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e6eaf2">'
+      +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">NEW IN THE LAST 8 WEEKS</div>'
+      +'<div style="font-size:26px;font-weight:800;color:#161d2e;line-height:1.1;margin:2px 0">'+e.toFixed(0)+'%</div>'
+      +'<div style="font-size:11.5px;color:#5b6478;line-height:1.5">'+N(NN.new8w)+' had not been reached at all in eight weeks. The stricter read: a week can look fresh against last week while recycling a pool you burned a month ago.</div></div>':'')
+     +'</div>';
+   })());
 
  /* ---------- 3. the fatigue score ---------- */
  const rows=[];
@@ -10453,7 +10473,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-163409'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-165041'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
