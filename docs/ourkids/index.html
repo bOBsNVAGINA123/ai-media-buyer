@@ -5523,7 +5523,8 @@ function yoyChannels(g){
      "customers" heading -- bnr.rc is returning ORDERS, not people, which is the trap here. */
   rows.push({n:b,k:'shop',r0:a[0]||0,r1:c[0]||0,u0:a[3]||0,u1:c[3]||0,gp:c[1]||0,
              nrev:n.nrev||0,rrev:n.rrev||0,nc:n.nc||0,
-             o0:a[2]||0,o1:c[2]||0,cu1:n.cust!=null?n.cust:null,cu0:n0.cust!=null?n0.cust:null});});
+             o0:a[2]||0,o1:c[2]||0,cu1:n.cust!=null?n.cust:null,cu0:n0.cust!=null?n0.cust:null,
+             no1:n.nord||0,no0:n0.nord||0,ro1:n.rord||0,ro0:n0.rord||0});});
  const q=NR[ly]||{}, w=NR[m]||{};
  /* Shopify customer counts come from its own analytics (the daily new/returning series),
     not from O.nr, which carries orders. Sum the two daily series over the month. */
@@ -5537,6 +5538,7 @@ function yoyChannels(g){
             u0:null,u1:null,gp:(w.ngp||0)+(w.rgp||0),nrev:w.nrev||0,rrev:w.rrev||0,
             nc:sc1?sc1.n:(w.nord||0),
             o0:(q.nord||0)+(q.rord||0),o1:(w.nord||0)+(w.rord||0),
+            no1:w.nord||0,no0:q.nord||0,ro1:w.rord||0,ro0:q.rord||0,
             cu1:sc1?sc1.t:null,cu0:sc0?sc0.t:null});
  rows.sort((x,y)=>y.r1-x.r1);
  const t0=rows.reduce((a,x)=>a+x.r0,0), t1=rows.reduce((a,x)=>a+x.r1,0);
@@ -5558,6 +5560,8 @@ function yoyChannels(g){
    +'<td style="'+TD+'">'+(x.cu1!=null?'<b>'+N(x.cu1)+'</b>'+(x.cu0?'<div style="font-size:10px">'+fp(pc(x.cu1,x.cu0))+'</div>':'')
         :'<span style="color:#c9ccd6" title="distinct shoppers arrive with the next collector sync">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(x.o1?N(x.o1)+(x.o0?'<div style="font-size:10px">'+fp(pc(x.o1,x.o0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+';color:#0f6e56">'+(x.no1?'<b>'+N(x.no1)+'</b>'+(x.no0?'<div style="font-size:10px">'+fp(pc(x.no1,x.no0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+';color:#3d3fb8">'+(x.ro1?'<b>'+N(x.ro1)+'</b>'+(x.ro0?'<div style="font-size:10px">'+fp(pc(x.ro1,x.ro0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(x.nc?N(x.nc):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(split!=null
       ?'<div style="display:flex;height:14px;width:96px;border-radius:4px;overflow:hidden;margin-left:auto">'
@@ -5570,7 +5574,10 @@ function yoyChannels(g){
   +'<th style="'+TH+'">'+ly+'</th><th style="'+TH+'">'+m+'</th><th style="'+TH+'">Change</th>'
   +'<th style="'+TH+'">Units</th><th style="'+TH+'">Units &Delta;</th>'
   +'<th style="'+TH+'">Gross profit</th><th style="'+TH+'">Customers</th>'
-  +'<th style="'+TH+'">Orders</th><th style="'+TH+'">New custs</th>'
+  +'<th style="'+TH+'">Orders</th>'
+  +'<th style="'+TH+';color:#0f6e56">New-cust orders</th>'
+  +'<th style="'+TH+';color:#3d3fb8">Returning orders</th>'
+  +'<th style="'+TH+'">New custs</th>'
   +'<th style="'+TH+'">New vs returning revenue</th></tr>';
 
  const tot='<tr style="border-top:2px solid #cbd3e1"><td style="'+TD+';text-align:left"><b>Tracked total</b></td>'
@@ -5579,12 +5586,15 @@ function yoyChannels(g){
   +'<td style="'+TD+'"></td>'
   +'<td style="'+TD+'">'+(rows.every(x=>x.cu1!=null)?'<b>'+N(rows.reduce((a,x)=>a+x.cu1,0))+'</b>':'')+'</td>'
   +'<td style="'+TD+'"><b>'+N(rows.reduce((a,x)=>a+(x.o1||0),0))+'</b></td>'
+  +'<td style="'+TD+';color:#0f6e56"><b>'+N(rows.reduce((a,x)=>a+(x.no1||0),0))+'</b></td>'
+  +'<td style="'+TD+';color:#3d3fb8"><b>'+N(rows.reduce((a,x)=>a+(x.ro1||0),0))+'</b></td>'
   +'<td style="'+TD+'"><b>'+N(rows.reduce((a,x)=>a+(x.nc||0),0))+'</b></td>'
   +'<td style="'+TD+'">'+(tn+tr?Math.round(tn/(tn+tr)*100)+'% new':'')+'</td></tr>';
 
  const note='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11px;color:#6b5730;line-height:1.55">'
   +'<b>Noon, Amazon and Homzmart are not in this table.</b> They sell through Odoo but reach none of this dashboard&rsquo;s feeds, so the tracked total above is short of the company total in Odoo&rsquo;s own Sales Analysis by whatever those three did that month. '
-  +'Everything here is the POS journals for the shops and the Shopify order feed for the webstore, which is why the branch figures line up with the Odoo pivot to within a fraction of a percent.'
+  +'Everything here is the POS journals for the shops and the Shopify order feed for the webstore, which is why the branch figures line up with the Odoo pivot to within a fraction of a percent. '
+  +'<b>New-cust orders</b> are the ones a customer placed on the day they first ever bought from that shop; <b>returning orders</b> are every order after that day. A customer who buys twice on their first afternoon puts both receipts in the new column, which is why new-cust orders can exceed the new-customer headcount beside them.'
   +'</div>';
 
  pnlCard(g,'odoo','Every channel &mdash; '+m+' against '+ly+INFO('Revenue, units, gross profit, customers, orders and the new-versus-returning split for each shop and for Shopify, this month against the same month a year earlier. The same cut as Odoo Sales Analysis, plus customer type and margin.'),
@@ -9852,7 +9862,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-142324'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-143040'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
