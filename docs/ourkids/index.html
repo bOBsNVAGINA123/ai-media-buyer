@@ -10002,6 +10002,150 @@ function rMETA(){
 
  try{qsweep('g31');}catch(e){}
 }
+/* v9.52 GOOGLE TAB.
+
+   Google is not Meta and the framework does not transfer wholesale: there is no reach, so no
+   frequency and no net-new-reach, and the fatigue model above is meaningless here. What Google
+   has instead is the auction -- it will tell you exactly why you did not show, split into "you
+   ran out of money" and "you were not good enough". Those need opposite responses, and blending
+   them into one impression-share number is what makes a Google account unmanageable.
+
+   So the same question order as Meta, answered with Google's own instruments:
+   the four inputs -> where the auction was lost -> which campaigns earn -> which terms leak. */
+function rGOOG(){
+ if(TAB!=='gg')return; dCh();
+ const g=document.getElementById('g32'); g.innerHTML='';
+ const bn=document.getElementById('bn32');
+ const W=O.gadsW, ads=(O.gads||[]).filter(a=>a.d), S=O.searchIntel||{};
+ if(!W||!ads.length){bn.innerHTML='Google per-campaign daily series missing — this tab fills on the next sync.';return;}
+ const fG=af('google');
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const pc=(c,p)=>(p>0)?((c/p-1)*100):null;
+ const sg=v=>v==null?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%';
+ const today=W.n-1;
+ const incr=((O.attr||{}).google||{}).incr;
+ bn.innerHTML='<b>GOOGLE</b> — '+W.n+' days of per-campaign data from '+W.start+'. '
+  +'Judged on the auction, not on reach: Google is the only platform that says <i>why</i> you did not show.';
+
+ const agg=(a,b,list)=>{let sp=0,im=0,clk=0,pur=0,val=0;
+  (list||ads).forEach(x=>{for(let k=a;k<=b;k++){const d=x.d;
+   sp+=(d.sp&&d.sp[k])||0; im+=(d.imp&&d.imp[k])||0; clk+=(d.clk&&d.clk[k])||0;
+   pur+=(d.pur&&d.pur[k])||0; val+=((d.pv&&d.pv[k])||0)*fG;}});
+  return {sp,im,clk,pur,val,ctr:im?clk/im*100:0,cpc:clk?sp/clk:0,cpm:im?sp/im*1000:0,
+          cvr:clk?pur/clk*100:0,aov:pur?val/pur:0,roas:sp?val/sp:0,cpa:pur?sp/pur:0};};
+ const cur=agg(today-6,today), prv=agg(today-13,today-7);
+
+ /* ---- 1. the four inputs ---- */
+ const lev=[['CPC',M(cur.cpc),pc(cur.cpc,prv.cpc),false,'what a click costs'],
+            ['CTR',cur.ctr.toFixed(2)+'%',pc(cur.ctr,prv.ctr),true,'clicks / impressions'],
+            ['CVR',cur.cvr.toFixed(2)+'%',pc(cur.cvr,prv.cvr),true,'conversions / clicks'],
+            ['AOV',M(cur.aov),pc(cur.aov,prv.aov),true,'value per conversion']];
+ pnlCard(g,'google','The four inputs — Google’s version'+INFO('Same decomposition as Meta, with CPC in place of CPM: Google sells clicks, so the click price is the lever you actually buy.'),
+  'Last 7 days against the 7 before. Reported ROAS <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per conversion.',
+  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'
+  +lev.map(l=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:11px 13px;background:#fff">'
+   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">'+l[0]+'</div>'
+   +'<div style="font-size:20px;font-weight:800;color:#161d2e;margin:2px 0 1px">'+l[1]+'</div>'
+   +'<div style="font-size:11.5px;font-weight:700;color:'+(l[2]==null?'#8a93a6':((l[3]?l[2]>0:l[2]<0)?'#0f6e56':'#a3271a'))+'">'+sg(l[2])+' vs prior 7d</div>'
+   +'<div style="font-size:10.5px;color:#8a93a6;margin-top:2px">'+l[4]+'</div></div>').join('')+'</div>'
+  +(incr!=null?'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
+   +'<b>At the assumed incremental rate of '+incr.toFixed(2)+' that '+cur.roas.toFixed(2)+'× is '+(cur.roas*incr).toFixed(2)+'×.</b> '
+   +'Google sells no incrementality measurement and none has been run on this account, so that multiplier is an assumption, not a finding.</div>':''));
+
+ /* ---- 2. where the auction was lost ---- */
+ const IS=S.is||{}, LY=S.isLY||{};
+ const rows=Object.keys(IS).map(k=>({k,...IS[k],ly:(LY[k]||{}).is})).filter(r=>r.is!=null)
+   .sort((a,b)=>(b.bl||0)-(a.bl||0));
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ const shareBar=r=>{const a=(r.is||0)*100,b=(r.bl||0)*100,c=(r.rl||0)*100;
+  return '<div style="display:flex;height:15px;width:150px;border-radius:4px;overflow:hidden;margin-left:auto">'
+   +'<div title="shown" style="width:'+a.toFixed(1)+'%;background:#12a06e"></div>'
+   +'<div title="lost to budget" style="width:'+b.toFixed(1)+'%;background:#e23a63"></div>'
+   +'<div title="lost to rank" style="width:'+c.toFixed(1)+'%;background:#c9ccd6"></div></div>';};
+ let ab='';
+ rows.forEach(r=>{
+  const verdict=(r.bl>=0.3)?['RAISE THE CAP','#a3271a','demand you already win and decline to buy']
+    :(r.rl>=0.6)?['BID / RELEVANCE','#a35a1a','more budget buys nothing here']
+    :['healthy','#0f6e56',''];
+  ab+='<tr><td style="'+TD+';text-align:left"><b>'+esc(r.k)+'</b>'
+   +(verdict[2]?'<div style="font-size:10px;color:#8a93a6">'+verdict[2]+'</div>':'')+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+(r.is*100).toFixed(0)+'%</td>'
+   +'<td style="'+TD+';color:#a3271a">'+((r.bl||0)*100).toFixed(0)+'%</td>'
+   +'<td style="'+TD+';color:#5a637a">'+((r.rl||0)*100).toFixed(0)+'%</td>'
+   +'<td style="'+TD+'">'+(r.ly!=null?(r.ly*100).toFixed(0)+'%<div style="font-size:10px;color:'+((r.is>=r.ly)?'#0f6e56':'#a3271a')+'">'+sg(pc(r.is,r.ly))+'</div>':'<span style="color:#c9ccd6">—</span>')+'</td>'
+   +'<td style="'+TD+'">'+shareBar(r)+'</td>'
+   +'<td style="'+TD+';text-align:left"><b style="color:'+verdict[1]+';font-size:11px">'+verdict[0]+'</b></td></tr>';});
+ const budLost=rows.filter(r=>(r.bl||0)>=0.3);
+ pnlCard(g,'google','Where the auction was lost — budget or rank'+INFO('Impression share split into the two reasons you did not show. They need opposite fixes, which is why the blended number is useless.'),
+  budLost.length?('<b>'+budLost.length+' campaign'+(budLost.length>1?'s are':' is')+' losing 30%+ of impressions to budget.</b> That is demand you already win the auction for and choose not to buy — raising the cap converts it directly, with nothing to fix first.')
+   :'No campaign is losing serious volume to budget. What is missing is being lost on rank, which more money will not buy.',
+  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Shown</th>'
+  +'<th style="'+TH+'">Lost: budget</th><th style="'+TH+'">Lost: rank</th><th style="'+TH+'">Shown LY</th>'
+  +'<th style="'+TH+'">Split</th><th style="'+TH+';text-align:left">Do</th></tr>'+ab+'</table></div>');
+
+ /* ---- 3. campaigns on their own money ---- */
+ const {gpOn}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266};}})();
+ const be=gpOn>0?1/gpOn:3.76;
+ const cr=ads.map(a=>{const c=agg(today-6,today,[a]),p=agg(today-13,today-7,[a]);
+   return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
+ let cb='';
+ cr.forEach(x=>{
+  const v=x.c.roas>=be?['earning','#0f6e56']:(x.c.pur<5?['too little data','#8a93a6']:['below breakeven','#a3271a']);
+  cb+='<tr><td style="'+TD+';text-align:left"><b>'+esc(x.a.n||'')+'</b>'
+   +'<div style="font-size:10px;color:#8a93a6">'+esc(x.a.cmp||'')+(x.a.st?' · '+esc(String(x.a.st).toLowerCase()):'')+'</div></td>'
+   +'<td style="'+TD+'">'+M(x.c.sp)+'<div style="font-size:10px;color:#8a93a6">'+sg(pc(x.c.sp,x.p.sp))+'</div></td>'
+   +'<td style="'+TD+'">'+M(x.c.val)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+x.c.roas.toFixed(2)+'×</td>'
+   +'<td style="'+TD+'">'+N(x.c.pur)+'</td>'
+   +'<td style="'+TD+'">'+(x.c.cpa?M(x.c.cpa):'—')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+(x.gp>=0?'+':'−')+M(Math.abs(x.gp))+'</td>'
+   +'<td style="'+TD+';text-align:left"><b style="color:'+v[1]+';font-size:11px">'+v[0]+'</b></td></tr>';});
+ pnlCard(g,'google','Every campaign on its own money'+INFO('Last 7 days per campaign, with gross profit left after the ad is paid for at your real online margin.'),
+  'Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% margin. The last column is what is left after both the product and the ad are paid for.',
+  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+  +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend 7d</th><th style="'+TH+'">Value</th>'
+  +'<th style="'+TH+'">ROAS</th><th style="'+TH+'">Conv</th><th style="'+TH+'">Cost / conv</th>'
+  +'<th style="'+TH+'">After ad cost</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+cb+'</table></div>');
+
+ /* ---- 4. terms paying for nothing ---- */
+ const T=(S.terms||[]).filter(t=>t&&t.sp>0);
+ if(T.length){
+  const dead=T.filter(t=>!(t.cn>0)).sort((a,b)=>b.sp-a.sp);
+  const waste=dead.reduce((a,t)=>a+t.sp,0), tot=T.reduce((a,t)=>a+t.sp,0);
+  let tb='';
+  dead.slice(0,14).forEach(t=>{tb+='<tr><td style="'+TD+';text-align:left"><b>'+esc(t.t)+'</b></td>'
+   +'<td style="'+TD+'">'+M(t.sp)+'</td><td style="'+TD+'">'+N(t.im)+'</td><td style="'+TD+'">'+N(t.ck)+'</td>'
+   +'<td style="'+TD+'">'+(t.ck?M(t.sp/t.ck):'—')+'</td>'
+   +'<td style="'+TD+'">'+(t.imL?sg(pc(t.im,t.imL)):'<span style="color:#c9ccd6">new</span>')+'</td></tr>';});
+  pnlCard(g,'google','Search terms that converted nothing'+INFO('Every term with spend and zero conversions in the window, biggest first. Individually small, which is why they never get cut.'),
+   '<b>'+dead.length+' of '+T.length+' terms took '+M(waste)+'</b> — '+Math.round(waste/tot*100)+'% of term spend — and returned no conversion. '
+   +'Check them against the catalogue before negating: a stocked brand can look like waste when the feed simply drops its name.',
+   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Term</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Impr</th>'
+   +'<th style="'+TH+'">Clicks</th><th style="'+TH+'">CPC</th><th style="'+TH+'">Impr vs LY</th></tr>'+tb+'</table></div>');
+ }
+
+ /* ---- 5. triage ---- */
+ const tri=[];
+ const dCpc=pc(cur.cpc,prv.cpc), dCtr=pc(cur.ctr,prv.ctr), dCvr=pc(cur.cvr,prv.cvr), dAov=pc(cur.aov,prv.aov);
+ if(budLost.length)tri.push(['1 · Budget','#a3271a',budLost.length+' campaign'+(budLost.length>1?'s losing':' losing')+' 30%+ of impressions to the cap. Raise it before anything else — this is the only lever with nothing to fix first.']);
+ if(dCpc!=null&&dCpc>20)tri.push(['2 · CPC','#a3271a','Clicks cost '+dCpc.toFixed(0)+'% more than the prior week. Check for a bid-strategy or targeting change before blaming the auction.']);
+ if(dCtr!=null&&dCtr<-20)tri.push(['3 · CTR','#a3271a','CTR down '+Math.abs(dCtr).toFixed(0)+'% — copy or feed relevance, not budget.']);
+ if(dCvr!=null&&dCvr<-20)tri.push(['4 · CVR','#a3271a','CVR down '+Math.abs(dCvr).toFixed(0)+'% — landing page, stock or price, not the ad.']);
+ if(dAov!=null&&dAov<-20)tri.push(['5 · AOV','#a3271a','AOV down '+Math.abs(dAov).toFixed(0)+'% — the mix moved to cheaper SKUs.']);
+ pnlCard(g,'google','Triage — in order',
+  tri.length?'These tripped this week. Fix in this order and change one thing at a time.'
+            :'Nothing tripped a threshold. CPC '+sg(dCpc)+', CTR '+sg(dCtr)+', CVR '+sg(dCvr)+', AOV '+sg(dAov)+'.',
+  tri.length?tri.map(t=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #f2f4f9">'
+    +'<b style="flex:0 0 84px;color:'+t[1]+';font-size:11.5px">'+t[0]+'</b>'
+    +'<span style="font-size:12.5px;color:#26313f;line-height:1.55">'+t[2]+'</span></div>').join('')
+   :'<div style="font-size:12.5px;color:#5b6478">All four inputs are inside the ±20% band.</div>');
+
+ try{qsweep('g32');}catch(e){}
+}
 function rTK(){if(TAB!=='tk')return;dCh();
  const g=document.getElementById('g24');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString('en-US');
@@ -10473,7 +10617,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-165041'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-171153'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
