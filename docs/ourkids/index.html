@@ -5456,7 +5456,7 @@ function alertBand(g){
 }
 
 function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30');g.innerHTML='';
- document.getElementById('bn30').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>Did the thing you did actually work?</b> Budget moves, launches and pauses are detected from each entity&rsquo;s own daily spend, then scored on the seven days before against the days after &mdash; on incremental value, at your real margin. A rise that bought volume at a worse rate is not growth and is not scored as such.';
+ document.getElementById('bn30').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>Did the thing you did actually work?</b> Budget moves, launches and pauses are detected from each entity&rsquo;s own daily spend, then scored on the seven days before against the days after &mdash; on incremental value, at your real margin. A rise that bought volume at a worse rate is not growth and is not scored as such. <b>Changes are filtered to the dates you selected above</b>, so widen the range to see older edits.';
  try{gadsChanges(g);}catch(e){}
  let _ev=[];
  try{_ev=changeLog(g)||[];}catch(e){g.innerHTML='<div style="padding:12px;color:#e23a63">Change log failed: '+e.message+'</div>';}
@@ -5486,11 +5486,24 @@ function changeLog(g){
  const manual=abGet(CL_MAN,[]);
  manual.forEach(m=>ev.push({d:m.d,kind:m.kind||'MANUAL',label:m.label,before:null,after:null,manual:true,note:m.note,meta:{pf:m.pf||'meta'}}));
  ev=ev.filter(x=>CLPF==='all'||x.meta.pf===CLPF).filter(x=>CLKIND==='all'||x.kind===CLKIND);
+ /* The change log ignored the date box entirely -- it always listed every step in the
+    60-day collector window, so "what did I change last week" meant scrolling past two
+    months of edits. Filter to the selected range; if the range excludes everything, say
+    so rather than silently rendering an empty table. */
+ let clAll=ev.length, clRanged=false;
+ if(ST.s&&ST.e){const inR=ev.filter(x=>x.d>=ST.s&&x.d<=ST.e);
+  if(inR.length!==ev.length){clRanged=true;ev=inR;}}
  ev.sort((a,b)=>b.d.localeCompare(a.d));
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SG=v=>(v>=0?'+':'−')+M(v);
  const PC=(c,p)=>(p==null||!p||c==null||!isFinite(c/p))?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
  const KC={'LAUNCHED':'#3a9bff','PAUSED':'#9aa3b5','BUDGET UP':'#12a06e','BUDGET DOWN':'#ff8b42','MANUAL':'#5a5bf0'};
+ if(clRanged&&!ev.length){
+  const q=document.createElement('div');q.className='card full';
+  q.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+   +'<div class="ct">No changes inside '+ST.s+' \u2192 '+ST.e+'</div>'
+   +'<div class="cs">'+clAll+' budget move'+(clAll===1?'':'s')+', launch'+(clAll===1?'':'es')+' and pause'+(clAll===1?'':'s')+' were detected in the wider collector window, all of them outside the dates you selected. Widen the range to see them.</div></div></div>';
+  g.appendChild(q);return [];}
  /* verdicts */
  let win=0,fail=0,incon=0,gpDelta=0;
  const scored=ev.map(x=>{
@@ -7413,8 +7426,22 @@ function vizActions(g){
  const PS=O.pos||{}, BC=O.bcost||{}, BNR=O.bnr||{};
  const names=Object.keys(PS); if(!names.length)return;
  const ms=[...new Set([].concat(...names.map(n=>Object.keys(PS[n]))))].sort();
- if(ms.length<3)return;
- const cur=ms[ms.length-2], prv=ms[ms.length-3];
+ if(ms.length<2)return;
+ /* Branch rent, payroll and new-customer counts only exist per MONTH in the ledger, so
+    this card cannot honour a 7-day range literally. It used to silently pin the last two
+    complete months and then print them as if they were the selection -- so a user sitting
+    on L7D read July-vs-June findings with no warning. Now it picks the latest month the
+    selected range actually touches (dropping the current part-month, whose rent cheque and
+    payroll have not landed), compares it with the month before, and says so on the card. */
+ const rEnd=(ST.e||'').slice(0,7), rStart=(ST.s||'').slice(0,7);
+ const nowM=(O.asof||O.today||'').slice(0,7);
+ const usable=ms.filter(m=>m!==nowM);
+ if(usable.length<2)return;
+ let ci=usable.length-1;
+ if(rEnd){for(let i=usable.length-1;i>=0;i--){if(usable[i]<=rEnd){ci=i;break;}}}
+ if(ci<1)ci=1;
+ const cur=usable[ci], prv=usable[ci-1];
+ const inRange=(!rStart||!rEnd)?true:(cur>=rStart&&cur<=rEnd);
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const rows=[];
  names.forEach(n=>{
@@ -7476,8 +7503,11 @@ function vizActions(g){
  el.style.cssText='border:2px solid #5a5bf0;box-shadow:0 6px 24px -14px rgba(90,91,240,.55)';
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
   +'<div class="ct">What this tab is telling you — '+cur+' vs '+prv+'</div>'
-  +'<div class="cs">Read from the same monthly branch tables the charts below draw, using the two most recent COMPLETE months. '
-  +'The charts are the evidence and every one is still here; this is what they add up to.</div></div></div>'+body;
+  +'<div class="cs">'+(inRange
+    ?'Your range lands in <b>'+cur+'</b>, compared with <b>'+prv+'</b>. '
+    :'<b>Your date range is '+(ST.s||'?')+' \u2192 '+(ST.e||'?')+', but rent, payroll and new-customer counts only exist per month in the ledger \u2014 so this reads '+cur+' against '+prv+', the closest complete months.</b> ')
+   +'Part-months are excluded: the rent cheque and payroll for a month in progress have not landed, so including it would invent a profitable shop. '
+   +'The charts below are the evidence and every one is still here; this is what they add up to.</div></div></div>'+body;
  g.appendChild(el);
 }
 function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8');g.innerHTML='';try{vizActions(g);}catch(e){}
@@ -10200,10 +10230,94 @@ function okRevCard(g,pf,tabKey){
  pnlCard(g,tabKey||'meta','Which ads moved the money'+INFO('Value gained and lost per entity against the previous window, plus the ads whose return collapsed on unchanged spend.'),
   'Last '+RM.days+' days against the '+RM.days+' before, at the attribution window selected on this page.', body);
 }
+/* The date box is the truth for the platform tabs.
+
+   Both Meta and Google used to hardcode "last 7 days vs the 7 before" off the end of
+   the collector window, so every headline on those tabs ignored the range the user had
+   selected and then LABELLED itself "last 7 days" -- the numbers were right for a period
+   nobody asked for. pfWin maps the selected range onto a platform's daily arrays and
+   hands back the comparison period of equal length immediately before it, plus the real
+   dates so no card can name a window it did not measure.
+
+   Falls back to last-7-vs-prior-7 only when the date box is empty. */
+function pfWin(W){
+ const N=(W&&W.n)||60, last=N-1;
+ let a=Math.max(0,last-6), b=last, ranged=false;
+ if(ST.s&&ST.e&&W&&W.start){const st=Date.parse(W.start);
+  if(!isNaN(st)){
+   let i0=Math.round((Date.parse(ST.s)-st)/864e5), i1=Math.round((Date.parse(ST.e)-st)/864e5);
+   const clipped=i0<0; i0=Math.max(0,i0); i1=Math.min(last,i1);
+   if(i1>=i0){a=i0;b=i1;ranged=true;var clip=clipped;}}}
+ const n=b-a+1, pb=a-1;
+ /* The prior period is the same length immediately before -- but the collector window is
+    only 60 days, so a 30-day selection starting near the front has nowhere to put a full
+    prior 30. Rather than print "--" everywhere, clamp it to whatever days exist and say
+    how many. Every comparison on these cards is a RATE (CPM, CTR, CVR, AOV, frequency),
+    so a shorter baseline is still a fair comparison. */
+ const pa=Math.max(0,a-n), pn=pb-pa+1;
+ const D=i=>addD(W&&W.start,i);
+ return {a:a,b:b,pa:pa,pb:pb,n:n,pn:pn,ranged:ranged,ok:pb>=0&&pn>0,part:pn>0&&pn<n,
+   lbl:D(a)+' \u2192 '+D(b),
+   plbl:(pb>=0&&pn>0)?(D(pa)+' \u2192 '+D(pb)):null,
+   /* the deck's frequency/CPM thresholds are all per-week; a 30-day range would
+      otherwise read 4x the frequency and scream DEAD ZONE on a healthy account */
+   wk:n/7,
+   clipped:(ST.s&&W&&W.start&&Date.parse(ST.s)<Date.parse(W.start))?W.start:null};}
+function pfWinNote(PW,W,what){
+ if(!PW.ranged)return 'The date box is empty, so this reads the <b>last 7 days</b> ('+PW.lbl+') against the 7 before.';
+ return '<b>'+PW.lbl+'</b> ('+PW.n+' day'+(PW.n===1?'':'s')+')'
+  +(PW.plbl
+    ?(PW.part
+      ?' against the <b>'+PW.pn+' day'+(PW.pn===1?'':'s')+'</b> before it ('+PW.plbl+') \u2014 that is all the '+what+' history there is, so the % moves compare rates, not totals.'
+      :' against the equal '+PW.n+' days before it, '+PW.plbl+'.')
+    :', with nothing earlier inside the '+((W&&W.n)||60)+'-day '+what+' window to compare against.')
+  +(PW.clipped?' <b>Clipped:</b> '+what+' data only goes back to '+PW.clipped+', so the start of your range is not covered.':'');}
+/* One ranked "do this" card, shared by the Meta and Google tabs.
+
+   Every tab on this tool could already tell you WHAT happened; none of them opened with
+   what to DO about it, so the answer was buried six cards down in a table. This takes the
+   findings each tab already computes, prices them in monthly gross profit at the real
+   online margin, sorts by that, and puts them above everything else. It is prepended to
+   the grid AFTER the tab has rendered, because the fatigue scores and campaign roles it
+   ranks are only known once those cards have been built. */
+function okActCard(g, acts, lead){
+ if(!acts||!acts.length){
+  const q=document.createElement('div'); q.className='card full';
+  q.style.cssText='border:2px solid #12a06e;box-shadow:0 6px 24px -14px rgba(18,160,110,.45)';
+  q.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+   +'<div class="ct">Nothing on this tab is asking for a decision</div>'
+   +'<div class="cs">'+lead+' No ad is burning money without returning it, nothing tripped a fatigue threshold, and no campaign is capped. The cards below are the evidence.</div></div></div>';
+  g.insertBefore(q, g.firstChild); return;}
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const RANK={P0:0,P1:1,P2:2};
+ acts.sort((a,b)=>(RANK[a.p]-RANK[b.p])||(b.money-a.money));
+ const CL={P0:['#a3271a','#fff6f9'],P1:['#a35a1a','#fff9f0'],P2:['#2a4a7a','#f4f8ff']};
+ const rows=acts.slice(0,12).map(function(a){const c=CL[a.p]||CL.P2;
+  return '<div style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:11px;background:'+c[1]+';border:1px solid '+c[0]+'22;margin-bottom:7px">'
+   +'<div style="flex:0 0 auto;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#fff;background:'+c[0]+';border-radius:5px;padding:3px 6px;margin-top:1px">'+a.p+'</div>'
+   +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:13.5px;font-weight:800;color:#161d2e;line-height:1.3">'+a.t+'</div>'
+    +'<div style="font-size:11.5px;color:#5b6478;line-height:1.55;margin-top:3px">'+a.w+'</div>'
+    +(a.ev?'<div style="font-size:10.5px;color:#8a93a6;margin-top:3px">'+a.ev+'</div>':'')
+   +'</div>'
+   +'<div style="flex:0 0 auto;text-align:right;min-width:104px">'
+    +'<div style="font-size:9px;font-weight:800;letter-spacing:.05em;color:#8a93a6">'+(a.lbl||'GP / MONTH')+'</div>'
+    +'<div style="font-size:16px;font-weight:800;color:'+c[0]+';line-height:1.2">'+(a.money>=1?M(a.money):'—')+'</div></div>'
+   +'</div>';}).join('');
+ const el=document.createElement('div'); el.className='card full';
+ el.style.cssText='border:2px solid #5a5bf0;box-shadow:0 6px 24px -14px rgba(90,91,240,.55)';
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+  +'<div class="ct">Do this first — '+acts.length+' decision'+(acts.length===1?'':'s')+' waiting</div>'
+  +'<div class="cs">'+lead+' Ranked by gross profit per month at your real online margin, not by spend. Everything below this card is the evidence for these lines.</div></div></div>'
+  +rows
+  +(acts.length>12?'<div style="font-size:11px;color:#8a93a6;margin-top:4px">'+(acts.length-12)+' more below the cut — they are all in the tables underneath.</div>':'');
+ g.insertBefore(el, g.firstChild);
+}
 function rMETA(){
  if(TAB!=='mt')return; dCh();
  const g=document.getElementById('g31'); g.innerHTML='';
  const W=O.madsW, ads=(O.mads||[]).filter(a=>a.pf==='meta'&&a.d);
+ const PW=pfWin(W);
  const bn=document.getElementById('bn31');
  if(!W||!ads.length){bn.innerHTML='Per-ad daily series missing — this tab fills on the next sync.';return;}
  const fON=af('meta'), fOFF=afo();
@@ -10211,7 +10325,7 @@ function rMETA(){
  const N=v=>Math.round(Math.abs(v)).toLocaleString();
  const today=W.n-1;
  bn.innerHTML='<b>META</b> — scored on the RevUp <i>Paid Media Mastery</i> framework. '
-  +W.n+' days of per-ad data from '+W.start+'. Fatigue is each ad against <b>its own</b> best week, never an account average.';
+  +'Reading <b>'+PW.lbl+'</b>'+(PW.ranged?'':' (date box empty — last 7 days)')+'. Fatigue is each ad against <b>its own</b> best week, never an account average.';
 
  /* ---------- account totals over the last 7 vs the 7 before ---------- */
  const agg=(a,b)=>{let sp=0,im=0,rch=0,clk=0,pur=0,val=0;
@@ -10222,7 +10336,7 @@ function rMETA(){
   return {sp,im,rch,clk,pur,val,ctr:im?clk/im*100:0,cpm:im?sp/im*1000:0,
           freq:rch?im/rch:0,cpmr:rch?sp/rch*1000:0,cvr:clk?pur/clk*100:0,
           aov:pur?val/pur:0,roas:sp?val/sp:0,cpa:pur?sp/pur:0};};
- const cur=agg(today-6,today), prv=agg(today-13,today-7);
+ const cur=agg(PW.a,PW.b), prv=PW.ok?agg(PW.pa,PW.pb):agg(0,-1);
  const pc=(c,p)=>(p>0)?((c/p-1)*100):null;
  const sg=v=>v==null?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%';
 
@@ -10234,34 +10348,46 @@ function rMETA(){
  const levH=lev.map(l=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:11px 13px;background:#fff">'
   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">'+l[0]+'</div>'
   +'<div style="font-size:20px;font-weight:800;color:#161d2e;margin:2px 0 1px">'+l[1]+'</div>'
-  +'<div style="font-size:11.5px;font-weight:700;color:'+(l[2]==null?'#8a93a6':((l[3]?l[2]>0:l[2]<0)?'#0f6e56':'#a3271a'))+'">'+sg(l[2])+' vs prior 7d</div>'
+  +'<div style="font-size:11.5px;font-weight:700;color:'+(l[2]==null?'#8a93a6':((l[3]?l[2]>0:l[2]<0)?'#0f6e56':'#a3271a'))+'">'+sg(l[2])+' vs prior '+PW.n+'d</div>'
   +'<div style="font-size:10.5px;color:#8a93a6;margin-top:2px">'+l[4]+'</div></div>').join('');
  pnlCard(g,'meta','ROAS is an output — these four are the inputs'+INFO('The deck’s core rule: ROAS = CPM × CTR × CVR × AOV. Report the four, not the output, and move one lever at a time.'),
-  'Last 7 days against the 7 before. Reported ROAS this week: <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per purchase.',
+  pfWinNote(PW,W,'Meta')+' Reported ROAS: <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per purchase.',
   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+levH+'</div>'
   +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
   +'<b>A rising CPM is not automatically bad.</b> Better-targeted creative costs more per thousand and earns it back on CTR and CVR — judge the four together, never CPM alone.</div>');
 
  /* ---------- 2. audience health: net new reach + frequency ---------- */
  const nnr=cur.rch&&prv.rch?null:null;
- const freqZone=cur.freq>=7?['DEAD ZONE','#a3271a','#fff6f9','CVR drops ~25%. Same people on loop — you are paying for visibility that will not convert.']
-   :cur.freq>=4?['CAUTION','#a35a1a','#fff9f0','CVR starts dipping around 10%. Warm pool saturating — ship new creative and check net new reach.']
+ /* Frequency needs UNIQUE people, and Meta only dedupes reach inside a window it was
+    asked for -- summing daily reach counts anyone who saw you on two days twice. So the
+    true weekly frequency is not a number here, it is an interval: at worst everyone was
+    new every day (unique = the sum, frequency at its floor), at best it was the same
+    crowd throughout (unique = the biggest single day, frequency at its ceiling). We show
+    both and score on the midpoint, because a single made-up number in the middle of a
+    wide interval is exactly the kind of figure people act on and should not. */
+ let peakR=0;for(let k=PW.a;k<=PW.b;k++){let r=0;ads.forEach(x=>{r+=(x.d.rch&&x.d.rch[k])||0;});if(r>peakR)peakR=r;}
+ const wkS=Math.max(1,PW.n)/7;
+ const fqLo=cur.rch?(cur.im/cur.rch)/wkS:0;
+ const fqHi=peakR?(cur.im/peakR)/wkS:fqLo;
+ const fqW=(fqLo+fqHi)/2;
+ const freqZone=fqW>=7?['DEAD ZONE','#a3271a','#fff6f9','CVR drops ~25%. Same people on loop — you are paying for visibility that will not convert.']
+   :fqW>=4?['CAUTION','#a35a1a','#fff9f0','CVR starts dipping around 10%. Warm pool saturating — ship new creative and check net new reach.']
    :['HEALTHY','#0f6e56','#f0fdf6','Conversion stable, pool still wide. Keep feeding fresh creative weekly to hold it here.'];
  pnlCard(g,'meta','Audience health — the warning that arrives before ROAS'+INFO('Frequency and cost per thousand people reached. By the time ROAS collapses the warm pool has usually been gone a fortnight.'),
-  'Weekly frequency is impressions ÷ summed daily reach across all live ads — an approximation, because summing daily reach double-counts anyone who saw you on two days.',
+  'The band is the honest answer: floor = impressions ÷ summed daily reach (assumes nobody repeats across days), ceiling = impressions ÷ the single biggest reach day (assumes the same crowd throughout). Both normalised to a week so the thresholds hold at any range length. Across all live ads — an approximation, because summing daily reach double-counts anyone who saw you on two days.',
   '<div style="display:flex;gap:10px;flex-wrap:wrap">'
   +'<div style="flex:1;min-width:210px;padding:12px 14px;border-radius:12px;background:'+freqZone[2]+';border:1px solid '+freqZone[1]+'33">'
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:'+freqZone[1]+'">FREQUENCY · '+freqZone[0]+'</div>'
-   +'<div style="font-size:26px;font-weight:800;color:'+freqZone[1]+';line-height:1.1;margin:2px 0">'+cur.freq.toFixed(1)+'×<span style="font-size:13px;font-weight:600"> / week</span></div>'
+   +'<div style="font-size:26px;font-weight:800;color:'+freqZone[1]+';line-height:1.1;margin:2px 0">'+fqLo.toFixed(1)+'–'+fqHi.toFixed(1)+'×<span style="font-size:13px;font-weight:600"> / week</span></div>'
    +'<div style="font-size:11.5px;color:#5b6478;line-height:1.5">'+freqZone[3]+'</div></div>'
   +'<div style="flex:1;min-width:210px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e6eaf2">'
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">CPMR · COST PER 1,000 REACHED</div>'
    +'<div style="font-size:26px;font-weight:800;color:#161d2e;line-height:1.1;margin:2px 0">'+M(cur.cpmr)+'</div>'
-   +'<div style="font-size:11.5px;color:#5b6478">'+sg(pc(cur.cpmr,prv.cpmr))+' vs the 7 days before — what a new pair of eyes costs.</div></div>'
+   +'<div style="font-size:11.5px;color:#5b6478">'+sg(pc(cur.cpmr,prv.cpmr))+' vs the '+PW.n+' days before — what a new pair of eyes costs.</div></div>'
   +'<div style="flex:1;min-width:210px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e6eaf2">'
-   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">PEOPLE REACHED · 7d</div>'
+   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">PEOPLE REACHED · '+PW.n+'d</div>'
    +'<div style="font-size:26px;font-weight:800;color:#161d2e;line-height:1.1;margin:2px 0">'+N(cur.rch)+'</div>'
-   +'<div style="font-size:11.5px;color:#5b6478">'+sg(pc(cur.rch,prv.rch))+' vs prior 7d on '+sg(pc(cur.sp,prv.sp))+' spend.</div></div></div>'
+   +'<div style="font-size:11.5px;color:#5b6478">'+sg(pc(cur.rch,prv.rch))+' vs prior '+PW.n+'d on '+sg(pc(cur.sp,prv.sp))+' spend.</div></div></div>'
   +(function(){
     /* Net new reach, measured rather than proxied. Meta dedupes reach inside a requested range,
        so reach(14d) - reach(the older 7d of it) is exactly the people who are new to this week.
@@ -10340,7 +10466,7 @@ function rMETA(){
 
  /* ---------- 4. budget split against the 4-campaign framework ---------- */
  const cmp={};
- ads.forEach(a=>{let sp=0;for(let k=today-6;k<=today;k++)sp+=(a.d.sp&&a.d.sp[k])||0;
+ ads.forEach(a=>{let sp=0;for(let k=PW.a;k<=PW.b;k++)sp+=(a.d.sp&&a.d.sp[k])||0;
   const n=(a.cmp||'').toLowerCase();
   const b=/test/.test(n)?'Testing':/scal/.test(n)?'Scaling':/catalog|advantage|dpa|daba/.test(n)?'Catalog'
     :/sale|promo|b2s|school|ramadan|eid|bf|black/.test(n)?'Sale / promo':'Unclassified';
@@ -10361,7 +10487,7 @@ function rMETA(){
       :'<b style="color:#a3271a;font-size:11px">'+(shr<t[0]?'under':'over')+' by '+Math.abs(shr-(shr<t[0]?t[0]:t[1])).toFixed(0)+' points</b>')+'</td></tr>';});
  pnlCard(g,'meta','Where the budget sits against the 4-campaign framework'
    +INFO('Testing 40–60%, Scaling 20–30%, Catalog 15–20%. Campaigns are matched to a role by name, so anything named loosely lands in Unclassified.'),
-  'Last 7 days of Meta spend, '+M(totC)+' in total. The deck’s rule that surprises most people: <b>testing should be your biggest line, not scaling</b>.',
+  PW.lbl+' — '+M(totC)+' of Meta spend. The deck’s rule that surprises most people: <b>testing should be your biggest line, not scaling</b>.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
   +'<tr><th style="'+TH+';text-align:left">Role</th><th style="'+TH+'">Spend 7d</th><th style="'+TH+'">Share</th>'
   +'<th style="'+TH+'">Target</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+cb+'</table></div>');
@@ -10371,10 +10497,93 @@ function rMETA(){
  /* ---------- 5. triage, in the deck's order ---------- */
  const tri=[];
  const dCpm=pc(cur.cpm,prv.cpm), dCtr=pc(cur.ctr,prv.ctr), dCvr=pc(cur.cvr,prv.cvr), dAov=pc(cur.aov,prv.aov);
- if(dCpm!=null&&dCpm>20)tri.push(['1 · CPM','#a3271a','CPM up '+dCpm.toFixed(0)+'% on the prior 7 days — audience fatigue or a seasonal spike. Ship fresh creative or widen the audience before touching budget.']);
+ if(dCpm!=null&&dCpm>20)tri.push(['1 · CPM','#a3271a','CPM up '+dCpm.toFixed(0)+'% on the prior '+PW.n+' days — audience fatigue or a seasonal spike. Ship fresh creative or widen the audience before touching budget.']);
  if(dCtr!=null&&dCtr<-20)tri.push(['2 · CTR','#a3271a','CTR down '+Math.abs(dCtr).toFixed(0)+'% — the creative is tired or off-message. Refresh the angle: hook, format, dialect. Not the colour.']);
  if(dCvr!=null&&dCvr<-20)tri.push(['3 · CVR','#a3271a','CVR down '+Math.abs(dCvr).toFixed(0)+'% — that is site, offer or trust, not the ad. Audit checkout speed, COD badge, reviews. One fix at a time.']);
  if(dAov!=null&&dAov<-20)tri.push(['4 · AOV','#a3271a','AOV down '+Math.abs(dAov).toFixed(0)+'% — the cart mix moved to cheaper items. Push bundles and raise the free-shipping threshold.']);
+
+ /* ---------- 0. the decisions, priced (prepended above everything) ---------- */
+ try{
+  const GPo=(function(){try{return _gpPct().gpOn;}catch(e){return 0.266;}})();
+  const BE=GPo>0?(1/GPo):3.76;
+  const mo=30/Math.max(1,PW.n);                     /* range -> per month */
+  const slice=(a,i0,i1)=>{let sp=0,val=0,pur=0,im=0,clk=0;const d=a.d;
+   for(let k=i0;k<=i1;k++){sp+=(d.sp&&d.sp[k])||0;
+    val+=(((d.pv&&d.pv[k])||0)*fON)+(((d.fv&&d.fv[k])||0)*fOFF);
+    pur+=((d.pu&&d.pu[k])||0)+((d.op&&d.op[k])||0);
+    im+=(d.im&&d.im[k])||0; clk+=(d.oc&&d.oc[k])||0;}
+   /* Meta backfills in-store conversions for about a fortnight, so a recent window's
+      OFFLINE value is always understated. Scale-up calls read the full value (they are
+      conservative if offline is missing); cut calls read website value only, so no ad is
+      killed for revenue that simply has not been matched yet. */
+   let wsp=0,wval=0,wpur=0;
+   for(let k=i0;k<=i1;k++){wval+=((d.pv&&d.pv[k])||0)*fON; wpur+=(d.pu&&d.pu[k])||0;}
+   wsp=sp;
+   return {sp,val,pur,im,clk,roas:sp?val/sp:0,cvr:clk?pur/clk*100:0,gp:val*GPo-sp,
+           wval:wval,wpur:wpur,wroas:wsp?wval/wsp:0,wgp:wval*GPo-wsp};};
+  const A=[];
+  const nm=a=>'<b>'+esc(a.n||a.id)+'</b>'+(a.cmp?' <span style="color:#8a93a6">· '+esc(a.cmp)+'</span>':'');
+
+  /* spend that bought nothing at all */
+  ads.forEach(a=>{const c=slice(a,PW.a,PW.b);
+   if(c.sp>=3000&&c.pur===0&&c.wpur===0){
+    A.push({p:'P0',money:c.sp*mo,lbl:'BLEED / MONTH',
+     t:'Turn off '+(a.n||a.id),
+     w:'Spent '+('E£'+Math.round(c.sp).toLocaleString())+' across '+PW.lbl+' and returned <b>nothing</b> — not one purchase, online or in store. At that rate it burns '+('E£'+Math.round(c.sp*mo).toLocaleString())+' a month for zero.',
+     ev:esc(a.cmp||'')+' · '+Math.round(c.clk).toLocaleString()+' clicks, '+Math.round(c.im).toLocaleString()+' impressions, 0 purchases'});}});
+
+  /* spend that comes back smaller than it left */
+  ads.forEach(a=>{const c=slice(a,PW.a,PW.b);
+   if(c.wpur>=8&&c.roas<BE&&c.sp>=3000){
+    A.push({p:'P1',money:-c.gp*mo,lbl:'LOSS / MONTH',
+     t:'Cap or cut '+(a.n||a.id),
+     w:'Returns '+c.roas.toFixed(2)+'× against a break-even of '+BE.toFixed(2)+'× on your '+(GPo*100).toFixed(1)+'% online margin — so after the product and the ad are both paid for it is <b>'+('E£'+Math.round(Math.abs(c.gp)).toLocaleString())+' short</b> over '+PW.lbl+'. Website purchases alone are '+Math.round(c.wpur)+', so this is not a small sample and not an in-store backfill that has yet to land.',
+     ev:esc(a.cmp||'')+' · '+('E£'+Math.round(c.sp).toLocaleString())+' spent, '+('E£'+Math.round(c.val).toLocaleString())+' claimed ('+('E£'+Math.round(c.wval).toLocaleString())+' of it on the website)'});}});
+
+  /* the opposite: money left on the table */
+  ads.forEach(a=>{const c=slice(a,PW.a,PW.b),p=PW.ok?slice(a,PW.pa,PW.pb):null;
+   if(c.pur>=10&&c.roas>=BE*2&&c.sp>=3000){
+    const flat=!p||p.sp<=0||Math.abs(c.sp/(PW.n)-(p.sp/Math.max(1,PW.pn)))<=(p.sp/Math.max(1,PW.pn))*0.15;
+    if(!flat)return;
+    const extra=c.gp*0.3;   /* a 30% budget step, assuming the marginal order earns the same */
+    A.push({p:'P1',money:extra*mo,lbl:'GP UPSIDE / MO',
+     t:'Raise budget 30% on '+(a.n||a.id),
+     w:'Earning '+c.roas.toFixed(2)+'× — '+(c.roas/BE).toFixed(1)+'× break-even — and its daily spend has not moved in '+PW.lbl+'. A 30% step is worth about '+('E£'+Math.round(extra*mo).toLocaleString())+' a month <b>if the marginal order earns what the average one does</b>, which it usually does not quite; step once, wait a week, then judge.',
+     ev:esc(a.cmp||'')+' · '+Math.round(c.pur)+' purchases at '+('E£'+Math.round(c.sp/c.pur).toLocaleString())+' each'});}});
+
+  /* Only the five biggest scale-ups survive. Twenty "raise budget 30%" lines is not a
+     decision list, it is a spreadsheet -- and you cannot step twenty budgets in one week
+     and learn anything from any of them. */
+  {const sc=A.filter(x=>x.lbl==='GP UPSIDE / MO').sort((x,y)=>y.money-x.money);
+   sc.slice(5).forEach(x=>{const i=A.indexOf(x);if(i>=0)A.splice(i,1);});}
+
+  /* fatigue, but only where there is money behind it */
+  pull.forEach(r=>{const c=slice(r.a,PW.a,PW.b); if(c.sp<3000)return;
+   A.push({p:'P1',money:c.sp*mo*0.25,lbl:'AT RISK / MO',
+    t:'Replace the creative on '+(r.a.n||r.a.id),
+    w:'Fatigue '+Math.round(r.sc.s)+'/100 — CTR is '+r.now.ctr.toFixed(2)+'% against its own best week of '+r.bestCtr.toFixed(2)+'%, and CPM has gone from '+('E£'+Math.round(r.launch.cpm))+' to '+('E£'+Math.round(r.now.cpm))+'. It is still spending '+('E£'+Math.round(c.sp).toLocaleString())+'; the deck’s worked example lost about a quarter of its efficiency between a score of 51 and 82.',
+    ev:esc(r.a.cmp||'')+' · judged against itself, never the account average'});});
+
+  /* the framework line the deck cares about most */
+  const tShare=(cmp['Testing']||0)/totC*100;
+  if(totC>0&&tShare<40){
+   const move=(40-tShare)/100*totC;
+   A.push({p:'P2',money:0,lbl:'TO REALLOCATE',
+    t:'Testing is '+tShare.toFixed(0)+'% of spend, the framework wants 40–60%',
+    w:'About '+('E£'+Math.round(move).toLocaleString())+' of '+PW.lbl+' spend would have to move into testing to reach the floor. This is the one line with no money attached because the return is next quarter’s winners, not this month’s — but an account that stops testing runs out of scalable creative before it runs out of budget.',
+    ev:'Scaling '+(((cmp['Scaling']||0)/totC*100).toFixed(0))+'%, Catalog '+(((cmp['Catalog']||0)/totC*100).toFixed(0))+'%, Sale/promo '+(((cmp['Sale / promo']||0)/totC*100).toFixed(0))+'%'});}
+
+  /* account-level input that moved enough to explain the rest */
+  if(dCvr!=null&&dCvr<-20){
+   const lost=cur.sp*(Math.abs(dCvr)/100)*GPo;
+   A.push({p:'P1',money:lost*mo,lbl:'GP / MONTH',
+    t:'Site conversion fell '+Math.abs(dCvr).toFixed(0)+'%, not the ads',
+    w:'CTR held at '+cur.ctr.toFixed(2)+'% ('+sg(dCtr)+') while CVR went from '+prv.cvr.toFixed(2)+'% to '+cur.cvr.toFixed(2)+'%. People are still clicking and no longer buying — that is checkout, offer or trust, and no budget change fixes it.',
+    ev:'Measured on '+PW.lbl+' against '+(PW.plbl||'the prior period')});}
+
+  okActCard(g,A,PW.ranged?('Reading '+PW.lbl+'.'):'The date box is empty, so this reads the last 7 days.');
+ }catch(e){}
+
  pnlCard(g,'meta','Triage — run it in this order'+INFO('The deck’s 60-second troubleshooting sequence. Only the steps that actually tripped are listed; skipping steps is how people change three things at once and learn nothing.'),
   tri.length?'These tripped their thresholds this week. Change one thing, wait two weeks, then assess.'
             :'Nothing tripped a threshold this week — no step of the sequence is calling for action.',
@@ -10400,6 +10609,7 @@ function rGOOG(){
  const g=document.getElementById('g32'); g.innerHTML='';
  const bn=document.getElementById('bn32');
  const W=O.gadsW, ads=(O.gads||[]).filter(a=>a.d), S=O.searchIntel||{};
+ const PW=pfWin(W);
  if(!W||!ads.length){bn.innerHTML='Google per-campaign daily series missing — this tab fills on the next sync.';return;}
  const fG=af('google');
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -10408,7 +10618,7 @@ function rGOOG(){
  const sg=v=>v==null?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%';
  const today=W.n-1;
  const incr=((O.attr||{}).google||{}).incr;
- bn.innerHTML='<b>GOOGLE</b> — '+W.n+' days of per-campaign data from '+W.start+'. '
+ bn.innerHTML='<b>GOOGLE</b> — reading <b>'+PW.lbl+'</b>'+(PW.ranged?'':' (date box empty — last 7 days)')+'. '
   +'Judged on the auction, not on reach: Google is the only platform that says <i>why</i> you did not show.';
 
  const agg=(a,b,list)=>{let sp=0,im=0,clk=0,pur=0,val=0;
@@ -10417,7 +10627,7 @@ function rGOOG(){
    pur+=(d.pur&&d.pur[k])||0; val+=((d.pv&&d.pv[k])||0)*fG;}});
   return {sp,im,clk,pur,val,ctr:im?clk/im*100:0,cpc:clk?sp/clk:0,cpm:im?sp/im*1000:0,
           cvr:clk?pur/clk*100:0,aov:pur?val/pur:0,roas:sp?val/sp:0,cpa:pur?sp/pur:0};};
- const cur=agg(today-6,today), prv=agg(today-13,today-7);
+ const cur=agg(PW.a,PW.b), prv=PW.ok?agg(PW.pa,PW.pb):agg(0,-1);
 
  /* ---- 1. the four inputs ---- */
  const lev=[['CPC',M(cur.cpc),pc(cur.cpc,prv.cpc),false,'what a click costs'],
@@ -10425,12 +10635,12 @@ function rGOOG(){
             ['CVR',cur.cvr.toFixed(2)+'%',pc(cur.cvr,prv.cvr),true,'conversions / clicks'],
             ['AOV',M(cur.aov),pc(cur.aov,prv.aov),true,'value per conversion']];
  pnlCard(g,'google','The four inputs — Google’s version'+INFO('Same decomposition as Meta, with CPC in place of CPM: Google sells clicks, so the click price is the lever you actually buy.'),
-  'Last 7 days against the 7 before. Reported ROAS <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per conversion.',
+  pfWinNote(PW,W,'Google')+' Reported ROAS <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per conversion.',
   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'
   +lev.map(l=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:11px 13px;background:#fff">'
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">'+l[0]+'</div>'
    +'<div style="font-size:20px;font-weight:800;color:#161d2e;margin:2px 0 1px">'+l[1]+'</div>'
-   +'<div style="font-size:11.5px;font-weight:700;color:'+(l[2]==null?'#8a93a6':((l[3]?l[2]>0:l[2]<0)?'#0f6e56':'#a3271a'))+'">'+sg(l[2])+' vs prior 7d</div>'
+   +'<div style="font-size:11.5px;font-weight:700;color:'+(l[2]==null?'#8a93a6':((l[3]?l[2]>0:l[2]<0)?'#0f6e56':'#a3271a'))+'">'+sg(l[2])+' vs prior '+PW.n+'d</div>'
    +'<div style="font-size:10.5px;color:#8a93a6;margin-top:2px">'+l[4]+'</div></div>').join('')+'</div>'
   +(incr!=null?'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
    +'<b>At the assumed incremental rate of '+incr.toFixed(2)+' that '+cur.roas.toFixed(2)+'× is '+(cur.roas*incr).toFixed(2)+'×.</b> '
@@ -10472,7 +10682,7 @@ function rGOOG(){
  /* ---- 3. campaigns on their own money ---- */
  const {gpOn}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266};}})();
  const be=gpOn>0?1/gpOn:3.76;
- const cr=ads.map(a=>{const c=agg(today-6,today,[a]),p=agg(today-13,today-7,[a]);
+ const cr=ads.map(a=>{const c=agg(PW.a,PW.b,[a]),p=PW.ok?agg(PW.pa,PW.pb,[a]):agg(0,-1,[a]);
    return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
  let cb='';
  cr.forEach(x=>{
@@ -10486,7 +10696,7 @@ function rGOOG(){
    +'<td style="'+TD+'">'+(x.c.cpa?M(x.c.cpa):'—')+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+(x.gp>=0?'+':'−')+M(Math.abs(x.gp))+'</td>'
    +'<td style="'+TD+';text-align:left"><b style="color:'+v[1]+';font-size:11px">'+v[0]+'</b></td></tr>';});
- pnlCard(g,'google','Every campaign on its own money'+INFO('Last 7 days per campaign, with gross profit left after the ad is paid for at your real online margin.'),
+ pnlCard(g,'google','Every campaign on its own money'+INFO('The selected range per campaign, with gross profit left after the ad is paid for at your real online margin.'),
   'Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% margin. The last column is what is left after both the product and the ad are paid for.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
   +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend 7d</th><th style="'+TH+'">Value</th>'
@@ -10514,13 +10724,83 @@ function rGOOG(){
  try{okRevCard(g,'Google','google');}catch(e){}
 
  /* ---- 5. triage ---- */
- const tri=[];
  const dCpc=pc(cur.cpc,prv.cpc), dCtr=pc(cur.ctr,prv.ctr), dCvr=pc(cur.cvr,prv.cvr), dAov=pc(cur.aov,prv.aov);
+ const tri=[];
  if(budLost.length)tri.push(['1 · Budget','#a3271a',budLost.length+' campaign'+(budLost.length>1?'s losing':' losing')+' 30%+ of impressions to the cap. Raise it before anything else — this is the only lever with nothing to fix first.']);
- if(dCpc!=null&&dCpc>20)tri.push(['2 · CPC','#a3271a','Clicks cost '+dCpc.toFixed(0)+'% more than the prior week. Check for a bid-strategy or targeting change before blaming the auction.']);
+ if(dCpc!=null&&dCpc>20)tri.push(['2 · CPC','#a3271a','Clicks cost '+dCpc.toFixed(0)+'% more than the prior '+PW.n+' days. Check for a bid-strategy or targeting change before blaming the auction.']);
  if(dCtr!=null&&dCtr<-20)tri.push(['3 · CTR','#a3271a','CTR down '+Math.abs(dCtr).toFixed(0)+'% — copy or feed relevance, not budget.']);
  if(dCvr!=null&&dCvr<-20)tri.push(['4 · CVR','#a3271a','CVR down '+Math.abs(dCvr).toFixed(0)+'% — landing page, stock or price, not the ad.']);
  if(dAov!=null&&dAov<-20)tri.push(['5 · AOV','#a3271a','AOV down '+Math.abs(dAov).toFixed(0)+'% — the mix moved to cheaper SKUs.']);
+
+ /* ---------- 0. the decisions, priced (prepended above everything) ---------- */
+ try{
+  const A=[];
+  const mo=30/Math.max(1,PW.n);
+  const slice=(a,i0,i1)=>{let sp=0,val=0,pur=0,im=0,clk=0;const d=a.d;
+   for(let k=i0;k<=i1;k++){sp+=(d.sp&&d.sp[k])||0; val+=((d.pv&&d.pv[k])||0)*fG;
+    pur+=(d.pur&&d.pur[k])||0; im+=(d.imp&&d.imp[k])||0; clk+=(d.clk&&d.clk[k])||0;}
+   return {sp,val,pur,im,clk,roas:sp?val/sp:0,gp:val*gpOn-sp};};
+
+  /* Budget-capped winners. Google is the only platform that says WHY you did not show,
+     so this is the one place a spend increase can be sized instead of guessed: the share
+     of auctions lost to budget, applied to what the campaign already earns, minus the
+     spend it would take at the campaign's own current efficiency. */
+  ads.forEach(a=>{const q=IS[a.n]||IS[a.id]; if(!q)return;
+   const c=slice(a,PW.a,PW.b); if(c.sp<2000||c.pur<3||c.roas<be)return;
+   const bl=q.bl||0, isv=q.is||0; if(bl<0.10||isv<=0)return;
+   const upliftV=c.val*(bl/isv), upliftSp=upliftV/c.roas;
+   const gain=upliftV*gpOn-upliftSp; if(gain<=0)return;
+   /* P0 is reserved for money that is worth interrupting the week for; a capped campaign
+      forfeiting E£10k/month is real but it is not more urgent than a six-figure P1. */
+   A.push({p:(gain*mo>=25000)?'P0':'P1',money:gain*mo,lbl:'GP FORGONE / MO',
+    t:'Raise the budget on '+(a.n||a.id),
+    w:'It shows for '+(isv*100).toFixed(0)+'% of its auctions and loses <b>'+(bl*100).toFixed(0)+'% to budget</b>, not to rank — the ranking is fine, the money simply runs out. It returns '+c.roas.toFixed(2)+'× against '+be.toFixed(2)+'× break-even, so the auctions it is skipping are profitable ones.',
+    ev:'Uncapping to full share is worth roughly '+('E£'+Math.round(upliftV).toLocaleString())+' more revenue for '+('E£'+Math.round(upliftSp).toLocaleString())+' more spend over '+PW.lbl});});
+
+  /* Rank-limited is the opposite prescription and gets confused with the above constantly */
+  ads.forEach(a=>{const q=IS[a.n]||IS[a.id]; if(!q)return;
+   const c=slice(a,PW.a,PW.b); if(c.sp<2000)return;
+   const rl=q.rl||0, bl=q.bl||0; if(rl<0.30||rl<bl)return;
+   A.push({p:'P1',money:c.sp*mo*0.15,lbl:'WASTED / MO',
+    t:'Do NOT raise budget on '+(a.n||a.id)+' — it is losing on rank',
+    w:'It loses <b>'+(rl*100).toFixed(0)+'% of auctions to rank</b> and only '+(bl*100).toFixed(0)+'% to budget. More money buys nothing here; the bid, the landing page or the ad relevance is what is losing. Raising the budget on a rank-limited campaign is the single most common way to spend more for the same impressions.',
+    ev:'Impression share '+((q.is||0)*100).toFixed(0)+'% · '+('E£'+Math.round(c.sp).toLocaleString())+' over '+PW.lbl});});
+
+  /* Terms that took money and returned nothing */
+  {const dead=(S.terms||[]).filter(t=>t&&t.sp>0&&!(t.cn>0));
+   const spD=dead.reduce((x,t)=>x+t.sp,0);
+   if(dead.length>=5&&spD>2000){
+    const top=dead.slice().sort((x,y)=>y.sp-x.sp).slice(0,4).map(t=>esc(t.t)+' ('+('E£'+Math.round(t.sp).toLocaleString())+')').join(', ');
+    A.push({p:'P1',money:spD*gpOn>0?spD:spD,lbl:'SPEND TO STOP',
+     t:'Negative '+dead.length+' search terms that converted nothing',
+     w:'They took <b>'+('E£'+Math.round(spD).toLocaleString())+'</b> and produced zero conversions between them. That is '+(spD/((S.terms||[]).reduce((x,t)=>x+(t.sp||0),0)||1)*100).toFixed(0)+'% of all search-term spend buying clicks that never bought anything. Check them against the catalogue first — an own-brand term with no conversions is a listing problem, not a negative.',
+     ev:'Biggest: '+top});}}
+
+  /* Campaigns that lose money at your real margin */
+  ads.forEach(a=>{const c=slice(a,PW.a,PW.b);
+   if(c.pur>=5&&c.roas<be&&c.sp>=3000){
+    A.push({p:'P1',money:-c.gp*mo,lbl:'LOSS / MONTH',
+     t:'Cap '+(a.n||a.id),
+     w:'Returns '+c.roas.toFixed(2)+'× against '+be.toFixed(2)+'× break-even on your '+(gpOn*100).toFixed(1)+'% online margin — <b>'+('E£'+Math.round(Math.abs(c.gp)).toLocaleString())+' short</b> over '+PW.lbl+' after the product and the click are both paid for. Google has no in-store backfill on this account, so there is no lagging revenue to wait for.',
+     ev:Math.round(c.pur)+' conversions at '+('E£'+Math.round(c.sp/Math.max(1,c.pur)).toLocaleString())+' each'});}});
+
+  /* the brand term is the cheapest revenue in the account and it is shrinking */
+  {const b=(S.terms||[]).find(t=>t&&/^our\s*kids$/i.test(String(t.t||'')));
+   if(b&&b.imL>0){const d=(b.im/b.imL-1)*100;
+    if(d<-20)A.push({p:'P1',money:(b.cv||0)*gpOn*mo*Math.min(1,Math.abs(d)/100),lbl:'GP AT RISK / MO',
+     t:'Your own brand term is down '+Math.abs(d).toFixed(0)+'% in impressions year on year',
+     w:'“our kids” drew '+Math.round(b.im).toLocaleString()+' impressions against '+Math.round(b.imL).toLocaleString()+' a year ago. It still converts at '+((b.cn/Math.max(1,b.ck))*100).toFixed(1)+'% — it is the cheapest revenue in the account — so fewer people searching your name is a demand problem upstream of Google, not a bidding one.',
+     ev:('E£'+Math.round(b.cv||0).toLocaleString())+' of value on '+('E£'+Math.round(b.sp||0).toLocaleString())+' of spend'});}}
+
+  if(dCvr!=null&&dCvr<-20){
+   A.push({p:'P1',money:cur.sp*(Math.abs(dCvr)/100)*gpOn*mo,lbl:'GP / MONTH',
+    t:'Google conversion rate fell '+Math.abs(dCvr).toFixed(0)+'%',
+    w:'CTR is '+cur.ctr.toFixed(2)+'% ('+sg(dCtr)+') while CVR went '+prv.cvr.toFixed(2)+'% → '+cur.cvr.toFixed(2)+'%. Same clicks, fewer buyers — the auction is fine and the site is not.',
+    ev:'Measured on '+PW.lbl+' against '+(PW.plbl||'the prior period')});}
+
+  okActCard(g,A,PW.ranged?('Reading '+PW.lbl+'.'):'The date box is empty, so this reads the last 7 days.');
+ }catch(e){}
+
  pnlCard(g,'google','Triage — in order',
   tri.length?'These tripped this week. Fix in this order and change one thing at a time.'
             :'Nothing tripped a threshold. CPC '+sg(dCpc)+', CTR '+sg(dCtr)+', CVR '+sg(dCvr)+', AOV '+sg(dAov)+'.',
@@ -10991,7 +11271,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260829-230351';
+const BUILD='20260831-192346';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -11002,7 +11282,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-185555'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-192346'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
