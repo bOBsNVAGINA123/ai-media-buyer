@@ -1772,6 +1772,128 @@ function storyFlow(g,o){
  g.appendChild(glanceCard);
  g.appendChild(frag);
 }
+/* v9.53 CAUSES — stop making the reader do the correlating.
+
+   The glance said "sessions down 10%" and left it there, so the obvious next question — was that
+   us, or the market? — had to be answered by opening four other tabs. Everything needed to answer
+   it is already in the payload and simply was not joined up:
+
+     O.mads / O.gads   per-entity daily spend  -> what was switched off, what was switched on
+     O.bev             62 Meta budget events   -> who moved a cap, when, from what to what
+     O.gops.changes    226 Google change events
+     reach + impressions                        -> frequency, and whether the pool is being reused
+     why.prods                                  -> which products ran out
+
+   Each finding carries the money or the multiple, so it can be ranked against the others rather
+   than read as a list of everything that happened. */
+function okCauses(o){
+ const out={traffic:[],cvr:[],cac:[],rev:[],spend:[]};
+ try{
+  const W=O.madsW; if(!W||!W.n)return out;
+  const n=W.n, today=n-1, days=Math.max(1,Math.min(28,span(ST.s,ST.e)));
+  const a0=today-days+1, p0=a0-days, p1=a0-1;
+  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const sum=(arr,i0,i1)=>{let t=0;for(let k=Math.max(0,i0);k<=i1;k++)t+=(arr&&arr[k])||0;return t;};
+
+  /* --- entities switched off or on between the two windows --- */
+  const ent=[];
+  (O.mads||[]).filter(x=>x.d).forEach(x=>ent.push({n:x.cmp||x.n,pf:'Meta',
+    c:sum(x.d.sp,a0,today), p:sum(x.d.sp,p0,p1),
+    imC:sum(x.d.im,a0,today), rcC:sum(x.d.rch,a0,today),
+    imP:sum(x.d.im,p0,p1), rcP:sum(x.d.rch,p0,p1)}));
+  (O.gads||[]).filter(x=>x.d).forEach(x=>ent.push({n:x.n,pf:'Google',
+    c:sum(x.d.sp,a0,today), p:sum(x.d.sp,p0,p1),imC:0,rcC:0,imP:0,rcP:0}));
+  const roll={};
+  ent.forEach(e=>{const k=e.pf+'|'+e.n; const r=roll[k]||(roll[k]={n:e.n,pf:e.pf,c:0,p:0,imC:0,rcC:0,imP:0,rcP:0});
+   r.c+=e.c;r.p+=e.p;r.imC+=e.imC;r.rcC+=e.rcC;r.imP+=e.imP;r.rcP+=e.rcP;});
+  const R=Object.values(roll);
+  const off=R.filter(r=>r.p>=3000&&r.c<r.p*0.15).sort((x,y)=>y.p-x.p).slice(0,4);
+  const on =R.filter(r=>r.c>=3000&&r.p<r.c*0.15).sort((x,y)=>y.c-x.c).slice(0,4);
+  const cut=R.filter(r=>r.p>=8000&&r.c<r.p*0.7&&r.c>=r.p*0.15).sort((x,y)=>(y.p-y.c)-(x.p-x.c)).slice(0,3);
+
+  off.forEach(r=>out.traffic.push(['off','<b>'+esc(r.n)+'</b> ('+r.pf+') stopped spending — '+M(r.p)+' in the prior window, '+M(r.c)+' in this one.']));
+  cut.forEach(r=>out.traffic.push(['cut','<b>'+esc(r.n)+'</b> ('+r.pf+') cut from '+M(r.p)+' to '+M(r.c)+', '+Math.round((1-r.c/r.p)*100)+'% less.']));
+  on.forEach(r=>out.traffic.push(['on','<b>'+esc(r.n)+'</b> ('+r.pf+') started — '+M(r.c)+' new spend that was not there before.']));
+
+  /* --- frequency and pool reuse --- */
+  const imC=R.reduce((t,r)=>t+r.imC,0), rcC=R.reduce((t,r)=>t+r.rcC,0);
+  const imP=R.reduce((t,r)=>t+r.imP,0), rcP=R.reduce((t,r)=>t+r.rcP,0);
+  const fC=rcC?imC/rcC:0, fP=rcP?imP/rcP:0;
+  if(fC&&fP){
+   const d=(fC/fP-1)*100;
+   if(Math.abs(d)>=8)out.traffic.push([d>0?'bad':'good',
+    '<b>Frequency '+(d>0?'rose':'fell')+' '+Math.abs(d).toFixed(0)+'%</b>, '+fP.toFixed(1)+'× to '+fC.toFixed(1)+'× — '
+    +(d>0?'the same people are seeing you more often, which is what a shrinking pool looks like before ROAS moves.'
+         :'the pool widened; each person is seeing you less.')]);
+   out.cac.push([fC>=4?'bad':'note','Frequency '+fP.toFixed(1)+'× &rarr; '+fC.toFixed(1)+'× per person'
+    +(fC>=7?' — dead zone, conversion drops around 25% here.':fC>=4?' — caution band, conversion typically dips about 10%.':' — still in the healthy band.')]);
+  }
+  const cpmC=imC?(R.reduce((t,r)=>t+r.c,0)/imC*1000):0, cpmP=imP?(R.reduce((t,r)=>t+r.p,0)/imP*1000):0;
+  if(cpmC&&cpmP){const dc=(cpmC/cpmP-1)*100;
+   out.cac.push([Math.abs(dc)<8?'note':(dc>0?'bad':'good'),'CPM '+M(cpmP)+' &rarr; '+M(cpmC)
+    +' ('+(dc>=0?'+':'−')+Math.abs(dc).toFixed(0)+'%) — what a thousand impressions cost.']);}
+  const nn=(O.netnew||{}).pctWk;
+  if(nn!=null)out.cac.push([nn<0.2?'bad':'good','Net new reach '+(nn*100).toFixed(0)+'% — '
+    +(nn<0.2?'under the 20% line, so the growth is coming out of a pool you already reached.':'still finding people who had not seen you.')]);
+
+  /* --- budget events actually logged --- */
+  const inWin=d=>{const x=String(d||'').slice(0,10); return x>=ST.s&&x<=ST.e;};
+  const bev=(O.bev||[]).filter(e=>inWin(e.t));
+  bev.slice(0,4).forEach(e=>{const dir=(e.new||0)>=(e.old||0)?'raised':'cut';
+   out.spend.push([dir==='raised'?'on':'cut','<b>'+esc(e.nm||'')+'</b> budget '+dir+' '+M(e.old)+' &rarr; '+M(e.new)+' on '+String(e.t).slice(0,10)+'.']);});
+  ((O.gops||{}).budgetChanges||[]).filter(e=>inWin(e.d)).slice(0,3).forEach(e=>{
+   const dir=(e.new||0)>=(e.old||0)?'raised':'cut';
+   out.spend.push([dir==='raised'?'on':'cut','<b>'+esc(e.cmp||'')+'</b> (Google) budget '+dir+' '+M(e.old)+' &rarr; '+M(e.new)+' on '+String(e.d).slice(0,10)+'.']);});
+  const gch=((O.gops||{}).changes||[]).filter(e=>inWin(e.d));
+  if(gch.length)out.spend.push(['note',gch.length+' other Google change'+(gch.length>1?'s were':' was')+' logged in this window — see Change log for the list.']);
+
+  /* --- stock, which is the usual CVR story --- */
+  const Wy=((O.why||{}).win||{})['7'];
+  if(Wy&&Wy.prods){
+   const fell=Wy.prods.map(x=>({...x,d:(x.r||0)-(x.pr||0)})).filter(x=>x.d<0);
+   const lost=fell.reduce((t,x)=>t+Math.abs(x.d),0);
+   const oos=fell.filter(x=>x.st!=null&&x.st<=3);
+   const lo=oos.reduce((t,x)=>t+Math.abs(x.d),0);
+   if(lost>0&&lo>0)out.cvr.push([lo/lost>=0.4?'bad':'note',
+    '<b>'+Math.round(lo/lost*100)+'% of the revenue that fell</b> is on '+oos.length+' item'+(oos.length===1?'':'s')+' with 3 or fewer units left ('+M(lo)+'). Nothing on the site or in the ad accounts recovers that.']);
+  }
+  /* --- price vs volume, said once, plainly --- */
+  const dOrd=o.ord[1]?((o.ord[0]/o.ord[1]-1)*100):null, dAov=o.aov[1]?((o.aov[0]/o.aov[1]-1)*100):null;
+  if(dOrd!=null&&dAov!=null)out.rev.push(['note',
+   'Orders '+(dOrd>=0?'+':'−')+Math.abs(dOrd).toFixed(1)+'% and basket '+(dAov>=0?'+':'−')+Math.abs(dAov).toFixed(1)+'% — '
+   +(Math.abs(dOrd)>=Math.abs(dAov)?'volume moved the number.':'price per order moved the number.')]);
+ }catch(e){}
+ return out;
+}
+
+/* Whole-business aMER: first-time-customer revenue ACROSS BOTH businesses over all the ad spend.
+   The Shopify half is exact and daily. The shops only publish their new-versus-returning split by
+   month, so the store half is that month's new-revenue share applied to the window's daily branch
+   revenue -- an apportionment, labelled as one, not a measurement. */
+function okBlendedAmer(o){
+ try{
+  const BL=O.bl; if(!BL||!BL.b)return null;
+  const t0=new Date(BL.start+'T00:00:00Z').getTime();
+  const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
+  const i0=Math.max(0,ix(ST.s)), i1=Math.min(BL.n-1,ix(ST.e));
+  if(i1<i0)return null;
+  let storeRev=0, storeNew=0;
+  Object.keys(BL.b).forEach(b=>{
+   for(let k=i0;k<=i1;k++){
+    const v=(BL.b[b]||{})[k]||0; if(!v)continue;
+    const day=new Date(t0+k*864e5).toISOString().slice(0,10), mo=day.slice(0,7);
+    const m=((O.bnr||{})[b]||{})[mo];
+    const shr=(m&&(m.nrev+m.rrev))?m.nrev/(m.nrev+m.rrev):null;
+    storeRev+=v; if(shr!=null)storeNew+=v*shr;
+   }
+  });
+  const onlineNew=(o.ncrev&&o.ncrev[0])||0;
+  const spend=(o.sp&&o.sp[0])||0;
+  if(!spend)return null;
+  return {amer:(onlineNew+storeNew)/spend, onlineNew, storeNew, storeRev, spend,
+          mer:(((o.net&&o.net[0])||0)+storeRev)/spend};
+ }catch(e){return null;}
+}
 function glance(g,o){
  if(!o||!o.gross)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -1787,6 +1909,7 @@ function glance(g,o){
  const be=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
 
  /* ---- 1. WHERE ARE WE ---------------------------------------------------- */
+ const BA=okBlendedAmer(o);
  const tiles=[
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'webstore, after returns'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin'],
@@ -1796,6 +1919,11 @@ function glance(g,o){
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket'],
   ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one']
  ];
+ /* The webstore is not the business. Blended puts the seven shops in the numerator against the
+    same ad spend, which is the only version of these two ratios that answers "are we growing". */
+ if(BA)tiles.push(
+  ['MER · whole business', BA.mer.toFixed(2)+'×', null, true, 'webstore + the 7 shops'],
+  ['aMER · whole business', BA.amer.toFixed(2)+'×', null, true, 'first-time buyers, both businesses']);
  const tileH=tiles.map(t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
@@ -1814,37 +1942,52 @@ function glance(g,o){
    +(dOrd!=null&&dAov!=null
      ? 'Orders '+(dOrd>=0?'+':'−')+Math.abs(dOrd).toFixed(1)+'%, basket '+(dAov>=0?'+':'−')+Math.abs(dAov).toFixed(1)+'% — '
        +(Math.abs(dOrd)>=Math.abs(dAov)?'this was volume, not price.':'this was price, not volume.')
-     : '')]);
+     : ''),'rev']);
  }
  if(o.mer[0]){
   const inc=(function(){try{return (O.attr&&O.attr.meta&&O.attr.meta.incr)||null;}catch(e){return null;}})();
   facts.push([o.mer[0]>=be?'good':'bad',
    '<b>MER '+o.mer[0].toFixed(2)+'× against a '+be.toFixed(2)+'× breakeven</b> — '
    +(o.mer[0]>=be?'the webstore is covering its own media at reported value.'
-                 :'the webstore is not covering its own media at reported value, before any incrementality haircut.')]);
+                 :'the webstore is not covering its own media at reported value, before any incrementality haircut.'),'spend']);
  }
  if(o.nc[0]&&o.cac[0]){
   const dc=pc(o.cac[0],o.cac[1]);
   facts.push([dc!=null&&dc>0?'bad':'good',
    '<b>'+N(o.nc[0])+' new customers at '+M(o.cac[0])+' each</b>'
-   +(dc!=null?' \u2014 that cost per customer is '+(dc>=0?'up':'down')+' '+Math.abs(dc).toFixed(1)+'% on the period before.':'.')]);
+   +(dc!=null?' \u2014 that cost per customer is '+(dc>=0?'up':'down')+' '+Math.abs(dc).toFixed(1)+'% on the period before.':'.'),'cac']);
  }
  if(o.sess&&o.sess[0]&&o.cvr){
   const dS=pc(o.sess[0],o.sess[1]), dC=pc(o.cvr[0],o.cvr[1]);
   if(dS!=null||dC!=null)facts.push([(dC!=null&&dC<0)?'bad':'note',
    '<b>'+N(o.sess[0])+' sessions converting at '+(o.cvr[0]||0).toFixed(2)+'%</b>'
    +(dS!=null?' — traffic '+(dS>=0?'+':'−')+Math.abs(dS).toFixed(1)+'%':'')
-   +(dC!=null?', conversion '+(dC>=0?'+':'−')+Math.abs(dC).toFixed(1)+'%':'')+'.']);
+   +(dC!=null?', conversion '+(dC>=0?'+':'−')+Math.abs(dC).toFixed(1)+'%':'')+'.','traffic']);
  }
  const dGp=pc(o.gpct[0],o.gpct[1]);
  if(dGp!=null&&Math.abs(dGp)>=2)facts.push([dGp<0?'bad':'good',
    '<b>Margin '+(dGp>=0?'widened':'narrowed')+' to '+(o.gpct[0]||0).toFixed(1)+'%</b> from '+(o.gpct[1]||0).toFixed(1)+'% — '
-   +(dGp<0?'either the mix moved to cheaper stock or discounting deepened.':'mix or discounting moved in your favour.')]);
+   +(dGp<0?'either the mix moved to cheaper stock or discounting deepened.':'mix or discounting moved in your favour.'),'cvr']);
 
- const COL={good:'#12a06e',bad:'#e23a63',note:'#5a5bf0'};
+ const COL={good:'#12a06e',bad:'#e23a63',note:'#5a5bf0',on:'#12a06e',off:'#e23a63',cut:'#ff8b42'};
+ /* Every fact opens onto the evidence for it. The point is that nobody should have to open four
+    other tabs to find out whether a fall in traffic was the market or a campaign somebody paused. */
+ const CA=okCauses(o);
+ const why=(list,empty)=>{
+  if(!list||!list.length)return '<div style="font-size:12px;color:#8a93a6;padding:6px 0 2px">'+empty+'</div>';
+  return list.map(c=>'<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:12.5px;line-height:1.5;color:#3D4763">'
+   +'<span style="flex:0 0 6px;height:6px;border-radius:50%;background:'+(COL[c[0]]||'#8a93a6')+';margin-top:6px"></span><span>'+c[1]+'</span></div>').join('');
+ };
  const factH=facts.length?('<div style="display:flex;flex-direction:column;gap:0">'
-  +facts.map(f=>'<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f2f4f9;font-size:13px;line-height:1.55;color:#26313f">'
-   +'<span style="flex:0 0 8px;height:8px;border-radius:50%;background:'+COL[f[0]]+';margin-top:6px"></span><span>'+f[1]+'</span></div>').join('')
+  +facts.map((f,i)=>{
+   const ev=f[2]?why(CA[f[2]],'Nothing in the ad accounts, budget log or stock data lines up with this one — it is not something we did.'):'';
+   return '<details style="border-bottom:1px solid #f2f4f9">'
+    +'<summary style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;font-size:13px;line-height:1.55;color:#26313f;cursor:pointer;list-style:none">'
+    +'<span style="flex:0 0 8px;height:8px;border-radius:50%;background:'+COL[f[0]]+';margin-top:6px"></span>'
+    +'<span style="flex:1">'+f[1]+'</span>'
+    +(f[2]?'<span style="flex:0 0 auto;font-size:11px;font-weight:700;color:#5a5bf0;white-space:nowrap">why ▾</span>':'')+'</summary>'
+    +(f[2]?'<div style="padding:2px 0 10px 17px;border-left:2px solid #eef0f5;margin-left:3px">'+ev+'</div>':'')
+    +'</details>';}).join('')
   +'</div>'):'';
 
  /* ---- 3. WHAT DO I DO ---------------------------------------------------- */
@@ -1881,6 +2024,10 @@ function glance(g,o){
   +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
   +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:2px 0 14px">'+tileH+'</div>'
+  +(BA?'<div style="margin:-4px 0 13px;padding:8px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+    +'<b>Read the two whole-business ratios as scale, not as ad performance.</b> They put '+M(BA.storeRev)+' of shop revenue over the same '+M(BA.spend)+' of spend, '
+    +'and regression on this account has shown Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled. '
+    +'The shops&rsquo; new-customer share is apportioned from the monthly split, so the store half of aMER is an estimate.</div>':'')
   +(factH?'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin-bottom:2px">What moved it</div>'+factH:'')
   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin:14px 0 2px">Do this first</div>'+doH;
  g.appendChild(el);
@@ -10617,7 +10764,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-171153'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-172745'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
