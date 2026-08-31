@@ -2412,7 +2412,29 @@ def pull_pos_customers():
         byven = {}
         for pid, vs in PFV.items():
             for v in vs: byven.setdefault(VNM.get(v) or v, []).append(pid)
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
+        # Ranking this board by ACQUIRED CUSTOMERS alone buries the suppliers that matter
+        # most in money. Multicom is the proof: #5 in the business at E£23.3M revenue and
+        # E£6.6M gross profit on only 1,451 units -- roughly E£16k each, a high-ticket line
+        # with few buyers. On a headcount ranking it fell outside the top 40 and vanished
+        # from the board with no note saying it had been cut. Raising the cap does not fix
+        # that; the ranking was asking the wrong question. So: the UNION of the top 120 by
+        # acquired customers and the top 60 by revenue. The >=25-customer floor still
+        # applies to both, because a repeat rate measured on 8 people is noise whatever the
+        # supplier is worth.
+        _vrev = {}
+        try:
+            for _p, _a in PATTR.items():
+                for _vn, _rv in (_a.get("ven") or {}).items():
+                    _vrev[_vn] = _vrev.get(_vn, 0.0) + _rv
+        except Exception as _e:
+            log("vendor revenue rank unavailable, falling back to headcount only:", str(_e)[:90])
+        _keep, _seen = [], set()
+        for k in ([x for x, _ in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:120]]
+                  + sorted(byven.keys(), key=lambda k2: -_vrev.get(k2, 0.0))[:60]):
+            if k not in _seen: _seen.add(k); _keep.append(k)
+        log("journey vendors kept", len(_keep), "of", len(byven))
+        for vn2 in _keep:
+            pids = byven[vn2]
             if len(pids) < 25: continue
             pr = _jprof(pids)
             if pr: pr["cat"] = _jmix(pids, "cat", 6); JOUR["ven"][vn2] = pr
@@ -2471,7 +2493,7 @@ def pull_pos_customers():
         CUBE["scopes"]["ALL STORES"] = _cubeb(allpids)
         for cg, pids in bycat.items():
             if len(pids) >= 100: CUBE["cat"][cg] = _cubeb(pids)
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:20]:
+        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:60]:
             if len(pids) >= 100: CUBE["ven"][vn2] = _cubeb(pids)
         X0 = XTRA.setdefault("cube", {"scopes": {}, "ven": {}, "cat": {}})
         X0["scopes"].update(CUBE["scopes"]); X0["ven"] = CUBE["ven"]; X0["cat"] = CUBE["cat"]
@@ -2662,7 +2684,30 @@ def pull_shop_lines():
         for p, vs in JVN0.items():
             for v in vs: byven.setdefault(v, []).append(p)
         venON = {}
-        for vn2, pids in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:40]:
+        # Ranking this board by ACQUIRED CUSTOMERS alone buries the suppliers that matter
+        # most in money. Multicom is the proof: #5 in the business at E£23.3M revenue and
+        # E£6.6M gross profit on only 1,451 units -- roughly E£16k each, a high-ticket line
+        # with few buyers. On a headcount ranking it fell outside the top 40 and vanished
+        # from the board with no note saying it had been cut. Raising the cap does not fix
+        # that; the ranking was asking the wrong question. So: the UNION of the top 120 by
+        # acquired customers and the top 60 by revenue. The >=25-customer floor still
+        # applies to both, because a repeat rate measured on 8 people is noise whatever the
+        # supplier is worth.
+        # SATTR here, not PATTR: this is the online twin and PATTR is local to the POS pull.
+        _vrev = {}
+        try:
+            for _p, _a in SATTR.items():
+                for _vn, _rv in (_a.get("ven") or {}).items():
+                    _vrev[_vn] = _vrev.get(_vn, 0.0) + _rv
+        except Exception as _e:
+            log("vendor revenue rank unavailable, falling back to headcount only:", str(_e)[:90])
+        _keep, _seen = [], set()
+        for k in ([x for x, _ in sorted(byven.items(), key=lambda kv: -len(kv[1]))[:120]]
+                  + sorted(byven.keys(), key=lambda k2: -_vrev.get(k2, 0.0))[:60]):
+            if k not in _seen: _seen.add(k); _keep.append(k)
+        log("journey vendors kept", len(_keep), "of", len(byven))
+        for vn2 in _keep:
+            pids = byven[vn2]
             if len(pids) < 25: continue
             pr = _jp(pids)
             if pr: venON[vn2] = pr
@@ -4739,7 +4784,25 @@ def pull_vendors():
                      "ltgp": c.get("ltgp", 0), "rep": c.get("rep", 0), "opc": c.get("opc", 0)})
     rows.sort(key=lambda x: -(x["r"] + x["orev"]))
     rows = rows[:160]
-    prows = sorted(tmpl.values(), key=lambda x: -(x["r"] + x["orev"]))[:200]
+    # A flat global top-200 meant most suppliers had NO products attached: of the 32
+    # vendors that made the cut, several scored highly on the supplier board and expanded
+    # to nothing, because one big seller can take dozens of the 200 slots. Keep the global
+    # 200 (it is what the product tables read) and add the top 8 of EVERY vendor that
+    # appears on the vendor board, so every row on that board can be opened.
+    _ranked = sorted(tmpl.values(), key=lambda x: -(x["r"] + x["orev"]))
+    prows = _ranked[:200]
+    _have = {id(p) for p in prows}
+    _want = {r["v"] for r in rows}
+    _byv = {}
+    for p in _ranked:
+        v = p.get("v")
+        if v in _want:
+            _byv.setdefault(v, []).append(p)
+    for v, lst in _byv.items():
+        for p in lst[:8]:
+            if id(p) not in _have:
+                _have.add(id(p)); prows.append(p)
+    log("prodv rows", len(prows), "covering", len({p.get("v") for p in prows}), "vendors")
     prods = [{"n": (p["n"] or str(p["t"]))[:52], "t": p["t"], "v": p["v"], "vn": NM.get(p["v"], p["v"])[:36],
               "cat": p["cat"][:34], "ct": p["ct"],
               "r": round(p["r"]), "g": round(p["g"]), "q": round(p["q"]),
