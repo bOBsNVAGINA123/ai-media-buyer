@@ -1676,6 +1676,100 @@ DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const part
 
    Every figure comes from calc(), the same call the cards below use, so the summary cannot drift
    from the thing it summarises. */
+/* v9.50 OVERVIEW AS A SEQUENCE.
+
+   The tab had 39 cards in the order they were built, which is not an order at all: revenue sat
+   next to a session count next to a cohort chart, every one at the same visual weight, so the
+   only way to find out whether the week was good was to read all of it. Hiding them behind a
+   toggle did not fix that -- a pile you cannot see is still a pile.
+
+   This puts the existing cards into the order the question is actually asked in, and writes the
+   join between each step from the same calc() the cards use:
+
+       did we make money  ->  what moved it  ->  who bought  ->  what it cost  ->  what to do
+
+   Cards are MOVED, never rebuilt, so every chart keeps the working it already showed. A card that
+   matches no chapter lands in the last one rather than being dropped. */
+function storyFlow(g,o){
+ if(!o||!o.gross)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const pc=(c,p)=>(p&&isFinite(p)&&p!==0)?((c/p-1)*100):null;
+ const sg=v=>v==null?'':(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%';
+ const be=(function(){try{const x=_gpPct();return x.gpOn>0?1/x.gpOn:3.76;}catch(e){return 3.76;}})();
+
+ const dNet=pc(o.net[0],o.net[1]), dOrd=pc(o.ord[0],o.ord[1]), dAov=pc(o.aov[0],o.aov[1]);
+ const dSess=pc(o.sess&&o.sess[0],o.sess&&o.sess[1]), dCvr=pc(o.cvr&&o.cvr[0],o.cvr&&o.cvr[1]);
+ const dSp=pc(o.sp[0],o.sp[1]), dNc=pc(o.nc[0],o.nc[1]), dCac=pc(o.cac[0],o.cac[1]);
+
+ /* Each chapter states the question, answers it in one sentence from the data, and says what the
+    answer forces you to look at next -- that hand-off is the thing that makes it read as one
+    document instead of a stack. */
+ const CH=[
+  {n:'1', q:'Did we make money?',
+   a:'Net revenue '+M(o.net[0])+' ('+sg(dNet)+'), gross profit '+M(o.gp[0])+' at '+(o.gpct[0]||0).toFixed(1)+'% margin.',
+   nx:(Math.abs(dOrd||0)>=Math.abs(dAov||0))
+      ? 'Volume did the work, not price — so the next question is where the orders came from.'
+      : 'Basket size did the work, not volume — so the next question is what people put in it.',
+   m:['total revenue','gross profit','net contribution','cancelled','pace','whole business','weekly audit','essentials']},
+  {n:'2', q:'What moved it?',
+   a:'Orders '+sg(dOrd)+' on a '+M(o.aov[0])+' basket ('+sg(dAov)+')'
+     +((dSess!=null||dCvr!=null)?', from '+N(o.sess[0])+' sessions ('+sg(dSess)+') converting at '+(o.cvr[0]||0).toFixed(2)+'% ('+sg(dCvr)+').':'.'),
+   nx:(dCvr!=null&&dSess!=null&&dCvr>0&&dSess<0)
+      ? 'The site got better while traffic got worse — that is a media problem, not a site problem.'
+      : 'Next: whether that came from people who already knew you, or people who did not.',
+   m:['orders & aov','gross profit per order','funnel','sessions','memo read','what changed','products','moved']},
+  {n:'3', q:'Who bought?',
+   a:N(o.nc[0])+' new customers ('+sg(dNc)+') against '+N((o.rcn&&o.rcn[0])||0)+' returning'
+     +((o.ncrev&&o.ncrev[0]&&o.rcrev&&o.rcrev[0])?', splitting revenue '+Math.round(o.ncrev[0]/(o.ncrev[0]+o.rcrev[0])*100)+'% new.':'.'),
+   nx:'Every one of those new customers had a price. That is the next chapter.',
+   m:['new vs returning','customers over time','same month last year','sales channel','cohort','retention']},
+  {n:'4', q:'What did it cost?',
+   a:'Spend '+M(o.sp[0])+' ('+sg(dSp)+') at MER '+(o.mer[0]||0).toFixed(2)+'× against a '+be.toFixed(2)+'× breakeven, aMER '+(o.amer[0]||0).toFixed(2)+'×, '+M(o.cac[0])+' per new customer ('+sg(dCac)+').',
+   nx:(o.mer[0]>=be)?'The webstore covers its own media at reported value. The list below is where to move the next pound.'
+                    :'Below breakeven at reported value — before any incrementality haircut. Nothing gets more budget until this is fixed.',
+   m:['ad spend','mer','roas','cac','cpp','ltgp','spend vs revenue','in-store revenue','gp : cac','every day']},
+  {n:'5', q:'So what do I do?',
+   a:'The ranked list, with the money and the evidence attached to each one.',
+   nx:'', m:['needs you today','insights','actions','what to do']}
+ ];
+
+ const cards=[].slice.call(g.querySelectorAll(':scope > .card'));
+ if(cards.length<8)return;
+ const glanceCard=cards[0];                       // the summary stays on top, outside the chapters
+ const rest=cards.slice(1);
+ const title=c=>((c.querySelector('.ct')||{}).textContent||'').toLowerCase();
+ const used=new Set();
+ const buckets=CH.map(ch=>{
+  const hit=rest.filter(c=>!used.has(c)&&ch.m.some(k=>title(c).indexOf(k)>=0));
+  hit.forEach(c=>used.add(c));
+  return hit;
+ });
+ const leftovers=rest.filter(c=>!used.has(c));
+ buckets[buckets.length-1]=buckets[buckets.length-1].concat(leftovers);
+
+ const frag=document.createDocumentFragment();
+ CH.forEach((ch,i)=>{
+  const list=buckets[i];
+  if(!list.length&&!ch.a)return;
+  const hd=document.createElement('div');
+  hd.className='card full';
+  hd.style.cssText='background:linear-gradient(180deg,#f7f8fd 0%,#fff 100%);border:1px solid #e0e5f2;'
+   +'border-left:5px solid #5a5bf0;padding:15px 18px;margin-top:6px';
+  hd.innerHTML='<div style="display:flex;align-items:baseline;gap:11px;flex-wrap:wrap">'
+   +'<span style="font-family:inherit;font-size:26px;font-weight:800;color:#c7cbe8;line-height:1">'+ch.n+'</span>'
+   +'<span style="font-size:19px;font-weight:800;color:#161d2e;letter-spacing:-.01em">'+ch.q+'</span></div>'
+   +'<div style="font-size:14px;color:#26313f;line-height:1.6;margin-top:5px;max-width:78ch">'+ch.a+'</div>'
+   +(ch.nx?'<div style="font-size:12.5px;color:#5a5bf0;font-weight:600;line-height:1.55;margin-top:7px;max-width:78ch">'
+     +'↓ '+ch.nx+'</div>':'')
+   +(list.length?'<div style="font-size:11px;color:#8a93a6;margin-top:8px">'+list.length+' card'+(list.length===1?'':'s')+' below</div>':'');
+  frag.appendChild(hd);
+  list.forEach(c=>frag.appendChild(c));
+ });
+ g.innerHTML='';
+ g.appendChild(glanceCard);
+ g.appendChild(frag);
+}
 function glance(g,o){
  if(!o||!o.gross)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -2152,7 +2246,9 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  wDrag(g);
  /* Fold last: every card is in the DOM and paired up by the layout pass above before anything is
     hidden, so collapsing cannot disturb the grid. keepFirst=1 leaves the glance itself showing. */
- try{glanceFold(g,1);}catch(e){}}
+ /* Order the tab into chapters instead of hiding it behind a toggle: a pile you cannot see is
+    still a pile. Runs last so every card exists and the layout pass has already paired them. */
+ try{storyFlow(g,o);}catch(e){}}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
   wfall('Shopify Net Contribution &mdash; waterfall ('+ST.s+' &rarr; '+ST.e+')',[
@@ -10145,7 +10241,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-153859'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-161312'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
