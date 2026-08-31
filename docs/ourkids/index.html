@@ -4277,17 +4277,29 @@ function prodContrib(g){
    executions will not fix it. The two get different verdicts here on purpose. */
 function fatigueScore(a,W){
  const d=a.d||{}; const n=(W&&W.n)||60;
- const half=14; const e=n-1, m=n-half, m0=Math.max(0,n-2*half);
+ /* This card announced "Does not follow the date filter" and meant it -- two fixed
+    14-day halves off the end of the feed, whatever the date box said. Now the selected
+    range IS the recent half and the equal span before it is the baseline, so changing
+    the dates changes the verdicts. With the box empty it falls back to 14 and 14. */
+ const _pw=(typeof pfWin==='function')?pfWin(W):null;
+ const e=_pw?_pw.b:(n-1), m=_pw?_pw.a:Math.max(0,n-14);
+ const half=Math.max(1,e-m+1);
+ const m0=Math.max(0,m-half);
  const S=(k,i0,i1)=>{let t=0;for(let i=i0;i<=i1;i++)t+=((d[k]||[])[i]||0);return t;};
- const now={sp:S('sp',m,e), im:S('im',m,e), rch:S('rch',m,e), clk:S('clk',m,e), pu:S('pu',m,e)+S('op',m,e), vv:S('vv',m,e)};
- const prv={sp:S('sp',m0,m-1), im:S('im',m0,m-1), rch:S('rch',m0,m-1), clk:S('clk',m0,m-1), pu:S('pu',m0,m-1)+S('op',m0,m-1), vv:S('vv',m0,m-1)};
+ const _fON=(typeof af==='function')?af('meta'):1, _fOFF=(typeof afo==='function')?afo():1;
+ const now={sp:S('sp',m,e), im:S('im',m,e), rch:S('rch',m,e), clk:S('clk',m,e), pu:S('pu',m,e)+S('op',m,e), vv:S('vv',m,e),
+            val:S('pv',m,e)*_fON+S('fv',m,e)*_fOFF};
+ const prv={sp:S('sp',m0,m-1), im:S('im',m0,m-1), rch:S('rch',m0,m-1), clk:S('clk',m0,m-1), pu:S('pu',m0,m-1)+S('op',m0,m-1), vv:S('vv',m0,m-1),
+            val:S('pv',m0,m-1)*_fON+S('fv',m0,m-1)*_fOFF};
  if(now.sp<1500||prv.sp<1500||!now.im||!prv.im)return null;   // not enough recent life to judge
  const R=o=>({frq:o.rch?o.im/o.rch:null, cpm:o.im?o.sp/o.im*1000:null, ctr:o.im?o.clk/o.im:null,
-              hook:o.im?o.vv/o.im:null, cpc:o.clk?o.sp/o.clk:null, cpp:o.pu?o.sp/o.pu:null});
+              hook:o.im?o.vv/o.im:null, cpc:o.clk?o.sp/o.clk:null, cpp:o.pu?o.sp/o.pu:null,
+              cpmr:o.rch?o.sp/o.rch*1000:null, roas:o.sp?o.val/o.sp:null});
  const A=R(now), B=R(prv);
  const dl=(c,p)=>(c==null||p==null||!p)?null:(c/p-1);
  const sig={frq:dl(A.frq,B.frq), cpm:dl(A.cpm,B.cpm), ctr:dl(A.ctr,B.ctr),
-            hook:dl(A.hook,B.hook), cpc:dl(A.cpc,B.cpc), cpp:dl(A.cpp,B.cpp)};
+            hook:dl(A.hook,B.hook), cpc:dl(A.cpc,B.cpc), cpp:dl(A.cpp,B.cpp),
+            cpmr:dl(A.cpmr,B.cpmr), roas:dl(A.roas,B.roas)};
  /* each signal contributes 0..100 in its BAD direction, then a weighted mean */
  const pos=v=>v==null?null:Math.max(0,Math.min(1,v/0.5));    // +50% = full
  const neg=v=>v==null?null:Math.max(0,Math.min(1,-v/0.5));   // -50% = full
@@ -4297,7 +4309,8 @@ function fatigueScore(a,W){
     It is scored at zero weight so it still displays, and it drives its own verdict below. */
  const parts=[['Frequency',sig.frq,pos(sig.frq),0.24],['CPM',sig.cpm,pos(sig.cpm),0.18],
               ['CTR',sig.ctr,neg(sig.ctr),0.28],['Hook rate',sig.hook,neg(sig.hook),0.16],
-              ['CPC',sig.cpc,pos(sig.cpc),0.14],['Cost per purchase',sig.cpp,pos(sig.cpp),0]];
+              ['CPC',sig.cpc,pos(sig.cpc),0.14],['Cost per purchase',sig.cpp,pos(sig.cpp),0],
+              ['CPMR',sig.cpmr,pos(sig.cpmr),0],['ROAS',sig.roas,neg(sig.roas),0]];
  const live=parts.filter(p=>p[2]!=null);
  const wsum=live.reduce((a,p)=>a+p[3],0)||1;
  const score=wsum?Math.round(live.reduce((a,p)=>a+p[2]*p[3],0)/wsum*100):null;
@@ -4325,6 +4338,9 @@ function creativeFatigue(g){
  const ADS=(O.mads||[]).filter(a=>a.d&&a.sp>0);
  if(!ADS.length)return;
  const W=O.madsW||{n:60};
+ /* the same window fatigueScore uses per ad, so the card can name the period it measured */
+ const _pw=(typeof pfWin==='function')?pfWin(W):null;
+ const half=_pw?_pw.n:14;
  const scored=ADS.map(a=>({a, f:fatigueScore(a,W)})).filter(x=>x.f);
  if(!scored.length){pnlCard(g,'meta','Creative fatigue','No ad has enough spend in both halves of the window to judge.','');return;}
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -4334,6 +4350,7 @@ function creativeFatigue(g){
  const costly=scored.filter(x=>x.f.cls==='COSTS UP').sort((a,b)=>(b.f.sig.cpp||0)-(a.f.sig.cpp||0));
  const fresh=scored.filter(x=>x.f.cls==='HEALTHY'||x.f.cls==='WATCH').sort((a,b)=>b.a.sp-a.a.sp);
  const tiredSp=tired.reduce((a,x)=>a+x.a.sp,0);
+ const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
  const sigChips=f=>f.parts.map(p=>{
@@ -4345,12 +4362,18 @@ function creativeFatigue(g){
   let h='<div style="font-size:11px;font-weight:800;color:#0F172A;margin:12px 0 2px;letter-spacing:.3px">'+ttl+'</div>'
    +(note?'<div style="font-size:11px;color:#7c869c;margin-bottom:4px">'+note+'</div>':'')
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
-   +'<tr><th style="'+TH+';text-align:left">Ad</th><th style="'+TH+'">Spend 14d</th>'
+   +'<tr><th style="'+TH+';text-align:left">Ad</th><th style="'+TH+'">Spend</th><th style="'+TH+'">ROAS</th><th style="'+TH+'">Freq</th><th style="'+TH+'">CPMR</th>'
    +(showScore?'<th style="'+TH+'">Score</th>':'')+'<th style="'+TH+';text-align:left">What moved</th></tr>';
   list.slice(0,10).forEach(x=>{
    h+='<tr><td style="'+TD+';text-align:left;max-width:290px;overflow:hidden;text-overflow:ellipsis"><b>'+x.a.n+'</b>'
     +'<div style="font-size:11px;color:#5b6478">'+(x.a.cmp||'')+'</div></td>'
     +'<td style="'+TD+';font-weight:700">'+M(x.f.now.sp)+'</td>'
+    /* the ABSOLUTE level, not only the % move: a ROAS down 20% means one thing at 30x and
+       something else entirely at 1.2x, and the chips alone cannot tell you which you have */
+    +'<td style="'+TD+';font-weight:800;color:'+((x.f.A.roas!=null&&x.f.A.roas>=beFat)?'#0f6e56':'#a3271a')+'">'
+      +(x.f.A.roas==null?'—':x.f.A.roas.toFixed(2)+'×')+'</td>'
+    +'<td style="'+TD+'">'+(x.f.A.frq==null?'—':x.f.A.frq.toFixed(1)+'×')+'</td>'
+    +'<td style="'+TD+'">'+(x.f.A.cpmr==null?'—':M(x.f.A.cpmr))+'</td>'
     +(showScore?'<td style="'+TD+';font-weight:800;color:'+x.f.band+'">'+x.f.score+'</td>':'')
     +'<td style="'+TD+';text-align:left;white-space:normal">'+sigChips(x.f)+'</td></tr>';});
   return h+'</table></div>';};
@@ -4364,13 +4387,16 @@ function creativeFatigue(g){
  body+=tbl(mixed,'NOT FATIGUE — do NOT remake these','CTR or hook fell WITHOUT frequency rising meaningfully. The same people are not being shown it more, so the creative has not worn out — what it is being shown to, or where, has changed. New executions will not fix a targeting, placement or auction shift. Where the cost-per-purchase chip is red, the economics moved too: judge that in the desk below.',false);
  body+=tbl(costly,'COSTS UP — attention held, the economics did not','Frequency, CTR and hook are steady, so this is not a creative problem and new executions will not fix it. Cost per purchase rose anyway — the offer, the landing page, the audience price or the product mix moved. Judge these on the money in the desk below.',false);
  body+=tbl(fresh,'HEALTHY — leave alone','No deterioration in attention and no cost blow-out. These are the ones to scale, not to touch.',false);
- const notes=[['#e23a63','<b>Every ad is judged against its own previous 14 days</b>, never an account average &mdash; a CTR that is fine for one format is fatal for another, so cross-ad league tables produce false verdicts.'],
+ const notes=[['#e23a63','<b>Every ad is judged against its own previous '+half+' days</b>, never an account average &mdash; a CTR that is fine for one format is fatal for another, so cross-ad league tables produce false verdicts.'],
   ['#3a9bff','<b>Fatigue and audience change look identical on CTR alone.</b> Real fatigue needs frequency AND CPM rising with it. That test is what separates the two lists above, and it is the difference between commissioning new creative and fixing targeting.'],
   ['#ff8b42','<b>Cost per purchase is shown but deliberately excluded from the fatigue score.</b> It is an outcome, not a sign of attention decay &mdash; folding it in let five calm attention signals outvote a cost per purchase that had tripled, and produced ads marked "leave alone" while their economics collapsed. It drives its own list instead.'],
   ['#7c869c','Ads with under E£1,500 in either half are not scored. Thin spend produces confident nonsense, and killing an untested ad is the expensive mistake.'],
   ['#7c869c','Hook rate is video views over impressions from the ads feed. Three-second and ThruPlay breakdowns are <b>UNAVAILABLE FROM SOURCE</b> in this sync, so hold-rate depth is not scored.']];
  pnlCard(g,'meta','Which creative is actually tired &mdash; and which only looks it'+INFO('Six signals per ad against its own prior fortnight, weighted into a 0-100 fatigue score, with a separate verdict for ads whose CTR fell without frequency or CPM moving.'),
-  'Last 14 days against the 14 before, per ad, from the '+((W.n)||60)+'-day ad feed starting '+(W.start||'—')+'. Does not follow the date filter.',
+  (_pw&&_pw.ranged
+   ?('<b>'+_pw.lbl+'</b> ('+half+' day'+(half===1?'':'s')+') against the equal '+half+' days before it, per ad. Follows the date box above.')
+   :('Last '+half+' days against the '+half+' before, per ad \u2014 the date box is empty, so this falls back to a fortnight.'))
+  +' From the '+((W.n)||60)+'-day ad feed starting '+(W.start||'—')+'. ROAS, frequency and CPMR are shown on every row; ROAS and CPMR carry no weight in the fatigue score for the same reason cost per purchase does not \u2014 they are outcomes, not signs of attention decay.',
   body+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
 
@@ -11518,7 +11544,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-010502';
+const BUILD='20260901-012746';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -11988,11 +12014,68 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
    if(t.some(w=>s.indexOf(w)>=0))sp+=a.sp||0;});return sp;};
  const med=(()=>{const a=ranked.map(r=>r.ltgp).sort((x,y)=>x-y);return a.length?a[Math.floor(a.length/2)]:0;})();
  const top=ranked.slice(0,12).map(r=>Object.assign(r,{adSp:spendFor(r.nm)}));
+ /* Every supplier row opens into its actual best-selling SKUs.
+
+    O.prodv.rows already carries product name, vendor, revenue, gross profit, units, stock
+    AND a resolved Shopify url, so nothing new had to be fetched for the front end. What it
+    did NOT carry was coverage: it was a flat global top-200, so one big seller could take
+    dozens of slots and a high-scoring supplier could expand to nothing. The collector now
+    also keeps the top 8 of every vendor on this board, so each row has something to open.
+    Until that sync lands, a supplier with no products says so rather than showing blank. */
+ const PV=((O.prodv||{}).rows)||[];
+ const _norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+ const skusFor=nm=>{const k=_norm(nm); if(!k)return [];
+  return PV.filter(p=>{const v=_norm(p.vn); return v===k||(v.length>3&&k.length>3&&(v.indexOf(k)===0||k.indexOf(v)===0));})
+           .sort((a,b)=>(b.r+b.orev)-(a.r+a.orev)).slice(0,8);};
+ const skuRow=(nm,cols)=>{const L=skusFor(nm);
+  const id='sku'+_norm(nm);
+  let inner;
+  if(!L.length){inner='<div style="padding:9px 12px;font-size:11.5px;color:#8a93a6">No products carried for this supplier yet — the per-vendor product cut lands on the next collector sync.</div>';}
+  else{
+   inner='<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<tr><th style="text-align:left;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase">Product</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B">Units</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B">Revenue</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B">Gross profit</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B">GP %</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:9.5px;font-weight:800;color:#64748B">In stock</th></tr>'
+    +L.map(p=>{
+      /* the name arrives as "[barcode] title" -- split so the barcode is copyable and the
+         title is the link text, rather than pasting the whole string into an anchor */
+      const m=String(p.n||'').match(/^\[([^\]]+)\]\s*(.*)$/);
+      const bc=m?m[1]:'', ttl=(m?m[2]:String(p.n||''))||'(untitled)';
+      const gpct=p.r?(p.g/p.r*100):0;
+      const st=(p.st&&p.st.u!=null)?p.st.u:null;
+      /* Only about a quarter of these SKUs resolve to a Shopify URL, and that gap is not a
+         rendering failure -- the product is not listed on the website at all. A top seller
+         in the shops with no webstore listing is a finding, so say it rather than quietly
+         printing a title that happens not to be a link. */
+      const link=p.url
+        ?'<a href="'+esc(p.url)+'" target="_blank" rel="noopener" style="color:#5a5bf0;font-weight:700;text-decoration:none">'+esc(ttl)+' \u2197</a>'
+        :'<b>'+esc(ttl)+'</b> <span class="tg" style="background:#fff3e6;color:#a35a1a;font-size:9px">NOT ON THE SITE</span>';
+      return '<tr><td style="text-align:left;padding:6px 8px;border-top:1px solid #eef0f5">'+link
+       +(bc?'<div style="font-size:10px;color:#8a93a6;font-family:ui-monospace,monospace">'+esc(bc)+'</div>':'')+'</td>'
+       +'<td style="text-align:right;padding:6px 8px;border-top:1px solid #eef0f5">'+money(p.q)+'</td>'
+       +'<td style="text-align:right;padding:6px 8px;border-top:1px solid #eef0f5">E&pound; '+money(p.r+ (p.orev||0))+'</td>'
+       +'<td style="text-align:right;padding:6px 8px;border-top:1px solid #eef0f5"><b>E&pound; '+money(p.g+(p.ogp||0))+'</b></td>'
+       +'<td style="text-align:right;padding:6px 8px;border-top:1px solid #eef0f5;color:'+(gpct>=25?'#0f6e56':'#a3271a')+';font-weight:700">'+gpct.toFixed(0)+'%</td>'
+       +'<td style="text-align:right;padding:6px 8px;border-top:1px solid #eef0f5">'+(st==null?'&mdash;':(st<=0?'<b style="color:#a3271a">0</b>':money(st)))+'</td></tr>';}).join('')
+    +'</table>';
+   const oos=L.filter(p=>p.st&&p.st.u!=null&&p.st.u<=0);
+   const off=L.filter(p=>!p.url);
+   const flag=[];
+   if(oos.length)flag.push('<b>'+oos.length+' of these '+L.length+' best sellers are out of stock</b> ('+oos.map(p=>esc(String(p.n||'').replace(/^\[[^\]]*\]\s*/,''))).slice(0,3).join(', ')+(oos.length>3?'…':'')+')');
+   if(off.length)flag.push('<b>'+off.length+' are not listed on the website</b>, so the webstore cannot sell them at all');
+   if(flag.length)inner+='<div style="padding:8px 12px;font-size:11.5px;color:#7a2233;background:#fff6f9;border-top:1px solid #f3d7de;line-height:1.5">'+flag.join(' &middot; ')+'.</div>';}
+  return '<tr id="'+id+'" class="skuex" style="display:none"><td colspan="'+cols+'" style="padding:0 0 8px;background:#fafbfe">'+inner+'</td></tr>';};
+ window.skuTog=function(nm){const e=document.getElementById('sku'+String(nm));if(!e)return;
+  e.style.display=(e.style.display==='none'?'table-row':'none');};
  const rowH=r=>{const gap=r.adSp<1000&&!r.dead;
-  return '<tr'+(gap?' style="background:#f0fdf6"':(r.dead?' style="opacity:.55"':''))+'><td style="text-align:left"><b>'+r.nm+'</b>'+(r.dead?' <span class="tg" style="background:#fde8ee;color:#c0392b">CANNOT SUPPLY</span>':'')+'<div style="font-size:10px;color:#8a93a6">'+r.src+' &middot; '+money(r.n)+' customers'+(r.dead?' &middot; <span style="color:#c0392b">'+r.dead+'</span>':'')+'</div></td>'
+  return '<tr'+(gap?' style="background:#f0fdf6"':(r.dead?' style="opacity:.55"':''))+'><td style="text-align:left"><b style="cursor:pointer;border-bottom:1px dotted #9aa3b5" onclick="skuTog(\''+_norm(r.nm)+'\')" title="Show this supplier\u2019s best sellers">'+r.nm+' <span style="font-size:9px;color:#5a5bf0">\u25be SKUs</span></b>'+(r.dead?' <span class="tg" style="background:#fde8ee;color:#c0392b">CANNOT SUPPLY</span>':'')+'<div style="font-size:10px;color:#8a93a6">'+r.src+' &middot; '+money(r.n)+' customers'+(r.dead?' &middot; <span style="color:#c0392b">'+r.dead+'</span>':'')+'</div></td>'
   +'<td><b>'+r.score.toFixed(0)+'</b></td><td>'+r.rep+'%</td><td>'+(r.med2==null?'&mdash;':r.med2+'d')+'</td><td>'+r.oyr+'</td><td><b>E&pound; '+money(r.ltgp)+'</b>'+(med?'<div style="font-size:10px;color:'+(r.ltgp>=med?'#12a06e':'#8a93a6')+'">'+(r.ltgp>=med?'+':'')+Math.round((r.ltgp/med-1)*100)+'% vs median</div>':'')+'</td>'
   +'<td>'+(gap?'<b style="color:#12a06e">NOT ADVERTISED</b><div style="font-size:10px;color:#8a93a6">E&pound; '+money(r.adSp)+' in 60d</div>':'E&pound; '+money(r.adSp))+'</td>'
-  +'<td style="text-align:left;font-size:11px">'+(r.next||[]).slice(0,3).map(x=>Array.isArray(x)?x[0]:x).join(' &middot; ')+'</td></tr>';};
+  +'<td style="text-align:left;font-size:11px">'+(r.next||[]).slice(0,3).map(x=>Array.isArray(x)?x[0]:x).join(' &middot; ')+'</td></tr>'
+  +skuRow(r.nm,8);};
  const gaps=top.filter(r=>r.adSp<1000&&!r.dead);
  const deads=top.filter(r=>r.dead);
  let h='<table class="bt" style="min-width:900px"><tr><th style="text-align:left">First purchase &mdash; the hook</th><th>Score</th><th>Repeat</th><th>Days&rarr;2nd</th><th>Orders/yr</th><th>Lifetime GP</th><th>Ad spend 60d</th><th style="text-align:left">They buy next</th></tr>'+top.map(rowH).join('')+'</table>';
