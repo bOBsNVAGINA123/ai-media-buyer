@@ -5485,7 +5485,91 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
   +rows.map(tr).join('')+'</table></div>');}
 
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';
+/* v9.47 EVERY CHANNEL, THIS MONTH vs THE SAME MONTH LAST YEAR, SPLIT BY CUSTOMER TYPE.
+   This is the view Odoo's Sales Analysis pivot gives, which the dashboard held all the data for
+   and never drew: it had a YoY card for Shopify alone, and the seven shops only ever appeared
+   against the PREVIOUS period, never against the same month a year earlier.
+
+   Two things the Odoo pivot cannot do are added here, because the ledger carries them:
+   new versus returning revenue per row (O.bnr per branch, O.nr for Shopify), and gross profit.
+
+   What this deliberately does NOT cover: Noon, Amazon and Homzmart. They sell through Odoo but
+   never reach this dashboard's feeds, so the total below is short of the Odoo company total by
+   roughly what those three did. The card says so rather than quietly under-reporting. */
+function yoyChannels(g){
+ const P=O.pos||{}, NR=O.nr||{}, BNR=O.bnr||{};
+ const months=Object.keys(NR).sort();
+ if(!months.length)return;
+ // latest month that any shop actually billed in, so a half-synced current month cannot win
+ let m=null;
+ Object.keys(P).forEach(b=>Object.keys(P[b]||{}).forEach(k=>{if(!m||k>m)m=k;}));
+ if(!m)m=months[months.length-1];
+ const ly=(+m.slice(0,4)-1)+m.slice(4);
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const pc=(c,p)=>p>0?((c/p-1)*100):null;
+ const fp=v=>v==null?'<span style="color:#c9ccd6">new</span>'
+   :'<b style="color:'+(v>=0?'#0f6e56':'#a3271a')+'">'+(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%</b>';
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+
+ const rows=[];
+ Object.keys(P).forEach(b=>{
+  const a=(P[b]||{})[ly]||[0,0,0,0], c=(P[b]||{})[m]||[0,0,0,0];
+  const n=(BNR[b]||{})[m]||{};
+  if(!a[0]&&!c[0])return;
+  rows.push({n:b,k:'shop',r0:a[0]||0,r1:c[0]||0,u0:a[3]||0,u1:c[3]||0,gp:c[1]||0,
+             nrev:n.nrev||0,rrev:n.rrev||0,nc:n.nc||0});});
+ const q=NR[ly]||{}, w=NR[m]||{};
+ rows.push({n:'Shopify',k:'on',r0:(q.nrev||0)+(q.rrev||0),r1:(w.nrev||0)+(w.rrev||0),
+            u0:null,u1:null,gp:(w.ngp||0)+(w.rgp||0),nrev:w.nrev||0,rrev:w.rrev||0,nc:w.nord||0});
+ rows.sort((x,y)=>y.r1-x.r1);
+ const t0=rows.reduce((a,x)=>a+x.r0,0), t1=rows.reduce((a,x)=>a+x.r1,0);
+ const tn=rows.reduce((a,x)=>a+x.nrev,0), tr=rows.reduce((a,x)=>a+x.rrev,0);
+
+ let body='';
+ rows.forEach(x=>{
+  const split=(x.nrev+x.rrev)>0?x.nrev/(x.nrev+x.rrev):null;
+  body+='<tr>'
+   +'<td style="'+TD+';text-align:left"><b>'+esc(x.n)+'</b>'
+     +(x.k==='on'?'<span style="color:#8a93a6;font-size:10px"> · webstore</span>':'')+'</td>'
+   +'<td style="'+TD+'">'+(x.r0?M(x.r0):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+M(x.r1)+'</td>'
+   +'<td style="'+TD+'">'+fp(pc(x.r1,x.r0))+'</td>'
+   +'<td style="'+TD+'">'+(x.u1!=null?N(x.u1):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(x.u1!=null&&x.u0?fp(pc(x.u1,x.u0)):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(x.gp?M(x.gp):'<span style="color:#c9ccd6">&mdash;</span>')
+     +(x.gp&&x.r1?'<div style="font-size:10px;color:#8a93a6">'+Math.round(x.gp/x.r1*100)+'%</div>':'')+'</td>'
+   +'<td style="'+TD+'">'+(x.nc?N(x.nc):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   +'<td style="'+TD+'">'+(split!=null
+      ?'<div style="display:flex;height:14px;width:96px;border-radius:4px;overflow:hidden;margin-left:auto">'
+        +'<div style="width:'+(split*100).toFixed(1)+'%;background:#12a06e"></div>'
+        +'<div style="flex:1;background:#5a5bf0"></div></div>'
+        +'<div style="font-size:10px;color:#8a93a6">'+Math.round(split*100)+'% new</div>'
+      :'<span style="color:#c9ccd6">&mdash;</span>')+'</td></tr>';});
+
+ const head='<tr><th style="'+TH+';text-align:left">Channel</th>'
+  +'<th style="'+TH+'">'+ly+'</th><th style="'+TH+'">'+m+'</th><th style="'+TH+'">Change</th>'
+  +'<th style="'+TH+'">Units</th><th style="'+TH+'">Units &Delta;</th>'
+  +'<th style="'+TH+'">Gross profit</th><th style="'+TH+'">New custs</th>'
+  +'<th style="'+TH+'">New vs returning revenue</th></tr>';
+
+ const tot='<tr style="border-top:2px solid #cbd3e1"><td style="'+TD+';text-align:left"><b>Tracked total</b></td>'
+  +'<td style="'+TD+'"><b>'+M(t0)+'</b></td><td style="'+TD+'"><b>'+M(t1)+'</b></td>'
+  +'<td style="'+TD+'">'+fp(pc(t1,t0))+'</td><td style="'+TD+'"></td><td style="'+TD+'"></td>'
+  +'<td style="'+TD+'"></td><td style="'+TD+'"></td>'
+  +'<td style="'+TD+'">'+(tn+tr?Math.round(tn/(tn+tr)*100)+'% new':'')+'</td></tr>';
+
+ const note='<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11px;color:#6b5730;line-height:1.55">'
+  +'<b>Noon, Amazon and Homzmart are not in this table.</b> They sell through Odoo but reach none of this dashboard&rsquo;s feeds, so the tracked total above is short of the company total in Odoo&rsquo;s own Sales Analysis by whatever those three did that month. '
+  +'Everything here is the POS journals for the shops and the Shopify order feed for the webstore, which is why the branch figures line up with the Odoo pivot to within a fraction of a percent.'
+  +'</div>';
+
+ pnlCard(g,'odoo','Every channel &mdash; '+m+' against '+ly+INFO('Revenue, units, gross profit and the new-versus-returning split for each shop and for Shopify, this month against the same month a year earlier. The same cut as Odoo Sales Analysis, plus customer type and margin.'),
+  'Same comparison as Odoo&rsquo;s Sales Analysis pivot, with gross profit and customer type added. Shops come from the POS journals, Shopify from its order feed.',
+  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+body+tot+'</table></div>'+note);
+}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{yoyChannels(g);}catch(e){}
  try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}
  try{offAudit(g);}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
@@ -9746,7 +9830,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260830-032550'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-141945'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
