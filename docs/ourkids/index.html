@@ -1800,21 +1800,59 @@ function okCauses(o){
   (O.mads||[]).filter(x=>x.d).forEach(x=>ent.push({n:x.cmp||x.n,pf:'Meta',
     c:sum(x.d.sp,a0,today), p:sum(x.d.sp,p0,p1),
     imC:sum(x.d.im,a0,today), rcC:sum(x.d.rch,a0,today),
-    imP:sum(x.d.im,p0,p1), rcP:sum(x.d.rch,p0,p1)}));
+    imP:sum(x.d.im,p0,p1), rcP:sum(x.d.rch,p0,p1),
+    clC:sum(x.d.oc,a0,today), clP:sum(x.d.oc,p0,p1)}));
   (O.gads||[]).filter(x=>x.d).forEach(x=>ent.push({n:x.n,pf:'Google',
-    c:sum(x.d.sp,a0,today), p:sum(x.d.sp,p0,p1),imC:0,rcC:0,imP:0,rcP:0}));
+    c:sum(x.d.sp,a0,today), p:sum(x.d.sp,p0,p1),imC:0,rcC:0,imP:0,rcP:0,
+    clC:sum(x.d.clk,a0,today), clP:sum(x.d.clk,p0,p1)}));
   const roll={};
-  ent.forEach(e=>{const k=e.pf+'|'+e.n; const r=roll[k]||(roll[k]={n:e.n,pf:e.pf,c:0,p:0,imC:0,rcC:0,imP:0,rcP:0});
-   r.c+=e.c;r.p+=e.p;r.imC+=e.imC;r.rcC+=e.rcC;r.imP+=e.imP;r.rcP+=e.rcP;});
+  ent.forEach(e=>{const k=e.pf+'|'+e.n; const r=roll[k]||(roll[k]={n:e.n,pf:e.pf,c:0,p:0,imC:0,rcC:0,imP:0,rcP:0,clC:0,clP:0});
+   r.c+=e.c;r.p+=e.p;r.imC+=e.imC;r.rcC+=e.rcC;r.imP+=e.imP;r.rcP+=e.rcP;r.clC+=e.clC;r.clP+=e.clP;});
   const R=Object.values(roll);
   const off=R.filter(r=>r.p>=3000&&r.c<r.p*0.15).sort((x,y)=>y.p-x.p).slice(0,4);
   const on =R.filter(r=>r.c>=3000&&r.p<r.c*0.15).sort((x,y)=>y.c-x.c).slice(0,4);
   const cut=R.filter(r=>r.p>=8000&&r.c<r.p*0.7&&r.c>=r.p*0.15).sort((x,y)=>(y.p-y.c)-(x.p-x.c)).slice(0,3);
 
-  off.forEach(r=>out.traffic.push(['off','<b>'+esc(r.n)+'</b> ('+r.pf+') stopped spending — '+M(r.p)+' in the prior window, '+M(r.c)+' in this one.']));
-  cut.forEach(r=>out.traffic.push(['cut','<b>'+esc(r.n)+'</b> ('+r.pf+') cut from '+M(r.p)+' to '+M(r.c)+', '+Math.round((1-r.c/r.p)*100)+'% less.']));
-  on.forEach(r=>out.traffic.push(['on','<b>'+esc(r.n)+'</b> ('+r.pf+') started — '+M(r.c)+' new spend that was not there before.']));
+  /* Attribute the session move before naming anything. A campaign that stopped is only a cause
+     if its lost CLICKS are big enough to matter against the session change -- and the first thing
+     to establish is whether paid moved in the same direction at all. Listing "X stopped spending"
+     under a traffic fall that paid did not cause is the exact mistake this replaces. */
+  const clkC=R.reduce((t,r)=>t+r.clC,0), clkP=R.reduce((t,r)=>t+r.clP,0);
+  const dClk=clkC-clkP;
+  const A2=O.ad||{};
+  const t0s=A2.start?new Date(A2.start+'T00:00:00Z').getTime():null;
+  const sIx=d=>t0s?Math.round((new Date(d+'T00:00:00Z')-t0s)/864e5):-1;
+  const sSum=(i0,i1)=>{let t=0;for(let k=Math.max(0,i0);k<=i1;k++)t+=(A2.sessions&&A2.sessions[k])||0;return t;};
+  const pDays=Math.max(1,span(ST.s,ST.e));
+  const sesC=sSum(sIx(ST.s),sIx(ST.e));
+  const sesP=sSum(sIx(ST.s)-pDays,sIx(ST.s)-1);
+  const dSes=sesC-sesP;
 
+  if(dSes!==0&&sesP>0){
+   const sameWay=(dSes<0&&dClk<0)||(dSes>0&&dClk>0);
+   const share=dSes!==0?dClk/dSes*100:0;
+   out.traffic.push([sameWay?'bad':'good',
+    '<b>Sessions '+(dSes<0?'fell':'rose')+' '+Math.abs(dSes).toLocaleString()+' while paid clicks '
+    +(dClk<0?'fell':'rose')+' '+Math.abs(dClk).toLocaleString()+'</b> (Meta and Google together, '
+    +clkP.toLocaleString()+' &rarr; '+clkC.toLocaleString()+'). '
+    +(sameWay
+      ? 'Paid moved the same way and accounts for about '+Math.abs(share).toFixed(0)+'% of the change — the rest is non-paid traffic.'
+      : '<b>Paid moved the opposite way, so it did not cause this.</b> '+Math.abs(dSes+ (dClk>0?dClk:0)).toLocaleString()
+        +' sessions of the gap sit outside the ad accounts entirely — organic, direct or referral.')]);
+  }
+
+  /* Individual entities only earn a line once the direction question is settled, and each carries
+     its own share of the session move so a small one cannot masquerade as the explanation. */
+  const shareOf=d=>(dSes!==0)?Math.abs(d/dSes*100):0;
+  off.forEach(r=>{const sh=shareOf(r.clP-r.clC);
+   out.traffic.push(['off','<b>'+esc(r.n)+'</b> ('+r.pf+') stopped — '+M(r.p)+' and '+r.clP.toLocaleString()+' clicks in the prior window, nothing in this one'
+    +(dSes<0?'. That is '+sh.toFixed(0)+'% of the session fall'+(sh<15?', so it is not the story':'')+'.':'.')]);});
+  cut.forEach(r=>{const sh=shareOf(r.clP-r.clC);
+   out.traffic.push(['cut','<b>'+esc(r.n)+'</b> ('+r.pf+') cut '+M(r.p)+' &rarr; '+M(r.c)+', losing '+(r.clP-r.clC).toLocaleString()+' clicks'
+    +(dSes<0&&sh>=5?' — '+sh.toFixed(0)+'% of the fall.':'.')]);});
+  on.forEach(r=>{const sh=shareOf(r.clC-r.clP);
+   out.traffic.push(['on','<b>'+esc(r.n)+'</b> ('+r.pf+') started — '+M(r.c)+' and '+r.clC.toLocaleString()+' clicks that were not there before'
+    +(dSes<0&&sh>=5?', offsetting '+sh.toFixed(0)+'% of the fall.':'.')]);});
   /* --- frequency and pool reuse --- */
   const imC=R.reduce((t,r)=>t+r.imC,0), rcC=R.reduce((t,r)=>t+r.rcC,0);
   const imP=R.reduce((t,r)=>t+r.imP,0), rcP=R.reduce((t,r)=>t+r.rcP,0);
@@ -10764,7 +10802,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-172745'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-174928'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
