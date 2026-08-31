@@ -167,7 +167,10 @@ function af(p){const k=(ST.att&&ST.att[p])||ST.at;const v=(O.attr[p]||{})[k];ret
 // afo() = the MEASURED in-store/offline ladder. Falls back to the website factor only
 // if the collector could not measure the offline windows this run.
 function afo(){const k=(ST.att&&ST.att.meta)||ST.at;const v=((O.attr&&O.attr.metaOff)||{})[k];return v==null?af('meta'):v;}
-function addD(iso,n){const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+/* A null or malformed date used to reach toISOString and throw, and because addD sits under
+   calc() -> cmpW -> cmpWr, that single throw took down the ENTIRE page render rather than the
+   one card that asked for it. Return '' instead and let callers degrade. */
+function addD(iso,n){if(!iso)return '';const d=new Date(String(iso)+'T00:00:00Z');if(isNaN(d.getTime()))return '';d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
 function span(s,e){return Math.round((Date.parse(e)-Date.parse(s))/864e5)+1;}
 function bD(i){const d=new Date(O.bl.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);}
 function bSum(name,r){if(!r)return 0;const a=O.bl.b[name]||[];let t=0;for(let i=r[0];i<=r[1];i++)t+=a[i]||0;return t;}
@@ -1349,7 +1352,7 @@ function cmpNote(){const el=document.getElementById('cmpst');if(!el)return;
 function ppHdr(){const p=document.getElementById('pp');if(!p)return;try{cmpNote();}catch(e){}
  const w=cmpW(),mg=['pl','pn','vl','cs','ao','me','mi'].indexOf(TAB)>=0;
  p.innerHTML='Range <b>'+ST.s+'</b> &rarr; '+ST.e+(mg?' &middot; months <b>'+(ST.pm0||'&mdash;')+'</b> &rarr; '+(ST.pm1||'&mdash;'):'')+' &middot; vs '+(ST.cmp==='off'?'<b>no comparison</b>':'<b>'+w[0]+'</b> &rarr; '+w[1]);}
-function cmpWr(_S,_E,_C){_C=_C||ST.cmp;const ln=span(_S,_E);if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(_C==='yoy')return[addD(_S,-365),addD(_E,-365)];if(_C==='wk')return[addD(_S,-7),addD(_E,-7)];if(_C==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
+function cmpWr(_S,_E,_C){if(!_S||!_E)return ['',''];_C=_C||ST.cmp;const ln=span(_S,_E)||0;if(ST.cmp==='custom'){const a=document.getElementById('c0').value,b=document.getElementById('c1').value;if(a&&b&&a<=b)return[a,b];}if(_C==='yoy')return[addD(_S,-365),addD(_E,-365)];if(_C==='wk')return[addD(_S,-7),addD(_E,-7)];if(_C==='mo')return[addD(_S,-30),addD(_E,-30)];return[addD(_S,-ln),addD(_S,-1)];}
 function shS(k,s2,e2){if(!O.shop||!O.shop[k])return 0;const r=rng(s2,e2);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[k][i]||0;return t;}
 function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
  const o={cs,ce};PREVLBL='prev '+cs.slice(5)+' &rarr; '+ce.slice(5);const G=(k,a,b)=>fSum(k,a,b);
@@ -1662,7 +1665,169 @@ DCS.gp=o=>{if(!o.gp||!o.gp[1]||!o.net||!o.net[1])return '';const m0=o.gp[1]/o.ne
  return '<div class="dcmp"><b>Why gross profit moved '+dcFmt(dcPct(o.gp[0],o.gp[1]))+':</b> revenue volume <span style="font-weight:700;color:'+(volE>=0?'#12a06e':'#e23a63')+'">'+dcMoney(volE)+'</span> ('+Math.round(Math.abs(volE)/t*100)+'% of the move) · margin '+((m1-m0)>=0?'+':'−')+Math.abs((m1-m0)*100).toFixed(1)+' pts <span style="font-weight:700;color:'+(mgE>=0?'#12a06e':'#e23a63')+'">'+dcMoney(mgE)+'</span> ('+Math.round(Math.abs(mgE)/t*100)+'%)</div>';};
 DCS.mer=o=>{if(!o.sp||!o.sp[1]||!o.sp[0]||!o.net||!o.net[1])return '';const parts=dcLog([['revenue',o.net[0],o.net[1]],['spend',o.sp[1],o.sp[0]]]);parts[1].pc=dcPct(o.sp[0],o.sp[1]);
  return dcHtml('Why MER moved '+dcFmt(dcPct(o.net[0]/o.sp[0],o.net[1]/o.sp[1]))+' (Odoo net revenue ÷ spend):',parts,'red on spend means spend went UP.');};
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';
+/* v9.49 THE GLANCE — one screen that answers the whole tab.
+
+   Overview renders 33 cards. Every one of them is something somebody asked for, and together they
+   are unreadable: there is no altitude, so the number that matters and a supporting footnote are
+   drawn at exactly the same size and you have to scroll the lot to find out whether the week was
+   good. This block sits above all of it and answers three questions in order -- where are we, what
+   moved it, what do I do -- and then collapses the 33 behind one control instead of deleting them,
+   because the detail is still where the working is shown.
+
+   Every figure comes from calc(), the same call the cards below use, so the summary cannot drift
+   from the thing it summarises. */
+function glance(g,o){
+ if(!o||!o.gross)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const pc=(c,p)=>(p&&isFinite(p)&&p!==0)?((c/p-1)*100):null;
+ const arrow=v=>v==null?'':(v>=0?'▲':'▼');
+ const dl=(v,good)=>{ if(v==null)return '<span style="color:#9aa3b5;font-size:11px">no prior</span>';
+   const ok=good===false?v<0:v>0;
+   return '<span style="font-size:11.5px;font-weight:800;color:'+(Math.abs(v)<1?'#8a93a6':(ok?'#0f6e56':'#a3271a'))+'">'
+     +arrow(v)+' '+Math.abs(v).toFixed(1)+'%</span>';};
+
+ const days=Math.max(1,span(ST.s,ST.e));
+ const be=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+
+ /* ---- 1. WHERE ARE WE ---------------------------------------------------- */
+ const tiles=[
+  ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'webstore, after returns'],
+  ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin'],
+  ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'all platforms'],
+  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'breakeven '+be.toFixed(2)+'×'],
+  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only'],
+  ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket'],
+  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one']
+ ];
+ const tileH=tiles.map(t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
+  +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
+  +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
+  +'<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'+dl(t[2],t[3])
+  +'<span style="font-size:10.5px;color:#8a93a6">'+t[4]+'</span></div></div>').join('');
+
+ /* ---- 2. WHAT MOVED IT --------------------------------------------------- */
+ /* Ranked by money, not by how interesting the metric is. A driver only earns a line if it moved
+    the number by something you would act on. */
+ const facts=[];
+ const dNet=o.net[0]-o.net[1];
+ const dOrd=pc(o.ord[0],o.ord[1]), dAov=pc(o.aov[0],o.aov[1]);
+ if(o.net[1]){
+  facts.push([dNet>=0?'good':'bad',
+   '<b>Net revenue '+(dNet>=0?'up':'down')+' '+M(dNet)+'</b> ('+(pc(o.net[0],o.net[1])||0).toFixed(1)+'%) against the '+days+' days before. '
+   +(dOrd!=null&&dAov!=null
+     ? 'Orders '+(dOrd>=0?'+':'−')+Math.abs(dOrd).toFixed(1)+'%, basket '+(dAov>=0?'+':'−')+Math.abs(dAov).toFixed(1)+'% — '
+       +(Math.abs(dOrd)>=Math.abs(dAov)?'this was volume, not price.':'this was price, not volume.')
+     : '')]);
+ }
+ if(o.mer[0]){
+  const inc=(function(){try{return (O.attr&&O.attr.meta&&O.attr.meta.incr)||null;}catch(e){return null;}})();
+  facts.push([o.mer[0]>=be?'good':'bad',
+   '<b>MER '+o.mer[0].toFixed(2)+'× against a '+be.toFixed(2)+'× breakeven</b> — '
+   +(o.mer[0]>=be?'the webstore is covering its own media at reported value.'
+                 :'the webstore is not covering its own media at reported value, before any incrementality haircut.')]);
+ }
+ if(o.nc[0]&&o.cac[0]){
+  const dc=pc(o.cac[0],o.cac[1]);
+  facts.push([dc!=null&&dc>0?'bad':'good',
+   '<b>'+N(o.nc[0])+' new customers at '+M(o.cac[0])+' each</b>'
+   +(dc!=null?' \u2014 that cost per customer is '+(dc>=0?'up':'down')+' '+Math.abs(dc).toFixed(1)+'% on the period before.':'.')]);
+ }
+ if(o.sess&&o.sess[0]&&o.cvr){
+  const dS=pc(o.sess[0],o.sess[1]), dC=pc(o.cvr[0],o.cvr[1]);
+  if(dS!=null||dC!=null)facts.push([(dC!=null&&dC<0)?'bad':'note',
+   '<b>'+N(o.sess[0])+' sessions converting at '+(o.cvr[0]||0).toFixed(2)+'%</b>'
+   +(dS!=null?' — traffic '+(dS>=0?'+':'−')+Math.abs(dS).toFixed(1)+'%':'')
+   +(dC!=null?', conversion '+(dC>=0?'+':'−')+Math.abs(dC).toFixed(1)+'%':'')+'.']);
+ }
+ const dGp=pc(o.gpct[0],o.gpct[1]);
+ if(dGp!=null&&Math.abs(dGp)>=2)facts.push([dGp<0?'bad':'good',
+   '<b>Margin '+(dGp>=0?'widened':'narrowed')+' to '+(o.gpct[0]||0).toFixed(1)+'%</b> from '+(o.gpct[1]||0).toFixed(1)+'% — '
+   +(dGp<0?'either the mix moved to cheaper stock or discounting deepened.':'mix or discounting moved in your favour.')]);
+
+ const COL={good:'#12a06e',bad:'#e23a63',note:'#5a5bf0'};
+ const factH=facts.length?('<div style="display:flex;flex-direction:column;gap:0">'
+  +facts.map(f=>'<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f2f4f9;font-size:13px;line-height:1.55;color:#26313f">'
+   +'<span style="flex:0 0 8px;height:8px;border-radius:50%;background:'+COL[f[0]]+';margin-top:6px"></span><span>'+f[1]+'</span></div>').join('')
+  +'</div>'):'';
+
+ /* ---- 3. WHAT DO I DO ---------------------------------------------------- */
+ /* Reuse the Actions engine rather than inventing a second opinion that could contradict it. */
+ /* Built from the same order-line crawl the mover list uses, so the action and the evidence for
+    it cannot disagree. Restocks first: they are the only ones where no amount of media helps. */
+ let doH='';
+ try{
+  const W=((O.why||{}).win||{})[(typeof window.WHYW!=='undefined'&&window.WHYW)||'7'];
+  const pr=(W&&W.prods)||[];
+  const fell=pr.map(x=>({...x,d:(x.r||0)-(x.pr||0)})).filter(x=>x.d<0);
+  const oos=fell.filter(x=>x.st!=null&&x.st<=3).sort((a,b)=>a.d-b.d).slice(0,3);
+  const acts=oos.map(x=>({p:'P0',t:'Restock '+String(x.n||'').replace(/^\[[^\]]*\]\s*/,''),
+    w:M(Math.abs(x.d))+' of revenue gone with '+x.st+' unit'+(x.st===1?'':'s')+' left \u2014 '
+      +(x.pq||0)+' \u2192 '+(x.q||0)+' units. No bid or creative change recovers this.',
+    n:x.n}));
+  if(o.mer[0]&&o.mer[0]<be)acts.push({p:'P1',t:'Media is below breakeven',
+    w:'MER '+o.mer[0].toFixed(2)+'\u00d7 against '+be.toFixed(2)+'\u00d7. Cut the worst entities on Money desk before adding budget anywhere.',n:''});
+  const dS2=pc(o.sess&&o.sess[0],o.sess&&o.sess[1]);
+  if(dS2!=null&&dS2<-8)acts.push({p:'P1',t:'Traffic fell '+Math.abs(dS2).toFixed(0)+'%',
+    w:'Conversion held, so this is a delivery or demand problem, not the site. Check Launches & budgets for what changed.',n:''});
+  doH=acts.slice(0,4).map(a=>'<div style="display:flex;gap:9px;align-items:baseline;padding:7px 0;border-bottom:1px solid #f2f4f9;font-size:13px">'
+   +'<span style="flex:0 0 auto;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+(a.p==='P0'?'#fbe0e8':'#fdf0dc')+';color:'+(a.p==='P0'?'#a3271a':'#8a5a1a')+'">'+a.p+'</span>'
+   +'<span style="color:#26313f;line-height:1.5"><b>'+(a.n?okpA(a.n,esc(a.t)):esc(a.t))+'</b> \u2014 '+a.w+'</span></div>').join('');
+ }catch(e){}
+ if(!doH)doH='<div style="font-size:12.5px;color:#5b6478;line-height:1.6">Nothing crossed the bar to be lifted up here this window. The ranked list with the money attached is on <b>Actions</b>.</div>';
+
+ const el=document.createElement('div');
+ el.className='card full';
+ el.dataset.a='odoo';
+ el.style.cssText='border:2px solid #5a5bf0;box-shadow:0 6px 24px -14px rgba(90,91,240,.55)';
+ el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+  +'<div class="ct">The week at a glance — '+ST.s+' to '+ST.e+'</div>'
+  +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
+  +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:2px 0 14px">'+tileH+'</div>'
+  +(factH?'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin-bottom:2px">What moved it</div>'+factH:'')
+  +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin:14px 0 2px">Do this first</div>'+doH;
+ g.appendChild(el);
+}
+
+/* Collapse the detail behind one control. The cards are not removed -- an index of them is printed
+   so you can jump straight to the one you want, which is faster than scrolling even when open. */
+function glanceFold(g,keepFirst){
+ const cards=[].slice.call(g.querySelectorAll(':scope > .card'));
+ if(cards.length<=keepFirst+2)return;
+ const hide=cards.slice(keepFirst);
+ const bar=document.createElement('div');
+ bar.className='card full';
+ bar.style.cssText='padding:12px 14px';
+ const names=hide.map((c,i)=>{const t=(c.querySelector('.ct')||{}).textContent||('Card '+(i+1));
+   return {i:i,t:t.replace(/i$/,'').replace(/(odoo|shop|blend|meta)$/,'').trim()};});
+ bar.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
+  +'<div style="font-size:13px;color:#3D4763"><b>'+hide.length+' more cards</b> below — the full working behind everything above.</div>'
+  +'<button type="button" id="gfBtn" style="font:inherit;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;border:1px solid #5a5bf0;background:#5a5bf0;color:#fff">Show all '+hide.length+'</button></div>'
+  +'<div id="gfIdx" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'
+  +names.map(n=>'<span data-gf="'+n.i+'" style="cursor:pointer;font-size:11px;padding:4px 9px;border-radius:99px;border:1px solid #dfe4ee;background:#fff;color:#5a637a">'+esc(n.t)+'</span>').join('')
+  +'</div>';
+ g.insertBefore(bar,hide[0]);
+ hide.forEach(c=>{c.style.display='none';});
+ let open=false;
+ const btn=bar.querySelector('#gfBtn');
+ btn.addEventListener('click',function(){
+  open=!open;
+  hide.forEach(c=>{c.style.display=open?'':'none';});
+  btn.textContent=open?'Hide the detail':('Show all '+hide.length);
+  btn.style.background=open?'#fff':'#5a5bf0'; btn.style.color=open?'#5a5bf0':'#fff';
+  if(open)setTimeout(()=>{try{qsweep('g1');}catch(e){}},60);
+ });
+ bar.querySelectorAll('[data-gf]').forEach(function(sp){
+  sp.addEventListener('click',function(){
+   const c=hide[+sp.getAttribute('data-gf')]; if(!c)return;
+   if(!open){open=true;hide.forEach(x=>{x.style.display='';});btn.textContent='Hide the detail';
+     btn.style.background='#fff';btn.style.color='#5a5bf0';try{qsweep('g1');}catch(e){}}
+   setTimeout(()=>c.scrollIntoView({behavior:'smooth',block:'start'}),80);
+  });
+ });
+}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -1984,7 +2149,10 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  // no half-row holes: if a section ends on an odd half-card, stretch that card full-width
  (function(){let run=[];const flush=()=>{if(run.length%2===1)run[run.length-1].classList.add('full');run=[];};
   [...g.children].forEach(el2=>{if(el2.classList.contains('sechd')||el2.classList.contains('full'))flush();else run.push(el2);});flush();})();
- wDrag(g);}
+ wDrag(g);
+ /* Fold last: every card is in the DOM and paired up by the layout pass above before anything is
+    hidden, so collapsing cannot disturb the grid. keepFirst=1 leaves the glance itself showing. */
+ try{glanceFold(g,1);}catch(e){}}
 function expand(c,o){
  if(c.id==='np'&&o&&o.onp){const dn=span(ST.s,ST.e);const ep=372076*dn/30.44;const nf=o.gross[0]?1-o.ref[0]/o.gross[0]:1;
   wfall('Shopify Net Contribution &mdash; waterfall ('+ST.s+' &rarr; '+ST.e+')',[
@@ -9977,7 +10145,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-151438'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-153859'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
