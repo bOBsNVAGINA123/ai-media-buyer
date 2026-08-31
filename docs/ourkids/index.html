@@ -931,8 +931,20 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
  if(O.mads)O.mads.forEach(function(a){var d=a.d;if(!d||!d.fv)return;
   var nz=d.fv.filter(function(v){return v>0;}).sort(function(x,y){return x-y;});
   if(nz.length<3)return;var med=nz[Math.floor(nz.length/2)];var cap=Math.max(60000,med*6);var clip=0;
-  d.fv=d.fv.map(function(v){if(v>cap){clip+=v-cap;return cap;}return v;});
-  if(clip>0){a.ofv=Math.max(0,(a.ofv||0)-Math.round(clip));a._fvClip=Math.round(clip);}});
+  /* The clamp used to cut d.fv alone and leave d.ncv/d.nc/d.op untouched. Those are SUBSETS
+     of the same day's offline conversions, so after a clip the new-customer value could
+     exceed the total offline value it is part of -- on 2026-08-25 that made new customers
+     read as 159% of in-store value. Scale the subsets by the same ratio so the parts still
+     add up to the whole. */
+  d.fv=d.fv.map(function(v,i){
+   if(v<=cap)return v;
+   var r=cap/v; clip+=v-cap;
+   if(d.ncv&&d.ncv[i])d.ncv[i]=d.ncv[i]*r;
+   if(d.nc&&d.nc[i])d.nc[i]=d.nc[i]*r;
+   if(d.op&&d.op[i])d.op[i]=d.op[i]*r;
+   return cap;});
+  if(clip>0){a.ofv=Math.max(0,(a.ofv||0)-Math.round(clip));a._fvClip=Math.round(clip);
+   if(a.ncv!=null&&(a.ofv+clip)>0)a.ncv=Math.max(0,a.ncv*(a.ofv/(a.ofv+clip)));}});
  if(typeof MutationObserver!=='undefined')try{['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g12','g13','g14','g15'].forEach(id=>{const el=document.getElementById(id);if(!el)return;new MutationObserver(()=>insWrap(id)).observe(el,{childList:true,subtree:true});});}catch(e){}LSC=cairoFull(O.lastSync);try{const t0=cparse(O.lastSync);if(t0!=null)NXC=cfmt(t0+3*3600*1000);}catch(e){}
  LSF=cairoFull(O.lastSync);
  document.getElementById('sync').innerHTML='↻ Synced <b>'+LSF+'</b> Cairo · next ~<b>'+NXC+'</b>'+srcHealth();
@@ -10320,6 +10332,97 @@ function okActCard(g, acts, lead){
   +(acts.length>12?'<div style="font-size:11px;color:#8a93a6;margin-top:4px">'+(acts.length-12)+' more below the cut — they are all in the tables underneath.</div>':'');
  g.insertBefore(el, g.firstChild);
 }
+
+/* New vs returning, on the only leg where Meta actually splits it.
+
+   VERIFIED BEFORE BUILDING, because guessing here would have been wrong: `ncv`/`nc` are
+   the NEW-CUSTOMER split of IN-STORE conversions only. Across 916 non-zero ad-days in the
+   live feed, ncv never exceeded that day's offline value (3 rounding cases at 0.3%) and
+   was never non-zero on a day with no offline value at all. The split comes from the
+   branch CAPI's "In-store New Customer - <branch>" custom conversions, so it cannot and
+   does not describe website revenue. This card therefore splits the in-store leg and
+   reports the website leg beside it as unsplit, rather than quietly implying a whole-
+   account new/returning ratio that the data does not support. */
+function metaNCRC(g, ads, PW, W, fON, fOFF){
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const day=i=>{let web=0,off=0,ncv=0,nc=0,op=0,sp=0;
+  ads.forEach(a=>{const d=a.d;
+   web+=((d.pv&&d.pv[i])||0)*fON; off+=((d.fv&&d.fv[i])||0)*fOFF;
+   ncv+=((d.ncv&&d.ncv[i])||0)*fOFF; nc+=(d.nc&&d.nc[i])||0;
+   op+=(d.op&&d.op[i])||0; sp+=(d.sp&&d.sp[i])||0;});
+  /* Meta's own feed still has a handful of ad-days where the new-customer subset reads
+     above the offline total it belongs to. Clamp so a share can never print above 100%. */
+  ncv=Math.min(ncv,off); nc=Math.min(nc,op);
+  return {web,off,ncv,rcv:Math.max(0,off-ncv),nc,rc:Math.max(0,op-nc),op,sp};};
+ const sum=(a,b)=>{const t={web:0,off:0,ncv:0,rcv:0,nc:0,rc:0,op:0,sp:0};
+  for(let i=a;i<=b;i++){const d=day(i);for(const k in t)t[k]+=d[k];}return t;};
+ const cur=sum(PW.a,PW.b), prv=PW.ok?sum(PW.pa,PW.pb):null;
+ if(!cur.off&&!cur.web)return;
+ /* per-day so a 7-day range and a 30-day one are comparable */
+ const pd=o=>{const k={};for(const x in o)k[x]=o[x]/Math.max(1,(o===cur?PW.n:PW.pn));return k;};
+ const c=pd(cur), p=prv?pd(prv):null;
+ const shr=cur.off>0?cur.ncv/cur.off*100:0;
+ const pshr=(prv&&prv.off>0)?prv.ncv/prv.off*100:null;
+
+ /* Which leg moved, in money per day -- the actual question. */
+ const dNC=p?(c.ncv-p.ncv):null, dRC=p?(c.rcv-p.rcv):null, dW=p?(c.web-p.web):null;
+ let verdict='';
+ if(p){
+  const parts=[['new-customer in-store',dNC],['returning in-store',dRC],['website',dW]]
+    .filter(x=>Math.abs(x[1])>1).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  const tot=dNC+dRC+dW;
+  if(parts.length){const big=parts[0];
+   verdict='<b>'+(tot>=0?'Attributed value is up ':'Attributed value is down ')+M(Math.abs(tot))+' a day</b>, and '
+    +(Math.abs(big[1])/Math.max(1,Math.abs(tot))*100).toFixed(0)+'% of that move is <b>'+big[0]+'</b> ('
+    +(big[1]>=0?'+':'−')+M(Math.abs(big[1]))+'/day). '
+    +parts.slice(1).map(x=>x[0]+' '+(x[1]>=0?'+':'−')+M(Math.abs(x[1]))).join(', ')+'.';}
+ } else verdict='No equal earlier period inside the '+((W&&W.n)||60)+'-day Meta window, so there is nothing to attribute the move to yet.';
+
+ const tile=(lbl,val,sub,col,bg)=>'<div style="flex:1;min-width:190px;padding:12px 14px;border-radius:12px;background:'+bg+';border:1px solid '+col+'22">'
+  +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:'+col+'">'+lbl+'</div>'
+  +'<div style="font-size:23px;font-weight:800;color:'+col+';line-height:1.15;margin:2px 0">'+val+'</div>'
+  +'<div style="font-size:11.5px;color:#5b6478;line-height:1.5">'+sub+'</div></div>';
+
+ /* stacked daily bars: new on the bottom, returning above, website hatched on top */
+ const H=118, days=[]; for(let i=PW.a;i<=PW.b;i++)days.push(day(i));
+ const mx=Math.max.apply(null,days.map(d=>d.ncv+d.rcv+d.web).concat([1]));
+ const bw=Math.max(3,Math.min(26,Math.floor(760/Math.max(1,days.length))-2));
+ let bars='',x=0;
+ days.forEach((d,k)=>{const t=d.ncv+d.rcv+d.web;
+  const h=v=>Math.max(0,v/mx*H);
+  const hn=h(d.ncv),hr=h(d.rcv),hw=h(d.web);
+  bars+='<g><title>'+addD(W.start,PW.a+k)+' \u2014 new in-store '+M(d.ncv)+', returning in-store '+M(d.rcv)+', website '+M(d.web)+'</title>'
+   +'<rect x="'+x+'" y="'+(H-hn)+'" width="'+bw+'" height="'+hn+'" fill="#12a06e"/>'
+   +'<rect x="'+x+'" y="'+(H-hn-hr)+'" width="'+bw+'" height="'+hr+'" fill="#5a5bf0"/>'
+   +'<rect x="'+x+'" y="'+(H-hn-hr-hw)+'" width="'+bw+'" height="'+hw+'" fill="#c9cede"/></g>';
+  x+=bw+2;});
+ const wpx=Math.max(1,x);
+ const svg='<svg viewBox="0 0 '+wpx+' '+(H+16)+'" preserveAspectRatio="none" style="width:100%;height:150px;display:block">'
+  +bars+'</svg>'
+  +'<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#8a93a6;margin-top:2px">'
+   +'<span>'+addD(W.start,PW.a)+'</span><span>peak day '+M(mx)+'</span><span>'+addD(W.start,PW.b)+'</span></div>'
+  +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#5b6478;margin-top:6px">'
+   +'<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#12a06e;margin-right:5px"></i>New customer, in store</span>'
+   +'<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#5a5bf0;margin-right:5px"></i>Returning, in store</span>'
+   +'<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#c9cede;margin-right:5px"></i>Website (no split available)</span></div>';
+
+ pnlCard(g,'meta','New or returning — which one is moving the attributed money'
+   +INFO('Meta splits new vs returning ONLY on the in-store leg, through the branch CAPI’s "In-store New Customer" custom conversions. The website leg carries no such split on this account, so it is shown whole rather than guessed at.'),
+  pfWinNote(PW,W,'Meta')+' '+verdict,
+  '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:11px">'
+   +tile('NEW CUSTOMER · IN STORE',M(c.ncv)+'<span style="font-size:12px;font-weight:600">/day</span>',
+      N(c.nc.toFixed(0))+' new buyers a day — <b>'+shr.toFixed(0)+'%</b> of in-store value'
+      +(pshr!=null?', was '+pshr.toFixed(0)+'%':''),'#0f6e56','#f0fdf6')
+   +tile('RETURNING · IN STORE',M(c.rcv)+'<span style="font-size:12px;font-weight:600">/day</span>',
+      N(c.rc.toFixed(0))+' returning buyers a day — '+(100-shr).toFixed(0)+'% of in-store value','#3a3bd0','#f4f5ff')
+   +tile('WEBSITE',M(c.web)+'<span style="font-size:12px;font-weight:600">/day</span>',
+      'Meta reports no new/returning split for website purchases on this account.','#5b6478','#f7f9fc')
+  +'</div>'+svg
+  +'<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
+  +'<b>Both in-store bars are backfilled for about a fortnight</b>, so the last two weeks understate new and returning alike. '
+  +'A fall at the right-hand edge of this chart is the matching window still open, not customers walking away — check it against the shops’ own POS takings before acting on it.</div>');
+}
 function rMETA(){
  if(TAB!=='mt')return; dCh();
  const g=document.getElementById('g31'); g.innerHTML='';
@@ -10418,6 +10521,8 @@ function rMETA(){
       +'<div style="font-size:11.5px;color:#5b6478;line-height:1.5">'+N(NN.new8w)+' had not been reached at all in eight weeks. The stricter read: a week can look fresh against last week while recycling a pool you burned a month ago.</div></div>':'')
      +'</div>';
    })());
+
+ try{metaNCRC(g,ads,PW,W,fON,fOFF);}catch(e){}
 
  /* ---------- 3. the fatigue score ---------- */
  const rows=[];
@@ -11278,7 +11383,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-002020';
+const BUILD='20260901-003104';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
