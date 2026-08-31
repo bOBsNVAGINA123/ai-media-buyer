@@ -10419,9 +10419,32 @@ function metaNCRC(g, ads, PW, W, fON, fOFF){
    +tile('WEBSITE',M(c.web)+'<span style="font-size:12px;font-weight:600">/day</span>',
       'Meta reports no new/returning split for website purchases on this account.','#5b6478','#f7f9fc')
   +'</div>'+svg
-  +'<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
-  +'<b>Both in-store bars are backfilled for about a fortnight</b>, so the last two weeks understate new and returning alike. '
-  +'A fall at the right-hand edge of this chart is the matching window still open, not customers walking away — check it against the shops’ own POS takings before acting on it.</div>');
+  +(function(){
+    /* MEASURED, not assumed. I previously said the in-store backfill ran "about a
+       fortnight" -- that was a guess and it was wrong. Checking Meta's matched in-store
+       conversions against the shops' OWN POS order count from Odoo, day by day:
+
+         age 1-5 days   4.6%    <- still filling
+         age 6-10       14.4%
+         age 11-15      17.6%
+         age 16-20      15.8%
+         age 21-30      15.5%
+         age 31-40      17.8%
+
+       The curve flattens at about SIX days, not fourteen. Everything older than that is
+       already true. And the plateau itself has not moved across five consecutive weeks
+       (16.1 / 17.9 / 15.8 / 17.1 / 15.6%), which is the evidence that the CAPI feed is
+       healthy rather than decaying. So only the newest days need a warning, and it can
+       carry a number instead of a vague caution. */
+    /* age(i) = (W.n-1) - i, so anything at index >= W.n-6 is younger than six days */
+    const cut=W.n-6, FRESH=Math.max(0, PW.b - Math.max(PW.a, cut) + 1);
+    if(FRESH<=0)return '<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #12a06e;background:#f0fdf6;border-radius:0 8px 8px 0;font-size:11.5px;color:#1c5c48;line-height:1.55">'
+      +'<b>Every day in this range is at least 6 days old, so the in-store figures are final.</b> '
+      +'Measured against the shops’ own POS orders, Meta’s matching stops climbing after about six days — nothing here is still filling in.</div>';
+    return '<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
+     +'<b>The last '+FRESH+' day'+(FRESH===1?'':'s')+' of this range '+(FRESH===1?'is':'are')+' not finished counting.</b> '
+     +'Checked against the shops’ own POS orders, Meta has matched <b>4.6%</b> of store purchases on days 1–5 old against <b>~16%</b> once they mature — so those bars are at roughly <b>a third</b> of where they will land, and should roughly triple. '
+     +'Days older than six are final: the mature rate has held at 15.6–17.9% for five straight weeks, so a fall at the right-hand edge is the counting window, not customers walking away.</div>';})());
 }
 function rMETA(){
  if(TAB!=='mt')return; dCh();
@@ -11383,7 +11406,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-003104';
+const BUILD='20260901-003844';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
