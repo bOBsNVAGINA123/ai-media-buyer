@@ -5528,18 +5528,24 @@ function changeLog(g){
      PAUSED is judged on what was stopped: killing a loss is a win, killing a winner is not.
      BUDGET UP is the only one where "did the rate survive the extra money" is the question. */
   let v;
-  if(s.aN<4||(s.A.pu<4&&s.B.pu<4))v='INCONCLUSIVE';
+  /* A PAUSE is the one change that does not need an after-window to be judged. There is
+     no "after" -- the ad is off. The only question is what you stopped, and the BEFORE
+     window already answers it. Leaving pauses behind the aN>=4 gate meant anything
+     switched off in the last three days read INCONCLUSIVE, which is exactly when you most
+     want to know whether you just killed a winner. Judged on before-purchases instead. */
+  if(x.kind==='PAUSED')
+   v=(s.B.pu<4)?'INCONCLUSIVE':(Bgp<0?'WORKED':(Broas!=null&&Broas>=be?'PAUSED A WINNER':'COST US'));
+  else if(s.aN<4||(s.A.pu<4&&s.B.pu<4))v='INCONCLUSIVE';
   else if(x.kind==='LAUNCHED')v=(Aroas!=null&&Aroas>=be)?'WORKED':'NOT PAYING';
-  else if(x.kind==='PAUSED')v=(Bgp<0)?'WORKED':'COST US';
   else if(x.kind==='BUDGET UP')
    v=(Aroas!=null&&Broas!=null&&Aroas>=Broas*0.85&&Aroas>=be)?'WORKED':(Aroas!=null&&Aroas<be?'FAILED SCALE':'DILUTED');
   else v=(dGp>=0)?'WORKED':'COST US';
-  if(v==='WORKED')win++;else if(v==='FAILED SCALE'||v==='COST US'||v==='NOT PAYING')fail++;else incon++;
+  if(v==='WORKED')win++;else if(v==='FAILED SCALE'||v==='COST US'||v==='NOT PAYING'||v==='PAUSED A WINNER')fail++;else incon++;
   /* an unproven change must not contribute a confident number to the headline */
   if(v!=='INCONCLUSIVE'&&v!=='TOO RECENT'&&v!=='LOGGED')gpDelta+=dGp;
   return Object.assign({},x,{v,s,Bd,Ad,Broas,Aroas,dGp,proven:(v!=='INCONCLUSIVE'&&v!=='TOO RECENT')});
  });
- const VC={'WORKED':'#12a06e','FAILED SCALE':'#e23a63','COST US':'#e23a63','NOT PAYING':'#e23a63','DILUTED':'#ff8b42','INCONCLUSIVE':'#9aa3b5','TOO RECENT':'#9aa3b5','LOGGED':'#5a5bf0'};
+ const VC={'WORKED':'#12a06e','FAILED SCALE':'#e23a63','COST US':'#e23a63','NOT PAYING':'#e23a63','PAUSED A WINNER':'#e23a63','DILUTED':'#ff8b42','INCONCLUSIVE':'#9aa3b5','TOO RECENT':'#9aa3b5','LOGGED':'#5a5bf0'};
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
  const btn=(on,lbl,k,v)=>'<button onclick="clSet(\''+k+'\',\''+v+'\')" style="border:1px solid '+(on?'#0F172A':'#d8dde8')+';background:'+(on?'#0F172A':'#fff')+';color:'+(on?'#fff':'#334155')+';border-radius:6px;padding:3px 10px;font-size:11.5px;font-weight:700;cursor:pointer;margin-right:5px">'+lbl+'</button>';
@@ -5574,7 +5580,8 @@ function changeLog(g){
    +(x.dGp==null?'—':(x.proven?SG(x.dGp):'('+SG(x.dGp)+')'))+'</td>'
    +'<td style="'+TD+';text-align:left"><span style="font-size:10.5px;font-weight:800;color:'+VC[x.v]+'">'+x.v+'</span></td></tr>';});
  tb+='</table></div>';
- const notes=[['#e23a63','<b>A budget rise only "worked" if the return survived it.</b> Spending more will almost always buy more revenue; the test applied here is whether incremental ROAS held within 15% of its own pre-change level AND still cleared the '+be.toFixed(2)+'× breakeven. Anything that bought volume at a worse rate reads as DILUTED or FAILED SCALE, not as growth.'],
+ const notes=[['#e23a63','<b>PAUSED A WINNER means you switched off an ad that was clearing breakeven.</b> Pauses are the one change judged on the BEFORE window alone \u2014 there is no after, the ad is off \u2014 so a pause made yesterday still gets a verdict instead of sitting at INCONCLUSIVE for a week. It needs four purchases before the pause to be called at all.'],
+  ['#e23a63','<b>A budget rise only "worked" if the return survived it.</b> Spending more will almost always buy more revenue; the test applied here is whether incremental ROAS held within 15% of its own pre-change level AND still cleared the '+be.toFixed(2)+'× breakeven. Anything that bought volume at a worse rate reads as DILUTED or FAILED SCALE, not as growth.'],
   ['#3a9bff','<b>Windows are compared per day, not per window.</b> A change three days from the edge of the feed has a three-day after-window, and comparing that total against seven days before would manufacture a collapse.'],
   ['#9aa3b5','<b>A bracketed, greyed profit figure means the change is not proven</b> &mdash; fewer than four days after it, or too few purchases either side. Those rows are excluded from the headline total rather than quietly counted.'],
   ['#3a9bff','<b>Google budget moves are read from Google&rsquo;s own change history, not inferred.</b> Where a recorded change exists, the inferred spend step within a day of it is dropped so one decision is not counted twice'+(window.__clDeduped?' ('+window.__clDeduped+' suppressed this run)':'')+'. Meta exposes no comparable history, so Meta rows here are all inferred.'],
@@ -11271,7 +11278,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260831-192346';
+const BUILD='20260901-002020';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
