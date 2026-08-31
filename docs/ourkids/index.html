@@ -2790,7 +2790,30 @@ function okpMap(){
  return OKPMAP;
 }
 function okBar(n){const m=/^\[([^\]]+)\]/.exec(String(n||''));return m?m[1].trim():'';}
+/* Every row clickable, without ever fabricating a product URL.
+   Three cases came out of testing these barcodes against Shopify:
+     - a real SKU on a published product -> its own page
+     - a real SKU whose product is NOT published (onlineStoreUrl null) -> no page exists at all
+     - an Odoo-internal code such as "10698-38" that Shopify has never seen
+   The last two have nothing to point at, so they go to site search on the barcode: it lands on
+   the product when it is findable and on an honest empty result when it is not. Guessing at
+   /products/<slug> for those would 404 in front of whoever clicked it. Solid underline = the
+   product's own page, dashed = a search. */
 function okpUrl(n){const e=okpMap()[okBar(n)];return e&&e.url?e.url:'';}
+function okpAny(n){
+ const direct=okpUrl(n); if(direct)return {u:direct,exact:true};
+ const bc=okBar(n);
+ const term=bc||String(n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,60);
+ if(!term)return {u:'',exact:false};
+ return {u:'https://shop-ourkids.com/search?q='+encodeURIComponent(term),exact:false};
+}
+function okpA(name,label){
+ const L=okpAny(name); const t=String(label==null?'':label);
+ if(!L.u)return t;
+ return '<a href="'+L.u.replace(/"/g,'&quot;')+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" '
+  +'style="color:inherit;text-decoration:none;border-bottom:1px '+(L.exact?'dotted #9aa3b5':'dashed #c9ccd6')+'" '
+  +'title="'+(L.exact?'Open on shop-ourkids.com':'No product page for this code — search the site')+'">'+t+'</a>';
+}
 
 /* Export what is on screen with the identifiers a buyer acts on -- barcode first, because that is
    what the warehouse and the supplier both speak. */
@@ -2855,7 +2878,7 @@ function prodBars(rows,opt){
   return '<div style="border-bottom:1px solid #f1f3f8">'
    +'<div onclick="pdToggle(\''+k+'\')" style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer">'
      +'<span id="pa_'+k+'" style="width:10px;color:#9aa3b5;font-size:10px">'+(window.PDOPEN[k]?'▾':'▸')+'</span>'
-     +'<div style="width:230px;flex:0 0 230px;padding-right:10px;box-sizing:border-box;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+pLink(clean(r.n),r.url||okpUrl(r.n))+'</div>'
+     +'<div style="width:230px;flex:0 0 230px;padding-right:10px;box-sizing:border-box;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+clean(r.n).replace(/"/g,'&quot;')+'">'+(r.url?pLink(clean(r.n),r.url):okpA(r.n,clean(r.n)))+'</div>'
      /* Was absolutely positioned just past the end of the bar, which works until the bar is the
         longest one: the offset then reaches the container edge and the number printed on top of
         the product name. Rebuilt as two half-width flex cells -- [label][bar] on the losing side,
@@ -4553,6 +4576,30 @@ function merDaily(g){
   +'<div class="row"><span class="dot" style="background:#e23a63"></span><span><b>The in-store line is a claim, not a measurement.</b> It is Meta&rsquo;s offline conversion value at your current attribution setting &mdash; shop sales it recognised as buyers it had reached. It is not the shops&rsquo; POS takings, and on this account that matched value has been shown not to move with spend once trend and the Friday/Saturday pattern are controlled.</span></div>'
   +'<div class="row"><span class="dot" style="background:#7c869c"></span><span>All three ratios divide by the <b>whole</b> budget, including spend that worked in the shops. That is the standard definition and it is why aMER sits well below MER: the same spend is being charged against a narrower slice of revenue each time.</span></div>'
   +'</div>';
+ /* v9.48: put the numbers on the page, not only in the lines. Six coloured series with no values
+    anywhere is a shape, not a reading -- you could not tell whether MER was 3x or 30x without
+    hovering. This strip states each series at the end of the window, and what it did across it. */
+ (function(){
+  const last=a=>{for(let k=a.length-1;k>=0;k--)if(a[k]!=null&&isFinite(a[k]))return a[k];return null;};
+  const sum=a=>a.reduce((x,y)=>x+(y||0),0);
+  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const days=lab.length;
+  const items=[
+   ['Ad spend',M(sum(spend)),'over '+days+' days','#9aa3b5'],
+   ['New-customer revenue',M(sum(nc)),Math.round(sum(nc)/Math.max(1,sum(nc)+sum(rc))*100)+'% of webstore','#12a06e'],
+   ['Returning revenue',M(sum(rc)),Math.round(sum(rc)/Math.max(1,sum(nc)+sum(rc))*100)+'% of webstore','#3a9bff'],
+   ['In-store Meta claims',M(sum(off)),'matched, not measured','#ff8b42'],
+   ['MER',(last(mer)!=null?last(mer).toFixed(2)+'\u00d7':'\u2014'),'webstore \u00f7 all spend','#5a5bf0'],
+   ['aMER',(last(amer)!=null?last(amer).toFixed(2)+'\u00d7':'\u2014'),'first-time buyers only','#12a06e'],
+   ['MER + in-store',(last(merOff)!=null?last(merOff).toFixed(2)+'\u00d7':'\u2014'),'incl. Meta\u2019s shop claim','#ff8b42']];
+  const strip=document.createElement('div');
+  strip.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin:2px 0 10px';
+  strip.innerHTML=items.map(x=>'<div style="border:1px solid #e6eaf2;border-left:3px solid '+x[3]+';border-radius:9px;padding:8px 10px;background:#fff">'
+   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#64748B">'+x[0]+'</div>'
+   +'<div style="font-size:17px;font-weight:800;color:#161d2e;line-height:1.15;font-variant-numeric:tabular-nums">'+x[1]+'</div>'
+   +'<div style="font-size:10.5px;color:#8a93a6">'+x[2]+'</div></div>').join('');
+  el.appendChild(strip);
+ })();
  g.appendChild(el);
  const money=[{label:'New-customer revenue',data:nc,borderColor:'#12a06e',backgroundColor:'rgba(18,160,110,0.10)',borderWidth:2,pointRadius:0,tension:0.25,fill:true},
    {label:'Returning-customer revenue',data:rc,borderColor:'#3a9bff',backgroundColor:'rgba(58,155,255,0.08)',borderWidth:2,pointRadius:0,tension:0.25,fill:true},
@@ -9930,7 +9977,7 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
  el.innerHTML=(bad?'DATA IS STALE':'Data may be behind')+' — last sync '+t+', about '+hrs.toFixed(1)+' hours ago. The collector runs hourly; if this stays red the GitHub job is not firing, so treat every number on this page as of that timestamp.';
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
-async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-145545'&&v!==BUILD)location.reload();}catch(e){}}
+async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-151438'&&v!==BUILD)location.reload();}catch(e){}}
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
@@ -10120,8 +10167,8 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
  const oosLoss=oos.reduce((a,x)=>a+(x.pr-x.r),0);
  const totAbs=prods.reduce((a,x)=>a+Math.abs(x.r-x.pr),0)||1;
  const prow=x=>'<tr><td style="text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis" dir="auto"><b>'+String(x.n).replace(/</g,'&lt;')+'</b>'+(x.vn?'<span style="color:#8a93a6"> · '+x.vn+'</span>':'')+'</td><td>'+x.pq+' → <b>'+x.q+'</b></td><td style="font-weight:800;color:'+col(x.r-x.pr)+'">'+SM(x.r-x.pr)+'</td><td style="color:#8a93a6">'+Math.round(Math.abs(x.r-x.pr)/totAbs*100)+'%</td><td>'+(x.st==null?'—':(x.st<=0?'<b style="color:#e23a63">OUT OF STOCK</b>':x.st<=3?'<b style="color:#ff8b42">'+x.st+' left</b>':x.st+' left'))+'</td></tr>';
- const ptab=(rows)=>'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Product</th><th>Units prev → now</th><th>Δ revenue</th><th>share of all moves</th><th>Stock on hand</th></tr>'+rows.map(prow).join('')+'</table></div>';
- const vtab='<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Vendor</th><th>Revenue prev → now</th><th>Δ</th><th>Units prev → now</th><th>Price / unit prev → now</th></tr>'
+ const ptab=(rows)=>'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Product</th><th>Units '+W.ps.slice(5)+' → '+W.s.slice(5)+'</th><th>Δ revenue</th><th>share of all moves</th><th>Stock on hand</th></tr>'+rows.map(prow).join('')+'</table></div>';
+ const vtab='<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right"><tr><th style="text-align:left">Vendor</th><th>Revenue prev → now</th><th>Δ</th><th>Units '+W.ps.slice(5)+' → '+W.s.slice(5)+'</th><th>Price / unit prev → now</th></tr>'
   +vend.slice(0,12).map(v=>'<tr><td style="text-align:left"><b>'+String(v.n).replace(/</g,'&lt;')+'</b> <span style="color:#8a93a6">'+v.v+'</span></td><td>'+M(v.pr)+' → <b>'+M(v.r)+'</b></td><td style="font-weight:800;color:'+col(v.r-v.pr)+'">'+SM(v.r-v.pr)+' <span style="color:#8a93a6;font-weight:600">'+fp(pc(v.r,v.pr))+'</span></td><td>'+v.pq+' → '+v.q+'</td><td>'+(v.pq?M(v.pr/v.pq):'—')+' → <b>'+(v.q?M(v.r/v.q):'—')+'</b></td></tr>').join('')+'</table></div>';
  const mix=node(3,'Price per unit = product &amp; vendor MIX, discounting, and stock',M(ppuP)+' → <b>'+M(ppuC)+'</b> <span style="color:'+col(ppuC-ppuP)+'">'+fp(pc(ppuC,ppuP))+'</span>','When cheaper items take over the basket, AOV falls even with more units per order. Stock column shows whether a faller simply ran out.',
    node(4,'Discounts',SM(C.disc-P.disc)+' <span style="color:#8a93a6">('+(P.rev?(Math.abs(P.disc)/P.rev*100).toFixed(1):'0')+'% → '+(C.rev?(Math.abs(C.disc)/C.rev*100).toFixed(1):'0')+'% of gross)</span>','Shopify discount lines. '+(Math.abs(C.disc)<=Math.abs(P.disc)?'Discounting did NOT drive the move — it went down.':'Discounting increased — part of the price-per-unit drop is deliberate.'))
