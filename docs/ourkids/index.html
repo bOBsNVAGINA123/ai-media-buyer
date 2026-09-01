@@ -1,33 +1,3 @@
- const posBox=(function(){
-  const P=PR.pos;
-  if(!P)return '';
-  if(P.error)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">The in-store probe did not run this sync.</div>';
-  if(!P.any)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">'
-   +'No till discounts recorded in the branches across '+N(P.lines)+' POS lines this window.</div>';
-  const p=P.probes||{}, CL=P.codes||[];
-  const rows=CL.slice(0,20).map(r=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+esc(r.c)+'</td>'
-    +'<td style="'+TD+'">'+N(r.ord)+'</td></tr>').join('');
-  return '<div style="margin-top:14px;padding-top:12px;border-top:2px solid #e6eaf2">'
-   +'<div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:3px">In the shops — far bigger than the webstore</div>'
-   +'<div style="font-size:11.5px;color:#5b6478;line-height:1.55;margin-bottom:9px">'
-    +'<b>'+M(P.given)+'</b> given away across '+N(p.discount||0)+' discounted lines of '+N(P.lines)+' — against '+M(tDisc)+' online. '
-    +'Reward lines name the code but carry no money (the discount comes off as a percentage on the ordinary lines), so the table below is <b>order counts per code</b> and the total above is the money. '
-    +'Two measured numbers rather than one invented join.</div>'
-   +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
-    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff6f9;border:1px solid #a3271a22">'
-     +'<div style="font-size:10px;font-weight:800;color:#a3271a">GIVEN AWAY IN STORE</div>'
-     +'<div style="font-size:21px;font-weight:800;color:#a3271a;margin:2px 0">'+M(P.given)+'</div>'
-     +'<div style="font-size:11.5px;color:#5b6478">'+(tDisc?(P.given/tDisc).toFixed(0):'—')+'× the webstore figure</div></div>'
-    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff;border:1px solid #e6eaf2">'
-     +'<div style="font-size:10px;font-weight:800;color:#64748B">CODES USED IN STORE</div>'
-     +'<div style="font-size:21px;font-weight:800;color:#161d2e;margin:2px 0">'+N(CL.length)+'</div>'
-     +'<div style="font-size:11.5px;color:#5b6478">'+N(p.coupon||0)+' coupon lines, '+N(p.reward||0)+' reward lines</div></div>'
-   +'</div>'
-   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
-   +'<tr><th style="'+TH+';text-align:left">Code (in store)</th><th style="'+TH+'">Orders</th></tr>'+rows+'</table></div>'
-   +(CL.length>20?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(CL.length-20)+' smaller codes not shown.</div>':'')
-   +'</div>';})();
-
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>OurKids — Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -5448,13 +5418,27 @@ function promoCard(g){
   const P=PR.pos;
   if(!P)return '';
   if(P.error)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">The in-store probe did not run this sync.</div>';
-  if(P.any){const p=P.probes||{};
-   return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #12a06e;background:#f0fdf6;border-radius:0 8px 8px 0;font-size:11.5px;color:#1c5c48;line-height:1.55">'
-    +'<b>The shops ARE recording till discounts now.</b> Of '+N(P.lines)+' POS lines in this window: '
-    +Object.keys(p).map(k=>k+' '+N(p[k])).join(', ')+'. This card should be extended to break those out by code.</div>';}
-  return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #a3271a;background:#fff6f9;border-radius:0 8px 8px 0;font-size:11.5px;color:#7a2233;line-height:1.55">'
-   +'<b>None of this is happening in the shops — measured, not assumed.</b> Across '+N(P.lines)+' POS lines in the same window Odoo holds <b>zero</b> with a coupon attached, <b>zero</b> with a reward, <b>zero</b> with a discount percentage and <b>zero</b> negative lines. '
-   +'Four independent ways of recording a till discount, all empty. So either the branches do not honour these codes, or they honour them off-system and the POS never sees it — and in that second case the discount is invisible in every margin number you have, including the GP% on the audit above.</div>';})();
+  if(!P.any)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">'
+   +'No till discounts recorded in the branches across '+N(P.lines)+' POS lines this window.</div>';
+  const p=P.probes||{}, CL=P.codes||[];
+  const rows=CL.slice(0,20).map(r=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+esc(r.c)+'</td><td style="'+TD+'">'+N(r.ord)+'</td></tr>').join('');
+  return '<div style="margin-top:14px;padding-top:12px;border-top:2px solid #e6eaf2">'
+   +'<div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:3px">In the shops &mdash; far bigger than the webstore</div>'
+   +'<div style="font-size:11.5px;color:#5b6478;line-height:1.55;margin-bottom:9px"><b>'+M(P.given)+'</b> given away across '+N(p.discount||0)+' discounted lines of '+N(P.lines)+' &mdash; against '+M(tDisc)+' online. Reward lines name the code but carry no money (the discount comes off as a percentage on the ordinary lines), so the table below is <b>order counts per code</b> and the total above is the money.</div>'
+   +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff6f9;border:1px solid #a3271a22">'
+     +'<div style="font-size:10px;font-weight:800;color:#a3271a">GIVEN AWAY IN STORE</div>'
+     +'<div style="font-size:21px;font-weight:800;color:#a3271a;margin:2px 0">'+M(P.given)+'</div>'
+     +'<div style="font-size:11.5px;color:#5b6478">'+(tDisc?(P.given/tDisc).toFixed(0):'—')+'× the webstore figure</div></div>'
+    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff;border:1px solid #e6eaf2">'
+     +'<div style="font-size:10px;font-weight:800;color:#64748B">CODES USED IN STORE</div>'
+     +'<div style="font-size:21px;font-weight:800;color:#161d2e;margin:2px 0">'+N(CL.length)+'</div>'
+     +'<div style="font-size:11.5px;color:#5b6478">'+N(p.coupon||0)+' coupon lines, '+N(p.reward||0)+' reward lines</div></div>'
+   +'</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+   +'<tr><th style="'+TH+';text-align:left">Code (in store)</th><th style="'+TH+'">Orders</th></tr>'+rows+'</table></div>'
+   +(CL.length>20?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(CL.length-20)+' smaller codes not shown.</div>':'')
+   +'</div>';})();
 
  pnlCard(g,'shopify','Discount codes — what they cost and whether the shops use them'
    +INFO('Shopify’s own discount_code dimension for the webstore, and a four-way probe of the Odoo POS for the same window. Odoo’s loyalty tables are deliberately not used: every reward id on this store is null.'),
@@ -11636,7 +11620,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-030216';
+const BUILD='20260901-101453';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
