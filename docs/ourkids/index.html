@@ -1,3 +1,33 @@
+ const posBox=(function(){
+  const P=PR.pos;
+  if(!P)return '';
+  if(P.error)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">The in-store probe did not run this sync.</div>';
+  if(!P.any)return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478">'
+   +'No till discounts recorded in the branches across '+N(P.lines)+' POS lines this window.</div>';
+  const p=P.probes||{}, CL=P.codes||[];
+  const rows=CL.slice(0,20).map(r=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+esc(r.c)+'</td>'
+    +'<td style="'+TD+'">'+N(r.ord)+'</td></tr>').join('');
+  return '<div style="margin-top:14px;padding-top:12px;border-top:2px solid #e6eaf2">'
+   +'<div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:3px">In the shops — far bigger than the webstore</div>'
+   +'<div style="font-size:11.5px;color:#5b6478;line-height:1.55;margin-bottom:9px">'
+    +'<b>'+M(P.given)+'</b> given away across '+N(p.discount||0)+' discounted lines of '+N(P.lines)+' — against '+M(tDisc)+' online. '
+    +'Reward lines name the code but carry no money (the discount comes off as a percentage on the ordinary lines), so the table below is <b>order counts per code</b> and the total above is the money. '
+    +'Two measured numbers rather than one invented join.</div>'
+   +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff6f9;border:1px solid #a3271a22">'
+     +'<div style="font-size:10px;font-weight:800;color:#a3271a">GIVEN AWAY IN STORE</div>'
+     +'<div style="font-size:21px;font-weight:800;color:#a3271a;margin:2px 0">'+M(P.given)+'</div>'
+     +'<div style="font-size:11.5px;color:#5b6478">'+(tDisc?(P.given/tDisc).toFixed(0):'—')+'× the webstore figure</div></div>'
+    +'<div style="flex:1;min-width:170px;padding:10px 12px;border-radius:11px;background:#fff;border:1px solid #e6eaf2">'
+     +'<div style="font-size:10px;font-weight:800;color:#64748B">CODES USED IN STORE</div>'
+     +'<div style="font-size:21px;font-weight:800;color:#161d2e;margin:2px 0">'+N(CL.length)+'</div>'
+     +'<div style="font-size:11.5px;color:#5b6478">'+N(p.coupon||0)+' coupon lines, '+N(p.reward||0)+' reward lines</div></div>'
+   +'</div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+   +'<tr><th style="'+TH+';text-align:left">Code (in store)</th><th style="'+TH+'">Orders</th></tr>'+rows+'</table></div>'
+   +(CL.length>20?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(CL.length-20)+' smaller codes not shown.</div>':'')
+   +'</div>';})();
+
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>OurKids — Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -2649,8 +2679,49 @@ function offOnChart(g){const A=O.ad,BM=O.bmeta||{};if(!A||!A.start)return;
    height, so spend "tracked" store revenue by construction. Two panels over one shared x-axis
    keep every series on a scale that means something and still let the eye compare shapes.
    The panels are aligned by pinning both y-axes to the same width. */
+/* END LABELS + REFERENCE LINE.
+
+   These panels drew four lines with pointRadius 0, a legend and an axis, and nothing else --
+   so reading "what is MER right now" meant matching a colour to a legend, then eyeballing a
+   height against a tick. The number was never written down. Two plugins fix that without
+   adding a single pixel of grid:
+     endLbl -- prints each series' LAST value at the end of its own line, in its own colour,
+               so the legend becomes a convenience rather than a decoder ring.
+     refLine -- draws the break-even ratio across the ratio panel and names it, because a MER
+               of 3.2x and one of 4.2x look identical on a shape and are opposite verdicts. */
+const OKENDLBL={id:'okEndLbl',afterDatasetsDraw(c){
+ const ar=c.chartArea; if(!ar)return; const ctx=c.ctx; ctx.save();
+ ctx.font='800 10px Inter,system-ui,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+ const used=[];
+ c.data.datasets.forEach((ds,di)=>{
+  const m=c.getDatasetMeta(di); if(!m||m.hidden||!m.data||!m.data.length)return;
+  let k=-1; for(let j=ds.data.length-1;j>=0;j--){if(ds.data[j]!=null){k=j;break;}}
+  if(k<0||!m.data[k])return;
+  const p=m.data[k]; const f=(c.$okFmt||(v=>String(Math.round(v))));
+  const t=f(ds.data[k]);
+  let y=p.y; let guard=0;
+  while(used.some(u=>Math.abs(u-y)<11)&&guard<14){y+=11;guard++;}
+  if(y>ar.bottom-2||y<ar.top+2)y=Math.min(ar.bottom-2,Math.max(ar.top+2,p.y));
+  used.push(y);
+  const x=Math.min(p.x+5,ar.right-2);
+  ctx.fillStyle='rgba(255,255,255,.82)';
+  const w=ctx.measureText(t).width;
+  ctx.fillRect(x-2,y-7,w+4,14);
+  ctx.fillStyle=ds.borderColor||'#0F172A'; ctx.fillText(t,x,y);});
+ ctx.restore();}};
+const OKREFLINE={id:'okRefLine',beforeDatasetsDraw(c){
+ const r=c.$okRef; if(r==null)return; const ar=c.chartArea, sc=c.scales.y; if(!ar||!sc)return;
+ const y=sc.getPixelForValue(r); if(!(y>ar.top&&y<ar.bottom))return;
+ const ctx=c.ctx; ctx.save();
+ ctx.strokeStyle='#c0143c'; ctx.setLineDash([5,4]); ctx.lineWidth=1.2;
+ ctx.beginPath(); ctx.moveTo(ar.left,y); ctx.lineTo(ar.right,y); ctx.stroke();
+ ctx.setLineDash([]); ctx.font='800 9.5px Inter,system-ui,sans-serif';
+ ctx.fillStyle='#c0143c'; ctx.textBaseline='bottom';
+ ctx.fillText('break-even '+r.toFixed(2)+'\u00d7',ar.left+4,y-2);
+ ctx.restore();}};
 function splitPanel(elId,labels,top,bot){
  const mk=(id,spec,showX)=>({type:spec.type||'line',data:{labels,datasets:spec.sets},
+  plugins:[OKENDLBL,OKREFLINE],
   options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,
    interaction:{mode:'index',intersect:false},
    plugins:{legend:{display:spec.sets.length>1,labels:{boxWidth:12,font:{size:10}}},
@@ -2666,6 +2737,13 @@ function splitPanel(elId,labels,top,bot){
   +'<div style="position:relative;height:'+(bot.h||190)+'px;margin-top:2px"><canvas id="'+elId+'_b"></canvas></div>';
  const A=new Chart(document.getElementById(elId+'_t'),mk(elId+'_t',top,false));
  const B=new Chart(document.getElementById(elId+'_b'),mk(elId+'_b',bot,true));
+ /* the end label needs room to the right of the last point, and each panel needs its own
+    formatter so the money panel prints E£ and the ratio panel prints x */
+ A.$okFmt=top.fmt; B.$okFmt=bot.fmt;
+ if(top.ref!=null)A.$okRef=top.ref; if(bot.ref!=null)B.$okRef=bot.ref;
+ [A,B].forEach(c=>{c.options.layout=Object.assign({},c.options.layout,
+   {padding:Object.assign({},(c.options.layout||{}).padding,{right:Math.max(56,((c.options.layout||{}).padding||{}).right||0)})});});
+ A.update();B.update();
  /* Pinning the y-axes to one width lines up the left edge, but the bottom panel also reserves
     room for its last x-label to overhang, so its plot ended up to 28px narrower -- enough to
     shift the two panels out of register and defeat the whole point of a shared calendar.
@@ -5123,7 +5201,8 @@ function merDaily(g){
    {label:'aMER',data:amer,borderColor:'#12a06e',backgroundColor:'transparent',borderWidth:2.5,pointRadius:0,tension:0.3,spanGaps:true}];
  splitPanel('merpan',lab,
    {sets:money,h:170,fmt:v=>'E£'+Math.round(v).toLocaleString()},
-   {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7'});
+   {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7',
+    ref:(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})()});
 }
 /* v9.46 NEW-AUDIENCE SPEND AND REACH (Meta).
    "How much am I spending to reach people who have never bought from me, and how many of them am I
@@ -7006,7 +7085,12 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
     return '<div style="border:1px solid '+(x.agg?'#cfd6e6':'#e8ebf2')+';border-radius:10px;padding:7px 8px 4px;'+(x.agg?'background:#fafbfe':'')+'"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12.5px;font-weight:800;color:'+x.c+'">'+x.n+(x.agg?' <span style="font-size:9px;color:#9aa3b5">own scale</span>':'')+'</span><span style="font-size:13px;font-weight:800;color:#0F172A">'+(lv==null?'&mdash;':F(lv))+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;min-height:12px">'
      +'<span style="color:'+(pp==null?'#9aa3b5':(pd>=0?'#12a06e':'#e23a63'))+'">'+(pd==null?'':(pd>=0?'&#9650; +':'&#9660; &minus;')+SF(Math.abs(pd)).replace(/^[\u2212-]/,'')+' vs prev period'+(ptx?' ('+ptx+')':''))+'</span>'
-     +'<span style="color:'+(dv==null?'#9aa3b5':(dv>=0?'#12a06e':'#e23a63'))+'">'+(dv==null?'':(dv>=0?'+':'&minus;')+Math.abs(dv).toFixed(0)+'% vs avg branch')+'</span></div>'
+     /* Only ONE comparison is allowed to shout. Colouring both "vs prev period" and
+        "vs avg branch" put two red/green judgements on every panel that regularly
+        disagreed, and the eye cannot tell which one it is being asked to act on. Movement
+        against the branch's own past is the one that matters, so it keeps the colour;
+        standing against the average stays grey context. */
+     +'<span style="color:#9aa3b5">'+(dv==null?'':(dv>=0?'+':'&minus;')+Math.abs(dv).toFixed(0)+'% vs avg')+'</span></div>'
     +'<div style="height:132px"><canvas data-sm="'+i+'"></canvas></div></div>';}).join('')
   +'</div>'
   +(opt.cmt&&opt.cmt.length?'<div class="ins" style="margin-top:8px">'+opt.cmt.map(x=>'<div class="row"><span class="dot" style="background:'+(x[0]||'#5a5bf0')+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>':'');
@@ -7018,9 +7102,11 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
   // which points get a printed number: first, last, highest, lowest (all of them when the series is short)
   const idx=x.d.map((v,j)=>v==null?-1:j).filter(j=>j>=0);
   const pick=new Set();
-  if(idx.length){let hi=idx[0],lo=idx[0];idx.forEach(j=>{if(x.d[j]>x.d[hi])hi=j;if(x.d[j]<x.d[lo])lo=j;});
-   [idx[0],idx[idx.length-1],hi,lo].forEach(j=>pick.add(j));
-   if(idx.length<=7)idx.forEach(j=>pick.add(j));}
+  /* Four printed readings per sparkline (first, last, highest, lowest) in a 248px panel is
+     more ink than line. First and last carry the trend, which is the whole job of a small
+     multiple; the peak and trough are one hover away and are still drawn as points. */
+  if(idx.length){[idx[0],idx[idx.length-1]].forEach(j=>pick.add(j));
+   if(idx.length<=5)idx.forEach(j=>pick.add(j));}
   const LBL={id:'smlbl'+i,afterDatasetsDraw(cc){const m=cc.getDatasetMeta(1);if(!m||!m.data||!m.data.length)return;const ar=cc.chartArea,ctx=cc.ctx;if(!ar)return;
    ctx.save();ctx.font='800 9.5px Inter,system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
    const done=[];
@@ -7049,8 +7135,14 @@ function smallMult(g,title,sub,labels,series,fmt,opt){opt=opt||{};
     pointRadius:(q)=>pick.has(q.dataIndex)?2.6:0,pointBackgroundColor:x.c,pointHoverRadius:5,tension:0,fill:true,spanGaps:true}]},
    options:{responsive:1,maintainAspectRatio:0,animation:false,devicePixelRatio:DPRX,interaction:{mode:'index',intersect:false},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:q=>q.dataset.label+': '+F(q.parsed.y)}}},
-    scales:{x:{grid:{display:0},ticks:{maxTicksLimit:4,color:'#0F172A',font:{size:10}}},
-     y:{min:ymn<0?ymn*1.12:0,max:ymx*1.16,grid:{color:'#f1f3f8'},ticks:{maxTicksLimit:3,color:'#0F172A',font:{size:10},callback:v=>SF(v)}}}}});
+    scales:{x:{grid:{display:0},ticks:{maxTicksLimit:3,color:'#9aa3b5',font:{size:9.5}}},
+     /* DECLUTTER. Small multiples work because the panels are near-identical and the eye
+        compares SHAPES; every repeated axis is chrome competing with the line. On a shared
+        scale all eight y-axes carry the same numbers eight times, so print them once, on
+        the first panel, and let the rest borrow it. On "own scale" each panel means
+        something different, so each keeps its own. */
+     y:{min:ymn<0?ymn*1.12:0,max:ymx*1.16,grid:{color:'#f5f6fa'},
+        ticks:{display:(own||x.agg||i===0),maxTicksLimit:3,color:'#9aa3b5',font:{size:9.5},callback:v=>SF(v)}}}}});
   ch.push(c);});}
 
 // ranked horizontal bars with the NAME on every row - used where a scatter hid the names
@@ -11544,7 +11636,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-012746';
+const BUILD='20260901-030216';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
