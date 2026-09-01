@@ -6586,11 +6586,14 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
         +pill('META',m,shop.sp.mp)+pill('GOOGLE',gg,shop.sp.gp)+pill('TIKTOK',tt,shop.sp.tp)+pill('TOTAL',all,shop.sp.ap2)
        +'</div>'
        +'<b>That is the entire budget for '+ST.s+' \u2192 '+ST.e+', and it is stated here once.</b> '
+       +'<span style="display:block;margin-top:5px"><b>Revenue here is NET of VAT and will not match the monthly tables.</b> '
+       +'This block reads the daily branch feed; <i>Every channel</i>, <i>Retail P&amp;L</i> and the shops audit read the monthly POS ledger, which is VAT-INCLUSIVE and is what Odoo\u2019s own Sales Analysis reports. '
+       +'Measured across the seven shops in 2026-08 the ledger runs <b>1.125\u00d7</b> the daily feed (E&pound;58.5m against E&pound;52.0m) \u2014 that gap is the tax, not a data error, and neither figure is wrong for what it is.</span>'
        +'The same ads worked on the webstore and in the shops at the same time, so the spend cannot be split between them. '
        +'Each row below therefore carries only its <b>share</b> of the Meta budget \u2014 Meta\u2019s own apportionment, by where it saw the in-store value land \u2014 never a second copy of the money.</div>';
     }catch(e){return '';}})()
   +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right">'
-  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="4" style="text-align:center;background:#fff4ec">SHARE OF THE AD BUDGET<div style="font-size:8.5px;font-weight:600;color:#8a6a3a;text-transform:none;letter-spacing:0">one budget, apportioned &mdash; the money itself is on the line above</div></th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m+(isMTD?' MTD':'')+' (monthly)')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
+  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'<div style="font-size:8.5px;font-weight:600;text-transform:none;letter-spacing:0;color:#6b7280">daily branch feed &mdash; NET of VAT</div></th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="4" style="text-align:center;background:#fff4ec">SHARE OF THE AD BUDGET<div style="font-size:8.5px;font-weight:600;color:#8a6a3a;text-transform:none;letter-spacing:0">one budget, apportioned &mdash; the money itself is on the line above</div></th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m+(isMTD?' MTD':'')+' (monthly)')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
   +'<tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>Attributed</th><th>vs prev</th><th>share</th><th colspan="4">Share of Meta budget</th>'
   +'<th>New</th><th>vs prev</th><th>vs LY</th><th>Returning</th><th>vs prev</th><th>vs LY</th>'
   +'<th>NC revenue</th><th>vs prev</th><th>RC revenue</th><th>vs prev</th>'
@@ -6843,7 +6846,7 @@ function yoyChannels(g){
   +'</div>';
 
  pnlCard(g,'odoo','Every channel &mdash; '+m+' against '+ly+INFO('Revenue, units, gross profit, customers, orders and the new-versus-returning split for each shop and for Shopify, this month against the same month a year earlier. The same cut as Odoo Sales Analysis, plus customer type and margin. It follows the MONTH your date range ends in — the branch ledger is monthly, so it cannot split a part-month.'),
-  'Same comparison as Odoo&rsquo;s Sales Analysis pivot, with gross profit and customer type added. Shops come from the POS journals, Shopify from its order feed.'
+  'Same comparison as Odoo&rsquo;s Sales Analysis pivot, with gross profit and customer type added. Shops come from the POS journals, Shopify from its order feed. <b>Revenue here is VAT-INCLUSIVE</b>, matching Odoo; the Branch scoreboard reads the daily feed, which is net of VAT and runs about 1.125&times; smaller.'
    +(_pinned?' <b>Your range ends in '+((ST.e||'').slice(0,7))+', which the monthly ledger does not cover yet, so this is pinned to '+m+'.</b>':'')
    /* A shop with no trading in the comparison month makes the TOTAL row a growth number
       that is mostly "we opened a shop". State the like-for-like beside it rather than
@@ -9891,7 +9894,7 @@ function rPE(g){
  /* Read the cost through s2() so the unsettled month arrives modelled rather than as a zero:
    this engine answers "spend more or cut", and a month with no delivery cost in it says cut
    nothing and spend freely. */
-const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept:S2.kept[j]||0,cost:s2('cost',m)||0,col:S2.col[j]||0};});
+const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept:S2.kept[j]||0,cost:s2('cost',m)||0,col:S2.col[j]||0,paid:(S2.paidN||[])[j]||0,m:m};});
  const goodM=(S2.m||[]).filter(k=>SM[k].conf>=100).sort();
  const lastGood=SM[goodM[goodM.length-1]]||{conf:1,kept:1,cost:0,col:0};
  // courier invoices lag: a month whose posted cost is BELOW what customers paid back
@@ -9900,7 +9903,14 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
  const lastCost=SM[costM[costM.length-1]]||lastGood;
  const cpdOf=m=>{const x=(SM[m]&&SM[m].conf>=100&&SM[m].cost>=SM[m].col)?SM[m]:lastCost;
   const d0=(SM[m]&&SM[m].conf>=100)?SM[m]:lastGood;
-  return{cpd:x.cost/x.conf,cpdN:(x.cost-x.col)/x.conf,dr:d0.kept/(d0.conf||1)};};
+  /* borrowed: when the month's courier invoices have not landed, the RATE comes from the
+     last fully-invoiced month and the card has to say which one, or a borrowed number reads
+     as a measured one. Collections are this month's own -- those are in Odoo immediately. */
+  return{cpd:x.cost/x.conf,cpdN:(x.cost-x.col)/x.conf,dr:d0.kept/(d0.conf||1),
+         src:x.m,borrowed:(x.m!==m),
+         payAny:d0.conf?d0.col/d0.conf:0,
+         payPaying:d0.paid?d0.col/d0.paid:0,
+         payShare:d0.conf?d0.paid/d0.conf:0};};
  const dim=m=>new Date(+m.slice(0,4),+m.slice(5,7),0).getDate();
  const opexDay=m=>{const e=O.exp&&O.exp[m];if(!e)return null;
   const v=((e['Packing & bags']||0)+(e['Payment & collection fees']||0))/dim(m);return v>0?v:null;};
@@ -9952,7 +9962,16 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   +kpi('NET REVENUE','E&pound; '+money(tRev),days.length+' days &middot; '+money(tOrd)+' orders')
   +kpi('AD SPEND','E&pound; '+money(tSp),'Meta + Google + TikTok, daily actuals')
   +kpi('COGS','E&pound; '+money(tCg),'daily real Odoo margin, refunds netted')
-  +kpi('DELIVERY (NET)','E&pound; '+money(tDel),'CPD E&pound; '+money(drNow.cpd)+'/order gross &middot; customers pay back E&pound; '+money(drNow.cpd-drNow.cpdN)+' &middot; delivery rate '+(drNow.dr*100).toFixed(1)+'%')
+  /* "customers pay back E£50" was collections divided by EVERY order, including the ones
+     that paid nothing for delivery, so it named a price no customer is ever charged. In
+     2026-08, 6,752 of 10,356 orders paid and they paid E£76 each; spread over all 10,356 it
+     averages E£50. Both are useful and only one of them is the fee, so print both and say
+     which is which. */
+  +kpi('DELIVERY (NET)','E&pound; '+money(tDel),
+    'Courier E&pound; '+money(drNow.cpd)+'/order'+(drNow.borrowed?' <span style="color:#b8860b">(rate from '+drNow.src+', last fully-invoiced month)</span>':'')
+    +' &middot; the '+(drNow.payShare*100).toFixed(0)+'% who are charged pay <b>E&pound; '+money(drNow.payPaying)+'</b>'
+    +' &middot; E&pound; '+money(drNow.payAny)+' averaged over every order'
+    +' &middot; delivery rate '+(drNow.dr*100).toFixed(1)+'%')
   +kpi('ORDER OPEX','E&pound; '+money(tOp),'packing &amp; bags + payment/collection fees (posted ledger)'+(FIX?' + your E&pound;'+money(FIX)+'/day':''))
   +kpi('NET PROFIT','E&pound; '+money(tPr),'E&pound; '+money(tPr/days.length)+'/day average',tPr>=0?'#12a06e':'#e23a63')
   +kpi('MER vs BREAK-EVEN',aMER.toFixed(2)+'x vs '+(beMER?beMER.toFixed(2)+'x':'&mdash;'),'MER = net revenue &divide; ad spend. Break-even carries every cost the NET PROFIT line does &mdash; COGS, delivery and order opex &mdash; so this reads green only when the profit above it is positive.',aMER>=(beMER||0)?'#12a06e':'#e23a63')
@@ -12161,7 +12180,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-133711';
+const BUILD='20260901-134441';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
