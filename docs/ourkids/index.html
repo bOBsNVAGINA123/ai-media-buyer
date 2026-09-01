@@ -9844,9 +9844,36 @@ function s2floor(m){return bostaCost(m);}          // already-shipped parcels, p
 function s2est(m){const r=shipRate();if(!r)return bostaCost(m);
  const conf=(function(){const a=S2f()['conf'];return (a&&a[S2If()[m]])||0;})();
  return Math.max(bostaCost(m),conf*r.rate);}       // never below what is already spent
+/* Bosta API gives the delivery MIX; the Odoo ledger gives the TOTAL. Use each for what it
+   is good for and neither for what it is not.
+
+   The per-delivery pull (2026-09-01) priced 6,164 of 6,236 deliveries at E£432,033. That is
+   NOT the month's courier bill: August confirmed ~10,356 shipments and Odoo posted E£754,207
+   to Bosta. The two agree on RATE -- E£69.28/delivery from the API against E£72.83/order
+   from the ledger, inside 5% -- which is exactly why the API total cannot be substituted for
+   the ledger total: the pull simply covers fewer shipments. Swapping one for the other would
+   have understated August by E£322,174, and it nearly went out that way.
+
+   What the API alone can tell us is the SPLIT, and that is the part nothing else knows:
+     Send                    E£360,592   83.5%
+     Return to Origin        E£ 39,868
+     Customer Return Pickup  E£ 15,074
+     Exchange                E£ 16,448
+     -> return traffic       E£ 71,390   16.5% of the bill
+   Applied to the ledger total, return legs cost about E£124,600 in August. THAT is the price
+   of free returns, and it is a measured share of a measured total rather than an allocation
+   guessed from which orders happened to collect a shipping fee.
+
+   Static because the collector cannot reach Bosta -- the key is on the Mac, not in the
+   Action. Re-run the pull and extend this map. */
+const BOSTA_X={'2026-08':{retShare:0.1652,n:6164,ofN:6236,priced:432033,
+  rto:39868,cust:15074,exch:16448,src:'Bosta API per-delivery mix, pulled 2026-09-01'}};
 function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])||0;
  if(k==='cost'&&!v)return s2est(m);
  return v;}
+/* return-leg and outbound cost for a month, = the ledger's courier bill split by the API mix */
+function s2ret(m){const b=BOSTA_X[m];if(!b)return null;const c=s2('cost',m);return c?c*b.retShare:null;}
+function s2send(m){const b=BOSTA_X[m];if(!b)return null;const c=s2('cost',m);return c?c*(1-b.retShare):null;}
 /* The final month is ALWAYS understated: Bosta settles COD on a lag, so only the
    first settlement batch of that month has hit the ledger when we read it. Every
    cost-bearing chart drops it rather than drawing a cliff that is not real. */
@@ -10080,7 +10107,14 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed. On a free-delivery promotion this line falls while the courier bill underneath does not move at all -- that gap is what makes the net negative.'},
    {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that -- 3.5m EGP of courier cost sitting in an account named after card fees. Until this was found the dashboard reported ZERO courier cost for the first 17 months.'},
    {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin. The old version of this line also added account 32.00.00.18.00 as a rebate; that account is the ledger mirror of the shipping revenue already counted above, so adding it double-counted every pound. It is gone.'},
-   {n:'&nbsp;&nbsp;of which: COURIER COST ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month\u2019s courier bill multiplied by the share of confirmed orders with no paid shipping line. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. NOT the cost of a free-delivery offer \u2014 none was running in Aug 2026. Free RETURNS and shipping absorbed into the product price both land here, and the number cannot tell them apart.'},
+   /* Where the Bosta pull covers the month we can stop allocating and just state it: the
+     return legs are their own delivery types with their own fees. This is the cost of free
+     RETURNS, measured, not inferred from which orders collected a shipping fee. */
+  {n:'&nbsp;&nbsp;of which: RETURN LEGS (Bosta mix &times; ledger total)',f:m=>s2ret(m)?-s2ret(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',
+   tt:'Return to Origin + Customer Return Pickup + Exchange. Bosta\u2019s per-delivery pull prices these at 16.5% of the courier bill; that share is applied to the month\u2019s posted ledger total, because the pull covers fewer shipments than the month contains. This is the cost of free RETURNS \u2014 measured share of a measured total, not an allocation.'},
+  {n:'&nbsp;&nbsp;of which: OUTBOUND SENDS (Bosta mix &times; ledger total)',f:m=>s2send(m)?-s2send(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',
+   tt:'The other 83.5% of the courier bill: Send legs. Mean fee per send in the Bosta pull was E\u00a370.69.'},
+  {n:'&nbsp;&nbsp;of which: COURIER COST ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month\u2019s courier bill multiplied by the share of confirmed orders with no paid shipping line. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. NOT the cost of a free-delivery offer \u2014 none was running in Aug 2026. Free RETURNS and shipping absorbed into the product price both land here, and the number cannot tell them apart.'},
    {n:'Shipping recovery, % of the courier bill covered by customers',f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself. Anything below that is the share of every delivery you are funding yourself.'},
    {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below this line now subtracts from THIS number, not from the gross profit row above it.'},
    /* months where the ads feed does not cover the FULL month (feed starts O.ad.start, rolling
@@ -12180,7 +12214,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-134441';
+const BUILD='20260901-140008';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
