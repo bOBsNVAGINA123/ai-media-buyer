@@ -1808,7 +1808,7 @@ function storyFlow(g,o){
    Each finding carries the money or the multiple, so it can be ranked against the others rather
    than read as a list of everything that happened. */
 function okCauses(o){
- const out={traffic:[],cvr:[],cac:[],rev:[],spend:[]};
+ const out={traffic:[],cvr:[],cac:[],rev:[],spend:[],mer:[]};
  try{
   const W=O.madsW; if(!W||!W.n)return out;
   const n=W.n, today=n-1, days=Math.max(1,Math.min(28,span(ST.s,ST.e)));
@@ -1934,6 +1934,38 @@ function okCauses(o){
     '<b>'+esc(r.n)+'</b> ('+r.pf+') added '+M(r.dv)+', ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
   }
  }catch(e){}
+
+ /* WHY MER MOVED. MER is revenue over spend and nothing else, so the honest answer is which
+    of the two moved and by how much -- not a list of budget edits, which is what this used
+    to hand back because the fact was tagged 'spend' and inherited the change log. A ratio
+    question gets a ratio answer: revenue did X, spend did Y, and (1+X)/(1+Y)-1 is the whole
+    of the move. Only then is it worth naming who drove the bigger side. */
+ try{
+  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const rc=(o.net&&o.net[0])||0, rp=(o.net&&o.net[1])||0;
+  const sc=(o.sp&&o.sp[0])||0, sp2=(o.sp&&o.sp[1])||0;
+  if(rc&&rp&&sc&&sp2){
+   const dR=rc/rp-1, dS=sc/sp2-1, dM=((1+dR)/(1+dS))-1;
+   const pct=v=>(v>=0?'+':'\u2212')+Math.abs(v*100).toFixed(1)+'%';
+   out.mer.push([Math.abs(dM)<0.02?'note':(dM>=0?'good':'bad'),
+     '<b>MER moved '+pct(dM)+'</b> because revenue went '+pct(dR)+' ('+M(rp)+' \u2192 '+M(rc)+') while spend went '
+     +pct(dS)+' ('+M(sp2)+' \u2192 '+M(sc)+'). Those two numbers are the entire explanation \u2014 everything below is who drove them.']);
+   out.mer.push(['note', Math.abs(dR)>=Math.abs(dS)
+     ? '<b>Revenue is the bigger mover here</b>, so this is a demand or conversion story, not a budget one.'
+     : '<b>Spend is the bigger mover here</b>, so the ratio moved mostly because of what you chose to put in, not what the market did.']);
+   /* the entities behind the side that actually moved */
+   try{
+    if(Math.abs(dS)>Math.abs(dR)){
+     (out.spend||[]).slice(0,3).forEach(x=>out.mer.push(x));
+    } else {
+     (out.rev||[]).slice(0,3).forEach(x=>out.mer.push(x));
+     (out.cvr||[]).slice(0,1).forEach(x=>out.mer.push(x));
+    }
+   }catch(e){}
+   const beL=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+   out.mer.push(['note','<b>The '+beL.toFixed(2)+'\u00d7 break-even here covers COGS only</b> \u2014 it is the point where the media pays for the goods. The Daily Profit Engine uses a higher one because it also carries delivery and order opex; both are correct for what they cover, and the higher one is the one that decides whether the month made money.']);
+  }
+ }catch(e){}
  return out;
 }
 
@@ -2032,7 +2064,7 @@ function glance(g,o){
   facts.push([o.mer[0]>=be?'good':'bad',
    '<b>MER '+o.mer[0].toFixed(2)+'× against a '+be.toFixed(2)+'× breakeven</b> — '
    +(o.mer[0]>=be?'the webstore is covering its own media at reported value.'
-                 :'the webstore is not covering its own media at reported value, before any incrementality haircut.'),'spend']);
+                 :'the webstore is not covering its own media at reported value, before any incrementality haircut.'),'mer']);
  }
  if(o.nc[0]&&o.cac[0]){
   const dc=pc(o.cac[0],o.cac[1]);
@@ -12214,7 +12246,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-140008';
+const BUILD='20260901-141818';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
