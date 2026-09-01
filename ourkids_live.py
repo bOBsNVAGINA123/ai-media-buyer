@@ -5141,13 +5141,8 @@ def pull_promos():
     therefore returns one bucket called False. Shopify's own `discount_code` dimension is
     clean and carries orders, gross, discount and net per code.
 
-    IN STORE there is genuinely nothing to read. Across the same window Odoo holds ZERO
-    pos.order.line rows with a coupon_id, zero with a reward_id, zero with discount > 0
-    and zero negative-value lines. That is not a query that failed -- it is four
-    independent ways of recording a till discount all returning nothing, which means the
-    branches are not putting these codes through the POS at all. We re-check it every run
-    rather than baking the claim in, so the card starts reporting store usage by itself if
-    that ever changes.
+    IN STORE the shops DO record discounts, and heavily -- see the note on the probe below
+    for the query bug that made it look otherwise.
     """
     out = {"codes": [], "ly": {}, "pos": None, "win": None}
     d1 = today
@@ -5201,22 +5196,51 @@ def pull_promos():
     out["lyTotal"] = {"ord": sum(v["ord"] for v in ly.values()),
                       "disc": round(sum(v["disc"] for v in ly.values()))} if ly else None
 
-    # in-store: prove there is nothing rather than assume it
+    # IN STORE. The first version of this probe filtered on order_id.date_order and got
+    # zero rows for every test, which I read as "the branches never record a discount".
+    # That was wrong and the query was the reason: pos.order.date_order matches NOTHING in
+    # this database (0 orders in a 60-day window) because the POS records are imported with
+    # that field unset. Branch retail lives in report.pos.order and the POS journals, not in
+    # pos.order. Filtering the LINES on their own create_date instead returns 182,209 rows
+    # for the window -- and 18,394 of them carry a discount. The shops discount heavily.
+    #
+    # Reward lines name the code but carry no value (price_unit, price_subtotal and
+    # price_subtotal_incl are all 0 on them -- the money comes off as a discount % on the
+    # ordinary lines). So: per-code ORDER COUNTS from the reward lines, and the total money
+    # given away from the negative lines. Two honest numbers rather than one invented join.
     try:
         since = d0.isoformat() + " 00:00:00"
+        base = [["create_date", ">=", since]]
         probes = {}
-        for label, dom in (
-            ("coupon", [["coupon_id", "!=", False]]),
-            ("reward", [["reward_id", "!=", False]]),
-            ("discount", [["discount", ">", 0]]),
-            ("negative", [["price_subtotal_incl", "<", 0]])):
-            probes[label] = oexec("pos.order.line", "search_count",
-                                  [dom + [["order_id.date_order", ">=", since]]]) or 0
-        tot = oexec("pos.order.line", "search_count",
-                    [[["order_id.date_order", ">=", since]]]) or 0
-        out["pos"] = {"probes": probes, "lines": tot,
-                      "any": any(v > 0 for v in probes.values())}
-        log("promos: pos probes", probes, "of", tot, "lines")
+        for label, dom in (("coupon", [["coupon_id", "!=", False]]),
+                           ("reward", [["reward_id", "!=", False]]),
+                           ("discount", [["discount", ">", 0]]),
+                           ("negative", [["price_subtotal_incl", "<", 0]])):
+            probes[label] = oexec("pos.order.line", "search_count", [dom + base]) or 0
+        tot = oexec("pos.order.line", "search_count", [base]) or 0
+
+        codes = []
+        for g in (ogroup("pos.order.line",
+                         [["is_reward_line", "=", True]] + base,
+                         ["price_subtotal_incl"], ["reward_id"]) or []):
+            rid = g.get("reward_id")
+            nm = rid[1] if isinstance(rid, list) and len(rid) > 1 else str(rid)
+            n = g.get("reward_id_count") or g.get("__count") or 0
+            if not n: continue
+            # "LFRE10 - 10% on your order" -> "LFRE10"
+            codes.append({"c": str(nm).split(" - ")[0].strip()[:40], "ord": int(n)})
+        codes.sort(key=lambda r: -r["ord"])
+
+        given = 0.0
+        for g in (ogroup("pos.order.line",
+                         [["price_subtotal_incl", "<", 0]] + base,
+                         ["price_subtotal_incl"], ["create_date:month"]) or []):
+            given += abs(float(g.get("price_subtotal_incl") or 0))
+
+        out["pos"] = {"probes": probes, "lines": tot, "any": any(v > 0 for v in probes.values()),
+                      "codes": codes[:30], "given": round(given)}
+        log("promos: in-store %d codes, %d discounted lines of %d, E\u00a3%s given away"
+            % (len(codes), probes.get("discount", 0), tot, round(given)))
     except Exception as e:
         out["pos"] = {"error": str(e)[:120]}
         log("promos: pos probe failed", str(e)[:120])
