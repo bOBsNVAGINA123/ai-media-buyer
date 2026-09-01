@@ -6307,6 +6307,97 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
    What this deliberately does NOT cover: Noon, Amazon and Homzmart. They sell through Odoo but
    never reach this dashboard's feeds, so the total below is short of the Odoo company total by
    roughly what those three did. The card says so rather than quietly under-reporting. */
+
+/* IDENTITY CAPTURE. The single most important caveat on every customer number in this tool.
+
+   "New customers" in a shop means the first time a REGISTERED customer appears in the POS
+   ledger. A receipt with nobody attached is in the revenue and in no customer count. So if
+   the tills stop capturing identity, new-customer counts fall on their own and nothing else
+   in the tool notices.
+
+   That is exactly what has happened. Network identification ran 92-95% through 2025 and has
+   fallen every month since March, reaching 81.4% in 2026-08 -- 5,957 receipts with no
+   customer against 1,803 in the same month last year. Adjusting each branch's new customers
+   back to its OWN prior-year capture rate turns a 14-19% collapse at four of the six older
+   branches into roughly flat, and leaves a genuine decline only at Zayed and October.
+
+   The adjustment assumes unregistered receipts split new/returning like registered ones.
+   They almost certainly skew NEW -- a first-time walk-in is less likely to hand over a phone
+   than a regular -- so if anything this UNDERSTATES the correction. It is shown beside the
+   raw number, never instead of it. */
+function idCapture(g){
+ const P=O.pos||{}, B=O.bnr||{};
+ const months=[...new Set(Object.keys(P).flatMap(b=>Object.keys(P[b]||{})))].sort();
+ if(months.length<13)return;
+ const row=(b,m)=>{const o=((P[b]||{})[m]||[0,0,0,0])[2]||0;
+  const d=(B[b]||{})[m]||{}; const nc=d.nc||0, rc=d.rc||0;
+  return {o,nc,rc,un:Math.max(0,o-nc-rc)};};
+ const net=m=>{let o=0,nc=0,rc=0;Object.keys(P).forEach(b=>{const r=row(b,m);o+=r.o;nc+=r.nc;rc+=r.rc;});
+  return {o,nc,rc,un:Math.max(0,o-nc-rc),id:o?(nc+rc)/o*100:null};};
+ const cur=months[months.length-1], ly=(+cur.slice(0,4)-1)+cur.slice(4);
+ const C=net(cur), L=net(ly);
+ if(!C.o||!L.o||C.id==null||L.id==null)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const N=v=>Math.round(Math.abs(v)).toLocaleString();
+ const drop=L.id-C.id;
+ if(drop<2)return;                       /* nothing to warn about */
+
+ /* sparkline of the identification rate, last 18 months */
+ const win=months.slice(-18).map(m=>({m,id:net(m).id})).filter(x=>x.id!=null);
+ const H=54,W=Math.max(120,win.length*16);
+ const lo=Math.min.apply(null,win.map(x=>x.id))-2, hi=Math.max.apply(null,win.map(x=>x.id))+2;
+ const px=(v)=>H-((v-lo)/Math.max(0.01,hi-lo))*H;
+ const pts=win.map((x,i)=>(i*(W/Math.max(1,win.length-1)))+','+px(x.id)).join(' ');
+ const spark='<svg viewBox="0 0 '+W+' '+(H+2)+'" preserveAspectRatio="none" style="width:100%;height:64px;display:block">'
+  +'<polyline points="'+pts+'" fill="none" stroke="#a3271a" stroke-width="2"/></svg>'
+  +'<div style="display:flex;justify-content:space-between;font-size:10px;color:#8a93a6"><span>'+win[0].m+' &middot; '+win[0].id.toFixed(0)+'%</span><span>'+win[win.length-1].m+' &middot; '+win[win.length-1].id.toFixed(0)+'%</span></div>';
+
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+ let body='';
+ Object.keys(P).sort((a,b)=>(((P[b]||{})[cur]||[0])[0]||0)-(((P[a]||{})[cur]||[0])[0]||0)).forEach(b=>{
+  const a5=row(b,ly), a6=row(b,cur); if(!a6.o)return;
+  const i5=a5.o?(a5.nc+a5.rc)/a5.o:null, i6=(a6.nc+a6.rc)/a6.o;
+  const adj=(i5&&i6)?a6.nc*(i5/i6):null;
+  const raw=a5.nc?((a6.nc/a5.nc-1)*100):null;
+  const fix=(adj&&a5.nc)?((adj/a5.nc-1)*100):null;
+  const col=v=>v==null?'#9aa3b5':(v>=-5?'#0f6e56':(v>=-20?'#a35a1a':'#a3271a'));
+  body+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+esc(b)+'</td>'
+   +'<td style="'+TD+'">'+(i5==null?'—':(100-i5*100).toFixed(1)+'%')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:#a3271a">'+((1-i6)*100).toFixed(1)+'%</td>'
+   +'<td style="'+TD+'">'+N(a6.nc)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+(adj==null?'—':N(adj))+'</td>'
+   +'<td style="'+TD+';color:'+col(raw)+'">'+(raw==null?'new':(raw>=0?'+':'−')+Math.abs(raw).toFixed(0)+'%')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+col(fix)+'">'+(fix==null?'new':(fix>=0?'+':'−')+Math.abs(fix).toFixed(0)+'%')+'</td></tr>';});
+
+ pnlCard(g,'odoo','Identity capture has collapsed &mdash; read every customer number through this'
+   +INFO('A POS receipt with no customer attached counts in revenue and in no customer total. When capture falls, new-customer counts fall on their own. This restates each branch against its OWN prior-year capture rate.'),
+  '<b>'+C.id.toFixed(1)+'% of '+cur+' receipts carry a customer, against '+L.id.toFixed(1)+'% in '+ly+'.</b> '
+  +'That is '+N(C.un)+' receipts with nobody attached this month against '+N(L.un)+' a year ago. '
+  +'It has fallen every month since 2026-03, and it is the reason the new-customer columns elsewhere look worse than the business is.',
+  '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:11px">'
+   +'<div style="flex:1;min-width:190px;padding:12px 14px;border-radius:12px;background:#fff6f9;border:1px solid #a3271a22">'
+    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#a3271a">RECEIPTS WITH NO CUSTOMER</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#a3271a;line-height:1.15;margin:2px 0">'+(100-C.id).toFixed(1)+'%</div>'
+    +'<div style="font-size:11.5px;color:#5b6478">'+N(C.un)+' this month &middot; was '+(100-L.id).toFixed(1)+'% ('+N(L.un)+')</div></div>'
+   +'<div style="flex:1;min-width:190px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e6eaf2">'
+    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">NEW CUSTOMERS, AS COUNTED</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0">'+N(C.nc)+'</div>'
+    +'<div style="font-size:11.5px;color:#5b6478">'+(L.nc?((C.nc/L.nc-1)*100>=0?'+':'−')+Math.abs((C.nc/L.nc-1)*100).toFixed(0)+'% vs '+ly:'')+'</div></div>'
+   +'<div style="flex:1;min-width:190px;padding:12px 14px;border-radius:12px;background:#f0fdf6;border:1px solid #0f6e5622">'
+    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#0f6e56">AT LAST YEAR&rsquo;S CAPTURE RATE</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#0f6e56;line-height:1.15;margin:2px 0">'+N(C.nc*(L.id/C.id))+'</div>'
+    +'<div style="font-size:11.5px;color:#5b6478">'+(L.nc?((C.nc*(L.id/C.id)/L.nc-1)*100>=0?'+':'−')+Math.abs((C.nc*(L.id/C.id)/L.nc-1)*100).toFixed(0)+'% vs '+ly:'')+' &mdash; the like-for-like read</div></div>'
+  +'</div>'
+  +spark
+  +'<div style="overflow-x:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+  +'<tr><th style="'+TH+';text-align:left">Branch</th><th style="'+TH+'">No customer '+ly+'</th><th style="'+TH+'">No customer '+cur+'</th>'
+  +'<th style="'+TH+'">New, as counted</th><th style="'+TH+'">New, capture-adjusted</th>'
+  +'<th style="'+TH+'">YoY raw</th><th style="'+TH+'">YoY adjusted</th></tr>'+body+'</table></div>'
+  +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
+  +'<b>The adjustment assumes unregistered receipts split new and returning like registered ones.</b> They almost certainly skew NEW &mdash; a first-time walk-in is less likely to give a phone than a regular &mdash; so this probably still understates the correction. It is shown beside the raw count, never instead of it. '
+  +'<b>This also degrades things downstream:</b> in-store CAPI matching, Customer Match audiences and every retention cohort are all built on the same identity, so a fifth of August receipts are invisible to all of them.</div>');
+}
 function yoyChannels(g){
  const P=O.pos||{}, NR=O.nr||{}, BNR=O.bnr||{};
  const months=Object.keys(NR).sort();
@@ -6440,7 +6531,7 @@ function yoyChannels(g){
     }catch(e){return '';}})(),
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+body+tot+'</table></div>'+note);
 }
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{yoyChannels(g);}catch(e){}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{idCapture(g);}catch(e){}try{yoyChannels(g);}catch(e){}
  try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}
  try{offAudit(g);}catch(e){}try{promoCard(g);}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
@@ -11648,7 +11739,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-102435';
+const BUILD='20260901-102933';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
