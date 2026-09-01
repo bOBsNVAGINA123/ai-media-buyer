@@ -6311,10 +6311,18 @@ function yoyChannels(g){
  const P=O.pos||{}, NR=O.nr||{}, BNR=O.bnr||{};
  const months=Object.keys(NR).sort();
  if(!months.length)return;
- // latest month that any shop actually billed in, so a half-synced current month cannot win
+ /* This card always pinned itself to the newest month in the ledger and ignored the date
+    box entirely, so "why does it not update by time" was a fair question. It is a monthly
+    ledger — the branch feeds carry no daily new/returning split — so it cannot honour an
+    arbitrary range, but it CAN follow the month your range ends in. It now does, and falls
+    back to the newest billed month when the selection has no ledger data. */
  let m=null;
- Object.keys(P).forEach(b=>Object.keys(P[b]||{}).forEach(k=>{if(!m||k>m)m=k;}));
+ const _want=(ST.e||'').slice(0,7);
+ const _have=new Set(); Object.keys(P).forEach(b=>Object.keys(P[b]||{}).forEach(k=>_have.add(k)));
+ if(_want&&_have.has(_want))m=_want;
+ if(!m)_have.forEach(k=>{if(!m||k>m)m=k;});
  if(!m)m=months[months.length-1];
+ const _pinned=(m!==_want);
  const ly=(+m.slice(0,4)-1)+m.slice(4);
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const N=v=>Math.round(Math.abs(v)).toLocaleString();
@@ -6408,8 +6416,28 @@ function yoyChannels(g){
   +'<b>New-cust orders</b> are the ones a customer placed on the day they first ever bought from that shop; <b>returning orders</b> are every order after that day. A customer who buys twice on their first afternoon puts both receipts in the new column, which is why new-cust orders can exceed the new-customer headcount beside them.'
   +'</div>';
 
- pnlCard(g,'odoo','Every channel &mdash; '+m+' against '+ly+INFO('Revenue, units, gross profit, customers, orders and the new-versus-returning split for each shop and for Shopify, this month against the same month a year earlier. The same cut as Odoo Sales Analysis, plus customer type and margin.'),
-  'Same comparison as Odoo&rsquo;s Sales Analysis pivot, with gross profit and customer type added. Shops come from the POS journals, Shopify from its order feed.',
+ pnlCard(g,'odoo','Every channel &mdash; '+m+' against '+ly+INFO('Revenue, units, gross profit, customers, orders and the new-versus-returning split for each shop and for Shopify, this month against the same month a year earlier. The same cut as Odoo Sales Analysis, plus customer type and margin. It follows the MONTH your date range ends in — the branch ledger is monthly, so it cannot split a part-month.'),
+  'Same comparison as Odoo&rsquo;s Sales Analysis pivot, with gross profit and customer type added. Shops come from the POS journals, Shopify from its order feed.'
+   +(_pinned?' <b>Your range ends in '+((ST.e||'').slice(0,7))+', which the monthly ledger does not cover yet, so this is pinned to '+m+'.</b>':'')
+   /* A shop with no trading in the comparison month makes the TOTAL row a growth number
+      that is mostly "we opened a shop". State the like-for-like beside it rather than
+      leaving a +57% headline that half of is a new site. */
+   +(function(){try{
+      /* `names` does not exist here -- the branches are the keys of O.pos, and a branch is
+         "new" when it billed nothing in the comparison month. */
+      const bns=Object.keys(P).filter(n=>{const a=(P[n]||{})[ly]||[0],c=(P[n]||{})[m]||[0];return (a[0]||c[0]);});
+      const newOnes=bns.filter(n=>!(((P[n]||{})[ly]||[0])[0]));
+      if(!newOnes.length)return '';
+      let cN=0,pN=0,cA=0,pA=0;
+      bns.forEach(n=>{const c=(P[n]||{})[m]||[0],a=(P[n]||{})[ly]||[0];
+        cA+=c[0]||0; pA+=a[0]||0;
+        if(newOnes.indexOf(n)<0){cN+=c[0]||0; pN+=a[0]||0;}});
+      const gAll=pA>0?((cA/pA-1)*100):null, gLfl=pN>0?((cN/pN-1)*100):null;
+      if(gAll==null||gLfl==null)return '';
+      return '<div style="margin-top:6px;padding:8px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
+       +'<b>'+newOnes.join(', ')+' did not trade in '+ly+'</b>, so the total row is partly "we opened a shop". '
+       +'Shops only: <b>'+gAll.toFixed(1)+'%</b> as shown, <b>'+gLfl.toFixed(1)+'%</b> like-for-like on the branches that existed in both months.</div>';
+    }catch(e){return '';}})(),
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+body+tot+'</table></div>'+note);
 }
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{yoyChannels(g);}catch(e){}
@@ -11620,7 +11648,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-101453';
+const BUILD='20260901-102435';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
