@@ -2393,6 +2393,15 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  })();
  // ---- WEEKLY AUDIT SCOREBOARD: week vs last week, plus month-vs-LY and year-vs-LY on every row ----
  (function(){const o2=calc();if(!o2)return;const pw=cmpWr(ST.s,ST.e);
+  /* PERIOD values for the two whole-business rows. okBlendedAmer already does exactly this
+     arithmetic for the Overview tiles -- webstore revenue plus the seven shops' own daily
+     POS revenue over the one budget -- so reuse it for this window and the comparison one
+     rather than writing a second version that can drift from it. */
+  (function(){try{
+    const B1=okBlendedAmer(o2), B0=(pw&&pw[0])?okBlendedAmer(o2,pw[0],pw[1],(o2.ncrev&&o2.ncrev[1])||0,(o2.sp&&o2.sp[1])||0):null;
+    o2.merAll=[B1?B1.mer:null, B0?B0.mer:null];
+    o2.amerAll=[B1?B1.amer:null, B0?B0.amer:null];
+  }catch(e){o2.merAll=[null,null];o2.amerAll=[null,null];}})();
   const A=O.ad||{};const NRm=O.nr||{};
   // monthly aggregates: finance (full history), ad panel (from A.start), customers (NR)
   const FMo={};if(O.fin&&DD.length){for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const f=FMo[m]||(FMo[m]={rev:0,ref:0,gp:0,ord:0});f.rev+=(O.fin.rev[i]||0)*1000;f.ref+=(O.fin.refund[i]||0)*1000;f.gp+=(O.fin.gp[i]||0)*1000;f.ord+=(O.fin.orders?(O.fin.orders[i]||0):0);}}
@@ -2413,6 +2422,9 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const elapsed=Math.max(1,+(ST.e||'').slice(8,10));const dimM=new Date(Date.UTC(+curM.slice(0,4),+curM.slice(5,7),0)).getUTCDate();
   const isMTD=curM===(O.today||'').slice(0,7)||(ST.e||'')<((O.today||''));const pfM=dimM/elapsed;
   const F=m=>FMo[m]||{rev:0,ref:0,gp:0,ord:0};const N=m=>NRm[m]||{};const AD=m=>AMo[m]||{sp:0,ncrev:0,rcrev:0,sess:0};
+  /* the seven shops, per month, straight from the branch ledger */
+  const SREV=m=>{const P2=O.pos||{};let t=0;Object.keys(P2).forEach(b=>{const c=(P2[b]||{})[m];if(c)t+=c[0]||0;});return t;};
+  const SNC=m=>{const B2=O.bnr||{};let t=0;Object.keys(B2).forEach(b=>{const c=(B2[b]||{})[m];if(c)t+=c.nrev||0;});return t;};
   const yr=curM.slice(0,4),yl=lyM.slice(0,4);
   const monthsOf=(y,upto)=>{const o3=[];for(let k=1;k<=+upto;k++)o3.push(y+'-'+String(k).padStart(2,'0'));return o3;};
   const mm=+curM.slice(5,7);
@@ -2434,6 +2446,16 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    ['Ad spend',o2.sp,'cur',0,m=>AD(m).sp,null,1],
    ['MER (net ÷ spend)',o2.mer,'x',1,m=>F(m).rev-F(m).ref,m=>AD(m).sp,1],
    ['aMER',o2.amer,'x',1,m=>AD(m).ncrev,m=>AD(m).sp,1],
+   /* The two rows the webstore-only MER and aMER above cannot answer: what the WHOLE
+      business returns on the one budget. The same ads work on the site and in the shops at
+      once and the spend cannot be split, so the honest version puts every pound of revenue
+      over every pound of spend. Store revenue and store NEW-customer revenue come from the
+      monthly branch ledger (O.pos / O.bnr), which reaches back to 2024-08, so these compare
+      against last year wherever the ad feed does. */
+   ['MER incl. the 7 shops',o2.merAll,'x',1,
+     m=>(F(m).rev-F(m).ref)+SREV(m), m=>AD(m).sp,1],
+   ['aMER incl. the 7 shops',o2.amerAll,'x',1,
+     m=>AD(m).ncrev+SNC(m), m=>AD(m).sp,1],
    ['nCAC (spend ÷ new customers)',o2.cac,'cur',0,m=>AD(m).sp,m=>N(m).nord,1],
    ['Sessions',o2.sess,'n',1,m=>AD(m).sess,null,1],
    ['Site CVR',o2.cvr,'pct',1,null,null,1]];
@@ -5751,6 +5773,21 @@ function offAudit(g){
   ['AOV — new customers', M(C.ncAov), M(P&&P.ncAov), pc(C.ncAov,P&&P.ncAov),1, M(gv(bmNow,'ncAov')), pc(gv(bmNow,'ncAov'),gv(bmLy,'ncAov')), M(gv(byNow,'ncAov')), pc(gv(byNow,'ncAov'),gv(byLy,'ncAov'))],
   ['AOV — returning', M(C.rcAov), M(P&&P.rcAov), pc(C.rcAov,P&&P.rcAov),1, M(gv(bmNow,'rcAov')), pc(gv(bmNow,'rcAov'),gv(bmLy,'rcAov')), M(gv(byNow,'rcAov')), pc(gv(byNow,'rcAov'),gv(byLy,'rcAov'))],
   ['AOV — all', M(C.aov), M(P&&P.aov), pc(C.aov,P&&P.aov),1, M(gv(bmNow,'aov')), pc(gv(bmNow,'aov'),gv(bmLy,'aov')), M(gv(byNow,'aov')), pc(gv(byNow,'aov'),gv(byLy,'aov'))],
+  /* Receipts with nobody attached sit in the revenue line and in NEITHER customer line, so
+     the rows above never reconciled to the total. The daily feed carries only new/returning,
+     with no order or revenue total, so the PERIOD block cannot derive it -- the monthly
+     ledger can, and that is where the year-on-year comparison lives anyway. */
+  ['Unregistered receipts', '—','—',null,0,
+   N(mNow&&bmNow?Math.max(0,mNow.ord-bmNow.ord):null), pc(mNow&&bmNow?Math.max(0,mNow.ord-bmNow.ord):null, mLy&&bmLy?Math.max(0,mLy.ord-bmLy.ord):null),
+   N(yNow&&byNow?Math.max(0,yNow.ord-byNow.ord):null), pc(yNow&&byNow?Math.max(0,yNow.ord-byNow.ord):null, yLy&&byLy?Math.max(0,yLy.ord-byLy.ord):null)],
+  ['Unregistered, % of receipts', '—','—',null,0,
+   (mNow&&bmNow&&mNow.ord)?P1(Math.max(0,mNow.ord-bmNow.ord)/mNow.ord*100):'—',
+   pc((mNow&&bmNow&&mNow.ord)?Math.max(0,mNow.ord-bmNow.ord)/mNow.ord:null,(mLy&&bmLy&&mLy.ord)?Math.max(0,mLy.ord-bmLy.ord)/mLy.ord:null),
+   (yNow&&byNow&&yNow.ord)?P1(Math.max(0,yNow.ord-byNow.ord)/yNow.ord*100):'—',
+   pc((yNow&&byNow&&yNow.ord)?Math.max(0,yNow.ord-byNow.ord)/yNow.ord:null,(yLy&&byLy&&yLy.ord)?Math.max(0,yLy.ord-byLy.ord)/yLy.ord:null)],
+  ['Unregistered revenue', '—','—',null,0,
+   M(mNow&&bmNow?Math.max(0,mNow.rev-bmNow.rev):null), pc(mNow&&bmNow?Math.max(0,mNow.rev-bmNow.rev):null, mLy&&bmLy?Math.max(0,mLy.rev-bmLy.rev):null),
+   M(yNow&&byNow?Math.max(0,yNow.rev-byNow.rev):null), pc(yNow&&byNow?Math.max(0,yNow.rev-byNow.rev):null, yLy&&byLy?Math.max(0,yLy.rev-byLy.rev):null)],
   ['Gross profit', '—','—',null,1, M(mNow&&mNow.gp), pc(mNow&&mNow.gp,mLy&&mLy.gp), M(yNow&&yNow.gp), pc(yNow&&yNow.gp,yLy&&yLy.gp)],
   ['GP %', '—','—',null,1,
    (mNow&&mNow.rev)?P1(mNow.gp/mNow.rev*100):'—', pc(mNow&&mNow.rev?mNow.gp/mNow.rev:null, mLy&&mLy.rev?mLy.gp/mLy.rev:null),
@@ -12070,7 +12107,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-130309';
+const BUILD='20260901-130757';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
