@@ -5132,123 +5132,118 @@ def pull_salaries():
 
 
 def pull_promos():
-    """Discount-code usage, online and in the shops.
+    """Discount codes, ONLINE and IN STORE, as DAILY series so the front end can follow the
+    date box instead of reading one baked window.
 
-    ONLINE comes from Shopify, not Odoo. Odoo's loyalty tables look like the obvious
-    source and are a trap on this database: `sale.order.line.is_reward_line` is set true
-    on ordinary product lines (49,699 of them in 60 days, including the Shopify shipping
-    line), and every `reward_id` / `coupon_id` on those lines is null. Grouping by reward
-    therefore returns one bucket called False. Shopify's own `discount_code` dimension is
-    clean and carries orders, gross, discount and net per code.
+    ONLINE comes from Shopify. `GROUP BY discount_code, day` is supported, so one query
+    returns the whole per-code daily grid. Odoo is NOT the source for online: on this store
+    `sale.order.line.is_reward_line` is true on ordinary product lines (the Shopify shipping
+    line included) and every `reward_id` is null, so grouping by reward returns one bucket.
 
-    IN STORE the shops DO record discounts, and heavily -- see the note on the probe below
-    for the query bug that made it look otherwise.
-    """
-    out = {"codes": [], "ly": {}, "pos": None, "win": None}
+    IN STORE is a two-step join, because no single Odoo model carries code + money:
+      1. pos.order.line where is_reward_line -> (reward_id, order_id, day). The reward line
+         names the code but carries NO value: price_unit, price_subtotal and
+         price_subtotal_incl are all zero on it. The money comes off as a discount % on the
+         ordinary lines.
+      2. report.pos.order grouped by order_id for those orders -> price_total and margin.
+         That model is the only one with margin on it, which is what makes GP per code
+         possible at all.
+    Filter POS lines on their OWN create_date. pos.order.date_order matches NOTHING in this
+    database (0 rows in a 60-day window), and filtering through it silently returns zero and
+    reads exactly like "the shops never use codes".
+
+    Baselines are carried alongside so the front end can say "this code's basket against a
+    normal one" without inventing a denominator."""
+    out = {"win": None, "on": {}, "off": {}, "onBase": {}, "offBase": {}, "pos": None}
     d1 = today
-    d0 = d1 - datetime.timedelta(days=59)
-    l1 = d1 - datetime.timedelta(days=365)
-    l0 = d0 - datetime.timedelta(days=365)
+    d0 = d1 - datetime.timedelta(days=89)
     out["win"] = [d0.isoformat(), d1.isoformat()]
-    out["lyWin"] = [l0.isoformat(), l1.isoformat()]
 
-    def grab(a, b, tag):
+    # ---------- ONLINE ----------
+    try:
         ql = ("FROM sales SHOW orders, gross_sales, discounts, net_sales "
-              "GROUP BY discount_code ORDER BY discounts ASC LIMIT 60 "
-              "SINCE %s UNTIL %s" % (a.isoformat(), b.isoformat()))
-        rows = shopify_ql(ql, tag) or []
-        o = {}
-        for r in rows:
+              "GROUP BY discount_code, day SINCE %s UNTIL %s LIMIT 5000"
+              % (d0.isoformat(), d1.isoformat()))
+        for r in (shopify_ql(ql, "promoDaily") or []):
+            day = str(r.get("day") or "")[:10]
+            if not day: continue
             c = (r.get("discount_code") or "").strip()
-            if not c:            # the no-code bucket is the rest of the store, kept separately
-                o["__none__"] = {"ord": int(float(r.get("orders") or 0)),
-                                 "gross": float(r.get("gross_sales") or 0),
-                                 "disc": abs(float(r.get("discounts") or 0)),
-                                 "net": float(r.get("net_sales") or 0)}
-                continue
-            o[c] = {"ord": int(float(r.get("orders") or 0)),
-                    "gross": float(r.get("gross_sales") or 0),
-                    "disc": abs(float(r.get("discounts") or 0)),
-                    "net": float(r.get("net_sales") or 0)}
-        return o
+            cell = [int(float(r.get("orders") or 0)),
+                    round(float(r.get("gross_sales") or 0)),
+                    round(abs(float(r.get("discounts") or 0))),
+                    round(float(r.get("net_sales") or 0))]
+            if c: out["on"].setdefault(c, {})[day] = cell
+            else: out["onBase"][day] = cell
+        log("promos: online codes", len(out["on"]), "days", len(out["onBase"]))
+    except Exception as e:
+        log("promos online failed", str(e)[:140])
 
-    cur = grab(d0, d1, "promo")
-    ly = grab(l0, l1, "promoLY")
-    if not cur:
-        log("promos: shopify returned nothing")
-        return
-    none_now = cur.pop("__none__", None)
-    none_ly = ly.pop("__none__", None)
-    rows = []
-    for c, v in cur.items():
-        p = ly.get(c) or {}
-        rows.append({"c": c, "ord": v["ord"], "gross": round(v["gross"]),
-                     "disc": round(v["disc"]), "net": round(v["net"]),
-                     "aov": round(v["gross"] / v["ord"]) if v["ord"] else 0,
-                     "rate": round(v["disc"] / v["gross"] * 100, 1) if v["gross"] else 0,
-                     "lyOrd": p.get("ord"), "lyGross": round(p["gross"]) if p.get("gross") else None})
-    rows.sort(key=lambda r: -r["disc"])
-    out["codes"] = rows
-    out["none"] = ({"ord": none_now["ord"], "gross": round(none_now["gross"]),
-                    "disc": round(none_now["disc"]), "net": round(none_now["net"]),
-                    "aov": round(none_now["gross"] / none_now["ord"]) if none_now["ord"] else 0}
-                   if none_now else None)
-    out["lyTotal"] = {"ord": sum(v["ord"] for v in ly.values()),
-                      "disc": round(sum(v["disc"] for v in ly.values()))} if ly else None
-
-    # IN STORE. The first version of this probe filtered on order_id.date_order and got
-    # zero rows for every test, which I read as "the branches never record a discount".
-    # That was wrong and the query was the reason: pos.order.date_order matches NOTHING in
-    # this database (0 orders in a 60-day window) because the POS records are imported with
-    # that field unset. Branch retail lives in report.pos.order and the POS journals, not in
-    # pos.order. Filtering the LINES on their own create_date instead returns 182,209 rows
-    # for the window -- and 18,394 of them carry a discount. The shops discount heavily.
-    #
-    # Reward lines name the code but carry no value (price_unit, price_subtotal and
-    # price_subtotal_incl are all 0 on them -- the money comes off as a discount % on the
-    # ordinary lines). So: per-code ORDER COUNTS from the reward lines, and the total money
-    # given away from the negative lines. Two honest numbers rather than one invented join.
+    # ---------- IN STORE ----------
     try:
         since = d0.isoformat() + " 00:00:00"
-        base = [["create_date", ">=", since]]
+        rl = oexec("pos.order.line", "search_read",
+                   [[["is_reward_line", "=", True], ["create_date", ">=", since]],
+                    ["reward_id", "order_id", "create_date"]], {"limit": 40000}) or []
+        code, day_of, oids = {}, {}, []
+        for r in rl:
+            rid, oid = r.get("reward_id"), r.get("order_id")
+            if not (rid and oid): continue
+            nm = (rid[1] if isinstance(rid, list) else str(rid)).split(" - ")[0].strip()[:40]
+            code[oid[0]] = nm
+            day_of[oid[0]] = str(r.get("create_date") or "")[:10]
+            oids.append(oid[0])
+        oids = list(dict.fromkeys(oids))
+        for i in range(0, len(oids), 800):
+            for row in (ogroup("report.pos.order",
+                               [["order_id", "in", oids[i:i + 800]]],
+                               ["price_total", "margin"], ["order_id"]) or []):
+                o = row.get("order_id")
+                oid = o[0] if isinstance(o, list) else o
+                c, dy = code.get(oid), day_of.get(oid)
+                if not (c and dy): continue
+                cell = out["off"].setdefault(c, {}).setdefault(dy, [0, 0.0, 0.0])
+                cell[0] += 1
+                cell[1] += row.get("price_total") or 0
+                cell[2] += row.get("margin") or 0
+        for c in out["off"]:
+            for dy in out["off"][c]:
+                v = out["off"][c][dy]
+                out["off"][c][dy] = [v[0], round(v[1]), round(v[2])]
+
+        # every POS order per day, so a code's basket and margin have something to sit against
+        for row in (ogroup("report.pos.order",
+                           [["date", ">=", since],
+                            ["state", "in", ["paid", "done", "invoiced"]]],
+                           ["price_total", "margin"], ["date:day"]) or []):
+            dy = row.get("date:day")
+            try: dy = datetime.datetime.strptime(dy, "%d %b %Y").date().isoformat()
+            except Exception: continue
+            out["offBase"][dy] = [int(row.get("date_count") or 0),
+                                  round(row.get("price_total") or 0),
+                                  round(row.get("margin") or 0)]
+
         probes = {}
         for label, dom in (("coupon", [["coupon_id", "!=", False]]),
                            ("reward", [["reward_id", "!=", False]]),
                            ("discount", [["discount", ">", 0]]),
                            ("negative", [["price_subtotal_incl", "<", 0]])):
-            probes[label] = oexec("pos.order.line", "search_count", [dom + base]) or 0
-        tot = oexec("pos.order.line", "search_count", [base]) or 0
-
-        codes = []
-        for g in (ogroup("pos.order.line",
-                         [["is_reward_line", "=", True]] + base,
-                         ["price_subtotal_incl"], ["reward_id"]) or []):
-            rid = g.get("reward_id")
-            nm = rid[1] if isinstance(rid, list) and len(rid) > 1 else str(rid)
-            n = g.get("reward_id_count") or g.get("__count") or 0
-            if not n: continue
-            # "LFRE10 - 10% on your order" -> "LFRE10"
-            codes.append({"c": str(nm).split(" - ")[0].strip()[:40], "ord": int(n)})
-        codes.sort(key=lambda r: -r["ord"])
-
+            probes[label] = oexec("pos.order.line", "search_count",
+                                  [dom + [["create_date", ">=", since]]]) or 0
+        tot = oexec("pos.order.line", "search_count", [[["create_date", ">=", since]]]) or 0
         given = 0.0
         for g in (ogroup("pos.order.line",
-                         [["price_subtotal_incl", "<", 0]] + base,
+                         [["price_subtotal_incl", "<", 0], ["create_date", ">=", since]],
                          ["price_subtotal_incl"], ["create_date:month"]) or []):
             given += abs(float(g.get("price_subtotal_incl") or 0))
-
-        out["pos"] = {"probes": probes, "lines": tot, "any": any(v > 0 for v in probes.values()),
-                      "codes": codes[:30], "given": round(given)}
-        log("promos: in-store %d codes, %d discounted lines of %d, E\u00a3%s given away"
-            % (len(codes), probes.get("discount", 0), tot, round(given)))
+        out["pos"] = {"probes": probes, "lines": tot, "given": round(given),
+                      "any": any(v > 0 for v in probes.values())}
+        log("promos: in-store codes", len(out["off"]), "orders", len(oids),
+            "baseline days", len(out["offBase"]))
     except Exception as e:
         out["pos"] = {"error": str(e)[:120]}
-        log("promos: pos probe failed", str(e)[:120])
+        log("promos in-store failed", str(e)[:160])
 
     XTRA["promo"] = out
-    log("promos: %d codes online, E\u00a3%s discounted, in-store usage %s"
-        % (len(rows), round(sum(r["disc"] for r in rows)),
-           "PRESENT" if (out.get("pos") or {}).get("any") else "none recorded"))
 
 
 def build():
