@@ -8857,9 +8857,9 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
     {l:'NET delivery',c:'#5a5bf0',w:3,f:'zero',d:Lp.map(m=>s2('col',m)-s2('cost',m))},
     {l:'zero',c:'#0F172A',dash:1,w:1,pr:0,d:Lp.map(()=>0)}],null,
    {cmt:[['#e23a63','<b>Over the '+Lp.length+' settled months charted here, delivery has cost E&pound;'+money2(tk)+' and brought back E&pound;'+money2(tc)+' &mdash; a net of '+(tc-tk<0?'&minus;':'')+'E&pound;'+money2(Math.abs(tc-tk))+'.</b> Customers cover '+(tk?(tc/tk*100).toFixed(0):0)+'% of the bill. The rest comes out of product margin, which is why the Shopify P&amp;L now subtracts it before it gets to profit contribution.'],
-     ['#3b7dd8','<b>The blue line is a pricing decision, the red line is not.</b> The courier bill tracks order volume almost mechanically. What you collect tracks how much of the time you are running free delivery. When blue falls while red keeps climbing, that is a promotion, not a cost problem.']]});
+     ['#3b7dd8','<b>The blue line is a pricing decision, the red line is not.</b> The courier bill tracks order volume almost mechanically; what you collect tracks how often the customer is charged for delivery at all. When blue falls while red keeps climbing, something changed about who pays for shipping &mdash; a promotion, a returns policy, or shipping folded into the product price. This chart cannot tell you which, only that the recovery rate moved.']]});
 
-  vzCard(g,'The cost of free delivery, over time'+INFO('The courier bill for each month split by whether the customer paid for delivery. The orange band is the money you spent shipping orders that were advertised as free delivery: that month bill multiplied by the share of confirmed orders carrying no paid shipping line. Bosta bills a near-flat rate per shipment so the order-share split is the honest allocation.'),
+  vzCard(g,'Courier cost on orders that collected no shipping fee'+INFO('The courier bill each month split by whether the customer paid anything for delivery. The orange band is the bill on orders carrying no paid shipping line, allocated by order share (Bosta bills a near-flat rate per shipment). It is NOT the price of a free-delivery offer \u2014 none was running in Aug 2026 \u2014 and free returns, whose leg is couriered and collects nothing, land in exactly the same band.'),
    'Allocated from the actual courier bill by free-order share. Orange is what the free-delivery offer costs you.'+lagNote,Lp.map(lab),
    [{l:'Cost of orders shipped FREE (allocated)',c:'#c9834a',w:2.6,f:1,d:Lp.map(m=>s2free(m))},
     {l:'Cost of orders the customer paid for',c:'#12a06e',w:2.2,d:Lp.map(m=>s2('cost',m)-s2free(m))},
@@ -9603,7 +9603,7 @@ function rShip2(g,mons,T,F,SH){
   {n:'NET delivery P&L',f:m=>s2('col',m)-s2('cost',m)||null,fmt:SIG,sh:1,b:1,tt:'Collected minus the courier bill. Nothing else is added.'},
   {n:'Recovery, % of the courier bill customers cover',f:m=>s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:F.PCT,sh:1},
   null,
-  {n:'COST OF FREE DELIVERY (allocated)',f:m=>s2free(m)?-s2free(m):null,fmt:SIG,sh:1,b:1,gd:-1,tt:'Courier bill x free-order share. The price of the offer, in pounds.'},
+  {n:'COURIER COST, NO SHIPPING COLLECTED (allocated)',f:m=>s2free(m)?-s2free(m):null,fmt:SIG,sh:1,b:1,gd:-1,tt:'Courier bill x the share of orders that collected no shipping fee. NOT proof of a free-delivery offer \u2014 free returns and shipping folded into the product price both land here.'},
   /* The table counted returned ORDERS and their lost revenue but never what the return itself
      costs. A return is a second shipment with its own fee, and the outbound leg that carried it
      was already paid for and earned nothing -- both legs belong here, month by month, next to
@@ -9849,11 +9849,17 @@ function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])|
    cost-bearing chart drops it rather than drawing a cliff that is not real. */
 function s2lag(m){return S2f()&&S2f().lagM===m;}
 function s2cols(mons,dropLag){return mons.filter(m=>s2h(m)&&!(dropLag&&s2lag(m)));}
-/* Cost of free delivery: total courier bill for the month x the share of that
-   month's confirmed orders that the customer paid NOTHING to have delivered.
-   Bosta bills per shipment at a near-flat rate (E-pound 53.6 average across
-   85,240 delivered orders in the raw export), so a straight order-share split is
-   the honest allocation -- it is labelled ALLOCATED everywhere it appears. */
+/* Courier cost carried on orders that collected NO shipping fee: the month's courier bill
+   x the share of confirmed orders with no paid shipping line. Bosta bills per shipment at a
+   near-flat rate (E-pound 53.6 across 85,240 delivered orders in the raw export), so an
+   order-share split is the honest allocation -- it is labelled ALLOCATED wherever it appears.
+
+   THIS IS NOT "the cost of free delivery" and used to be labelled that way, which asserted a
+   promotion that was not running: there was no free-shipping offer in Aug 2026. All the
+   number knows is that no shipping was collected on those orders. On this account the
+   likely reasons are free RETURNS -- the return leg is couriered and collects nothing, and
+   the original shipping line goes back with the refund -- and shipping absorbed into the
+   product price. Name the measurement, not a cause we have not established. */
 function s2free(m){const c=s2('conf',m);return c?s2('cost',m)*s2('freeN',m)/c:0;}
 /* Static, from the Bosta cash-cycle export parsed off the Mac. This CANNOT come
    from Odoo -- the ledger records one settlement total per batch, not per-order
@@ -9916,8 +9922,18 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
  if(days.length<5){pnlCard(g,'blend','Daily Profit Engine','Fewer than 5 overlapping revenue+spend days in this window &mdash; widen the date filter.','');return;}
  const sum=k=>days.reduce((t,x)=>t+(x[k]||0),0);
  const tRev=sum('net'),tSp=sum('sp'),tCg=sum('cogs'),tDel=sum('del'),tOp=sum('opx'),tPr=sum('prof'),tOrd=sum('ord');
- const cm=tRev>0?1-(tCg+tDel)/tRev:0;              // contribution per E£1 of net revenue AFTER cogs+delivery
- const beMER=cm>0?1/cm:null;                        // each ad E£1 must bring this much revenue to break even
+ /* Break-even MER has to be built from the SAME costs the profit line subtracts, or the
+    card contradicts itself. It used to leave order opex out -- packing, bags, payment and
+    collection fees -- on the grounds that fixed costs do not move with spend. But those are
+    per-ORDER costs, they scale with the orders the spend buys, and `prof` already deducts
+    them. The result: a window with E£9,139,000 of net revenue, E£6,777,673 of COGS,
+    E£153,162 of delivery and E£316,310 of order opex printed "4.65x vs 4.14x" in green
+    while showing a NET PROFIT of -E£72,007 in red. Including opex puts break-even at 4.83x,
+    which is above the 4.65x actually achieved -- and that is why the profit is negative.
+    Now MER >= break-even is true exactly when profit >= 0, which is the only version of
+    this pair worth printing. */
+ const cm=tRev>0?1-(tCg+tDel+tOp)/tRev:0;          // contribution per E£1 of net revenue after EVERY cost the profit line carries
+ const beMER=cm>0?1/cm:null;
  const aMER=tSp>0?tRev/tSp:0;
  const drNow=cpdOf(days[days.length-1].d.slice(0,7));
  /* ---------- card 1: the graph ---------- */
@@ -9939,7 +9955,16 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   +kpi('DELIVERY (NET)','E&pound; '+money(tDel),'CPD E&pound; '+money(drNow.cpd)+'/order gross &middot; customers pay back E&pound; '+money(drNow.cpd-drNow.cpdN)+' &middot; delivery rate '+(drNow.dr*100).toFixed(1)+'%')
   +kpi('ORDER OPEX','E&pound; '+money(tOp),'packing &amp; bags + payment/collection fees (posted ledger)'+(FIX?' + your E&pound;'+money(FIX)+'/day':''))
   +kpi('NET PROFIT','E&pound; '+money(tPr),'E&pound; '+money(tPr/days.length)+'/day average',tPr>=0?'#12a06e':'#e23a63')
-  +kpi('MER vs BREAK-EVEN',aMER.toFixed(2)+'x vs '+(beMER?beMER.toFixed(2)+'x':'&mdash;'),'MER = net revenue &divide; ad spend. Below break-even, every extra E&pound;1 of spend needs a margin miracle',aMER>=(beMER||0)?'#12a06e':'#e23a63')
+  +kpi('MER vs BREAK-EVEN',aMER.toFixed(2)+'x vs '+(beMER?beMER.toFixed(2)+'x':'&mdash;'),'MER = net revenue &divide; ad spend. Break-even carries every cost the NET PROFIT line does &mdash; COGS, delivery and order opex &mdash; so this reads green only when the profit above it is positive.',aMER>=(beMER||0)?'#12a06e':'#e23a63')
+  /* This card and the Shopify P&L both end in a profit line and they do not match, which
+     reads as one of them being wrong. Neither is: they cover different windows and carry
+     different costs. Say so here rather than leaving two numbers to argue with each other. */
+  +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.6">'
+   +'<b>This will not equal the EBITDA on Shopify P&amp;L, and both are right.</b> '
+   +'This engine runs on the <b>'+days.length+' days you have selected</b> ('+money(tOrd)+' orders) and carries COGS, ads, delivery and <b>order opex</b> &mdash; packing, bags and payment fees, '+('E&pound; '+money(tOp))+' here. '
+   +'It does <b>not</b> carry e-com payroll unless you put it in the box above, which is why the fixed-opex field exists. '
+   +'The P&amp;L runs on <b>calendar months</b> and does the opposite: it deducts payroll and leaves order opex out. '
+   +'Same business, two different cost sets over two different windows &mdash; use this one for "is the next pound of spend worth it" and the P&amp;L for "did the channel wash its face last month".</div>'
   +'</div>';
  pnlCard(g,'blend','Daily Profit Engine — revenue, ad spend, COGS, delivery, NET PROFIT','Every line is an actual: Odoo daily revenue/margin, real courier cost per confirmed order (returns priced in), the posted expense ledger. Today (partial) excluded.',
   ctl+hero+'<div class="cv" style="height:280px"><canvas id="peCv"></canvas></div><div style="font-size:10px;color:#8a93a6;margin-top:4px">'+(SMOOTH?'7-day averages for readability &mdash; switch to Raw daily above. ':'')+'Net profit = net revenue &minus; COGS &minus; ad spend &minus; net delivery cost &minus; order opex'+(FIX?' &minus; your fixed add-on':'')+'. Delivery uses each month&rsquo;s REAL cost &divide; confirmed orders ('+(goodM.length)+' months of courier invoices).</div>');
@@ -9977,7 +10002,7 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   tb2+='<div style="overflow-x:auto"><table class="bt" style="min-width:620px"><tr><th style="text-align:left">Spend band (days ranked by ad spend)</th><th>Days</th><th>Avg spend/day</th><th>Avg revenue/day</th><th>MER</th><th>Avg NET PROFIT/day</th></tr>'
    +buk.map((b2,q)=>{const w=mx?Math.abs(b2.pr)/mx*100:0;
     return '<tr><td>'+['Lowest','Low','Middle','High','Highest'][q]+' 20%</td><td>'+b2.n+'</td><td>E&pound; '+money(b2.sp)+'</td><td>E&pound; '+money(b2.rev)+'</td><td'+(beMER&&b2.mer<beMER?' style="color:#e23a63;font-weight:800"':'')+'>'+b2.mer.toFixed(2)+'x</td><td style="min-width:170px"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:90px;background:#f0f2f7;border-radius:4px;height:11px;direction:'+(b2.pr<0?'rtl':'ltr')+'"><div style="width:'+w.toFixed(0)+'%;background:'+(b2.pr<0?'#e23a63':'#12b886')+';height:11px;border-radius:4px"></div></div><b style="color:'+(b2.pr<0?'#e23a63':'#12a06e')+'">E&pound; '+money(b2.pr)+'</b></div></td></tr>';}).join('')+'</table></div>';
-  tb2+='<div style="font-size:11px;color:#5b6478;margin-top:6px">Break-even MER in this window = <b>'+(beMER?beMER.toFixed(2)+'x':'&mdash;')+'</b> (1 &divide; contribution margin after COGS + delivery; fixed opex excluded because it does not move when spend does). Red MER = band below break-even. Honest caveat: this is association, not a controlled test &mdash; promo days push spend AND revenue up together. Read it next to the per-ad verdicts on Launches &amp; Budgets.</div>';
+  tb2+='<div style="font-size:11px;color:#5b6478;margin-top:6px">Break-even MER in this window = <b>'+(beMER?beMER.toFixed(2)+'x':'&mdash;')+'</b> (1 &divide; contribution margin after COGS, delivery AND order opex &mdash; packing, bags and payment fees are per-order costs that scale with the orders the spend buys, and the NET PROFIT line deducts them, so break-even has to as well). Red MER = band below break-even. Honest caveat: this is association, not a controlled test &mdash; promo days push spend AND revenue up together. Read it next to the per-ad verdicts on Launches &amp; Budgets.</div>';
   pnlCard(g,'blend','Spend more or cut? — profit response to ad spend, all costs packed in','Days ranked into five spend bands. If profit climbs with spend, feed it; if it decays, the account is buying revenue it cannot keep.',tb2);}
  /* ---------- card 3: most profitable days ---------- */
  const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -10036,7 +10061,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed. On a free-delivery promotion this line falls while the courier bill underneath does not move at all -- that gap is what makes the net negative.'},
    {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that -- 3.5m EGP of courier cost sitting in an account named after card fees. Until this was found the dashboard reported ZERO courier cost for the first 17 months.'},
    {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin. The old version of this line also added account 32.00.00.18.00 as a rebate; that account is the ledger mirror of the shipping revenue already counted above, so adding it double-counted every pound. It is gone.'},
-   {n:'&nbsp;&nbsp;of which: COST OF FREE DELIVERY (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The courier bill for the month multiplied by the share of that month\u2019s confirmed orders on which the customer paid nothing for delivery. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. This is the price of the free-delivery offer, in pounds, month by month.'},
+   {n:'&nbsp;&nbsp;of which: COURIER COST ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month\u2019s courier bill multiplied by the share of confirmed orders with no paid shipping line. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. NOT the cost of a free-delivery offer \u2014 none was running in Aug 2026. Free RETURNS and shipping absorbed into the product price both land here, and the number cannot tell them apart.'},
    {n:'Shipping recovery, % of the courier bill covered by customers',f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself. Anything below that is the share of every delivery you are funding yourself.'},
    {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below this line now subtracts from THIS number, not from the gross profit row above it.'},
    /* months where the ads feed does not cover the FULL month (feed starts O.ad.start, rolling
@@ -12136,7 +12161,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-132655';
+const BUILD='20260901-133711';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
