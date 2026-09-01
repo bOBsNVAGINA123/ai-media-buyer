@@ -536,17 +536,26 @@ function rLT(){if(TAB!=='lt')return;dCh();
  rows.sort(function(a,b){return (b.r||-1)-(a.r||-1);});
  const mxr=Math.max.apply(null,rows.map(function(r){return r.r||0;}))||1;
  html+='<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Every scope ranked \u2014 LTGP @ '+h+'d vs CAC vs real expenses</div><div class="cs">Break-even customers = (branch OpEx + CAC) \u00F7 LTGP for the latest complete month. Above your actual new customers, the branch cannot pay for itself no matter how good the ads get.</div></div></div>'
- +'<table class="bt"><tr><th>Scope</th><th>CAC</th><th>LTGP @'+h+'d</th><th>Ratio</th><th style="text-align:left">&nbsp;</th><th>Payback</th><th>OpEx / mo</th><th>New cust / mo</th><th>Break-even cust</th><th>D1 share of revenue</th></tr>'
+ +'<table class="bt"><tr><th>Scope</th><th>CAC</th><th>LTGP @'+h+'d</th><th title="What LTGP is built from: orders a year x basket x margin. LTGP is a PER-CUSTOMER figure, so the biggest branch does not automatically rank highest.">Orders / yr</th><th>Basket</th><th>Repeat</th><th>Ratio</th><th style="text-align:left">&nbsp;</th><th>Payback</th><th>OpEx / mo</th><th>New cust / mo</th><th>Break-even cust</th><th>D1 share of revenue</th></tr>'
  +rows.map(function(r){
    const short=r.be!=null&&r.nc?r.nc/r.be:null;
    return '<tr><td style="font-weight:800">'+r.sc+'</td><td>'+(r.cac?rtF(r.cac):'\u2014')+'</td><td>'+(r.ltgp!=null?rtF(r.ltgp):'\u2014')+'</td>'
+   /* LTGP is PER CUSTOMER, so a bigger branch is not automatically a better one: New
+      Cairo carries 49% more customers than Dokki and each is worth marginally less,
+      which is the whole reason Dokki outranks it. Print the three parts LTGP is built
+      from so the order explains itself instead of prompting the question. */
+   +(function(){var J=((O.jour||{}).scopes||{})[r.sc]||{};
+     var oyr=J.oyr, rep=J.rep, aov=(J.ltv&&J.oyr)?J.ltv/J.oyr:null;
+     return '<td>'+(oyr!=null?(+oyr).toFixed(2):'\u2014')+'</td>'
+      +'<td>'+(aov!=null?rtF(aov):'\u2014')+'</td>'
+      +'<td>'+(rep!=null?(+rep).toFixed(1)+'%':'\u2014')+'</td>';})()
    +'<td style="font-weight:800;color:'+ltCol(r.r)+'">'+(r.r!=null?r.r.toFixed(2)+'\u00D7':'\u2014')+'</td>'
    +'<td style="text-align:left;min-width:120px"><div style="background:'+ltCol(r.r)+';height:8px;border-radius:4px;width:'+Math.round(100*(r.r||0)/mxr)+'%;opacity:.85"></div></td>'
    +'<td>'+(r.pay!=null?'day '+r.pay:'<span style="color:var(--red);font-weight:800">never</span>')+'</td>'
    +'<td>'+rtF(r.opex)+'</td><td>'+Math.round(r.nc).toLocaleString('en-US')+'</td>'
    +'<td style="font-weight:800;color:'+(short==null?'var(--mut)':short>=1?'var(--grn)':'var(--red)')+'">'+(r.be!=null?Math.round(r.be).toLocaleString('en-US')+(short!=null?' ('+short.toFixed(2)+'\u00D7)':''):'\u2014')+'</td>'
    +'<td>'+(r.d1!=null?r.d1+'%':'\u2014')+'</td></tr>';}).join('')
- +'</table><div class="rtNote">Ratio uses each scope\u2019s own live CAC. <b>Break-even cust</b> is how many new customers a month that scope must acquire for its '+h+'-day gross profit to cover its own OpEx and ad spend \u2014 the bracket is actual \u00F7 required, so under 1.00\u00D7 is a structural hole that media cannot fill.</div></div>';
+ +'</table><div class="rtNote"><b>LTGP is per customer, not per branch.</b> A bigger shop does not automatically rank higher \u2014 New Cairo carries 49% more customers than Dokki and each is worth slightly less, which is why Dokki sits above it. The three columns after LTGP are what it is built from (orders a year \u00D7 basket \u00D7 margin), so a gap can be read rather than guessed at. Ratio uses each scope\u2019s own live CAC. <b>Break-even cust</b> is how many new customers a month that scope must acquire for its '+h+'-day gross profit to cover its own OpEx and ad spend \u2014 the bracket is actual \u00F7 required, so under 1.00\u00D7 is a structural hole that media cannot fill.</div></div>';
  /* ---- 2b. portfolio compare ---- */
  html+=ltPortfolio(h);
  /* ---- 3. by cohort month ---- */
@@ -11314,11 +11323,31 @@ function rMETA(){
 
   /* account-level input that moved enough to explain the rest */
   if(dCvr!=null&&dCvr<-20){
-   const lost=cur.sp*(Math.abs(dCvr)/100)*GPo;
+   /* Size it the same way the offender list does -- lost purchases x basket x margin --
+      rather than spend x the CVR drop, which multiplies a cost by a rate and produces a
+      number in no real units. The two used to disagree by 20x on the same card.
+      WEBSITE value only for the basket: in-store value backfills for about six days and
+      would inflate the recent window's basket against the older one it is compared with. */
+   const _off=[];
+   ads.forEach(a=>{const c=slice(a,PW.a,PW.b), p=PW.ok?slice(a,PW.pa,PW.pb):null;
+     if(!p||c.clk<40||p.clk<40)return;
+     const cv=c.clk?c.wpur/c.clk:0, pv=p.clk?p.wpur/p.clk:0;
+     if(!(pv>0)||cv>=pv)return;
+     const aov=c.wpur?c.wval/c.wpur:(p.wpur?p.wval/p.wpur:0);
+     const cost=(pv-cv)*c.clk*aov*GPo;
+     if(cost<500)return;
+     _off.push({n:a.n||a.id,cost:cost,d:(cv/pv-1)*100,clk:c.clk});});
+   _off.sort((x,y)=>y.cost-x.cost);
+   const lost=_off.reduce((x,y)=>x+y.cost,0);
+   if(lost>0)
    A.push({p:'P1',money:lost*mo,lbl:'GP / MONTH',
     t:'Site conversion fell '+Math.abs(dCvr).toFixed(0)+'%, not the ads',
     w:'CTR held at '+cur.ctr.toFixed(2)+'% ('+sg(dCtr)+') while CVR went from '+prv.cvr.toFixed(2)+'% to '+cur.cvr.toFixed(2)+'%. People are still clicking and no longer buying — that is checkout, offer or trust, and no budget change fixes it.',
-    ev:'Measured on '+PW.lbl+' against '+(PW.plbl||'the prior period')});}
+    ev:(function(){
+      if(!_off.length)return 'Measured on '+PW.lbl+' against '+(PW.plbl||'the prior period')+'.';
+      return '<b>Biggest offenders:</b> '+_off.slice(0,4).map(x=>esc(x.n)+' '+x.d.toFixed(0)+'% ('+M(x.cost*mo)+'/mo)').join(' \u00b7 ')
+        +(_off.length>4?' \u2026 +'+(_off.length-4)+' more':'')
+        +'. '+_off.reduce((x,y)=>x+y.clk,0).toLocaleString()+' clicks between them. This is an UPPER bound \u2014 it assumes the old conversion rate was still achievable on the same traffic.';})()});}
 
   okActCard(g,A,PW.ranged?('Reading '+PW.lbl+'.'):'The date box is empty, so this reads the last 7 days.');
  }catch(e){}
@@ -12010,7 +12039,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-123609';
+const BUILD='20260901-125056';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
