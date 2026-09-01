@@ -6495,7 +6495,8 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
    const d=(sh!=null&&psh!=null&&psh>0)?(sh-psh):null;
    return '<td style="border-left:1px solid #e6e9f0" colspan="4" title="Ads are not bought per branch, so this is not measured spend. It is this shop\u2019s share of the Meta in-store attributed value in the window, which is how the one budget gets apportioned. In money that is '+M(r.sp.m||0)+' of '+M(tot)+'.">'
     +(sh==null?'<span style="color:#c9ccd6">\u2014</span>'
-      :'<b style="font-size:13px">'+sh.toFixed(1)+'%</b><div style="font-size:9px;color:#b8860b">of the Meta budget'+(d!=null?' &middot; '+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(1)+'pt':'')+'</div>')
+      :'<b style="font-size:13px">'+sh.toFixed(1)+'%</b><div style="font-size:9px;color:#b8860b">of the Meta budget'
+         +(psh!=null&&psh>0?' &middot; was '+psh.toFixed(1)+'% &middot; '+((sh/psh-1)>=0?'+':'\u2212')+Math.abs((sh/psh-1)*100).toFixed(0)+'%':'')+'</div>')
     +'</td>';})()
   +(function(){const q=r.dly?1:pf;const ly=r.dly?null:r.l;const D2=(a,b2)=>fp(pc(a*q,b2));
    return '<td style="border-left:1px solid #e6e9f0">'+NUM(r.c.nc)+(r.cEst?'<div style="font-size:9px;color:#b8860b">est. from monthly</div>':(r.dly?'':'<div style="font-size:9px;color:#b8860b">monthly</div>'))+'</td><td>'+D2(r.c.nc,r.p.nc)+'</td><td>'+(ly?D2(r.c.nc,ly.nc):'<span style="color:#c9ccd6">—</span>')+'</td>'
@@ -6719,8 +6720,14 @@ function yoyChannels(g){
       const u0=x.o0?Math.max(0,x.o0-(x.no0||0)-(x.ro0||0)):null, p0=(u0!=null&&x.o0)?u0/x.o0*100:null;
       const d=(p0!=null)?(p1-p0):null;
       const col=p1>=15?'#a3271a':(p1>=10?'#a35a1a':'#5b6478');
+      /* BOTH years, and the change as a PERCENTAGE, never in points. A move from 7.6% to
+         21.1% is "+178%", not "+13.5pt" -- points understate how much worse it got and
+         nobody reads them the way they read a percentage. */
+      const rel=(p0!=null&&p0>0)?((p1/p0-1)*100):null;
       return '<b style="color:'+col+'">'+p1.toFixed(1)+'%</b>'
-       +'<div style="font-size:10px;color:#8a93a6">'+N(u1)+(d==null?'':' &middot; '+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(1)+'pt')+'</div>';})()+'</td>'
+       +'<div style="font-size:10px;color:#8a93a6">'+N(u1)+' receipts</div>'
+       +(p0!=null?'<div style="font-size:10px;color:#8a93a6">was '+p0.toFixed(1)+'%'
+          +(rel!=null?' &middot; <b style="color:'+(rel>0?'#a3271a':'#0f6e56')+'">'+(rel>=0?'+':'\u2212')+Math.abs(rel).toFixed(0)+'%</b>':'')+'</div>':'');})()+'</td>'
    +'<td style="'+TD+';color:#0f6e56">'+(x.no1?'<b>'+N(x.no1)+'</b>'+(x.no0?'<div style="font-size:10px">'+fp(pc(x.no1,x.no0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+';color:#3d3fb8">'+(x.ro1?'<b>'+N(x.ro1)+'</b>'+(x.ro0?'<div style="font-size:10px">'+fp(pc(x.ro1,x.ro0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(x.nc?N(x.nc):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
@@ -6755,8 +6762,11 @@ function yoyChannels(g){
      const o0=sh.reduce((a,x)=>a+(x.o0||0),0);
      const u0=sh.reduce((a,x)=>a+Math.max(0,(x.o0||0)-(x.no0||0)-(x.ro0||0)),0);
      const p=u/o*100, p0=o0?u0/o0*100:null;
+     const rel=(p0!=null&&p0>0)?((p/p0-1)*100):null;
      return '<b style="color:'+(p>=15?'#a3271a':'#5b6478')+'">'+p.toFixed(1)+'%</b>'
-      +'<div style="font-size:10px;color:#8a93a6">shops only'+(p0!=null?' &middot; was '+p0.toFixed(1)+'%':'')+'</div>';})()+'</td>'
+      +'<div style="font-size:10px;color:#8a93a6">shops only</div>'
+      +(p0!=null?'<div style="font-size:10px;color:#8a93a6">was '+p0.toFixed(1)+'%'
+         +(rel!=null?' &middot; <b style="color:'+(rel>0?'#a3271a':'#0f6e56')+'">'+(rel>=0?'+':'\u2212')+Math.abs(rel).toFixed(0)+'%</b>':'')+'</div>':'');})()+'</td>'
   +'<td style="'+TD+';color:#0f6e56"><b>'+N(rows.reduce((a,x)=>a+(x.no1||0),0))+'</b></td>'
   +'<td style="'+TD+';color:#3d3fb8"><b>'+N(rows.reduce((a,x)=>a+(x.ro1||0),0))+'</b></td>'
   +'<td style="'+TD+'"><b>'+N(rows.reduce((a,x)=>a+(x.nc||0),0))+'</b></td>'
@@ -12000,7 +12010,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-121923';
+const BUILD='20260901-123609';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
