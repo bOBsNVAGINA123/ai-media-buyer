@@ -2397,7 +2397,18 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   // monthly aggregates: finance (full history), ad panel (from A.start), customers (NR)
   const FMo={};if(O.fin&&DD.length){for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const f=FMo[m]||(FMo[m]={rev:0,ref:0,gp:0,ord:0});f.rev+=(O.fin.rev[i]||0)*1000;f.ref+=(O.fin.refund[i]||0)*1000;f.gp+=(O.fin.gp[i]||0)*1000;f.ord+=(O.fin.orders?(O.fin.orders[i]||0):0);}}
   const AMo={};if(A.start){const t0=new Date(A.start+'T00:00:00Z').getTime();for(let i=0;i<A.n;i++){const m=new Date(t0+i*864e5).toISOString().slice(0,7);const x=AMo[m]||(AMo[m]={sp:0,ncrev:0,rcrev:0,sess:0});x.sp+=(A.spend||[])[i]||0;x.ncrev+=(A.ncrev||[])[i]||0;x.rcrev+=(A.rcrev||[])[i]||0;x.sess+=(A.sessions||[])[i]||0;}}
-  const adOK=m=>m>='2025-09';  // ad panel fully covers months from Sep-2025
+  /* This was hardcoded to '2025-09' and blocked the whole ad block from comparing against
+     last year -- Ad spend, MER, aMER and nCAC all printed a bare dash for the MONTH column
+     even where the feed had every day of it. The feed actually starts 2025-05-29, so the
+     first month it covers END TO END is 2025-06 and August 2025 (E£1,372,623 of spend) was
+     always available. Derive the gate from the feed instead of asserting a date: a month is
+     comparable only if the feed covers its first day. */
+  const adFirstFull=(function(){const st=(A&&A.start)||'';
+    if(!st)return '9999-12';
+    if(st.slice(8,10)==='01')return st.slice(0,7);
+    const d=new Date(st+'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth()+1);
+    return d.toISOString().slice(0,7);})();
+  const adOK=m=>m>=adFirstFull;
   const curM=(ST.e||'').slice(0,7);const lyM=(+curM.slice(0,4)-1)+curM.slice(4);
   const elapsed=Math.max(1,+(ST.e||'').slice(8,10));const dimM=new Date(Date.UTC(+curM.slice(0,4),+curM.slice(5,7),0)).getUTCDate();
   const isMTD=curM===(O.today||'').slice(0,7)||(ST.e||'')<((O.today||''));const pfM=dimM/elapsed;
@@ -2428,6 +2439,11 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    ['Site CVR',o2.cvr,'pct',1,null,null,1]];
   const f2=k=>FM[k]||fI;const pcF=(a2,b2)=>(a2!=null&&b2)?((a2/b2-1)*100):null;
   const cell=(v,fmt)=>v==null||!isFinite(v)?'—':f2(fmt)(v);
+  /* A blank should say why it is blank. The YTD-vs-last-year column stays empty for the ad
+     rows because the feed only reaches back to adFirstFull -- comparing 2026 Jan-Aug against
+     a 2025 that starts in June would be 243 days against 95 and would read as growth that is
+     really just missing months. */
+  const adGap='Ad feed starts '+((A&&A.start)||'?')+', so the first month it covers end to end is '+adFirstFull+'. A year-to-date comparison against '+yl+' would put '+mm+' months of '+yr+' against a part-year and invent the difference.';
   const dcell=(pc2,good)=>pc2==null?'<td style="color:#c2c8d4">—</td>':'<td style="font-weight:800;color:'+(((pc2>=0)===!!good)?'#12a06e':'#e23a63')+'">'+(pc2>=0?'▲ +':'▼ −')+Math.abs(pc2).toFixed(0)+'%</td>';
   const rows=R.map(r=>{const [lbl,per,fmt,gu,num,den,adS]=r;const c=per?per[0]:null,p2=per?per[1]:null;
    let mv=null,mly=null,ytd=null,ytdL=null;
@@ -8978,6 +8994,21 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {n:'New customers',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].nc:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,tt:'REGISTERED first-time customers of this branch that month (walk-ins without a phone are not countable)'},
     {n:'New-customer revenue',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].nrev:null,fmt:POS,sh:1,tt:'Revenue from customers whose FIRST purchase at this branch was that month'},
     {n:'Returning revenue',f:m=>(O.bnr&&O.bnr[n]&&O.bnr[n][m])?O.bnr[n][m].rrev:null,fmt:POS,sh:1,tt:'Revenue from customers acquired in an earlier month'},
+    /* Receipts with nobody attached are in the revenue line at the top and in NEITHER
+       customer line, so the three customer rows above never reconciled to it. Unregistered
+       is the remainder: orders minus (new + returning), and revenue minus (NC + RC). It has
+       gone from about 7% of receipts to 19% network-wide since March, which is enough to
+       move every per-customer number on this table, so it is stated rather than implied. */
+    {n:'Unregistered receipts',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
+       if(!b||!P[m])return null;return Math.max(0,(P[m][2]||0)-(b.nc||0)-(b.rc||0));},
+     fmt:v=>Math.round(v).toLocaleString(),sh:1,
+     tt:'Receipts with no customer attached: total orders minus new minus returning. They are in the revenue and in no customer count.'},
+    {n:'Unregistered, % of receipts',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
+       if(!b||!P[m]||!P[m][2])return null;return Math.max(0,(P[m][2]-(b.nc||0)-(b.rc||0)))/P[m][2]*100;},
+     fmt:PCT,sh:1,tt:'Rising means the tills are capturing identity on fewer sales, which drags every customer number on this table down on its own.'},
+    {n:'Unregistered revenue',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
+       if(!b||!P[m])return null;return Math.max(0,(P[m][0]||0)-(b.nrev||0)-(b.rrev||0));},
+     fmt:POS,sh:1,tt:'Revenue on receipts with no customer attached: POS revenue minus new-customer revenue minus returning revenue. Real money, attributable to nobody.'},
     {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,tt:'Salary ledger lines carrying this branch&rsquo;s analytic account; months without a posting fall back to the Excel payroll'},
     {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,tt:'RENT Branches lines by analytic distribution; missing months use the branch average / unlabelled pool'},
     {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:1,tt:'Actual accounting, allocated by revenue share'},
@@ -12039,7 +12070,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-125056';
+const BUILD='20260901-130309';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
