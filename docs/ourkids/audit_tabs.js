@@ -539,12 +539,19 @@ function rAG() {
   h += auCard('The priority list',
     'Ranked by 30-day in-store gross profit, weighted up for arrivals under 120 days old and down where there is no stock to sell. ' +
     inStock.length.toLocaleString() + ' of the top ' + gaps.length.toLocaleString() + ' shown are in stock right now — those need a merchandiser, not a purchase order. ' +
-    'Full file: ' + (A.gapsN || gaps.length).toLocaleString() + ' SKUs.',
+    'Full file: ' + (A.gapsN || gaps.length).toLocaleString() + ' SKUs. ' +
+    'Stock at cost is what was paid for what is on the shelf; stock at retail is what it sells for, priced at each SKU’s own 30-day in-store rate; GP in stock is the margin sitting inside it.',
     auKpi('Shown', gaps.length.toLocaleString()) + auKpi('In stock now', inStock.length.toLocaleString()) +
-    auKpi('Stock on them', 'E£ ' + auK(inStock.reduce((a, x) => a + x.sv, 0))) +
+    auKpi('Stock at cost', 'E£ ' + auK(inStock.reduce((a, x) => a + x.sv, 0))) +
+    /* Cost is what we paid; retail is what it is worth on the shelf, and it is the bigger
+       and more useful number when the question is "how much revenue is sitting unlisted".
+       Unit price comes from the SKU's own 30-day in-store trade (revenue / units), so it is
+       the price it actually sells at, not a list price nobody pays. */
+    auKpi('Stock at retail', 'E£ ' + auK(inStock.reduce((a, x) => a + (x.q ? x.s * (x.r / x.q) : 0), 0))) +
+    auKpi('GP locked in it', 'E£ ' + auK(inStock.reduce((a, x) => a + (x.q ? x.s * (x.g / x.q) : 0), 0))) +
     auKpi('New arrivals (<120d)', gaps.filter(x => x.a <= 120).length.toLocaleString()),
     '<div style="overflow-x:auto;padding:0 12px 12px"><table class="bt" style="font-size:11.5px"><thead><tr>' +
-    ['#', 'Product', 'Category', 'Vendor', 'Shopify', 'Age (d)', 'Units 30d', 'In-store rev', 'GP', 'Stock', 'Stock at cost']
+    ['#', 'Product', 'Category', 'Vendor', 'Shopify', 'Age (d)', 'Units 30d', 'In-store rev', 'GP', 'Stock', 'Stock at cost', 'Stock at retail', 'GP in stock']
       .map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' +
     gaps.slice(0, 200).map((x, i) => '<tr><td>' + (i + 1) + '</td>' +
       '<td style="text-align:left;font-weight:600">' + (x.n || '').replace(/</g, '&lt;') + '</td>' +
@@ -552,7 +559,10 @@ function rAG() {
       '<td style="color:' + (x.st === 'UNPUB' ? '#f0883e' : '#e23a63') + ';font-weight:700">' +
       (x.st === 'UNPUB' ? 'never published' : 'not in Shopify') + '</td>' +
       '<td>' + x.a + '</td><td>' + x.q + '</td><td>' + auK(x.r) + '</td><td>' + auK(x.g) + '</td>' +
-      '<td style="color:' + (x.s > 0 ? '#12a06e' : '#e23a63') + ';font-weight:700">' + x.s + '</td><td>' + auK(x.sv) + '</td></tr>').join('') +
+      '<td style="color:' + (x.s > 0 ? '#12a06e' : '#e23a63') + ';font-weight:700">' + x.s + '</td>' +
+      '<td>' + auK(x.sv) + '</td>' +
+      '<td style="font-weight:700">' + (x.q ? auK(x.s * (x.r / x.q)) : '—') + '</td>' +
+      '<td>' + (x.q ? auK(x.s * (x.g / x.q)) : '—') + '</td></tr>').join('') +
     '</tbody></table></div>');
 
   const newA = gaps.filter(x => x.a <= 120), stockVal = inStock.reduce((a, x) => a + x.sv, 0);
