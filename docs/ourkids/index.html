@@ -6478,10 +6478,25 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
      E£2,050,752 all-platform total under "TikTok". The numbers were right and every
      label on them was wrong. Emitted in header order now. */
   +'<td style="color:'+((r.rv&&r.av/r.rv>1)?'#b8860b;font-weight:800':'#8a93a6')+'" title="'+((r.rv&&r.av/r.rv>1)?'Meta claims more than this scope sold — over-attribution at this window; switch Meta to Incremental':'share of revenue Meta attributes to its ads')+'">'+(r.rv?Math.round(r.av/r.rv*100):0)+'%'+((r.rv&&r.av/r.rv>1)?' ⚠':'')+'</td>'
-  +(function(){const cv=(c2,p2)=>'<td>'+(c2==null?'<span style="color:#c9ccd6">—</span>':M(c2)+(p2?'<div style="font-size:9.5px;font-weight:800;color:'+(c2<=p2?'#12a06e':'#e23a63')+'">'+(c2>=p2?'▲+':'▼−')+Math.abs((c2/p2-1)*100).toFixed(0)+'%</div>':''))+'</td>';
-   const al=r.alloc?'<div style="font-size:9px;color:#b8860b" title="Ads are not targeted per branch, so branch spend is not a measured number. This row = total Meta spend in the window x this branch share of the Meta in-store attributed value in the same window. Meta decides the share, not us; SHOPIFY and ALL STORES are real spend and carry no tag.">allocated &#9432;</div>':'';
-   return '<td style="border-left:1px solid #e6e9f0">'+(M(r.sp.m)+(r.sp.mp?'<div style="font-size:9.5px;font-weight:800;color:'+(r.sp.m<=r.sp.mp?'#12a06e':'#e23a63')+'">'+(r.sp.m>=r.sp.mp?'▲+':'▼−')+Math.abs((r.sp.m/r.sp.mp-1)*100).toFixed(0)+'%</div>':'')+al)+'</td>'
-    +cv(r.sp.g,r.sp.gp)+cv(r.sp.t,r.sp.tp)+cv(r.sp.a,r.sp.ap2);})()
+  +(function(){
+   /* This used to print Meta / Google / TikTok / Total in MONEY on every row. Because a
+      branch's figure is the whole Meta budget re-split by its share of in-store attributed
+      value, the seven branches summed back to the very same total the SHOPIFY row already
+      showed -- E£1,718,404 each way -- so reading the column downwards said E£3.4m had been
+      spent when E£1.7m had. Money now appears ONCE, in the line above the table, and each
+      row carries only its SHARE of that one budget. Shares cannot be added into a second
+      budget, which is the whole point. The money is still on the cell, in the tooltip. */
+   const tot=(function(){let t=0;rows.forEach(function(x){if(x.n!=='SHOPIFY'&&x.n!=='ALL STORES')t+=(x.sp.m||0);});return t;})();
+   const isReal=(r.n==='SHOPIFY'||r.n==='ALL STORES');
+   if(isReal)return '<td style="border-left:1px solid #e6e9f0;color:#5b6478" colspan="4" title="This is the whole platform budget for the window. It cannot be split between the webstore and the shops -- the same ads worked on both -- so it is stated once above the table rather than repeated per scope.">whole budget \u2014 see the line above</td>';
+   const sh=tot?(r.sp.m||0)/tot*100:null;
+   const psh=(function(){let t=0;rows.forEach(function(x){if(x.n!=='SHOPIFY'&&x.n!=='ALL STORES')t+=(x.sp.mp||0);});
+     return t?(r.sp.mp||0)/t*100:null;})();
+   const d=(sh!=null&&psh!=null&&psh>0)?(sh-psh):null;
+   return '<td style="border-left:1px solid #e6e9f0" colspan="4" title="Ads are not bought per branch, so this is not measured spend. It is this shop\u2019s share of the Meta in-store attributed value in the window, which is how the one budget gets apportioned. In money that is '+M(r.sp.m||0)+' of '+M(tot)+'.">'
+    +(sh==null?'<span style="color:#c9ccd6">\u2014</span>'
+      :'<b style="font-size:13px">'+sh.toFixed(1)+'%</b><div style="font-size:9px;color:#b8860b">of the Meta budget'+(d!=null?' &middot; '+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(1)+'pt':'')+'</div>')
+    +'</td>';})()
   +(function(){const q=r.dly?1:pf;const ly=r.dly?null:r.l;const D2=(a,b2)=>fp(pc(a*q,b2));
    return '<td style="border-left:1px solid #e6e9f0">'+NUM(r.c.nc)+(r.cEst?'<div style="font-size:9px;color:#b8860b">est. from monthly</div>':(r.dly?'':'<div style="font-size:9px;color:#b8860b">monthly</div>'))+'</td><td>'+D2(r.c.nc,r.p.nc)+'</td><td>'+(ly?D2(r.c.nc,ly.nc):'<span style="color:#c9ccd6">—</span>')+'</td>'
     +'<td>'+NUM(r.c.rc)+'</td><td>'+D2(r.c.rc,r.p.rc)+'</td><td>'+(ly?D2(r.c.rc,ly.rc):'<span style="color:#c9ccd6">—</span>')+'</td>'
@@ -6492,28 +6507,28 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
  pnlCard(g,'odoo','Branch scoreboard &mdash; period '+ST.s+' → '+ST.e+' vs '+pw[0]+' → '+pw[1],
   'PERIOD block (daily feeds) follows the filter and the attribution selector: POS revenue and Meta-attributed value. CUSTOMER block is MONTHLY — per-branch new/returning come from the monthly POS customer crawl, so they cannot follow a 7-day window: it shows '+m+(isMTD?' month-to-date (day '+elapsed+' of '+dimM+', % = PACE)':'')+' vs prior month '+pm+' and vs '+lyM+'. AOV = that month&rsquo;s revenue ÷ its customers.',
   (function(){
-    /* Read the AD SPEND column top to bottom and it looks like the budget was spent twice.
-       It was not. SHOPIFY carries the REAL platform spend for the window, and each branch
-       row carries that same total re-split by its share of Meta's in-store attributed
-       value, so the seven branches sum back to exactly the SHOPIFY figure. Both views are
-       useful and neither is additive, which nothing on the card previously said. */
+    /* THE budget, stated once, in money. Every scope row below carries only a share of it,
+       so there is no second copy of the same pounds anywhere on the card. */
     try{
       const shop=rows.find(function(x){return x.n==='SHOPIFY';});
-      const brs=rows.filter(function(x){return x.n!=='SHOPIFY'&&x.n!=='ALL STORES'&&x.alloc;});
-      if(!shop||!brs.length)return '';
-      const bt=brs.reduce(function(a,x){return a+(x.sp.m||0);},0);
-      const sm=shop.sp.m||0; if(!sm)return '';
-      const same=Math.abs(bt-sm)/sm<0.02;
-      return '<div style="margin:0 0 9px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55">'
-       +'<b>Ad spend appears twice on purpose &mdash; it was not spent twice.</b> '
-       +'Meta cost <b>'+M(sm)+'</b> in this window. The SHOPIFY row is that real figure; the seven branch rows re-split '
-       +(same?'the very same ':'')+'budget by each shop&rsquo;s share of Meta&rsquo;s in-store attributed value, and they sum back to '+M(bt)+'. '
-       +'<b>Adding the column gives '+M(sm+bt)+', which is twice the money and is never the right number.</b> '
-       +'Ads are not bought per branch, so a branch row is an allocation, not a measurement &mdash; that is what the <i>allocated</i> tag means.</div>';
+      if(!shop||!shop.sp)return '';
+      const m=shop.sp.m||0, gg=shop.sp.g||0, tt=shop.sp.t||0, all=shop.sp.a||(m+gg+tt);
+      if(!all)return '';
+      const pill=function(l,v,p){return '<span style="display:inline-block;margin-right:14px">'
+        +'<span style="font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#8a6a3a">'+l+'</span> '
+        +'<b style="font-size:14px;color:#6b5730">'+M(v)+'</b>'
+        +(p?'<span style="font-size:10px;font-weight:800;color:'+(v<=p?'#12a06e':'#e23a63')+'"> '+(v>=p?'\u25b2+':'\u25bc\u2212')+Math.abs((v/p-1)*100).toFixed(0)+'%</span>':'')+'</span>';};
+      return '<div style="margin:0 0 9px;padding:10px 12px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.7">'
+       +'<div style="margin-bottom:3px">'
+        +pill('META',m,shop.sp.mp)+pill('GOOGLE',gg,shop.sp.gp)+pill('TIKTOK',tt,shop.sp.tp)+pill('TOTAL',all,shop.sp.ap2)
+       +'</div>'
+       +'<b>That is the entire budget for '+ST.s+' \u2192 '+ST.e+', and it is stated here once.</b> '
+       +'The same ads worked on the webstore and in the shops at the same time, so the spend cannot be split between them. '
+       +'Each row below therefore carries only its <b>share</b> of the Meta budget \u2014 Meta\u2019s own apportionment, by where it saw the in-store value land \u2014 never a second copy of the money.</div>';
     }catch(e){return '';}})()
   +'<div style="overflow-x:auto"><table class="bt" style="width:100%;font-size:11px;text-align:right">'
-  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="4" style="text-align:center;background:#fff4ec">AD SPEND<div style="font-size:8.5px;font-weight:600;color:#8a6a3a;text-transform:none;letter-spacing:0">SHOPIFY is real spend &middot; branch rows re-split that SAME budget &mdash; do not add the column</div></th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m+(isMTD?' MTD':'')+' (monthly)')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
-  +'<tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>Attributed</th><th>vs prev</th><th>share</th><th>Meta</th><th>Google</th><th>TikTok</th><th>Total</th>'
+  +'<tr><th></th><th colspan="2" style="text-align:center;background:#eef0f5">REVENUE '+ST.s.slice(5)+'→'+ST.e.slice(5)+'</th><th colspan="3" style="text-align:center;background:#eef6ff">ATTRIBUTED (META) SAME PERIOD</th><th colspan="4" style="text-align:center;background:#fff4ec">SHARE OF THE AD BUDGET<div style="font-size:8.5px;font-weight:600;color:#8a6a3a;text-transform:none;letter-spacing:0">one budget, apportioned &mdash; the money itself is on the line above</div></th><th colspan="6" style="text-align:center;background:#f3efff">CUSTOMERS · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m+(isMTD?' MTD':'')+' (monthly)')+'</th><th colspan="4" style="text-align:center;background:#e7f8f1">THEIR REVENUE · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th colspan="2" style="text-align:center;background:#fff4ec">AOV · '+(rows.some(function(r2){return r2.n!=='SHOPIFY'&&r2.dly;})?ST.s.slice(5)+'→'+ST.e.slice(5):m)+'</th><th style="background:#f8f9fc">WALK-INS</th></tr>'
+  +'<tr><th style="text-align:left">Scope</th><th>Revenue</th><th>vs prev</th><th>Attributed</th><th>vs prev</th><th>share</th><th colspan="4">Share of Meta budget</th>'
   +'<th>New</th><th>vs prev</th><th>vs LY</th><th>Returning</th><th>vs prev</th><th>vs LY</th>'
   +'<th>NC revenue</th><th>vs prev</th><th>RC revenue</th><th>vs prev</th>'
   +'<th>NC AOV</th><th>RC AOV</th><th>Unreg.</th></tr>'
@@ -11985,7 +12000,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-121413';
+const BUILD='20260901-121923';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
