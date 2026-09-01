@@ -6470,6 +6470,19 @@ function yoyChannels(g){
    +'<td style="'+TD+'">'+(x.cu1!=null?'<b>'+N(x.cu1)+'</b>'+(x.cu0?'<div style="font-size:10px">'+fp(pc(x.cu1,x.cu0))+'</div>':'')
         :'<span style="color:#c9ccd6" title="distinct shoppers arrive with the next collector sync">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(x.o1?N(x.o1)+(x.o0?'<div style="font-size:10px">'+fp(pc(x.o1,x.o0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   /* The column that decides whether the two beside it can be believed. A POS receipt with
+      nobody attached counts in Orders and in NEITHER the new nor the returning column, so
+      unregistered = orders - (new + returning). Shopify has no such gap -- every webstore
+      order carries an account -- which is why it reads a dash rather than 0%. */
+   +'<td style="'+TD+'">'+(function(){
+      if(x.k==='on')return '<span style="color:#c9ccd6" title="every webstore order carries an account">&mdash;</span>';
+      if(!x.o1)return '<span style="color:#c9ccd6">&mdash;</span>';
+      const u1=Math.max(0,x.o1-(x.no1||0)-(x.ro1||0)), p1=u1/x.o1*100;
+      const u0=x.o0?Math.max(0,x.o0-(x.no0||0)-(x.ro0||0)):null, p0=(u0!=null&&x.o0)?u0/x.o0*100:null;
+      const d=(p0!=null)?(p1-p0):null;
+      const col=p1>=15?'#a3271a':(p1>=10?'#a35a1a':'#5b6478');
+      return '<b style="color:'+col+'">'+p1.toFixed(1)+'%</b>'
+       +'<div style="font-size:10px;color:#8a93a6">'+N(u1)+(d==null?'':' &middot; '+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(1)+'pt')+'</div>';})()+'</td>'
    +'<td style="'+TD+';color:#0f6e56">'+(x.no1?'<b>'+N(x.no1)+'</b>'+(x.no0?'<div style="font-size:10px">'+fp(pc(x.no1,x.no0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+';color:#3d3fb8">'+(x.ro1?'<b>'+N(x.ro1)+'</b>'+(x.ro0?'<div style="font-size:10px">'+fp(pc(x.ro1,x.ro0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(x.nc?N(x.nc):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
@@ -6485,6 +6498,7 @@ function yoyChannels(g){
   +'<th style="'+TH+'">Units</th><th style="'+TH+'">Units &Delta;</th>'
   +'<th style="'+TH+'">Gross profit</th><th style="'+TH+'">Customers</th>'
   +'<th style="'+TH+'">Orders</th>'
+  +'<th style="'+TH+';color:#a3271a">No customer</th>'
   +'<th style="'+TH+';color:#0f6e56">New-cust orders</th>'
   +'<th style="'+TH+';color:#3d3fb8">Returning orders</th>'
   +'<th style="'+TH+'">New custs</th>'
@@ -6496,6 +6510,15 @@ function yoyChannels(g){
   +'<td style="'+TD+'"></td>'
   +'<td style="'+TD+'">'+(rows.every(x=>x.cu1!=null)?'<b>'+N(rows.reduce((a,x)=>a+x.cu1,0))+'</b>':'')+'</td>'
   +'<td style="'+TD+'"><b>'+N(rows.reduce((a,x)=>a+(x.o1||0),0))+'</b></td>'
+  +'<td style="'+TD+'">'+(function(){
+     const sh=rows.filter(x=>x.k!=='on');
+     const o=sh.reduce((a,x)=>a+(x.o1||0),0); if(!o)return '';
+     const u=sh.reduce((a,x)=>a+Math.max(0,(x.o1||0)-(x.no1||0)-(x.ro1||0)),0);
+     const o0=sh.reduce((a,x)=>a+(x.o0||0),0);
+     const u0=sh.reduce((a,x)=>a+Math.max(0,(x.o0||0)-(x.no0||0)-(x.ro0||0)),0);
+     const p=u/o*100, p0=o0?u0/o0*100:null;
+     return '<b style="color:'+(p>=15?'#a3271a':'#5b6478')+'">'+p.toFixed(1)+'%</b>'
+      +'<div style="font-size:10px;color:#8a93a6">shops only'+(p0!=null?' &middot; was '+p0.toFixed(1)+'%':'')+'</div>';})()+'</td>'
   +'<td style="'+TD+';color:#0f6e56"><b>'+N(rows.reduce((a,x)=>a+(x.no1||0),0))+'</b></td>'
   +'<td style="'+TD+';color:#3d3fb8"><b>'+N(rows.reduce((a,x)=>a+(x.ro1||0),0))+'</b></td>'
   +'<td style="'+TD+'"><b>'+N(rows.reduce((a,x)=>a+(x.nc||0),0))+'</b></td>'
@@ -11739,7 +11762,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-102933';
+const BUILD='20260901-103810';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
