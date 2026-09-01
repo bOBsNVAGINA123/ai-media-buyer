@@ -6792,7 +6792,9 @@ function yoyChannels(g){
           +(rel!=null?' &middot; <b style="color:'+(rel>0?'#a3271a':'#0f6e56')+'">'+(rel>=0?'+':'\u2212')+Math.abs(rel).toFixed(0)+'%</b>':'')+'</div>':'');})()+'</td>'
    +'<td style="'+TD+';color:#0f6e56">'+(x.no1?'<b>'+N(x.no1)+'</b>'+(x.no0?'<div style="font-size:10px">'+fp(pc(x.no1,x.no0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+';color:#3d3fb8">'+(x.ro1?'<b>'+N(x.ro1)+'</b>'+(x.ro0?'<div style="font-size:10px">'+fp(pc(x.ro1,x.ro0))+'</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
-   +'<td style="'+TD+'">'+(x.nc?N(x.nc):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
+   /* People, not receipts. Printing the receipts-per-person ratio underneath stops the two
+      columns looking like they disagree -- 1,931 orders from 1,764 people is 1.09 each. */
+   +'<td style="'+TD+'">'+(x.nc?N(x.nc)+(x.no1&&x.nc?'<div style="font-size:10px;color:#8a93a6">'+(x.no1/x.nc).toFixed(2)+' receipts each</div>':''):'<span style="color:#c9ccd6">&mdash;</span>')+'</td>'
    +'<td style="'+TD+'">'+(split!=null
       ?'<div style="display:flex;height:14px;width:96px;border-radius:4px;overflow:hidden;margin-left:auto">'
         +'<div style="width:'+(split*100).toFixed(1)+'%;background:#12a06e"></div>'
@@ -6806,9 +6808,9 @@ function yoyChannels(g){
   +'<th style="'+TH+'">Gross profit</th><th style="'+TH+'">Customers</th>'
   +'<th style="'+TH+'">Orders</th>'
   +'<th style="'+TH+';color:#a3271a">No customer</th>'
-  +'<th style="'+TH+';color:#0f6e56">New-cust orders</th>'
-  +'<th style="'+TH+';color:#3d3fb8">Returning orders</th>'
-  +'<th style="'+TH+'">New custs</th>'
+  +'<th style="'+TH+';color:#0f6e56" title="RECEIPTS placed on the day a customer first ever bought from this shop. Someone who buys twice that afternoon puts two receipts here and one person in New custs.">New-cust orders<div style="font-size:8px;font-weight:600;text-transform:none;color:#8a93a6">receipts</div></th>'
+  +'<th style="'+TH+';color:#3d3fb8" title="Every receipt after a customer\u2019s first day.">Returning orders<div style="font-size:8px;font-weight:600;text-transform:none;color:#8a93a6">receipts</div></th>'
+  +'<th style="'+TH+'" title="PEOPLE who bought here for the first time. Always at or below new-cust orders, because one person can leave more than one receipt on their first day.">New custs<div style="font-size:8px;font-weight:600;text-transform:none;color:#8a93a6">people</div></th>'
   +'<th style="'+TH+'">New vs returning revenue</th></tr>';
 
  const tot='<tr style="border-top:2px solid #cbd3e1"><td style="'+TD+';text-align:left"><b>Tracked total</b></td>'
@@ -11243,6 +11245,9 @@ function rMETA(){
   rows.push({a,wk,now,bestCtr,launch,sc,spendAll,weeks:wk.length,enough:wk.length>=1&&now.sp>0&&now.im>500});
  });
  rows.sort((x,y)=>y.sc.s-x.sc.s);
+ /* break-even for this tab's own verdict guard -- creativeFatigue() on the Money desk has
+    its own copy and the two functions do not share scope */
+ const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
  const pull=rows.filter(r=>r.enough&&r.sc.s>=RV.pull);
  const watch=rows.filter(r=>r.enough&&r.sc.s>=50&&r.sc.s<RV.pull);
 
@@ -11255,8 +11260,15 @@ function rMETA(){
    +'<b style="color:'+c+';font-size:13px">'+Math.round(v)+'</b></div>';};
  let body='';
  rows.slice(0,26).forEach(r=>{
+  /* A fatigue score measures ATTENTION decay, not profit, and telling someone to pull an ad
+     returning 34.94x on a 3.76x break-even is how a tool loses the room. Fatigue that high on
+     an ad still clearing break-even by a wide margin means the CREATIVE is tiring while the
+     money is still good: brief the replacement, do not switch the spend off. The word only
+     becomes PULL when the economics have gone too. */
+  const _roasNow=(r.now&&r.now.roas)||null;
+  const _rich=_roasNow!=null&&_roasNow>=beFat*1.5;
   const st=!r.enough?['too early','#8a93a6']
-    :r.sc.s>=RV.pull?['PULL OR REFRESH','#a3271a']
+    :r.sc.s>=RV.pull?(_rich?['REFRESH \u2014 do not cut','#a35a1a']:['PULL OR REFRESH','#a3271a'])
     :r.sc.s>=50?['brief the replacement','#a35a1a']:['healthy','#0f6e56'];
   body+='<tr>'
    +'<td style="'+TD+';text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis"><b>'+esc(r.a.n||'')+'</b>'
@@ -11278,7 +11290,8 @@ function rMETA(){
   +'<th style="'+TH+'">Freq</th><th style="'+TH+'">CPM</th><th style="'+TH+'">ROAS</th>'
   +'<th style="'+TH+'">Fatigue</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+body+'</table></div>'
   +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
-  +'<b>The deck’s lesson from its worked example:</b> at a score of 51 the CPA was only 31% above target — that is the week to brief the replacement, not the week it hits 82.</div>');
+  +'<b>The deck’s lesson from its worked example:</b> at a score of 51 the CPA was only 31% above target — that is the week to brief the replacement, not the week it hits 82. '
+  +'<b>A high score never means switch the money off on its own</b> — fatigue measures attention, not profit, so an ad still clearing break-even by half again reads <i>REFRESH — do not cut</i>. Replace the execution, keep the budget where it is earning.</div>');
 
  /* ---------- 4. budget split against the 4-campaign framework ---------- */
  const cmp={};
@@ -11404,7 +11417,8 @@ function rMETA(){
      const aov=c.wpur?c.wval/c.wpur:(p.wpur?p.wval/p.wpur:0);
      const cost=(pv-cv)*c.clk*aov*GPo;
      if(cost<500)return;
-     _off.push({n:a.n||a.id,cost:cost,d:(cv/pv-1)*100,clk:c.clk});});
+     _off.push({n:a.n||a.id,id:a.id,acct:a.acct,cost:cost,d:(cv/pv-1)*100,clk:c.clk,
+                cvr:cv*100,pcvr:pv*100,sp:c.sp,pur:c.wpur});});
    _off.sort((x,y)=>y.cost-x.cost);
    const lost=_off.reduce((x,y)=>x+y.cost,0);
    if(lost>0)
@@ -11413,9 +11427,24 @@ function rMETA(){
     w:'CTR held at '+cur.ctr.toFixed(2)+'% ('+sg(dCtr)+') while CVR went from '+prv.cvr.toFixed(2)+'% to '+cur.cvr.toFixed(2)+'%. People are still clicking and no longer buying — that is checkout, offer or trust, and no budget change fixes it.',
     ev:(function(){
       if(!_off.length)return 'Measured on '+PW.lbl+' against '+(PW.plbl||'the prior period')+'.';
-      return '<b>Biggest offenders:</b> '+_off.slice(0,4).map(x=>esc(x.n)+' '+x.d.toFixed(0)+'% ('+M(x.cost*mo)+'/mo)').join(' \u00b7 ')
-        +(_off.length>4?' \u2026 +'+(_off.length-4)+' more':'')
-        +'. '+_off.reduce((x,y)=>x+y.clk,0).toLocaleString()+' clicks between them. This is an UPPER bound \u2014 it assumes the old conversion rate was still achievable on the same traffic.';})()});}
+      /* Every offender is a link straight to that ad in Ads Manager, and the whole list is
+         expandable -- naming four and hiding fifteen means the fifth one never gets looked
+         at. Each row carries the CVR it fell from and to, so the claim can be checked
+         against the platform rather than taken on trust. */
+      const row=x=>{const u=(typeof amURL==='function')?amURL('ad',x.id,x.acct):null;
+        const nm=u?('<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a9bff;font-weight:700;text-decoration:none">'+esc(x.n)+' \u2197</a>'):('<b>'+esc(x.n)+'</b>');
+        return '<div style="display:flex;gap:10px;align-items:baseline;padding:4px 0;border-top:1px solid #f0f2f7">'
+         +'<div style="flex:1;min-width:0">'+nm
+         +'<div style="font-size:10px;color:#8a93a6">CVR '+x.pcvr.toFixed(2)+'% \u2192 '+x.cvr.toFixed(2)+'% \u00b7 '
+         +Math.round(x.clk).toLocaleString()+' clicks \u00b7 '+M(x.sp)+' spent</div></div>'
+         +'<div style="flex:0 0 auto;text-align:right"><b style="color:#a3271a">'+M(x.cost*mo)+'</b>'
+         +'<div style="font-size:10px;color:#8a93a6">'+x.d.toFixed(0)+'%</div></div></div>';};
+      return '<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:800;color:#0F172A">'
+        +'Biggest offenders \u2014 '+_off.length+' ad'+(_off.length===1?'':'s')+', '+M(_off.reduce((x,y)=>x+y.cost,0)*mo)+' a month between them'
+        +' <span style="font-size:10px;font-weight:600;color:#8a93a6">(click to open each in Ads Manager)</span></summary>'
+        +'<div style="margin-top:4px">'+_off.map(row).join('')+'</div>'
+        +'<div style="font-size:10.5px;color:#8a93a6;margin-top:5px">An UPPER bound \u2014 it assumes the old conversion rate was still achievable on the same traffic.</div>'
+        +'</details>';})()});}
 
   okActCard(g,A,PW.ranged?('Reading '+PW.lbl+'.'):'The date box is empty, so this reads the last 7 days.');
  }catch(e){}
@@ -12107,7 +12136,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-130757';
+const BUILD='20260901-132655';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
