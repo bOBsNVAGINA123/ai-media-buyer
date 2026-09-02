@@ -961,7 +961,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
  ST.e=lastD();ST.s=addD(ST.e,-6);
  (function(){const aM=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);if(aM[aM.length-1]!==m)aM.push(m);}if(aM.length){if(!ST.pm0)ST.pm0=aM[Math.max(0,aM.length-13)];if(!ST.pm1)ST.pm1=aM[aM.length-1];}})();
  const d0=document.getElementById('d0'),d1=document.getElementById('d1');
- d0.value=ST.s;d1.value=ST.e;d0.min=O.fin.start;d1.max=ST.e;
+ d0.value=ST.s;d1.value=ST.e;d0.min=d1.min=O.fin.start;d0.max=d1.max=lastD();
  document.getElementById('pre').innerHTML=[['L7D',7],['MTD','mtd'],['30d',30],['60d',60],['90d',90],['180d',180],['365d',365],['YTD','ytd'],['All',9999]].map(p=>`<span class="chip" onclick="pre('${p[1]}')">${p[0]}</span>`).join(' ');
  // v8.1: say out loud whether Incremental is Meta's own column or a fallback model.
  const _iL=((O.attr&&O.attr.labels)||{}).incr||'';
@@ -969,7 +969,7 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
  [['am','meta'],['ag','google'],['ax','tt']].forEach(pr=>{const op2=O.attr.order.filter(k=>(O.attr[pr[1]]||{})[k]!=null).map(k=>`<option value="${k}">${attrLabel(pr[1],k)}</option>`).join('');
   [pr[0],pr[0]+'2'].forEach(id=>{const el=document.getElementById(id);el.innerHTML=op2;el.value=ST.att[pr[1]];el.title=O.attr.order.map(k=>((O.attr.labels||{})[k]||k)).join('\n');
    el.onchange=e=>{ST.att[pr[1]]=e.target.value;document.getElementById(id===pr[0]?pr[0]+'2':pr[0]).value=e.target.value;rTab();atToast(pr[1]);};});});
- d0.onchange=e=>{ST.s=e.target.value;RDR();};d1.onchange=e=>{ST.e=e.target.value;RDR();};
+ d0.onchange=e=>setRange(e.target.value,ST.e);d1.onchange=e=>setRange(ST.s,e.target.value);
  document.getElementById('c0').onchange=RDR;document.getElementById('c1').onchange=RDR;
  injBars();
  ['gp','rf','tgt'].forEach(id=>document.getElementById(id).oninput=rOff);document.getElementById('oh').onchange=rOff;
@@ -983,6 +983,19 @@ function boot(){O=window.O;FF=window.F;isoDates();SORTON();renderTabs();if(O.rtC
  document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the Guide tab. · <b>v9.8</b>';}
 function lastD(){const a=(O.aw&&O.aw[1])||ST.e;return (window.EXT!==false&&a===(O.today||''))?addD(a,-1):a;}
 function setEXT(v){window.EXT=v;const t=(O.today||'');if(v&&ST.e===t)ST.e=addD(t,-1);if(!v&&ST.e===addD(t,-1))ST.e=t;RDR();}
+/* v9.30 ANY RANGE, NO NONSENSE RANGE. The FROM box had a min but no max and the TO box had a
+   max but no min, so nothing stopped FROM being set after TO. The header then printed
+   "-55 days . vs 2026-12-21 -> 2026-10-26" and every card underneath read an empty window.
+   One setter now owns both ends: clamp each to the data that exists, swap them if they arrive
+   backwards, then render. Any range inside the ledger is selectable; no range outside it is. */
+function setRange(a,b){const lo=(O.fin&&O.fin.start)||a,hi=lastD();
+ const cl=v=>!v?null:(v<lo?lo:(v>hi?hi:v));
+ let s2=cl(a)||ST.s,e2=cl(b)||ST.e;
+ if(s2>e2){const z=s2;s2=e2;e2=z;}
+ ST.s=s2;ST.e=e2;
+ const d0=document.getElementById('d0'),d1=document.getElementById('d1');
+ if(d0){d0.value=s2;d0.min=d1?lo:lo;d0.max=hi;}if(d1){d1.value=e2;d1.min=lo;d1.max=hi;}
+ RDR();}
 function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';else if(p==='mtd')ST.s=last.slice(0,8)+'01';else if(+p>=9999)ST.s=O.fin.start;else ST.s=addD(last,-(+p-1));ST.e=last;RDR();}
 /* v9.12 INFORMATION ARCHITECTURE. The old grouping was by data source, which is how the data
    arrives, not how anyone asks for it: 'Online' was a grab bag of five unrelated views and
@@ -992,15 +1005,22 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
    Groups now follow the order the questions actually get asked -- what happened, where the sales
    came from, who bought, what the media did, what it cost, then the deep end -- and no group
    holds more than five. TABQ prints, under the row, the one question the open tab answers. */
+/* v9.30 THE SHORT LIST. Thirty-three tabs across eight equal-looking groups meant the ten tabs
+   that get opened every day sat in the same visual rank as the four audit decks opened once a
+   quarter. The first five groups below are now the whole working tool -- online, shops,
+   customers, products, advertising, P&L -- and nothing in them is more than one click away.
+   Everything else still exists and still renders; it is parked under the three "More" groups so
+   it stops competing for the eye. Ids are unchanged, so every deep link and the audit harness
+   keep working. */
 const TABGROUPS=[
- ['Now',[['on','Overview'],['why','What moved it'],['ab','Actions'],['ai','Findings']]],
- ['Sales',[['off','Branches'],['dc','Discount codes'],['tr','Site routing'],['vl','Products & vendors'],['si','Search demand']]],
- ['Customers',[['cp','Portfolio'],['co','Cohorts'],['rt','Retention'],['lt','LTGP : CAC'],['cj','Journeys']]],
- ['Media',[['mt','Meta'],['gg','Google'],['mi','Paid insights'],['me','Media efficiency'],['ic','Incrementality'],['ao','Ads \u2192 stores'],['tk','TikTok']]],
- ['Campaigns',[['md','Money desk'],['cl','Change log'],['ce','Campaigns'],['mb','Creative'],['bg','Launches & budgets']]],
- ['Profit',[['pn','Shopify P&L'],['rp','Retail P&L'],['cs','Costs & payroll'],['pl','Plan']]],
- ['Explore',[['vz','All charts'],['iq','Business read'],['rm','Guide']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Overview',[['on','Online store'],['off','The 7 shops']]],
+ ['Customers',[['cp','Customer portfolio'],['lt','Lifetime profit vs CAC']]],
+ ['Products',[['vl','Vendors & products']]],
+ ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops']]],
+ ['P&L',[['pn','Online P&L'],['rp','Shops P&L']]],
+ ['More \u00b7 sales',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['dc','Discount codes'],['tr','Where traffic lands'],['si','Search demand'],['co','New-customer cohorts'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
+ ['More \u00b7 media',[['mi','All three platforms'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes'],['cl','Change log'],['ce','Every campaign'],['mb','Creative benchmarks'],['bg','Launches & budgets']]],
+ ['More \u00b7 finance & audits',[['cs','Costs & payroll'],['pl','30d vs prior 30d'],['vz','All charts'],['iq','Standing business read'],['au','Commercial audit'],['av','Vendor capital'],['ag','Listing gap'],['aq','Demand gap'],['rm','How every number is built']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1034,7 +1054,12 @@ const TABQ={
  pl:'The last 30 days against the 30 before, every driver quantified.',
  vz:'Every chart in the tool \u2014 branches, customers, delivery, profit.',
  iq:'The standing read of the whole business, in one place.',
- rm:'How every number here is built, and what it does and does not include.'
+ rm:'How every number here is built, and what it does and does not include.',
+ dc:'Every discount code, online and in store \u2014 what it sold, at what basket, and what margin it left.',
+ au:'The full commercial audit \u2014 where the gross profit actually comes from and what is eating it.',
+ av:'How much cash each vendor ties up, and what it returns for it.',
+ ag:'Products selling in the shops that the website does not even list.',
+ aq:'Demand people search for that you do not stock or do not show up on.'
 };
 let TABGRP=0;
 function tabLabel(id){for(var i=0;i<TABGROUPS.length;i++){var g=TABGROUPS[i][1];
@@ -1271,7 +1296,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -1279,7 +1304,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}syncTabGroup(t
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['dc','dcC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -1310,7 +1335,7 @@ function injBars(){TBT.forEach(x=>{const c=document.getElementById(x[1]);if(!c||
   if(first)first.insertAdjacentElement('afterend',d.firstChild);else c.insertBefore(d.firstChild,c.firstChild);
   c.dataset.bar='1';});syncBars();}
 function tbDate(t){const a=document.getElementById('d0_'+t).value,b=document.getElementById('d1_'+t).value;
- if(a)ST.s=a;if(b)ST.e=b;RDR();}
+ setRange(a||ST.s,b||ST.e);}
 function tbCmp(v){ST.cmp=v;RDR();}
 function tbCust(t){const a=document.getElementById('c0_'+t).value,b=document.getElementById('c1_'+t).value;
  if(a)document.getElementById('c0').value=a;if(b)document.getElementById('c1').value=b;RDR();}
@@ -1321,7 +1346,8 @@ function syncBars(){
  let cwl='';try{const w=cmpW();cwl=ST.cmp==='off'?'no comparison':'vs '+w[0]+' → '+w[1];}catch(e){}
  TBT.forEach(x=>{const t=x[0];
   const a=document.getElementById('d0_'+t),b=document.getElementById('d1_'+t),c=document.getElementById('cm_'+t);
-  if(a){a.value=ST.s;a.min=O.fin.start;}if(b){b.value=ST.e;b.max=O.aw[1];}if(c)c.value=ST.cmp;
+  const _lo=O.fin.start,_hi=lastD();
+  if(a){a.value=ST.s;a.min=_lo;a.max=_hi;}if(b){b.value=ST.e;b.min=_lo;b.max=_hi;}if(c)c.value=ST.cmp;
   ['cl0_','c0_','cl1_','c1_'].forEach(pfx=>{const e=document.getElementById(pfx+t);if(e)e.classList.toggle('hide',sh);});
   const c0=document.getElementById('c0_'+t),c1=document.getElementById('c1_'+t),gg0=document.getElementById('c0'),gg1=document.getElementById('c1');
   if(c0&&gg0)c0.value=gg0.value;if(c1&&gg1)c1.value=gg1.value;
@@ -7407,6 +7433,24 @@ function vzLineCard(g,a,t,cs2,labels,dsets,kind){
 function atToast(p){try{const k=ST.att[p];const lab=((O.attr.labels||{})[k]||k);const onf=Math.round((af(p)||1)*100);const off=p==='meta'?Math.round(afo()*100):null;let el=document.getElementById('atT');if(!el){el=document.createElement('div');el.id='atT';el.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:12px;font-size:12px;z-index:999;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:640px;text-align:center';document.body.appendChild(el);}
  el.innerHTML='<b>'+p.toUpperCase()+' → '+lab+'</b> — attributed values recomputed ('+onf+'% online'+(off!=null?' · '+off+'% in-store':'')+'). <span style="opacity:.75">POS revenue, orders and customer counts are till/ledger actuals — they never move with attribution.</span>';
  el.style.display='block';clearTimeout(window.__atT);window.__atT=setTimeout(()=>{el.style.display='none';},5000);}catch(e){}}
+/* v9.30 "CHANGING ATTRIBUTION DOES NOTHING." On the Google tab it genuinely does nothing --
+   the Meta and TikTok selectors are sitting right there and neither is read by a single number
+   on that page. Nothing said so, so a dead control looked like a broken one. The three
+   platform tabs now grey out the two selectors they ignore and put the applied multiplier in
+   the title of the one they use. Every other tab is blended and reads all three, so all three
+   stay live there. */
+const ATGATE={mt:['meta'],gg:['google'],tk:['tt']};
+function atGate(){try{
+ const use=ATGATE[TAB]; if(!use)var all=1;
+ const map={am:'meta',am2:'meta',ag:'google',ag2:'google',ax:'tt',ax2:'tt'};
+ const mark=function(el,p){if(!el)return;const on=all?true:use.indexOf(p)>=0;
+  el.disabled=!on;el.style.opacity=on?'1':'.32';el.style.cursor=on?'':'not-allowed';
+  el.title=on?('Applied on this tab \u2014 value \u00d7'+(af(p)||1).toFixed(2)
+    +(p==='meta'?(' online, \u00d7'+(afo()||1).toFixed(2)+' in store'):''))
+   :('Not read by '+tabLabel(TAB)+'. This tab only uses the '+(use[0]==='tt'?'TikTok':(use[0]==='meta'?'Meta':'Google'))+' setting.');};
+ Object.keys(map).forEach(function(id){mark(document.getElementById(id),map[id]);});
+ document.querySelectorAll('select.uatr').forEach(function(el){mark(el,el.dataset.p);});
+}catch(e){}}
 function attrSet(p,v){ST.att[p]=v;atToast(p);['am','am2','ag','ag2','ax','ax2'].forEach(id=>{const e=document.getElementById(id);if(!e)return;const k=(id[1]==='m')?'meta':(id[1]==='g')?'google':'tt';if(k===p)e.value=v;});document.querySelectorAll('.uatr').forEach(e=>{if(e.dataset.p===p)e.value=v;});rTab();}
 
 /* ===================== v6.0 ITEM (a): PROVENANCE ========================= */
@@ -7495,7 +7539,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -7791,10 +7835,11 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
   'Stacked. Where the money actually went, day by day, inside your selected range. A platform with a flat zero line is not running &mdash; or its token has expired, which looks identical from here.',
   L,PF.map(x=>({l:x.n+' spend',d:dsp[x.k],c:PC[x.k]})),fC,{type:'bar',stacked:1,
   cmt:[[C.blue,'<b>Read the shape, not the day.</b> A single tall bar is usually a billing catch-up, not a decision. What matters is whether a platform&rsquo;s band is thickening while its ROAS row in the table above is falling.']]});
- vzCard(g,'Daily Shopify conversion value by platform',
-  'Platform-reported purchase value landing on Shopify. This is what each platform CLAIMS it caused &mdash; the three claims overlap, so they do not add up to your real revenue.',
-  L,PF.map(x=>({l:x.n+' value',d:dv[x.k],c:PC[x.k]})),fC,{
-  cmt:[[C.orange,'<b>These lines double-count each other on purpose.</b> Meta, Google and TikTok each take full credit for the same order when a shopper saw more than one of them. That is why the sum of these three lines is larger than Odoo&rsquo;s Shopify revenue, and why aMER on the Media Efficiency tab &mdash; Odoo revenue divided by total spend &mdash; is the only honest cross-platform read.']]});
+ vzCard(g,'Daily Shopify conversion value by platform &mdash; against what it cost',
+  'Solid = platform-reported purchase value landing on Shopify, what each platform CLAIMS it caused. Dashed = that platform&rsquo;s spend on the same day, same colour, same axis, so the gap between the two lines IS the money made. The three claims overlap each other, so they do not add up to your real revenue.',
+  L,PF.map(x=>({l:x.n+' value',d:dv[x.k],c:PC[x.k]}))
+    .concat(PF.map(x=>({l:x.n+' spend',d:dsp[x.k],c:PC[x.k],dash:1,w:1.6,pr:0,f:0}))),fC,{
+  cmt:[[C.blue,'<b>Read the gap, not the line.</b> A blue solid line far above the blue dashed one is Meta earning; the two converging is Meta claiming barely more than it costs. Because the solid lines are each platform&rsquo;s own claim, the gap is the most generous possible read of that platform &mdash; if it is thin here it is thinner in reality.'],[C.orange,'<b>These lines double-count each other on purpose.</b> Meta, Google and TikTok each take full credit for the same order when a shopper saw more than one of them. That is why the sum of these three lines is larger than Odoo&rsquo;s Shopify revenue, and why aMER on the Media Efficiency tab &mdash; Odoo revenue divided by total spend &mdash; is the only honest cross-platform read.']]});
 
  /* ---------- 3. every funded entity across all three platforms ---------- */
  const ENT=[].concat((O.mads||[]).map(a=>Object.assign({pf:'meta'},a)),
@@ -11217,7 +11262,7 @@ function metaNCRC(g, ads, PW, W, fON, fOFF){
    +'<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#5a5bf0;margin-right:5px"></i>Returning, in store</span>'
    +'<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#c9cede;margin-right:5px"></i>Website (no split available)</span></div>';
 
- pnlCard(g,'meta','New or returning — which one is moving the attributed money'
+ pnlCard(g,'meta','Of the money Meta claims it caused, how much came from a buyer who had never bought before'
    +INFO('Meta splits new vs returning ONLY on the in-store leg, through the branch CAPI’s "In-store New Customer" custom conversions. The website leg carries no such split on this account, so it is shown whole rather than guessed at.'),
   pfWinNote(PW,W,'Meta')+' '+verdict,
   '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:11px">'
@@ -11683,16 +11728,25 @@ function rGOOG(){
    +'<div style="font-size:10px;color:#8a93a6">'+esc(x.a.cmp||'')+(x.a.st?' · '+esc(String(x.a.st).toLowerCase()):'')+'</div></td>'
    +'<td style="'+TD+'">'+M(x.c.sp)+'<div style="font-size:10px;color:#8a93a6">'+sg(pc(x.c.sp,x.p.sp))+'</div></td>'
    +'<td style="'+TD+'">'+M(x.c.val)+'</td>'
-   +'<td style="'+TD+';font-weight:800">'+x.c.roas.toFixed(2)+'×</td>'
+   +'<td style="'+TD+';font-weight:800">'+x.c.roas.toFixed(2)+'×'
+     +'<div style="font-size:10px;font-weight:600;color:'+(x.p.sp>0&&x.p.roas>0?(x.c.roas>=x.p.roas?'#0f6e56':'#a3271a'):'#8a93a6')+'">'
+     +(x.p.sp>0&&x.p.roas>0?(sg(pc(x.c.roas,x.p.roas))+' · was '+x.p.roas.toFixed(2)+'×'):'no prior period')+'</div></td>'
+   +'<td style="'+TD+'">'+(function(){const q=IS[x.a.n];if(!q||q.is==null)return '<span style="color:#c9ccd6">—</span>';
+     const b=Math.round((q.bl||0)*100),r=Math.round((q.rl||0)*100);
+     return Math.round(q.is*100)+'%<div style="font-size:10px;color:#8a93a6">'+(b>=r?b+'% lost on budget':r+'% lost on rank')+'</div>';})()+'</td>'
    +'<td style="'+TD+'">'+N(x.c.pur)+'</td>'
    +'<td style="'+TD+'">'+(x.c.cpa?M(x.c.cpa):'—')+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+(x.gp>=0?'+':'−')+M(Math.abs(x.gp))+'</td>'
    +'<td style="'+TD+';text-align:left"><b style="color:'+v[1]+';font-size:11px">'+v[0]+'</b></td></tr>';});
  pnlCard(g,'google','Every campaign on its own money'+INFO('The selected range per campaign, with gross profit left after the ad is paid for at your real online margin.'),
-  'Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% margin. The last column is what is left after both the product and the ad are paid for.',
+  '<b>'+PW.lbl+'</b>'+(PW.ok?(' against the '+PW.pn+' days before it, '+PW.plbl+'.'):' — no prior period inside the 60-day Google feed, so the ROAS move is blank.')
+  +' Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% margin. The last column is what is left after both the product and the ad are paid for. '
+  +'Auction shown is the share of the searches you could have appeared on that you actually did — it is a lifetime-of-campaign figure from the console pull ('+((S.win&&S.win[0])||'?')+' → '+((S.win&&S.win[1])||'?')+'), not a figure for the days you picked.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
-  +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend 7d</th><th style="'+TH+'">Value</th>'
-  +'<th style="'+TH+'">ROAS</th><th style="'+TH+'">Conv</th><th style="'+TH+'">Cost / conv</th>'
+  +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Value</th>'
+  +'<th style="'+TH+'">ROAS<div style="font-weight:600;font-size:9px;text-transform:none;color:#8a93a6">vs the period before</div></th>'
+  +'<th style="'+TH+'">Auction shown<div style="font-weight:600;font-size:9px;text-transform:none;color:#8a93a6">impression share</div></th>'
+  +'<th style="'+TH+'">Conv</th><th style="'+TH+'">Cost / conv</th>'
   +'<th style="'+TH+'">After ad cost</th><th style="'+TH+';text-align:left">Verdict</th></tr>'+cb+'</table></div>');
 
  /* ---- 4. terms paying for nothing ---- */
@@ -12263,7 +12317,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260902-202749';
+const BUILD='20260902-211304';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
