@@ -6670,9 +6670,18 @@ function idCapture(g){
   return {o,nc,rc,un:Math.max(0,o-nc-rc)};};
  const net=m=>{let o=0,nc=0,rc=0;Object.keys(P).forEach(b=>{const r=row(b,m);o+=r.o;nc+=r.nc;rc+=r.rc;});
   return {o,nc,rc,un:Math.max(0,o-nc-rc),id:o?(nc+rc)/o*100:null};};
- const cur=months[months.length-1], ly=(+cur.slice(0,4)-1)+cur.slice(4);
+ /* The newest month in the ledger is the RUNNING one -- on 2026-09-01 it holds a single
+    day, so identification computed off it produced "NaN" in the capture-rate tile. Compare
+    complete months only, and require both sides to carry real volume before saying anything
+    about a capture rate at all. */
+ const nowM=(O.today||'').slice(0,7);
+ const done=months.filter(m=>m!==nowM);
+ if(!done.length)return;
+ const cur=done[done.length-1], ly=(+cur.slice(0,4)-1)+cur.slice(4);
  const C=net(cur), L=net(ly);
  if(!C.o||!L.o||C.id==null||L.id==null)return;
+ if(C.o<200||L.o<200)return;              // too little volume for a rate to mean anything
+ if(!isFinite(C.id)||!isFinite(L.id)||C.id<=0)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const N=v=>Math.round(Math.abs(v)).toLocaleString();
  const drop=L.id-C.id;
@@ -10698,9 +10707,16 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    //   cpp  = cost per WEBSITE purchase (spend / pixel purchases)  <- the real CPP
    //   cpo  = cost per IN-STORE (offline) conversion
    //   cppA = the old all-in figure, kept only as a footnote line
-   return{sp,pv,fv,gp:gp2,pas,ron:sp?pv/sp:null,rst:sp?fv/sp:null,roas:sp?(pv+fv)/sp:null,ctr:im?oc/im*100:null,
+   /* ONLINE-ONLY profit, kept beside the blended one. "Profit after spend" folds the store
+      value in, and the store half both backfills for days and is Meta's own claim -- so a
+      budget change can read fine on the blended line while the webstore alone went
+      backwards. The online line settles within a day or two and is the one you can act on
+      immediately after a change. */
+   const pasOn=pv*gpOn-sp;
+   return{sp,pv,fv,gp:gp2,pas,pasOn,ron:sp?pv/sp:null,rst:sp?fv/sp:null,roas:sp?(pv+fv)/sp:null,ctr:im?oc/im*100:null,
     cpp:pu?sp/pu:null,cpo:op?sp/op:null,cppA:(pu+op)?sp/(pu+op):null,pu:pu,op:op,
-    spd:days>0?sp/days:0,gpd:days>0?gp2/days:0,pasd:days>0?pas/days:0,days};};
+    spd:days>0?sp/days:0,gpd:days>0?gp2/days:0,pasd:days>0?pas/days:0,
+    pasdOn:days>0?pasOn/days:0,days};};
   const b=M(i-7,i-1),a2=M(i,i+6);
   if(b.sp===0&&a2.sp===0)return head+'<div class="cs">The object was not delivering in the two weeks around this change (E&pound;0 spend before and after &mdash; paused, or the budget was set ahead of a launch). No verdict; when it starts spending the next sync scores it.</div>';
   // ---- verdict FIRST: profit is the judge ----
@@ -10732,7 +10748,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   const hero='<div style="margin:8px 0;padding:10px 14px;border-radius:10px;background:'+vd[1]+'14;border-left:4px solid '+vd[1]+'"><b style="color:'+vd[1]+';font-size:13px">'+vd[0]+'</b> <span style="font-size:12px;color:#333">'+vd[2]+'</span>'+
    '<div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:8px">'+[
     ['BUDGET you set / day',e.old,e.new,'cur',0],['SPEND Meta delivered / day',b.spd,a2.spd,'cur',0],
-    ['PROFIT after ad spend / day',b.pasd,a2.pasd,'cur',1],['ROAS online',b.ron,a2.ron,'x',1],['ROAS store',b.rst,a2.rst,'x',1],['CPP (website)',b.cpp,a2.cpp,'cur',-1],['Cost / in-store conv.',b.cpo,a2.cpo,'cur',-1]
+    ['PROFIT after ad spend / day',b.pasd,a2.pasd,'cur',1],['PROFIT / day \u2014 ONLINE only',b.pasdOn,a2.pasdOn,'cur',1],['ROAS online',b.ron,a2.ron,'x',1],['ROAS store',b.rst,a2.rst,'x',1],['CPP (website)',b.cpp,a2.cpp,'cur',-1],['Cost / in-store conv.',b.cpo,a2.cpo,'cur',-1]
    ].map(R=>{const vb=R[1],va=R[2],f=R[3],dir=R[4];const dOk=(vb!=null&&va!=null&&isFinite(vb)&&isFinite(va)&&vb!==0);const d2=dOk?(va-vb)/Math.abs(vb)*100:null;
     const col=(d2==null||dir===0)?'#8a93a6':((dir>0?d2>=0:d2<=0)?'#12a06e':'#e23a63');
     const fmt=v=>(v==null||!isFinite(v))?'&mdash;':(f==='cur'?'E£ '+money(v):v.toFixed(2)+'x');
@@ -10759,13 +10775,14 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   dt+=drow('ROAS online',k=>r.sp[k]?(r.pv[k]||0)*fON/r.sp[k]:null,b.ron,1,fm.x);
   dt+=drow('ROAS store',k=>r.sp[k]?(r.fv[k]||0)*fOFF/r.sp[k]:null,b.rst,1,fm.x);
   dt+=drow('Profit after spend',k=>gpDay(k)-(r.sp[k]||0),b.pasd,1,fm.cur);
+  dt+=drow('Profit after spend &mdash; ONLINE only',k=>(r.pv[k]||0)*fON*gpOn-(r.sp[k]||0),b.pasdOn,1,fm.cur);
   dt+=drow('CPP (website)',k=>(r.pu[k]||0)?(r.sp[k]||0)/(r.pu[k]||0):null,b.cpp,-1,fm.cur);
   dt+=drow('Website purchases',k=>r.pu[k]||0,null,0,v=>money(v));
   dt+=drow('Cost / in-store conv.',k=>(r.op[k]||0)?(r.sp[k]||0)/(r.op[k]||0):null,b.cpo,-1,fm.cur);
   dt+=drow('In-store conversions',k=>r.op[k]||0,null,0,v=>money(v));
-  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day; blue columns are Thu/Fri/Sat &mdash; the weekend, where demand moves for reasons that have nothing to do with your budget. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins).</div>';
+  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day; blue columns are Thu/Fri/Sat &mdash; the weekend, where demand moves for reasons that have nothing to do with your budget. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins). <b>The ONLINE-only row drops the store half entirely</b> &mdash; website value &times; '+(gpOn*100).toFixed(1)+'% minus spend. Read that one first after a change: the store half is Meta&rsquo;s own claim and backfills for about six days, so the blended line can look healthy while the webstore alone went backwards.</div>';
   // ---- 7d summary ----
-  const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['PROFIT after ad spend / day',b.pasd,a2.pasd,1,'cur'],['GP / day (before spend)',b.gpd,a2.gpd,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],
+  const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['PROFIT after ad spend / day',b.pasd,a2.pasd,1,'cur'],['PROFIT after ad spend / day \u2014 ONLINE only',b.pasdOn,a2.pasdOn,1,'cur'],['GP / day (before spend)',b.gpd,a2.gpd,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],
    ['CPP (website)',b.cpp,a2.cpp,-1,'cur'],['Website purchases',b.pu,a2.pu,1,'n'],
    ['Cost per IN-STORE conversion',b.cpo,a2.cpo,-1,'cur'],['In-store conversions',b.op,a2.op,1,'n'],
    ['CPP blended (website + in-store)',b.cppA,a2.cppA,-1,'cur'],
@@ -12246,7 +12263,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260901-141818';
+const BUILD='20260902-202749';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
