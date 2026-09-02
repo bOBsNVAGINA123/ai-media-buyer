@@ -1005,7 +1005,17 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
    Groups now follow the order the questions actually get asked -- what happened, where the sales
    came from, who bought, what the media did, what it cost, then the deep end -- and no group
    holds more than five. TABQ prints, under the row, the one question the open tab answers. */
-/* v9.30 THE SHORT LIST. Thirty-three tabs across eight equal-looking groups meant the ten tabs
+/* v9.31 REDUNDANCY, REMOVED. Three tabs were showing what other tabs already showed:
+     Every campaign (ce)  -- a third ranked table of the same entities that "Where the next
+                             pound goes" already ranks by profit and "All three side by side"
+                             already ranks by spend. Ranked worse than either.
+     All charts (vz)      -- 37 charts, every one of which is already drawn on the tab it
+                             belongs to. It was a table of contents pretending to be a tab.
+     Business read (iq)   -- a prose summary of What moved revenue + All findings, regenerated
+                             from the same inputs, so it could only ever agree or be stale.
+   Their ids are gone from the nav. The four audit decks were also listed twice -- once here
+   and once in the Audit group that audit_tabs.js injects -- so the duplicate is gone too.
+   v9.30 THE SHORT LIST. Thirty-three tabs across eight equal-looking groups meant the ten tabs
    that get opened every day sat in the same visual rank as the four audit decks opened once a
    quarter. The first five groups below are now the whole working tool -- online, shops,
    customers, products, advertising, P&L -- and nothing in them is more than one click away.
@@ -1013,15 +1023,13 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
    it stops competing for the eye. Ids are unchanged, so every deep link and the audit harness
    keep working. */
 const TABGROUPS=[
- ['Overview',[['on','Online store'],['off','The 7 shops']]],
- ['Customers',[['cp','Customer portfolio'],['lt','Lifetime profit vs CAC']]],
- ['Products',[['vl','Vendors & products']]],
- ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops']]],
- ['P&L',[['pn','Online P&L'],['rp','Shops P&L']]],
- ['More \u00b7 sales',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['dc','Discount codes'],['tr','Where traffic lands'],['si','Search demand'],['co','New-customer cohorts'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
- ['More \u00b7 media',[['mi','All three platforms'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes'],['cl','Change log'],['ce','Every campaign'],['mb','Creative benchmarks'],['bg','Launches & budgets']]],
- ['More \u00b7 finance & audits',[['cs','Costs & payroll'],['pl','30d vs prior 30d'],['vz','All charts'],['iq','Standing business read'],['au','Commercial audit'],['av','Vendor capital'],['ag','Listing gap'],['aq','Demand gap'],['rm','How every number is built']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Overview',[['on','Online store'],['off','The 7 shops'],['rm','How every number is built']]],
+ ['Customers',[['cp','Value bands'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
+ ['Products',[['vl','Vendors & products'],['dc','Discount codes']]],
+ ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
+ ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
+ ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1032,12 +1040,12 @@ const TABQ={
  tr:'Where site traffic lands, and which page types actually convert.',
  vl:'Which products and which suppliers make the money.',
  si:'What people search for, what you show up on, and who else is bidding.',
- cp:'Every registered customer split into ten bands by lifetime value.',
+ cp:'Every registered customer split into ten bands by lifetime value \u2014 who the top decile is and what they are worth.',
  co:'How each month\u2019s intake of new customers has paid back since.',
  rt:'How many customers come back, and how long they take to do it.',
  lt:'Lifetime gross profit against what it cost to acquire, by branch and Shopify.',
  cj:'What a first purchase turns into \u2014 repeat odds, time to the second order, lifetime value.',
- mi:'Meta, Google and TikTok side by side over the range you picked.',
+ mi:'Meta, Google and TikTok in one table \u2014 spend, CPM, CTR, CVR, ROAS \u2014 plus every funded ad and campaign ranked over your dates.',
  me:'What each channel returns per pound, and where the next pound should go.',
  ic:'What the platforms claim, against what the ledger can actually show.',
  ao:'How money spent online shows up as revenue in the shops.',
@@ -1046,15 +1054,15 @@ const TABQ={
  tk:'TikTok spend, what it claims, and what Shopify actually credits it.',
  cl:'Every budget move, launch and pause \u2014 and whether it actually worked.',
  md:'Where to cut and where the next pound goes \u2014 every entity ranked by profit left after the ad is paid for.',
- ce:'Every campaign, ad set and ad, with the rates and the week-on-week move.',
+
  mb:'Your launched creatives judged against the 2026 benchmarks.',
  bg:'What launched, what it cost, and what the budgets are doing.',
  pn:'Shopify profit and loss, down to what is left after ads and delivery.',
  rp:'Branch profit and loss, rent and payroll included.',
  cs:'What the business spends before a single ad runs.',
  pl:'The last 30 days against the 30 before, every driver quantified.',
- vz:'Every chart in the tool \u2014 branches, customers, delivery, profit.',
- iq:'The standing read of the whole business, in one place.',
+
+
  rm:'How every number here is built, and what it does and does not include.',
  dc:'Every discount code, online and in store \u2014 what it sold, at what basket, and what margin it left.',
  au:'The full commercial audit \u2014 where the gross profit actually comes from and what is eating it.',
@@ -7843,9 +7851,28 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
   cmt:[[C.blue,'<b>Read the gap, not the line.</b> A blue solid line far above the blue dashed one is Meta earning; the two converging is Meta claiming barely more than it costs. Because the solid lines are each platform&rsquo;s own claim, the gap is the most generous possible read of that platform &mdash; if it is thin here it is thinner in reality.'],[C.orange,'<b>These lines double-count each other on purpose.</b> Meta, Google and TikTok each take full credit for the same order when a shopper saw more than one of them. That is why the sum of these three lines is larger than Odoo&rsquo;s Shopify revenue, and why aMER on the Media Efficiency tab &mdash; Odoo revenue divided by total spend &mdash; is the only honest cross-platform read.']]});
 
  /* ---------- 3. every funded entity across all three platforms ---------- */
- const ENT=[].concat((O.mads||[]).map(a=>Object.assign({pf:'meta'},a)),
-                     (O.gads||[]).map(a=>Object.assign({pf:'google'},a)),
-                     (O.tads||[]).map(a=>Object.assign({pf:'tiktok'},a)));
+/* v9.31 THIS CARD IGNORED THE DATE BOX. Every entity row read a.sp / a.ov / a.imp, which are
+   the WHOLE 60-day collector pull, while the header above it said "5 days". On 2026-08-28 ->
+   09-01 that printed E£2,807,631 of spend for a window that actually held E£332,026 -- 8.5x
+   over, and every SCALE / KILL verdict underneath was scored on the wrong period. Meta and
+   Google both ship a per-entity daily series, so both are now summed across exactly the days
+   you picked. TikTok ships none (tadsW is null, 0 of 30 rows carry .d) so it cannot be
+   windowed at all -- its rows are held out of the ranking and said so, rather than being
+   silently mixed in at a different grain. */
+ const ENT=(function(){const out=[];
+  const take=function(list,W,pf){if(!list||!list.length||!W)return;const P=pfWin(W);
+   list.forEach(function(a){const d=a.d;if(!d)return;
+    let sp=0,pv=0,fv=0,pu=0,op=0,im=0,ck=0;
+    for(let k=P.a;k<=P.b;k++){
+     sp+=(d.sp&&d.sp[k])||0; pv+=(d.pv&&d.pv[k])||0; fv+=(d.fv&&d.fv[k])||0;
+     pu+=((d.pu&&d.pu[k])||(d.pur&&d.pur[k])||0); op+=(d.op&&d.op[k])||0;
+     im+=((d.im&&d.im[k])||(d.imp&&d.imp[k])||0); ck+=(d.clk&&d.clk[k])||0;}
+    out.push({id:a.id,n:a.n,cmp:a.cmp,st:a.st,pf:pf,sp:sp,pv:pv,ofv:fv,ov:pv+fv,
+              pur:pu,opur:op,imp:im,clk:ck,_noclk:pf==='meta'});});};
+  take(O.mads,O.madsW,'meta'); take(O.gads,O.gadsW,'google');
+  return out;})();
+ const TKOUT=(O.tads||[]).filter(a=>a.sp>3000), TKSP=TKOUT.reduce((x,a)=>x+(a.sp||0),0);
+ const ENTPW=pfWin(O.madsW||O.gadsW);
  const PN={meta:'META',google:'GOOGLE',tiktok:'TIKTOK'};
  const FUNDED=ENT.filter(a=>a.sp>3000);
  if(!FUNDED.length){
@@ -7875,14 +7902,15 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  const good=live.filter(a=>troas(a)>=8);
  const known=FUNDED.filter(a=>a.st).length;
  const rows=sorted.map(a=>{const v=vd(a),sc=stat(a);
-  const cpm=a.imp?a.sp/a.imp*1000:null,ctr=a.imp?a.clk/a.imp*100:null,cvr=a.clk?(a.pur||0)/a.clk*100:null;
+  const cpm=a.imp?a.sp/a.imp*1000:null,ctr=(a.imp&&a.clk)?a.clk/a.imp*100:null,cvr=a.clk?(a.pur||0)/a.clk*100:null;
   return {n:chip(PN[a.pf],PC[a.pf])+(sc?chip(sc[0],sc[1]):'')+((a.n||'(unnamed)').slice(0,42)),v:a.sp,c:v[1],b:v[0],
    rl:'E&pound; '+money(a.sp)+' <span style="color:#64748b;font-weight:700">&middot; '+troas(a).toFixed(1)+'x</span>',
    tip:(a.n||'')+' | '+PN[a.pf]+' | status '+(a.st||'unknown')+' | spend E£ '+money(a.sp)
     +' | Shopify value E£ '+money((a.ov||0)*fx(a))+' | offline value E£ '+money((a.ofv||0)*fx(a))
     +' | ROAS '+roas(a).toFixed(2)+'x | total ROAS '+troas(a).toFixed(2)+'x'
     +' | '+(a.pur||0)+' purchases'
-    +(cpm!=null?' | CPM E£ '+cpm.toFixed(1):'')+(ctr!=null?' | CTR '+ctr.toFixed(2)+'%':'')+(cvr!=null?' | CVR '+cvr.toFixed(2)+'%':'')};});
+    +(cpm!=null?' | CPM E£ '+cpm.toFixed(1):'')+(ctr!=null?' | CTR '+ctr.toFixed(2)+'%':'')+(cvr!=null?' | CVR '+cvr.toFixed(2)+'%':'')
+    +(a._noclk?' | CTR/CVR: Meta ships no clicks in the per-ad daily feed, so neither can be cut to your window':'')};});
  const cmt=[];
  cmt.push([C.blue,'<b>How to read a row.</b> First chip = platform. Second chip = that platform&rsquo;s own delivery status right now. LIVE means it is still spending today; PAUSED / ADSET OFF / CAMPAIGN OFF mean it is already stopped and only appears because it spent inside the window. Bar length = spend. The multiple on the right is TOTAL ROAS &mdash; Shopify conversion value plus whatever offline conversion value that platform reports &mdash; so an ad that mostly drives store visits is no longer punished for it. Hover any row for CPM, CTR, CVR and both ROAS figures.']);
  cmt.push([C.indigo,'<b>The verdict thresholds, in plain terms.</b> Total ROAS 4.0x means every E&pound; 1 spent came back as E&pound; 4 of attributed value. SCALE / SLEEPER = 8x or better (SLEEPER is that performance on a small budget &mdash; it has not been given a chance yet). KEEP = 4.5x&ndash;8x. WATCH = 3x&ndash;4.5x. KILL = under 3x, which is roughly where an ad stops paying for its own goods at your margin.']);
@@ -7890,10 +7918,13 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  else if(dead.length)cmt.push([C.grn,'<b>'+dead.length+' of these '+FUNDED.length+' entities '+(dead.length>1?'are':'is')+' already switched off</b> (E&pound; '+money(deadSp)+' of the E&pound; '+money(totSp)+' shown was spent before '+(dead.length>1?'they were':'it was')+' stopped). That money is history and cannot be recovered &mdash; it is listed so the total reconciles, not so you act on it.']);
  if(kill.length)cmt.push([C.red,'<b>The money on the table right now.</b> '+kill.length+' STILL-LIVE '+(kill.length>1?'entities are':'entity is')+' below the 3x kill line, burning E&pound; '+money(killSp)+' ('+(totSp?(killSp/totSp*100).toFixed(0):'0')+'% of the spend listed here) at an average '+(kill.length?(kill.reduce((x,a)=>x+troas(a),0)/kill.length).toFixed(1):'0')+'x. Those are the rows to touch first.']);
  else cmt.push([C.grn,'<b>No live entity is under the 3x kill line.</b> Everything still delivering is at least paying for its own goods. The next move is feeding, not cutting: push budget at the '+good.length+' running at 8x or better.']);
- const gcount=FUNDED.filter(a=>a.pf==='google').length,tcount=FUNDED.filter(a=>a.pf==='tiktok').length;
- if(!gcount||!tcount)cmt.push([C.orange,'<b>Coverage gap.</b> '+(!gcount?'No Google campaigns ':'')+(!gcount&&!tcount?'and ':'')+(!tcount?'No TikTok campaigns ':'')+'appear in this list. Meta rows come from the ad-level pull; Google and TikTok rows need their campaign-level tokens wired into the GitHub Action. The platform totals in the table above are unaffected &mdash; those come from the daily insights pull, which is already working.']);
- hbar(g,'Every funded ad and campaign &mdash; all three platforms, named, status-tagged, ranked by spend'+INFO('One row per Meta ad, Google campaign or TikTok campaign with more than E£3,000 of spend in its last-30-day pull. Left chip = platform. Second chip = live serving status straight from the platform. Bar = spend. Multiple = TOTAL ROAS (Shopify conversion value + offline conversion value) / spend.'),
-  FUNDED.length+' funded entities &middot; E&pound; '+money(totSp)+' spend &middot; '+live.length+' still delivering. Hover a row for CPM, CTR, CVR, both ROAS figures and purchases.',rows,{cmt:cmt,nw:330});
+ const gcount=FUNDED.filter(a=>a.pf==='google').length;
+ if(!gcount)cmt.push([C.orange,'<b>No Google campaigns in this window.</b> Google rows come from the campaign-level daily pull; if the whole platform is missing rather than just quiet, its token is not wired into the GitHub Action. The platform totals in the table above are unaffected — those come from the daily insights pull.']);
+ if(TKOUT.length)cmt.push([C.orange,'<b>'+TKOUT.length+' TikTok campaigns (E&pound; '+money(TKSP)+') are deliberately not in this ranking.</b> TikTok is the one platform that ships no per-campaign daily series — every row is a single lifetime figure — so there is no honest way to cut it to the '+ENTPW.n+' days you picked. Putting it in the same ranked list as windowed Meta and Google rows would make it look enormous purely because it is measured over a longer period. Its totals are in the platform table at the top of this tab, which does follow your dates.']);
+ hbar(g,'Every funded ad and campaign, ranked by spend &mdash; over the days you picked'+INFO('One row per Meta ad or Google campaign that spent more than E£3,000 INSIDE the selected range, summed from that entity\'s own daily series. Left chip = platform. Second chip = live serving status straight from the platform. Bar = spend. Multiple = TOTAL ROAS (Shopify conversion value + offline conversion value) / spend, at the attribution you have selected.'),
+  '<b>'+ENTPW.lbl+'</b> &middot; '+FUNDED.length+' entities over E&pound; 3,000 &middot; E&pound; '+money(totSp)+' spend &middot; '+live.length+' still delivering. '
+  +'Value is scaled by your attribution setting (Meta &times;'+mf.toFixed(2)+', Google &times;'+gf.toFixed(2)+') &mdash; change it and every multiple here moves. '
+  +'Hover a row for CPM, CTR, CVR, both ROAS figures and purchases.',rows,{cmt:cmt,nw:330});
 
  /* ---------- 4. spend by delivery status ---------- */
  const byS={};FUNDED.forEach(a=>{const k=(stat(a)||['UNKNOWN','#8b93a7']);byS[k[0]]=byS[k[0]]||{c:k[1],n:0,sp:0};byS[k[0]].n++;byS[k[0]].sp+=a.sp;});
@@ -12318,7 +12349,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260902-211304';
+const BUILD='20260902-214841';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
