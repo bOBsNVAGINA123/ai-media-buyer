@@ -1023,14 +1023,13 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
    it stops competing for the eye. Ids are unchanged, so every deep link and the audit harness
    keep working. */
 const TABGROUPS=[
- ['Overview',[['on','Online store'],['off','The 7 shops'],['rm','How every number is built']]],
- ['Customers',[['cp','Value bands'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
+ ['Overview',[['on','Online store'],['off','Branches'],['rm','How every number is built']]],
+ ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1041,7 +1040,7 @@ const TABQ={
  tr:'Where site traffic lands, and which page types actually convert.',
  vl:'Which products and which suppliers make the money \u2014 and what a customer who buys them is worth over their life.',
  si:'What people search for, what you show up on, and who else is bidding.',
- cp:'Every registered customer split into ten bands by lifetime value \u2014 who the top decile is and what they are worth.',
+ cp:'Your customers ranked into ten tiers by lifetime spend \u2014 who the best 10% are, what they buy, and what one of them is worth against an average shopper.',
  co:'How each month\u2019s intake of new customers has paid back since.',
  rt:'How many customers come back, and how long they take to do it.',
  lt:'Lifetime gross profit against what it cost to acquire, by branch and Shopify.',
@@ -2222,7 +2221,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{netSplitCard(g);}catch(e){}try{glance(g,o);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -2230,7 +2229,6 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  /* The control room is whatever page you land on. The diagnosis belongs above the
     scoreboard, not one tab away: the first question is what to do, not what the numbers are. */
  try{rActions(g);}catch(e){}
- try{netSplitCard(g);}catch(e){}
  try{ovCard(g);}catch(e){}
  try{offAudit(g);}catch(e){}try{promoCard(g);}catch(e){}
  try{paceCard(g);}catch(e){}
@@ -3213,8 +3211,11 @@ function netSplitCard(g){
  const brs=Object.keys(PS);
  const nowM=(O.today||'').slice(0,7);
  const A=_allM();
- const m0=ST.pm0||A[0], m1=ST.pm1||A[A.length-1];
+ const _c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);
+ const m0=_c((ST.s||'').slice(0,7)), m1=_c((ST.e||'').slice(0,7));
  let mons=A.filter(m=>m>=m0&&m<=m1&&O.exp[m]&&PA[m]);
+ /* a 7-day selection lands inside ONE month; profit needs at least that whole month of rent
+    and payroll, so the card reads the month(s) the range touches and says so */
  const dropped=mons.filter(m=>m===nowM);
  if(mons.length>1)mons=mons.filter(m=>m!==nowM);   // a part-month drags every ratio
  if(!mons.length)return;
@@ -3268,7 +3269,7 @@ function netSplitCard(g){
 
  const body='<div style="display:flex;gap:12px;flex-wrap:wrap">'
   +tile('Online · Shopify',netOn,onRev,onGP,adsOn,opxOn,netOn>=0?'#0f6e56':'#a3271a',netOn>=0?'#f0fdf6':'#fff6f9',netOn>=0?'#cdeede':'#fbe0e8')
-  +tile('The 7 shops',netSt,stRev,stGP,adsSt,opxSt,netSt>=0?'#0f6e56':'#a3271a',netSt>=0?'#f0fdf6':'#fff6f9',netSt>=0?'#cdeede':'#fbe0e8')
+  +tile('Branches',netSt,stRev,stGP,adsSt,opxSt,netSt>=0?'#0f6e56':'#a3271a',netSt>=0?'#f0fdf6':'#fff6f9',netSt>=0?'#cdeede':'#fbe0e8')
   +'<div style="flex:1;min-width:230px;padding:14px 16px;border-radius:13px;background:#0f172a;color:#fff">'
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#93a3bd;text-transform:uppercase">Whole company</div>'
    +'<div style="font-size:30px;font-weight:800;line-height:1.1;margin:3px 0;color:'+(netAll>=0?'#5ee0a8':'#ff8ba8')+'">'+SM(netAll)+'</div>'
@@ -3282,7 +3283,7 @@ function netSplitCard(g){
   :(netSt<0&&netOn>0)?'<b>The shops are losing money and the webstore is carrying them.</b> '
   :(netAll<0)?'<b>Both halves are under water this window.</b> ':'<b>Both halves are profitable.</b> ';
 
- pnlCard(g,'odoo','Net profit — online against the shops'
+ pnlCard(g,'odoo','Did we make money? — online vs branches, after everything'
    +INFO('Gross profit is exact per channel (Odoo margin on Shopify orders; report.pos.order margin per branch). Google and TikTok spend is charged wholly to online; Meta is split by its own attributed value, website against in-store CAPI. Posted OpEx is split by what each account is, with HQ rent, comms, other OpEx and untagged payroll shared pro-rata on revenue.'),
   lead+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
   +'Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '
@@ -5317,7 +5318,8 @@ function merDaily(g){
  const cut=O.partial||null;
  let s=ST.s,e=ST.e; if(cut&&e>=cut)e=addD(cut,-1);
  let i0=Math.max(0,aIx(s)), i1=Math.min(A.n-1,aIx(e));
- if(i1-i0<20){i0=Math.max(0,i1-59);}           // a ratio needs a run of days to mean anything
+ const i0sel=i0, selDays=i1-i0sel+1;           // the days actually picked, for the verdict
+ if(i1-i0<20){i0=Math.max(0,i1-59);}           // the ratio LINES need a run of days to mean anything
  const mfo=(typeof afo==='function')?afo():1;
  const offSrc=(A.moffv&&A.moffv.length)?A.moffv:A.instoreMeta;
  const lab=[],spend=[],nc=[],rc=[],off=[],shop=[];
@@ -5337,13 +5339,25 @@ function merDaily(g){
  const mer=roll(shop,spend,7), amer=roll(nc,spend,7);
  const merOff=roll(shop.map((v,k)=>v+(off[k]||0)),spend,7);
  const T=a=>a.reduce((x,y)=>x+(y||0),0);
- const tSp=T(spend), tNc=T(nc), tRc=T(rc), tOff=T(off), tSh=T(shop);
+ /* verdict totals = the SELECTED days only; the chart may show a longer trail for the lines */
+ const selOff=i0sel-i0;
+ const TS=a=>a.slice(selOff).reduce((x,y)=>x+(y||0),0);
+ const tSp=TS(spend), tNc=TS(nc), tRc=TS(rc), tOff=TS(off), tSh=TS(shop);
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const _gpo=(function(){try{return _gpPct().gpOn;}catch(e){return 0.266;}})();
+ const _be=_gpo>0?1/_gpo:3.76, _merW=tSp?tSh/tSp:0;
+ const _gpAfter=tSh*_gpo-tSp;
+ const _verd=!tSp?'' :
+  '<div style="margin:2px 0 10px;padding:10px 13px;border-radius:11px;background:'+(_gpAfter>=0?'#f0fdf6':'#fff6f9')+';border:1px solid '+(_gpAfter>=0?'#cdeede':'#fbe0e8')+';font-size:13px;color:#1e2b3a;line-height:1.55">'
+  +'<b>Your '+selDays+' day'+(selDays===1?'':'s')+' in one sentence:</b> you spent <b>'+M(tSp)+'</b> and the webstore returned <b>'+M(tSh)+'</b> — '
+  +'<b>'+_merW.toFixed(2)+'&times;</b> against a <b>'+_be.toFixed(2)+'&times;</b> break-even at your real margin, which is '
+  +'<b style="color:'+(_gpAfter>=0?'#0f6e56':'#a3271a')+'">'+(_gpAfter>=0?'+':'−')+M(_gpAfter)+'</b> of webstore gross profit after ads. '
+  +(tSp?Math.round(tNc/Math.max(1,tNc+tRc)*100):0)+'% of that revenue came from first-time buyers'
+  +(tOff?', and Meta separately claims '+M(tOff)+' of value in the branches — a claim, not a measurement, judged below.':'.')+'</div>';
  const el=document.createElement('div'); el.className='card full';
  el.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Every day: MER, aMER, and where the money came from</div>'
-  +'<div class="cs">'+lab[0]+' to '+lab[lab.length-1]+' on one calendar. Top panel is money per day; bottom is the return ratios, 7-day rolling because a daily ratio is mostly weekday noise. '
-  +'Over the window: <b>MER '+(tSp?(tSh/tSp).toFixed(2):'—')+'&times;</b>, <b>aMER '+(tSp?(tNc/tSp).toFixed(2):'—')+'&times;</b>, '
-  +'first-time revenue '+M(tNc)+' against returning '+M(tRc)+', and '+M(tOff)+' of in-store value Meta claims its ads drove.</div></div></div>'
+  +'<div class="cs">'+lab[0]+' to '+lab[lab.length-1]+' on one calendar. Top panel is money per day; bottom is the return ratios, 7-day rolling because a daily ratio is mostly weekday noise.</div></div></div>'
+  +_verd
   +'<div id="merpan"></div>'
   +'<div style="font-size:11.5px;color:#5b6478;margin-top:9px">'
   +'<b>MER</b> is Shopify revenue over ALL ad spend. <b>aMER</b> is first-time-customer revenue over that same spend &mdash; the rate you are buying growth at, rather than rebuying customers you already had. '
@@ -5359,9 +5373,11 @@ function merDaily(g){
     hovering. This strip states each series at the end of the window, and what it did across it. */
  (function(){
   const last=a=>{for(let k=a.length-1;k>=0;k--)if(a[k]!=null&&isFinite(a[k]))return a[k];return null;};
-  const sum=a=>a.reduce((x,y)=>x+(y||0),0);
+  /* money tiles = the SELECTED days, matching the verdict sentence; only the ratio tiles read
+     the longer trail the lines are drawn on */
+  const sum=a=>a.slice(selOff).reduce((x,y)=>x+(y||0),0);
   const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
-  const days=lab.length;
+  const days=selDays;
   const items=[
    ['Ad spend',M(sum(spend)),'over '+days+' days','#9aa3b5'],
    ['New-customer revenue',M(sum(nc)),Math.round(sum(nc)/Math.max(1,sum(nc)+sum(rc))*100)+'% of webstore','#12a06e'],
@@ -5638,7 +5654,10 @@ function rFOCUS(){
  const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
  const N=v=>Math.round(Math.abs(v||0)).toLocaleString();
  const A=_allM();
- const m0=ST.pm0||A[Math.max(0,A.length-3)], m1=ST.pm1||A[A.length-1];
+ /* months straight from the date box -- ST.pm0 is auto-widened for charts and made this tab
+    read a year no matter what you picked */
+ const _c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);
+ const m0=_c((ST.s||'').slice(0,7)), m1=_c((ST.e||'').slice(0,7));
  const cur=A.filter(m=>m>=m0&&m<=m1);
  const i0=A.indexOf(cur[0]);
  const prev=A.slice(Math.max(0,i0-cur.length),i0);
@@ -12838,7 +12857,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260902-233758';
+const BUILD='20260902-235731';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -13412,7 +13431,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
    const scale=rows.filter(r=>r.pas>0&&r.roas>=bench*1.2).sort((x,y)=>y.pas-x.pas).slice(0,5);
    const kill=rows.filter(r=>r.pas<0).sort((x,y)=>x.pas-y.pas).slice(0,5);
    const store=rows.filter(r=>r.offShare>=0.6&&r.pas>0).sort((x,y)=>y.fv-x.fv).slice(0,4);
-   const card=(ttl,list,col2,note,fmt)=>list.length?'<div style="flex:1;min-width:330px"><div style="font-size:11.5px;font-weight:800;color:'+col2+';margin-bottom:4px">'+ttl+'</div><table class="bt" style="width:100%"><tr><th style="text-align:left">Ad</th><th>14d spend</th><th>ROAS</th><th>Profit after spend</th></tr>'+list.map(r=>'<tr><td style="text-align:left"><b>'+String(r.a.n||'').slice(0,40)+'</b><div style="font-size:10px;color:#8a93a6">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div></td><td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td><td style="color:'+(r.pas>=0?'#12a06e':'#e23a63')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>').join('')+'</table><div style="font-size:10px;color:#8a93a6;margin-top:3px">'+note+'</div></div>':'';
+   const card=(ttl,list,col2,note,fmt)=>list.length?'<div style="flex:1;min-width:330px"><div style="font-size:11.5px;font-weight:800;color:'+col2+';margin-bottom:4px">'+ttl+' <span style="font-weight:600;color:#8a93a6;text-transform:none">&middot; '+winLbl+'</span></div><table class="bt" style="width:100%"><tr><th style="text-align:left">Ad</th><th>Spend</th><th>ROAS</th><th>Profit after spend</th></tr>'+list.map(r=>'<tr><td style="text-align:left"><b>'+String(r.a.n||'').slice(0,40)+'</b><div style="font-size:10px;color:#8a93a6">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div></td><td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td><td style="color:'+(r.pas>=0?'#12a06e':'#e23a63')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>').join('')+'</table><div style="font-size:10px;color:#8a93a6;margin-top:3px">'+note+'</div></div>':'';
    let h3='<div style="display:flex;gap:16px;flex-wrap:wrap">'
     +card('SCALE &mdash; beating the account and making money',scale,'#12a06e','Account blended ROAS over '+winLbl+' is '+bench.toFixed(2)+'x. These clear it by 20%+ AND cover their own spend.')
     +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over '+winLbl+' at your real margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store).')
