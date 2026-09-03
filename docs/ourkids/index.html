@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1280,7 +1279,7 @@ function foldTail(t,grid){
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const PIN=/Did we make money\?|of gross profit burned/;
+ const PIN=/Did we make money\?|of gross profit burned|Every day against break-even/;
  const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
  if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
   pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
@@ -2342,7 +2341,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{netSplitCard(g);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -3326,6 +3325,87 @@ function ovRange(a,b){
                    the shops'. Packing, collection fees and cargo are online's. HQ rent,
                    comms, other OpEx and the payroll not tagged to any branch are shared
                    and go pro-rata on revenue -- that split is the only estimate here. */
+/* ===================== v9.41 EVERY DAY AGAINST BREAK-EVEN =====================
+   The first table on the landing tab: one row per day of the selected range, MER, aMER and
+   gross profit after ad spend, each graded against the real break-even, webstore-only beside
+   webstore-plus-branches. The colour answers the question before the number does. */
+function dailyBE(g){
+ const A=O.ad,F=O.fin;if(!A||!F)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const {gpOn,gpSt}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
+ const be=gpOn>0?1/gpOn:3.76;
+ /* branch margin for the daily leg: last complete POS month (rent-free gross margin) */
+ const nowM=(O.today||'').slice(0,7);
+ const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
+ let stMg=gpSt;if(pm){let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=v[1]||0;}});if(r2>0)stMg=g2/r2;}
+ const beAll=(function(){ // blended break-even at this window's actual web/branch revenue mix
+  return null;})();
+ const t0=Date.parse(A.start),f0=Date.parse(F.start),b0=O.bl?Date.parse(O.bl.start):NaN;
+ const aix=d=>Math.round((d-t0)/864e5),fix=d=>Math.round((d-f0)/864e5),bix=d=>Math.round((d-b0)/864e5);
+ let d1=Date.parse(ST.e),d0=Date.parse(ST.s);
+ const MAXR=31;let clipped=false;
+ if((d1-d0)/864e5+1>MAXR){d0=d1-(MAXR-1)*864e5;clipped=true;}
+ const rows=[];
+ for(let d=d0;d<=d1;d+=864e5){
+  const ai=aix(d),fi=fix(d);
+  if(ai<0||ai>=A.n||fi<0||fi>=F.n)continue;
+  const sp=(A.spend||[])[ai]||0;
+  const rev=((F.rev[fi]||0)-(F.refund[fi]||0))*1000, gp2=(F.gp[fi]||0)*1000;
+  const nc=(A.ncrev||[])[ai]||0;
+  let br=null;const bi=bix(d);
+  if(O.bl&&bi>=0&&bi<O.bl.n){br=0;Object.keys(O.bl.b).forEach(b=>{br+=O.bl.b[b][bi]||0;});}
+  const dt=new Date(d);
+  rows.push({d:dt.toISOString().slice(0,10),wd:dt.getUTCDay(),sp,rev,gp:gp2,nc,br,
+   mer:sp>0?rev/sp:null, amer:sp>0?nc/sp:null,
+   merAll:(sp>0&&br!=null)?(rev+br)/sp:null,
+   pas:gp2-sp, pasAll:br!=null?gp2+br*stMg-sp:null});}
+ if(rows.length<2)return;
+ const grade=(v,b2)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
+  const r2=v/b2;
+  return r2>=1.25?'background:#0f6e56;color:#fff':r2>=1?'background:#dcf3e8;color:#0f6e56'
+        :r2>=0.85?'background:#fdeed9;color:#8a5a1a':'background:#fbdde5;color:#a3271a';};
+ const gMoney=v=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
+  return v>=0?'background:#dcf3e8;color:#0f6e56':'background:#fbdde5;color:#a3271a';};
+ const TD='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+ const TH='padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const cell=(v,st,txt)=>'<td style="'+TD+'"><span style="display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 7px;font-weight:800;'+st+'">'+txt+'</span></td>';
+ let b='';
+ rows.forEach(r=>{
+  const wk=(r.wd===5||r.wd===6);
+  b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
+   +'<td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+(wk?' <span style="font-size:9px;color:#8a93a6">'+(r.wd===5?'FRI':'SAT')+'</span>':'')+'</td>'
+   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +cell(r.mer,grade(r.mer,be),r.mer==null?'—':r.mer.toFixed(2)+'×')
+   +cell(r.amer,grade(r.amer,be),r.amer==null?'—':r.amer.toFixed(2)+'×')
+   +cell(r.pas,gMoney(r.pas),(r.pas>=0?'+':'−')+M(r.pas))
+   +cell(r.merAll,r.merAll==null?grade(null,be):grade(r.merAll,be),r.merAll==null?'—':r.merAll.toFixed(1)+'×')
+   +cell(r.pasAll,gMoney(r.pasAll),r.pasAll==null?'—':(r.pasAll>=0?'+':'−')+M(r.pasAll))
+   +'</tr>';});
+ const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
+ const tSp=T('sp'),tRev=T('rev'),tGp=T('gp'),tNc=T('nc');
+ const brOk=rows.every(r=>r.br!=null);
+ const tBr=brOk?T('br'):null;
+ b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
+  +'<td style="'+TD+'">'+M(tSp)+'</td>'
+  +cell(1,grade(tSp?tRev/tSp:null,be),tSp?(tRev/tSp).toFixed(2)+'×':'—')
+  +cell(1,grade(tSp?tNc/tSp:null,be),tSp?(tNc/tSp).toFixed(2)+'×':'—')
+  +cell(1,gMoney(tGp-tSp),(tGp-tSp>=0?'+':'−')+M(tGp-tSp))
+  +cell(1,tBr!=null?grade((tRev+tBr)/tSp,be):grade(null,be),tBr!=null&&tSp?((tRev+tBr)/tSp).toFixed(1)+'×':'—')
+  +cell(1,tBr!=null?gMoney(tGp+tBr*stMg-tSp):gMoney(null),tBr!=null?((tGp+tBr*stMg-tSp>=0?'+':'−')+M(tGp+tBr*stMg-tSp)):'—')
+  +'</tr>';
+ pnlCard(g,'blend','Every day against break-even'
+  +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
+  (clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
+  +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
+  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore only</div></th>'
+  +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">first-time buyers</div></th>'
+  +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore only</div></th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th>'
+  +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th></tr>'
+  +b+'</table></div>');
+}
 function netSplitCard(g){
  if(!O.exp||!O.pos||!O.fin)return;
  const PA=pnlAgg().M, AM=adMonthly(), BC=O.bcost||{}, PS=O.pos||{};
@@ -13224,7 +13304,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-131244';
+const BUILD='20260903-192757';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
