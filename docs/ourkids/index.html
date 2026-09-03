@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -10908,6 +10907,62 @@ function s2est(m){const r=shipRate();if(!r)return bostaCost(m);
 
    Static because the collector cannot reach Bosta -- the key is on the Mac, not in the
    Action. Re-run the pull and extend this map. */
+/* ===================== v9.45 THE TRUE ONLINE RETURN =====================
+   Headline MER treats every pound of net revenue as kept and the courier as somebody else's
+   problem. The true rate strips out what delivery actually does to an online order book:
+   refunds are already out of net revenue, so what remains hidden is the courier bill -- the
+   outbound legs, the RETURN legs (an RTO order pays the courier twice and keeps nothing),
+   and the shipping the customer never paid for. This card charges all of it before the ads. */
+function trueROAS(g){
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ if(!S2f())return;
+ const PAm=pnlAgg().M, ADm=adMonthly();
+ const nowM=(O.today||'').slice(0,7);
+ const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&adFull(m)&&ADm[m]&&ADm[m].s).slice(-6);
+ if(ms.length<2)return;
+ const {gpOn}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266};}})();
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const TD='padding:6px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+ let b='';
+ ms.forEach(m=>{
+  const net=(PAm[m].g-PAm[m].r), gp2=PAm[m].gp*(PAm[m].g?1-PAm[m].r/PAm[m].g:1);
+  const sp=ADm[m].s, col=s2('col',m)||0, cost=s2('cost',m)||0, shipNet=col-cost;
+  const ret=s2ret(m), free=s2free(m);
+  const conf=s2('conf',m)||0;
+  const perDel=conf?cost/conf:null;
+  const mer=sp?net/sp:null;
+  const trueMer=sp?(net+shipNet)/sp:null;
+  const trueGp=gp2+shipNet-sp;
+  const BX=BOSTA_X[m];
+  b+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+m+(BX?'<div style="font-size:9px;color:#0f6e56;font-weight:600">Bosta per-delivery mix</div>':'<div style="font-size:9px;color:#8a93a6;font-weight:600">ledger only</div>')+'</td>'
+   +'<td style="'+TD+'">'+M(net)+'</td>'
+   +'<td style="'+TD+'">'+(perDel!=null?'E£'+perDel.toFixed(0):'—')+'</td>'
+   +'<td style="'+TD+';color:'+(shipNet>=0?'#0f6e56':'#a3271a')+';font-weight:700">'+(shipNet>=0?'+':'−')+M(shipNet)+'</td>'
+   +'<td style="'+TD+'">'+(ret!=null?'−'+M(ret):'<span style="color:#c9ccd6" title="No Bosta per-delivery pull for this month — the return-leg share needs the API mix">—</span>')+'</td>'
+   +'<td style="'+TD+'">'+(free?'−'+M(free):'—')+'</td>'
+   +'<td style="'+TD+'">'+(mer!=null?mer.toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(trueMer!=null&&mer!=null&&trueMer<mer?'#a35a1a':'#26313f')+'">'+(trueMer!=null?trueMer.toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(trueGp>=0?'#0f6e56':'#a3271a')+'">'+(trueGp>=0?'+':'−')+M(trueGp)+'</td></tr>';});
+ const bx=BOSTA_X['2026-08'];
+ const bnote=bx?('<div class="ins" style="margin-top:9px">'
+  +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>What Bosta&rsquo;s own per-delivery ledger says for 2026-08</b> ('+bx.src+'): '+bx.n.toLocaleString()+' priced deliveries, fee per delivery <b>E£'+(bx.priced/bx.n).toFixed(0)+'</b>. Of the bill, <b>'+(bx.retShare*100).toFixed(1)+'% is return legs</b>: RTO '+M(bx.rto)+' (delivery failed — the order paid the courier twice and kept nothing), customer returns '+M(bx.cust)+', exchanges '+M(bx.exch)+'. The split above multiplies that measured mix into the ledger&rsquo;s posted courier total, because the API sample and the accounting total do not match to the pound (rate E£'+(bx.priced/bx.n).toFixed(2)+' vs the ledger&rsquo;s — the mix is trustworthy, the absolute sample is not the bill).</span></div>'
+  +'<div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>Refunds are already out.</b> Net revenue is net of posted credit notes, so a returned order&rsquo;s product money is not double-counted here — what this card adds is the money delivery itself burns: both courier legs of every return, and the shipping subsidy on orders that paid no shipping fee.</span></div>'
+  +'<div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>Why there is no per-AD version.</b> Which specific ad produced the orders that later came back is not in any feed — Bosta knows the delivery, Meta knows the click, and nothing joins them. The honest grain is the month, and the honest use is the gap: if headline MER is flat while TRUE MER slides, returns and RTO are eating the growth.</span></div></div>')
+  :'';
+ pnlCard(g,'ship','The TRUE online return — after refunds, RTO, return legs and the courier'
+  +INFO('Monthly, complete months with both a courier ledger and a full ad month. TRUE MER = (net revenue + net shipping)/ad spend, where net shipping = what customers paid for delivery minus the whole courier bill — outbound, both legs of returns and RTO, and the subsidised orders. The last column further subtracts ad spend from gross profit after shipping: what the webstore actually banked.'),
+  'Headline MER pretends delivery is free and every order stays sold. These columns stop pretending. The month tagged &ldquo;Bosta per-delivery mix&rdquo; splits the courier bill with Bosta&rsquo;s own API data; &ldquo;ledger only&rdquo; months know the total but not the return share.',
+  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">Month</th><th style="'+TH+'">Net revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">refunds out</div></th>'
+  +'<th style="'+TH+'">Courier fee<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">per delivery</div></th>'
+  +'<th style="'+TH+'">Net shipping<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">collected − bill</div></th>'
+  +'<th style="'+TH+'">of which return legs<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">RTO + returns + exchanges</div></th>'
+  +'<th style="'+TH+'">Free-shipping subsidy</th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">headline</div></th>'
+  +'<th style="'+TH+'">TRUE MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">after courier reality</div></th>'
+  +'<th style="'+TH+'">Banked<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">GP + shipping − ads</div></th></tr>'
+  +b+'</table></div>'+bnote);
+}
 const BOSTA_X={'2026-08':{retShare:0.1652,n:6164,ofN:6236,priced:432033,
   rto:39868,cust:15074,exch:16448,src:'Bosta API per-delivery mix, pulled 2026-09-01'}};
 function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])||0;
@@ -11110,6 +11165,7 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
 }
 function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4');g.innerHTML='';
  rPE(g);
+ try{trueROAS(g);}catch(e){}
  /* v9.44 THE PICTURE FIRST. A P&L that opens on a 14-row table makes the reader assemble the
     story themselves. These are the four lines the table exists to explain -- revenue, gross
     profit, what is left after ads, what is left after everything -- month by month, with
@@ -13422,7 +13478,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-201747';
+const BUILD='20260903-202634';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
