@@ -826,7 +826,12 @@ if(TAB!=='tr')return;dCh();
   g.innerHTML='';return;}
  const C=M.C,SC=trS(),U=trU();
  const cov=C.allSess?100*C.keptSess/C.allSess:100;
- document.getElementById('bn22').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>TRAFFIC ROUTING</b> — the Shopify “CVR routing” report, pulled live instead of exported by hand. Every landing page over the last <b>'+(C.days||14)+' days</b> judged on what it does with the traffic it gets, so you can move spend onto what converts and off what does not. Counts are raw ShopifyQL, so orders are exact. '
+ const _selD=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
+ const _snap=_selD!=null&&_selD!==TRS.win;
+ document.getElementById('bn22').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>TRAFFIC ROUTING</b>'
+  +(_snap?' — <b style="color:#b8621b">your date box asks for '+_selD+' day'+(_selD===1?'':'s')+', and this tab is reading the trailing '+TRS.win+'-day pull instead — the closest it has.</b> Shopify only serves sessions-by-landing-page as trailing 7 / 14 / 30-day windows ending at the last sync; there is no day-level feed to cut to your exact dates, so the tab snaps to the nearest window and follows the box that way. '
+         :' — reading the trailing <b>'+TRS.win+'-day</b> window, which matches your selection. ')
+  +'Every landing page judged on what it does with the traffic it gets, so you can move spend onto what converts and off what does not. Counts are raw ShopifyQL, so orders are exact. '
   +(trHasCtry()?(TRS.ctry==='Egypt'?'<b>Egypt sessions only</b> — foreign traffic is 8% of sessions and near 0% of orders, and counting it makes real pages look broken. Switch with the COUNTRY chips.':'<b>All countries</b> — includes ~8% foreign traffic that almost never orders, so CVR reads low. Switch back to Egypt only for the honest verdicts.'):'')
   +(C.capped?' <b style="color:#b8860b">Top '+trN(C.kept)+' landing pages by sessions ('+cov.toFixed(1)+'% of all traffic) — the thin tail below is not shown.</b>':' Covering all '+trN(C.kept)+' landing pages.');
  const views=['ROUTING','PRODUCTS','COLLECTIONS','BI'];
@@ -1029,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2066,6 +2070,33 @@ function glance(g,o){
  /* prior window on the same COMPARE setting the rest of the page uses */
  const _pw=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
  const BAp=(_pw&&_pw[0]&&_pw[1])?okBlendedAmer(o,_pw[0],_pw[1],(o.ncrev&&o.ncrev[1])||0,(o.sp&&o.sp[1])||0):null;
+ /* v9.36 NET PROFIT ON THE SCOREBOARD. Window-true where the ledger is daily (online GP, ad
+    spend, branch till revenue), month-true where costs only exist as monthly postings (branch
+    margin and the whole OpEx book, both taken from the last complete accounting month and
+    charged per day). It is labelled an estimate because that per-day charge is one; the exact
+    month-grain figure stays on the Did-we-make-money card below. */
+ const NP=(function(){try{
+  const A2=_allM();const nowM2=(O.today||'').slice(0,7);
+  const done=A2.filter(m=>m!==nowM2&&O.exp&&O.exp[m]&&O.pos);
+  if(!done.length)return null;
+  const bm=done[done.length-1];
+  const dim2=(m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();})(bm);
+  const opxD=Object.values(O.exp[bm]).reduce((a,b)=>a+b,0)/dim2;
+  let br=0,bg=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][bm];if(v){br+=v[0]||0;bg+=v[1]||0;}});
+  const stMg=br>0?bg/br:0.24;
+  const blSum=(a,b)=>{if(!O.bl)return null;let t=0;
+   const i0=Math.round((Date.parse(a)-Date.parse(O.bl.start))/864e5),i1=Math.round((Date.parse(b)-Date.parse(O.bl.start))/864e5);
+   if(i0<0)return null;
+   for(let i=i0;i<=Math.min(i1,O.bl.n-1);i++)Object.keys(O.bl.b).forEach(bb=>{t+=O.bl.b[bb][i]||0;});
+   return t;};
+  const calcNP=(gp2,sp2,a,b)=>{const d2=Math.max(1,span(a,b));const st=blSum(a,b);
+   if(st==null)return null;
+   return gp2+st*stMg-sp2-opxD*d2;};
+  const cur=calcNP(o.gp[0],o.sp[0],ST.s,ST.e);
+  const _pw2=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
+  const prev=(_pw2&&o.gp[1]!=null)?calcNP(o.gp[1],o.sp[1],_pw2[0],_pw2[1]):null;
+  return cur==null?null:{cur,prev,bm};
+ }catch(e){return null;}})();
  const tiles=[
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'webstore, after returns'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin'],
@@ -2075,6 +2106,10 @@ function glance(g,o){
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket'],
   ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one']
  ];
+ if(NP)tiles.splice(3,0,['Net profit · whole company, est',
+   '<span style="color:'+(NP.cur>=0?'#0f6e56':'#a3271a')+'">'+(NP.cur>=0?'+':'\u2212')+M(NP.cur)+'</span>',
+   (NP.prev!=null&&NP.prev!==0)?((NP.cur-NP.prev)/Math.abs(NP.prev)*100):null,true,
+   'after ads and every cost, OpEx charged per day from '+NP.bm]);
  /* The webstore is not the business. Blended puts the seven shops in the numerator against the
     same ad spend, which is the only version of these two ratios that answers "are we growing". */
  if(BA)tiles.push(
@@ -13062,7 +13097,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-121525';
+const BUILD='20260903-123453';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
