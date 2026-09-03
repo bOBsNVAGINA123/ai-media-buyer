@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -13343,7 +13342,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-193910';
+const BUILD='20260903-200343';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -13355,6 +13354,31 @@ function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d
 }catch(e){}}
 if(!window.__staleT){window.__staleT=setInterval(staleChk,120000);setTimeout(staleChk,1500);}
 async function verChk(){try{const r=await fetch('./version.txt?v='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&BUILD!=='20260831-192346'&&v!==BUILD)location.reload();}catch(e){}}
+/* v9.43 STOP THROWING THE READER TO THE TOP. RDR() preserved scroll, but every per-card and
+   per-tab control (attribution selects, the card-level date edits, view chips, window chips)
+   calls its render function DIRECTLY -- the innerHTML wipe momentarily empties the page, the
+   browser clamps the scroll to 0, and the user lands back at the masthead after every click.
+   One wrapper around every render entry point: remember where the reader was, put them back
+   after the rebuild, and once more after the async chart mounts change the height. Switching
+   TO a different tab still goes to the top -- that is navigation, not an edit. */
+(function(){
+ const KEEP=['rTab','rOn','rOff','rPnl','rRetail','rMedia','rViz','rIns','rMeta','rCJ','rBG','rCO','rMB','rRT','rLT','rTR','rMETA','rGOOG','rTK','rCP','rCost','rMD','rCL','rAB','rSI','rWHY','rAds','rDC','rFOCUS','rPACE','rCE','rIC','rAI','rVend','rPlan'];
+ let lastTab=null;
+ KEEP.forEach(function(n){
+  const f=window[n];if(typeof f!=='function'||f.__keepScroll)return;
+  const w=function(){
+   /* moving to a DIFFERENT tab is navigation and belongs at the top; a re-render of the
+      tab already on screen is an edit and the reader stays exactly where they were */
+   const navigated=lastTab!==null&&lastTab!==TAB;lastTab=TAB;
+   if(navigated){const out2=f.apply(this,arguments);window.scrollTo(0,0);return out2;}
+   const y=window.scrollY||window.pageYOffset||0;
+   const out=f.apply(this,arguments);
+   if(y>40){const tabAt=TAB;window.scrollTo(0,y);
+    requestAnimationFrame(function(){if(TAB===tabAt)window.scrollTo(0,y);});
+    setTimeout(function(){if(TAB===tabAt&&Math.abs((window.scrollY||0)-y)>200)window.scrollTo(0,y);},180);}
+   return out;};
+  w.__keepScroll=1;window[n]=w;});
+})();
 if(!window.__verChk){window.__verChk=setInterval(verChk,600000);setTimeout(verChk,60000);}
 if(!window.__autoRef)window.__autoRef=setInterval(function(){const s=document.createElement('script');s.src='./data.js?v='+Date.now();s.onload=function(){try{tab(TAB);}catch(e){}};document.head.appendChild(s);},1800000);
 /* ================= WHY TAB — every number decomposed to its roots ================= */
