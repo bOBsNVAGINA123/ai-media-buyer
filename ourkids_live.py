@@ -752,7 +752,7 @@ def pull_shopify(win):
     return out
 
 CVR_DAYS = 14      # default window, matches the "CVR routing" report the team exports by hand
-CVR_WINDOWS = (7, 14, 30)   # every window the tab can be switched to, each pulled at its own grain
+CVR_WINDOWS = (3, 7, 14, 30, 60, 90)   # every window the tab can be switched to, each pulled at its own grain -- v9.37 widened so the date-box snap is never far off
 CVR_LIMIT = 2500   # landing pages kept per window, ordered by sessions desc
 CVR_TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
           "Search", "Cart", "Checkout", "Other"]
