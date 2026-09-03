@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -5921,6 +5920,27 @@ function rPACE(){
 
  bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Day '+dNum+' of '+nowM+'. Every comparison on this page is <b>the first '+upto+' completed day'+(upto===1?'':'s')+' of each month</b> — a part month is never put beside a whole one, here or anywhere else in the tool. Branch daily history starts '+(O.bl?O.bl.start:'—')+', so branch pace against last year appears once that feed is a year old.';
 
+ /* the race chart: cumulative revenue by day-of-month, this month against last month and the
+    same month last year, online plus branches where the branch feed covers the month */
+ try{(function(){
+  const mPrev=mShift(nowM,-1), mLy=mShift(nowM,-12);
+  const dayVal=(m,d2)=>{const key=m+'-'+String(d2).padStart(2,'0');const i=finIdx[key];
+   if(i==null)return null;let t=(F.rev[i]-F.refund[i])*1000;
+   if(O.bl){const j=blIdx(key);if(j>=0&&j<O.bl.n)Object.keys(BLB).forEach(b=>{t+=BLB[b][j]||0;});}
+   return t;};
+  const series=m=>{const out=[];let run=0;
+   for(let d2=1;d2<=dim(m);d2++){const v=dayVal(m,d2);
+    if(v==null||(m===nowM&&d2>upto)){out.push(null);continue;}
+    run+=v;out.push(Math.round(run));}
+   return out;};
+  const labs=[];for(let d2=1;d2<=31;d2++)labs.push(String(d2));
+  vzCard(g,'The month as a race \u2014 cumulative revenue by day'
+    +INFO('Company revenue (webstore net of refunds + branch tills) accumulated day by day. The running month stops at its last complete day. Same day-of-month on every line, so day 9 is compared with day 9, never with day 30.'),
+   'Where this month\u2019s line sits against the same day of last month and last year IS the pace verdict \u2014 the tiles below put numbers on it.',
+   labs,[{l:nowM+' (running)',d:series(nowM),c:'#5a5bf0',w:3},
+         {l:mPrev,d:series(mPrev),c:'#9aa3b5',w:1.8,dash:1},
+         {l:mLy,d:series(mLy),c:'#ff8b42',w:1.8,dash:1}],fC,{});
+ })();}catch(e){}
  const scopes=[
   ['ONLINE — Shopify',m=>sumFin(m,Math.min(upto,dim(m)))],
   ['BRANCHES — all seven, at the till',m=>sumBl(m,Math.min(upto,dim(m)))],
@@ -6069,6 +6089,18 @@ function rFOCUS(){
   +'The top <b>'+N(p.half)+'</b> alone make half of it. '
   +'The remaining <b>'+N(p.tail)+'</b> together contribute '+M(p.tailGp)+''+(p.losing?', and '+N(p.losing)+' of them return nothing or lose money':'')+'.</div>'
   +'<div style="font-size:11px;color:#8a93a6;margin-top:6px">Biggest three: '+p.top.map(esc).join(' · ')+'</div></div>';
+ try{(function(){
+  const RV2=Vraw.filter(x=>x.gp>0).sort((a,b)=>b.gp-a.gp);
+  if(RV2.length>=10){const tot2=RV2.reduce((a,x)=>a+x.gp,0);let run=0;
+   const curve=RV2.map(x=>{run+=x.gp;return +(run/tot2*100).toFixed(1);});
+   const lab2=RV2.map((x,i)=>String(i+1));
+   vzCard(g,'The concentration curve \u2014 vendors ranked by gross profit'
+     +INFO('Vendors sorted by the gross profit they made in the window; the line is the running share of the total. Where it crosses 80% is how many conversations actually run the business. A steep start and a long flat tail is high concentration.'),
+    'Hover any point for the vendor. The flat tail on the right is shelf space and buying attention returning almost nothing.',
+    lab2,[{l:'Cumulative share of gross profit \u2014 hover for the vendor at each rank',
+      d:curve,c:'#5a5bf0',w:2.5,f:1,cl:RV2.map(x=>x.n.slice(0,34))}],
+    v=>v.toFixed(0)+'%',{xt:'Vendors, best first',yt:'% of window gross profit'});
+  }})();}catch(e){}
  pnlCard(g,'ins','Start here &mdash; how few lines actually carry the business'
    +INFO('Ranked on gross profit over the months your date box covers, cumulated until 80% of the total is reached. Products are Odoo templates; vendors are the supplier the template belongs to.'),
   'Attention is the scarce input, not stock. This says how short the list of things worth attention actually is &mdash; and how much of the catalogue you can safely stop thinking about.',
@@ -9970,6 +10002,31 @@ function coWater(){const {M,A,names}=pnlAgg();const PS=O.pos||{};
  steps.push({l:'COMPANY EBITDA est',v:onGp+retGp-ads-opxT,t:'tot'});
  wfall('Company &mdash; profit waterfall',steps);}
 function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g7');g.innerHTML='';
+ /* v9.44 who actually earns, before the ledger detail. GP for the last complete month against
+    that branch's salaries plus rent at a trailing-12-month run rate (rent posts in lumpy
+    quarterly cheques; a single month reads zero or triple). */
+ try{(function(){
+  const PS=O.pos||{},BC=O.bcost||{};const names=Object.keys(PS);if(!names.length)return;
+  const nowM=(O.today||'').slice(0,7);
+  const bm=Object.keys(PS[names[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];if(!bm)return;
+  const rows=names.map(n=>{
+   const v=(PS[n]||{})[bm];if(!v)return null;
+   const gp2=v[1]||0;
+   const sal=(((BC[n]||{})[bm]||{}).sal)||((FF.branches.find(b=>b.name===n)||{}).payroll||0);
+   const r12=Object.keys(BC[n]||{}).sort().filter(m=>m!==nowM).slice(-12);
+   const rent=r12.length?r12.reduce((a,m)=>a+(((BC[n]||{})[m]||{}).rent||0),0)/r12.length:0;
+   const net2=gp2-sal-rent;
+   return {n,v:net2,gp:gp2,sal,rent,
+     c:net2>=0?'#12a06e':'#e23a63',
+     b:(v[0]?((net2/v[0])*100).toFixed(1)+'% of rev':''),
+     rl:(net2>=0?'+':'\u2212')+'E\u00a3 '+Math.round(Math.abs(net2)).toLocaleString(),
+     tip:n+' | '+bm+' | GP E\u00a3 '+Math.round(gp2).toLocaleString()+' \u2212 salaries E\u00a3 '+Math.round(sal).toLocaleString()+' \u2212 rent (12-mo run rate) E\u00a3 '+Math.round(rent).toLocaleString()};}).filter(Boolean)
+   .sort((a,b)=>b.v-a.v);
+  if(rows.length)hbar(g,'Which branch actually earns \u2014 '+bm
+    +INFO('Real POS gross profit for the last complete month, minus that branch&rsquo;s posted salaries and its rent at a trailing-12-month run rate (rent posts as lumpy quarterly cheques, so a single month is meaningless). Before allocated ads and shared overhead \u2014 the full waterfall per branch is in the table below.'),
+   'Branch contribution before ads and shared overhead. A red bar is a branch whose gross profit does not cover its own walls and staff \u2014 no media decision fixes that.',
+   rows,{nw:170});
+ })();}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  document.getElementById('bn7').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. The stores on their own tab: real POS revenue, margin, orders and AOV per branch; actual salaries and rent; branch cohorts and expense-coverage ratios. Click any branch name for its profit waterfall.';
  const {M,A,BM,BD,names}=pnlAgg();
@@ -11052,6 +11109,27 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
 }
 function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4');g.innerHTML='';
  rPE(g);
+ /* v9.44 THE PICTURE FIRST. A P&L that opens on a 14-row table makes the reader assemble the
+    story themselves. These are the four lines the table exists to explain -- revenue, gross
+    profit, what is left after ads, what is left after everything -- month by month, with
+    vzCard's own window and compare controls. */
+ try{(function(){
+  const PAm=pnlAgg().M, ADm=adMonthly();
+  const ms=Object.keys(PAm).sort().filter(m=>PAm[m]&&PAm[m].g);
+  if(ms.length>=4){
+   const net=ms.map(m=>PAm[m].g-PAm[m].r);
+   const gp2=ms.map(m=>PAm[m].gp*(PAm[m].g?1-PAm[m].r/PAm[m].g:1));
+   const afterAds=ms.map((m,i)=>adFull(m)&&ADm[m]?gp2[i]-ADm[m].s:null);
+   const ebit=ms.map((m,i)=>{const e=O.exp&&O.exp[m];if(!e||afterAds[i]==null)return null;
+     return afterAds[i]-Object.values(e).reduce((a,b)=>a+b,0)*((PAm[m].g-PAm[m].r)/(((PAm[m].g-PAm[m].r)||1)+(function(){let t=0;Object.keys(O.pos||{}).forEach(b=>{const v=O.pos[b][m];if(v)t+=v[0]||0;});return t;})()))});
+   vzCard(g,'The webstore P&L in one picture'
+     +INFO('Monthly. Net revenue and gross profit from the Odoo daily ledger; after-ads subtracts the whole platform spend for the month; the bottom line also subtracts the webstore&rsquo;s revenue-share of the posted OpEx book. Months before the ad feed show no after-ads line rather than a fake one.'),
+    'Four lines, one story: what came in, what the goods left, what the ads left, what everything left. When the gap between the top two narrows, margin is the problem; when the second and third converge, ads are.',
+    ms,[{l:'Net revenue',d:net,c:'#3a9bff',w:2},
+        {l:'Gross profit',d:gp2,c:'#12a06e',w:2},
+        {l:'GP after ads',d:afterAds,c:'#ff8b42',w:2},
+        {l:'After ads + webstore OpEx share',d:ebit,c:'#e23a63',w:2,f:'zero'}],fC,{});
+  }})();}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  const EP=372076,RM=0.219,CO=(FF.company||{});
  const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=O.fin.refund[i]*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
@@ -13343,7 +13421,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-200343';
+const BUILD='20260903-201747';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
