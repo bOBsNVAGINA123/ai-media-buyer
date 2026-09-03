@@ -1290,7 +1290,7 @@ def pull_cohorts():
 EXPG = [("Payroll & benefits", ("31.01.01.", "31.01.09.")), ("Rent — branches", ("31.01.04.02",)),
         ("Rent — HQ / warehouses / flats", ("31.01.04.01", "31.01.04.03", "31.01.04.04")),
         ("Utilities (elec/water/gas)", ("31.01.08.01", "31.01.08.02", "31.01.08.03")),
-        ("Packing & bags", ("31.01.08.10",)), ("Payment & collection fees", ("31.01.08.17", "31.01.08.31", "31.01.08.32", "31.01.08.33", "31.01.08.34", "31.01.08.35", "31.01.08.36", "31.01.08.37")),
+        ("Packing & bags", ("31.01.08.10",)), ("Payment & collection fees", ("31.01.08.31", "31.01.08.32", "31.01.08.33", "31.01.08.34", "31.01.08.35", "31.01.08.36", "31.01.08.37")), ("Card fees \u2014 branches", ("31.01.08.17",)),  # v9.48 Credit Card Expenses is branch acquiring, not online collection
         ("Cargo & transport", ("31.01.06.", "31.01.08.08", "31.01.08.09")),
         ("Offline advertising & gifts", ("31.01.05.",)), ("Maintenance", ("31.01.02.",)),
         ("Comms & internet", ("31.01.03.",))]
