@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -3361,6 +3360,7 @@ function dailyBE(g){
  let stMg=gpSt;if(pm){let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=v[1]||0;}});if(r2>0)stMg=g2/r2;}
  const beAll=(function(){ // blended break-even at this window's actual web/branch revenue mix
   return null;})();
+ const _drag=(function(){try{return _gpPct().drag||0;}catch(e){return 0;}})();
  const t0=Date.parse(A.start),f0=Date.parse(F.start),b0=O.bl?Date.parse(O.bl.start):NaN;
  const aix=d=>Math.round((d-t0)/864e5),fix=d=>Math.round((d-f0)/864e5),bix=d=>Math.round((d-b0)/864e5);
  let d1=Date.parse(ST.e),d0=Date.parse(ST.s);
@@ -3371,7 +3371,8 @@ function dailyBE(g){
   const ai=aix(d),fi=fix(d);
   if(ai<0||ai>=A.n||fi<0||fi>=F.n)continue;
   const sp=(A.spend||[])[ai]||0;
-  const rev=((F.rev[fi]||0)-(F.refund[fi]||0))*1000, gp2=(F.gp[fi]||0)*1000;
+  const rev=((F.rev[fi]||0)-(F.refund[fi]||0))*1000;
+  const gp2=(F.gp[fi]||0)*1000-rev*_drag;
   const nc=(A.ncrev||[])[ai]||0;
   let br=null;const bi=bix(d);
   if(O.bl&&bi>=0&&bi<O.bl.n){br=0;Object.keys(O.bl.b).forEach(b=>{br+=O.bl.b[b][bi]||0;});}
@@ -3415,7 +3416,7 @@ function dailyBE(g){
   +cell(1,tBr!=null?gMoney(tGp+tBr*stMg-tSp):gMoney(null),tBr!=null?((tGp+tBr*stMg-tSp>=0?'+':'−')+M(tGp+tBr*stMg-tSp)):'—')
   +'</tr>';
  pnlCard(g,'blend','Every day against break-even'
-  +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
+  +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit, LESS the delivery drag (courier both ways, COD &amp; payment fees, net of shipping collected — measured at '+((_gpPct().drag||0)*100).toFixed(1)+'% of revenue over the last three ledger months), minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
   (clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
   +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
@@ -3473,10 +3474,11 @@ function netSplitCard(g){
  const opxAll=sum(m=>Object.values(O.exp[m]||{}).reduce((a,b)=>a+b,0));
  const opxOn=onDirect+shared*wOn, opxSt=stDirect+shared*(1-wOn);
 
- const netOn=onGP-adsOn-opxOn, netSt=stGP-adsSt-opxSt, netAll=netOn+netSt;
+ const shipN=sum(m=>s2h(m)?((s2('cost',m)||0)-(s2('col',m)||0)):0);
+ const netOn=onGP-adsOn-opxOn-shipN, netSt=stGP-adsSt-opxSt, netAll=netOn+netSt;
  const per=(v,r2)=>r2?(v/r2*100):null;
 
- const tile=(lab,val,rev2,gp2,ads2,opx2,col,bg,bd)=>
+ const tile=(lab,val,rev2,gp2,ads2,opx2,col,bg,bd,ship2v)=>
   '<div style="flex:1;min-width:270px;padding:14px 16px;border-radius:13px;background:'+bg+';border:1px solid '+bd+'">'
   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:'+col+';text-transform:uppercase">'+lab+'</div>'
   +'<div style="font-size:30px;font-weight:800;color:'+col+';line-height:1.1;margin:3px 0">'+SM(val)+'</div>'
@@ -3488,16 +3490,17 @@ function netSplitCard(g){
    +'<tr><td style="padding:2px 0;color:#5b6478">Less: ads</td><td style="padding:2px 0;text-align:right;font-weight:700;color:#a3271a">&minus;'+M(ads2)+'</td></tr>'
    +'<tr style="border-top:1px solid #e6eaf2"><td style="padding:3px 0;color:#26313f;font-weight:800">Contribution margin</td><td style="padding:3px 0;text-align:right;font-weight:800;color:'+((gp2-ads2)>=0?'#0f6e56':'#a3271a')+'">'+((gp2-ads2)>=0?'+':'&minus;')+M(gp2-ads2)+' <span style="color:#8a93a6;font-weight:600">('+(per(gp2-ads2,rev2)||0).toFixed(1)+'%)</span></td></tr>'
    +'<tr><td style="padding:2px 0;color:#5b6478">Less: operating costs</td><td style="padding:2px 0;text-align:right;font-weight:700;color:#a3271a">&minus;'+M(opx2)+'</td></tr>'
+   +(ship2v?'<tr><td style="padding:2px 0;color:#5b6478">Less: courier, net of shipping collected</td><td style="padding:2px 0;text-align:right;font-weight:700;color:#a3271a">&minus;'+M(ship2v)+'</td></tr>':'')
    +'<tr style="border-top:1px solid #e6eaf2"><td style="padding:3px 0;color:#26313f;font-weight:800">NET PROFIT</td><td style="padding:3px 0;text-align:right;font-weight:800;color:'+(val>=0?'#0f6e56':'#a3271a')+'">'+SM(val)+'</td></tr>'
   +'</table></div>';
 
  const body='<div style="display:flex;gap:12px;flex-wrap:wrap">'
-  +tile('Online · Shopify',netOn,onRev,onGP,adsOn,opxOn,netOn>=0?'#0f6e56':'#a3271a',netOn>=0?'#f0fdf6':'#fff6f9',netOn>=0?'#cdeede':'#fbe0e8')
+  +tile('Online · Shopify',netOn,onRev,onGP,adsOn,opxOn,netOn>=0?'#0f6e56':'#a3271a',netOn>=0?'#f0fdf6':'#fff6f9',netOn>=0?'#cdeede':'#fbe0e8',shipN)
   +tile('Branches',netSt,stRev,stGP,adsSt,opxSt,netSt>=0?'#0f6e56':'#a3271a',netSt>=0?'#f0fdf6':'#fff6f9',netSt>=0?'#cdeede':'#fbe0e8')
   +'<div style="flex:1;min-width:230px;padding:14px 16px;border-radius:13px;background:#0f172a;color:#fff">'
    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#93a3bd;text-transform:uppercase">Whole company</div>'
    +'<div style="font-size:30px;font-weight:800;line-height:1.1;margin:3px 0;color:'+(netAll>=0?'#5ee0a8':'#ff8ba8')+'">'+SM(netAll)+'</div>'
-   +'<div style="font-size:11.5px;color:#c7d0e0;line-height:1.5">'+M(rev)+' of revenue, '+M(onGP+stGP)+' of gross profit, '
+   +'<div style="font-size:11.5px;color:#c7d0e0;line-height:1.5">'+M(rev)+' of revenue, '+M(onGP+stGP)+' of gross profit, '+(shipN?M(shipN)+' of net courier, ':'')
    +M(adsOn+adsSt)+' of ads and '+M(opxAll)+' of posted operating cost. '
    +'This is the same figure as <b>Company EBITDA</b> on the Shops P&amp;L tab &mdash; the two tiles beside it are that one number split, so they always add back to it.</div></div>'
   +'</div>';
@@ -3508,7 +3511,7 @@ function netSplitCard(g){
   :(netAll<0)?'<b>Both halves are under water this window.</b> ':'<b>Both halves are profitable.</b> ';
 
  pnlCard(g,'odoo','Did we make money? — online vs branches, after everything'
-   +INFO('Gross profit is exact per channel (Odoo margin on Shopify orders; report.pos.order margin per branch). Google and TikTok spend is charged wholly to online; Meta is split by its own attributed value, website against in-store CAPI. Posted OpEx is split by what each account is, with HQ rent, comms, other OpEx and untagged payroll shared pro-rata on revenue.'),
+   +INFO('Gross profit is exact per channel (Odoo margin on Shopify orders; report.pos.order margin per branch). Google and TikTok spend is charged wholly to online; Meta is split by its own attributed value, website against in-store CAPI. Posted OpEx is split by what each account is, with HQ rent, comms, other OpEx and untagged payroll shared pro-rata on revenue. The courier bill is NOT in the 31.* expense book, so it is charged separately to online: the full Bosta cost minus the shipping customers paid.'),
   lead+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
   +'Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '
   +'The shared overhead pool of '+M(shared)+' goes '+Math.round(wOn*100)+'% online / '+Math.round((1-wOn)*100)+'% shops, on revenue.',
@@ -4122,7 +4125,7 @@ function platformTree(g){
    +(v.pnl?'<div style="margin-top:8px;font-size:12px;color:#334155;padding-top:7px;border-top:1px dashed #e2e6ef">'+v.pnl.line+'</div>':'')
    +'<div style="margin-top:7px;font-size:12.5px;font-weight:700;color:#0F172A">&rarr; '+v.act+'</div></div>';});
  const notes=[['#ff8b42','<b>Not every incremental figure here is a measurement.</b> '+PFDEF.map(P=>'<b>'+P.n+'</b>: '+incrSrc(P.at).tag).join(' &middot; ')+'. '+incrSrc('google').note],
-  ['#e23a63','<b>Judged on incremental, not reported.</b> Breakeven here is '+be.toFixed(2)+'× on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
+  ['#e23a63','<b>Judged on incremental, not reported.</b> Breakeven here is '+be.toFixed(2)+'× on your DELIVERED online margin of '+(gpOn*100).toFixed(1)+'% (goods, courier both ways, COD &amp; payment fees all charged). The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
   ['#7c869c','<b>Value = clicks × click→buy rate × basket.</b> The three contributions are a Shapley split, so they sum exactly to the actual move and no factor gets credit for being considered first. Spend sits outside that split — it is what the move cost, not part of it.'],
   ['#7c869c','Each platform is measured on the value <i>it</i> claims, so these do not add up to Shopify revenue and are not meant to. Cross-platform double-counting is the whole reason the ledger view exists.']];
  pnlCard(g,'ins','Platform diagnosis — what each channel did, and what to do'+INFO('Per-platform funnel decomposition. Attributed value is split into clicks, click-to-buy rate and basket size by closed-form Shapley, then each platform is judged on incremental value against the real breakeven from the ledger.'),
@@ -4632,7 +4635,7 @@ function moneyDesk(g){
    +'<div style="font-size:11.5px;font-weight:800;color:#5b6478">'+thin.length+(thin.length===1?' entity':' entities')+' held out as INSUFFICIENT DATA ('+M(thinSp)+' spend)</div>'
    +'<div style="font-size:11.5px;color:#7c869c;margin-top:2px">Under '+M(MD_MIN_SP)+' spend or under '+MD_MIN_PUR+' purchases in this window. They are not losers &mdash; they have not been tested. Give them budget or stop them for a reason other than this table.</div></div>';}
  const notes=[['#5a5bf0','<b>Ranked by money AND how unusual it is</b>, not money alone. Each entity is compared with its own daily history: <b>how far this window sits from its own normal level</b>, against <b>how much it normally moves anyway</b>. A 77% fall on something that routinely swings 90% is not news; a 40% fall on something that never moves more than 10% is. Both are shown as percentage change, and the comparison uses the middle of the entity&rsquo;s own range so one huge in-store matched day cannot widen it and hide a real break.'],
-  ['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your real online gross margin of '+(gpOn*100).toFixed(1)+'%. Anything under that is selling at a loss no matter how the platform reports it.'],
+  ['#e23a63','<b>Breakeven is '+be.toFixed(2)+'×</b> on your DELIVERED online margin of '+(gpOn*100).toFixed(1)+'% — goods, courier both ways, COD &amp; payment fees all charged. Anything under that is selling at a loss no matter how the platform reports it.'],
   ['#ff8b42','<b>Where each incremental rate comes from.</b> '+incrSrc('google').note+' Meta&rsquo;s is '+incrSrc('meta').tag.toLowerCase()+': '+incrSrc('meta').note],
   ['#3a9bff','<b>Website and in-store value are discounted differently.</b> Website carries the platform&rsquo;s measured incremental rate; Meta in-store carries '+(((O.attr||{}).metaOff||{}).incr||0).toFixed(3)+', because that number is mostly Meta recognising a shop buyer it had already reached, not sales it created. An ad can look strong on total value and still appear here as a CUT.'],
   ['#7c869c','<b>The swing figure assumes the PUMP list holds its current rate on new money.</b> It will not hold perfectly &mdash; that is what a staged scale test is for. Treat it as the size of the prize, not a forecast.'],
@@ -11669,12 +11672,28 @@ function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16')
   const tV=mkT(J.ven||{},'FIRST purchase supplier (stores)','',null);
   if(tV)pnlCard(g,'odoo','Journey by FIRST-purchase supplier (stores)','Which supplier&rsquo;s product acquires customers who come back.',tV);
  }}
-function _gpPct(){ // REAL channel gross-margin percentages from the ledger
+/* v9.47 DELIVERED margin, not shelf margin. Every "profit after spend" in the tool multiplied
+   ad value by the GROSS margin -- as if the courier worked free, COD collected itself and no
+   parcel ever came back. The online margin is now netted for delivery reality before any ad
+   profit is computed: the whole courier bill (outbound + both legs of every return and RTO)
+   minus what customers paid for shipping, plus the posted payment-&-collection fees, all as a
+   share of net revenue, averaged over the last three complete ledger months. Break-evens rise
+   with it -- honestly. The gross figure stays available as gpOnGross for pure product maths. */
+function _gpPct(){
  let so=0,go=0;((O.shop&&O.shop.rev)||[]).forEach((v,i)=>{so+=v||0;go+=((O.shop.gp||[])[i])||0;});
- const gpOn=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.28);
+ const gpOnGross=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.28);
  let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=v[1]||0;}));
  const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.28);
- return {gpOn,gpSt};}
+ let drag=0;
+ try{
+  const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
+  const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&PAm[m]&&PAm[m].g).slice(-3);
+  let net=0,cost=0,col=0,pay=0;
+  ms.forEach(m=>{net+=PAm[m].g-PAm[m].r;cost+=s2('cost',m)||0;col+=s2('col',m)||0;
+   pay+=((O.exp&&O.exp[m])||{})['Payment & collection fees']||0;});
+  if(net>0)drag=Math.max(0,Math.min(0.15,(cost-col+pay)/net));
+ }catch(e){}
+ return {gpOn:Math.max(0.05,gpOnGross-drag),gpSt,gpOnGross,drag};}
 // account-name -> act id, for deep links straight into Ads Manager with the object pre-selected
 const ACTID={'Ourkids EGP':'336343742536460','Basic':'652528128810469','Playmore 26 EGP Clean':'2619321185136291'};
 function amURL(lvl,id,acct){const a2=ACTID[acct];if(!a2||!id)return null;
@@ -11822,7 +11841,7 @@ function cmpLaunches(g){
   +'Each platform is scored against its OWN last-14-day blend, never against the other &mdash; a new Google campaign compared to a Meta average would be condemned for being Google. '
   +'Nothing is called a loser under '+MINP+' purchases, however bad the ratio looks; at that count one order moves it by half. '
   +'<b>Losing money and earning less than your best campaign are kept apart.</b> Only a campaign whose gross profit fails to cover its own spend is marked for cutting; one that makes money but trails the platform average is marked to cap, because switching it off would throw away profit. '
-  +'Profit after ad cost applies your real online margin of '+(gpOn*100).toFixed(1)+'%, so breakeven is '+be.toFixed(2)+'&times;.</div>';
+  +'Profit after ad cost applies your DELIVERED online margin of '+(gpOn*100).toFixed(1)+'% — goods, courier both ways, COD &amp; payment fees all charged — so breakeven is '+be.toFixed(2)+'&times;.</div>';
 
  pnlCard(g,'meta','New campaigns since the restructure &mdash; '+nG+' Google, '+nM+' Meta'
    +INFO('Every campaign whose first spending day is inside the window, on both platforms, with what it has returned and whether it is safe to judge yet.'),
@@ -11842,7 +11861,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
  const fON=af('meta'),fOFF=afo();const AK=(ST.att&&ST.att.meta)||'default';
  const {gpOn,gpSt}=_gpPct();
  const AL=(O.attr&&O.attr.labels)||{};
- document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>BUDGET CALLS</b>: every budget change on both accounts (60d, Meta activity feed), judged on the object&rsquo;s own day-by-day numbers. <b>AD LAUNCHES</b>: a library of every ad that started delivering in the last 3 weeks. Website and store legs are shown separately &mdash; at the attribution window you pick below, each leg scaled by its OWN measured ladder. GP uses your real channel margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store, from Odoo).';
+ document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>BUDGET CALLS</b>: every budget change on both accounts (60d, Meta activity feed), judged on the object&rsquo;s own day-by-day numbers. <b>AD LAUNCHES</b>: a library of every ad that started delivering in the last 3 weeks. Website and store legs are shown separately &mdash; at the attribution window you pick below, each leg scaled by its OWN measured ladder. GP uses your DELIVERED channel margins ('+(gpOn*100).toFixed(1)+'% online — goods, courier both ways, COD &amp; payment fees charged — / '+(gpSt*100).toFixed(1)+'% store, from Odoo).';
  // attribution selector (same measured ladders as everywhere else)
  const _pctLive=(m=>m?m[1]:null)(/\((\d+)% of live\)/.exec(String(AL[AK]||'')));
  try{cmpLaunches(g);}catch(e){}
@@ -12031,7 +12050,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   dt+=drow('Website purchases',k=>r.pu[k]||0,null,0,v=>money(v));
   dt+=drow('Cost / in-store conv.',k=>(r.op[k]||0)?(r.sp[k]||0)/(r.op[k]||0):null,b.cpo,-1,fm.cur);
   dt+=drow('In-store conversions',k=>r.op[k]||0,null,0,v=>money(v));
-  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day; blue columns are Thu/Fri/Sat &mdash; the weekend, where demand moves for reasons that have nothing to do with your budget. GP = online value &times; '+(gpOn*100).toFixed(1)+'% + store value &times; '+(gpSt*100).toFixed(1)+'% (your real Odoo margins). <b>The ONLINE-only row drops the store half entirely</b> &mdash; website value &times; '+(gpOn*100).toFixed(1)+'% minus spend. Read that one first after a change: the store half is Meta&rsquo;s own claim and backfills for about six days, so the blended line can look healthy while the webstore alone went backwards.</div>';
+  dt+='</table></div><div style="font-size:10px;color:#8a93a6;margin-top:2px">Colored vs the 7-day BEFORE average (green = better: higher ROAS/GP, lower CPP). The gold column is the change day; blue columns are Thu/Fri/Sat &mdash; the weekend, where demand moves for reasons that have nothing to do with your budget. GP = online value &times; '+(gpOn*100).toFixed(1)+'% (DELIVERED margin: goods, courier both ways, COD &amp; payment fees) + store value &times; '+(gpSt*100).toFixed(1)+'% (POS margin). <b>The ONLINE-only row drops the store half entirely</b> &mdash; website value &times; '+(gpOn*100).toFixed(1)+'% minus spend. Read that one first after a change: the store half is Meta&rsquo;s own claim and backfills for about six days, so the blended line can look healthy while the webstore alone went backwards.</div>';
   // ---- 7d summary ----
   const rows=[['Spend / day',b.spd,a2.spd,0,'cur'],['PROFIT after ad spend / day',b.pasd,a2.pasd,1,'cur'],['PROFIT after ad spend / day \u2014 ONLINE only',b.pasdOn,a2.pasdOn,1,'cur'],['GP / day (before spend)',b.gpd,a2.gpd,1,'cur'],['ROAS online',b.ron,a2.ron,1,'x'],['ROAS store',b.rst,a2.rst,1,'x'],['Outbound CTR',b.ctr,a2.ctr,1,'pct2'],
    ['CPP (website)',b.cpp,a2.cpp,-1,'cur'],['Website purchases',b.pu,a2.pu,1,'n'],
@@ -12888,7 +12907,7 @@ function rMETA(){
    const el2=document.createElement('div');el2.className='card full';el2.dataset.a='meta';
    el2.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
     +'<div class="ct" style="color:#a3271a">'+M(bleed)+' of gross profit burned over '+days+' day'+(days===1?'':'s')+' — '+L2.length+' ads not covering their own cost</div>'
-    +'<div class="cs"><b>'+M(bleed/days)+' a day</b> at the current mix, on '+M(bleedSp)+' of spend, after BOTH legs are counted — website value and Meta&rsquo;s in-store claim, each at its real margin, at your selected attribution. '
+    +'<div class="cs"><b>'+M(bleed/days)+' a day</b> at the current mix, on '+M(bleedSp)+' of spend, after BOTH legs are counted — website value at the DELIVERED margin (goods, courier both ways, COD &amp; payment fees) and Meta&rsquo;s in-store claim at the POS margin, at your selected attribution. '
     +'Meanwhile the profitable ads made <b style="color:#0f6e56">+'+M(okGp)+'</b> on '+M(okSp)+'. The fix is reallocation, not more budget. Every name opens that exact ad in Ads Manager.</div></div></div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff8fa;border-radius:9px">'
     +'<tr><th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:left">Ad</th>'
@@ -13018,7 +13037,7 @@ function rGOOG(){
    +'<td style="'+TD+';text-align:left"><b style="color:'+v[1]+';font-size:11px">'+v[0]+'</b></td></tr>';});
  pnlCard(g,'google','Every campaign on its own money'+INFO('The selected range per campaign, with gross profit left after the ad is paid for at your real online margin.'),
   '<b>'+PW.lbl+'</b>'+(PW.ok?(' against the '+PW.pn+' days before it, '+PW.plbl+'.'):' — no prior period inside the 60-day Google feed, so the ROAS move is blank.')
-  +' Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% margin. The last column is what is left after both the product and the ad are paid for. '
+  +' Breakeven is '+be.toFixed(2)+'× on a '+(gpOn*100).toFixed(1)+'% DELIVERED margin (goods, courier both ways, COD &amp; payment fees all charged). The last column is what is left after the product, the delivery AND the ad are paid for. '
   +'Auction shown is the share of the searches you could have appeared on that you actually did — it is a lifetime-of-campaign figure from the console pull ('+((S.win&&S.win[0])||'?')+' → '+((S.win&&S.win[1])||'?')+'), not a figure for the days you picked.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
   +'<tr><th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Value</th>'
@@ -13126,7 +13145,7 @@ function rGOOG(){
    if(c.pur>=5&&c.roas<be&&c.sp>=3000){
     A.push({p:'P1',money:-c.gp*mo,lbl:'LOSS / MONTH',
      t:'Cap '+(a.n||a.id),
-     w:'Returns '+c.roas.toFixed(2)+'× against '+be.toFixed(2)+'× break-even on your '+(gpOn*100).toFixed(1)+'% online margin — <b>'+('E£'+Math.round(Math.abs(c.gp)).toLocaleString())+' short</b> over '+PW.lbl+' after the product and the click are both paid for. Google has no in-store backfill on this account, so there is no lagging revenue to wait for.',
+     w:'Returns '+c.roas.toFixed(2)+'× against '+be.toFixed(2)+'× break-even on your '+(gpOn*100).toFixed(1)+'% DELIVERED online margin — <b>'+('E£'+Math.round(Math.abs(c.gp)).toLocaleString())+' short</b> over '+PW.lbl+' after the product and the click are both paid for. Google has no in-store backfill on this account, so there is no lagging revenue to wait for.',
      ev:Math.round(c.pur)+' conversions at '+('E£'+Math.round(c.sp/Math.max(1,c.pur)).toLocaleString())+' each'});}});
 
   /* the brand term is the cheapest revenue in the account and it is shrinking */
@@ -13616,7 +13635,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-214511';
+const BUILD='20260903-215218';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -14219,7 +14238,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
     return '<tr><td style="text-align:left"><b>'+(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0;text-decoration:none" title="Open this ad in Ads Manager to view or edit">'+String(r.a.n||'').slice(0,40)+'</a>':String(r.a.n||'').slice(0,40))+'</b><div style="font-size:10px;color:#8a93a6">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div></td><td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td><td style="color:'+(r.pasOn>=0?'#12a06e':'#e23a63')+';font-weight:800">'+(r.pasOn>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pasOn))+'</td><td style="color:'+(r.pas>=0?'#12a06e':'#e23a63')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>';}).join('')+'</table><div style="font-size:10px;color:#8a93a6;margin-top:3px">'+note+'</div></div>':'';
    let h3='<div style="display:flex;gap:16px;flex-wrap:wrap">'
     +card('SCALE &mdash; beating the account and making money',scale,'#12a06e','Account blended ROAS over '+winLbl+' is '+bench.toFixed(2)+'x. These clear it by 20%+ AND cover their own spend.')
-    +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over '+winLbl+' at your real margins ('+(gpOn*100).toFixed(1)+'% online / '+(gpSt*100).toFixed(1)+'% store).')
+    +card('KILL / FIX &mdash; not covering their own spend',kill,'#e23a63','Profit after ad spend is negative over '+winLbl+' at your DELIVERED margins ('+(gpOn*100).toFixed(1)+'% online incl. courier &amp; COD fees / '+(gpSt*100).toFixed(1)+'% store).')
     +'</div>';
    if(store.length)h3+='<div style="margin-top:14px">'+card('STORE DRIVERS &mdash; most of their return is in-store',store,'#9d6bff','60%+ of the value these produce is in-store, not website. Judging them on website ROAS alone would kill your best footfall ads.')+'</div>';
    (function(){var nclip=(O.mads||[]).filter(function(a){return a._fvClip;}).length;
