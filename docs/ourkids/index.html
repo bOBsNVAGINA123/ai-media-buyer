@@ -85,7 +85,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
 <input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
 <div class="wrap hide" id="app">
-<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<div style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE SEVEN SHOPS</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Sales &rarr; Branches</b>, <b>Retail P&amp;L</b>, and <b>Media &rarr; Ads &rarr; stores</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the shops.</div></div></div></div>
+<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<div style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE BRANCHES</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Overview &rarr; Branches</b>, <b>P&amp;L &rarr; Branches P&amp;L</b>, and <b>Advertising &rarr; Ads &rarr; branches</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the branches.</div></div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
 <div class="tgroups" id="tgroups"></div><div class="tabs" id="tabrow"></div>
 <div id="stale"></div>
@@ -1031,18 +1031,17 @@ const TABGROUPS=[
  ['Overview',[['on','Online store'],['off','Branches'],['tm','Pace & timeframes'],['rm','How every number is built']]],
  ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
- ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
- ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
+ ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
+ ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
  why:'What actually moved revenue: more orders, basket size, price per item, discounts.',
  ab:'The specific actions worth taking, ranked by the money riding on each.',
  ai:'Every finding the data supports, ranked by the gross profit a month at risk.',
- off:'The seven shops \u2014 revenue, customers, and what Meta contributes in store.',
+ off:'The seven branches \u2014 revenue, customers, and what Meta contributes in store.',
  tr:'Where site traffic lands, and which page types actually convert.',
  vl:'Which products and which suppliers make the money \u2014 and what a customer who buys them is worth over their life.',
  si:'What people search for, what you show up on, and who else is bidding.',
@@ -1054,7 +1053,7 @@ const TABQ={
  mi:'Meta, Google and TikTok in one table \u2014 spend, CPM, CTR, CVR, ROAS \u2014 plus every funded ad and campaign ranked over your dates.',
  me:'What each channel returns per pound, and where the next pound should go.',
  ic:'What the platforms claim, against what the ledger can actually show.',
- ao:'How money spent online shows up as revenue in the shops.',
+ ao:'How money spent online shows up as revenue in the branches.',
  mt:'Every Meta ad scored on the RevUp fatigue model, plus the audience-health and budget-split checks that warn before ROAS does.',
  gg:'Google by campaign type \u2014 where the auction is lost, what converts, and which terms are paying for nothing.',
  tk:'TikTok spend, what it claims, and what Shopify actually credits it.',
@@ -1064,9 +1063,9 @@ const TABQ={
  mb:'Your launched creatives judged against the 2026 benchmarks.',
  bg:'What launched, what it cost, and what the budgets are doing.',
  pn:'Shopify profit and loss, down to what is left after ads and delivery.',
- rp:'Branch profit and loss, rent and payroll included.',
+ rp:'Every branch\u2019s profit and loss, rent and payroll included \u2014 plus the combined company P&L.',
  cs:'What the business spends before a single ad runs.',
- pl:'The last 30 days against the 30 before, every driver quantified.',
+ pl:'The last 30 days against the 30 before, every driver quantified \u2014 fixed window on purpose.',
 
 
  rm:'How every number here is built, and what it does and does not include.',
@@ -1075,8 +1074,51 @@ const TABQ={
  dc:'Every discount code and every influencer, online and in store \u2014 what each one sold, at what basket, and what margin it left after the discount.',
  au:'The full commercial audit \u2014 where the gross profit actually comes from and what is eating it.',
  av:'How much cash each vendor ties up, and what it returns for it.',
- ag:'Products selling in the shops that the website does not even list.',
+ ag:'Products selling in the branches that the website does not even list.',
  aq:'Demand people search for that you do not stock or do not show up on.'
+};
+/* v9.38 EVERY TAB STATES ITS CLOCK. The grain surprises ("why doesn't X update") all came from
+   tabs silently reading a different clock than the date box: month-grain ledgers, trailing
+   Shopify windows, lifetime cohorts, fixed comparison windows. The rule is now printed under
+   the caption of every tab, before a single number, so no tab can be accused of freezing
+   without also showing the reason. */
+const TABCLOCK={
+ on:'Day-exact: every number reads the days in the date box.',
+ off:'Day-exact from 2026-05-05 (daily till feed); earlier months month-grain from the POS ledger.',
+ tm:'Completed days of the running month against the SAME days of last month and last year \u2014 never a part month vs a whole one.',
+ rm:'No clock \u2014 reference.',
+ cp:'Lifetime: customers ranked by everything they have ever spent. The date box does not apply \u2014 a lifetime cannot be windowed.',
+ lt:'Lifetime gross profit per cohort against acquisition cost \u2014 cohort clock, not the date box.',
+ co:'Cohort clock: each month\u2019s intake tracked from ITS OWN first month, not the date box.',
+ rt:'Cohort clock: repeat behaviour measured from each customer\u2019s first purchase.',
+ cj:'Cohort clock: what a first order becomes over the following months.',
+ fo:'Month-grain: product and vendor money exists per month \u2014 reads the complete months your range touches (part month dropped).',
+ vl:'Month-grain ledger \u2014 dates inside one month will not move it.',
+ dc:'Day-exact: both legs are daily series and follow the date box.',
+ av:'Fixed audit window \u2014 stated on each card.',
+ ag:'Fixed audit window \u2014 stated on each card.',
+ mt:'Day-exact inside the 60-day Meta ad feed; older selections clamp to its start.',
+ gg:'Day-exact inside the 60-day Google feed; auction share is lifetime-of-campaign (Google ships no daily version).',
+ tk:'Day-exact for platform totals; per-campaign rows are lifetime \u2014 TikTok ships no daily per-campaign series.',
+ ao:'Day-exact totals; the by-month tables read whole months, with the running month paced, and the in-store leg matches for ~6 days after purchase.',
+ mi:'Day-exact: totals and the entity ranking both read the days in the box.',
+ pn:'Month-grain: P&L lines are monthly postings \u2014 reads the months your range touches.',
+ rp:'Month-grain: rent, payroll and POS margin post monthly.',
+ au:'Day-exact where daily series exist; audit files carry their own stated windows.',
+ cs:'Month-grain: the expense ledger posts monthly.',
+ pl:'FIXED window: always the last 30 days vs the 30 before \u2014 it overwrites the date box so the comparison stays like-for-like.',
+ why:'Snaps to 1 / 7 / 28 days \u2014 the decomposition is pre-built at those three windows.',
+ ab:'Day-exact: actions are ranked on the days in the box.',
+ ai:'FIXED: the latest complete month \u2014 findings are ranked by monthly profit at risk.',
+ me:'Month-grain: efficiency is judged on complete months.',
+ ic:'Day-exact where both sides have daily data; ledger comparisons month-grain.',
+ md:'Day-exact inside the 60-day ad feed.',
+ tr:'Trailing Shopify windows (3\u201390 days after the next sync) ending at the last pull \u2014 snaps to the nearest; Shopify serves no day-addressed page feed to a static site.',
+ si:'Trailing search windows from the console pull \u2014 stated on each card.',
+ aq:'Fixed audit window \u2014 stated on each card.',
+ mb:'Cohort clock: each creative judged over its own life against the benchmarks.',
+ cl:'Day-exact: changes inside the days in the box, each judged on its own before/after.',
+ bg:'Listed by launch date (last 45 days back from your range\u2019s end); measured strictly over the days you selected.'
 };
 let TABGRP=0;
 function tabLabel(id){for(var i=0;i<TABGROUPS.length;i++){var g=TABGROUPS[i][1];
@@ -1085,7 +1127,10 @@ function grpOf(t){for(let i=0;i<TABGROUPS.length;i++){if(TABGROUPS[i][1].some(x=
 function syncTabGroup(t){TABGRP=grpOf(t);}
 function renderTabs(){const gr=document.getElementById('tgroups'),tr=document.getElementById('tabrow');if(!gr||!tr)return;
  gr.innerHTML=TABGROUPS.map(function(g,i){return '<div class="tgrp'+(i===TABGRP?' on':'')+'" onclick="selGroup('+i+')">'+g[0]+'</div>';}).join('');
- tr.innerHTML=TABGROUPS[TABGRP][1].map(function(x){return '<div class="tab'+(x[0]===TAB?' on':'')+'" onclick="tab(\''+x[0]+'\')">'+x[1]+'</div>';}).join('')+(TABQ[TAB]?'<div class="tabq"><span>'+TABQ[TAB]+'</span></div>':'');}
+ tr.innerHTML=TABGROUPS[TABGRP][1].map(function(x){return '<div class="tab'+(x[0]===TAB?' on':'')+'" onclick="tab(\''+x[0]+'\')">'+x[1]+'</div>';}).join('')
+  +((TABQ[TAB]||TABCLOCK[TAB])?'<div class="tabq"><span>'+(TABQ[TAB]||'')
+    +(TABCLOCK[TAB]?' <span style="display:inline-block;margin-left:4px;padding:1px 8px;border-radius:99px;background:#eef1fb;border:1px solid #dde3f5;color:#4a5578;font-size:10.5px;font-weight:700">\u23F1 '+TABCLOCK[TAB]+'</span>':'')
+    +'</span></div>':'');}
 function selGroup(i){TABGRP=i;const tabs=TABGROUPS[i][1];if(tabs.some(function(x){return x[0]===TAB;}))renderTabs();else tab(tabs[0][0]);}
 
 /* Monthly-granularity tabs read the range as whole MONTHS. Without saying so they look frozen
@@ -2115,7 +2160,7 @@ function glance(g,o){
     same ad spend, which is the only version of these two ratios that answers "are we growing". */
  if(BA)tiles.push(
   ['MER · whole business', BA.mer.toFixed(2)+'×', BAp?pc(BA.mer,BAp.mer):null, true,
-   'webstore + the 7 shops'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':'')],
+   'webstore + branches'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':'')],
   ['aMER · whole business', BA.amer.toFixed(2)+'×', BAp?pc(BA.amer,BAp.amer):null, true,
    'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':'')]);
  const tileH=tiles.map(t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
@@ -6530,7 +6575,7 @@ function offAudit(g){
  const notes=[['#e23a63','<b>No MER, aMER or CAC here, and that is deliberate.</b> One ad budget works on the webstore and the shops at the same time and cannot be split between them, so any per-scope return would be an allocation presented as a measurement. For a return on the whole budget use <b>The whole business</b>, where the entire spend sits against the entire revenue.'],
   ['#3a9bff','<b>The period block is the daily POS series; the month and year blocks are the monthly ledger, which reaches back to 2024-08.</b> Both carry new-versus-returning, and they agree: summing the ledger for '+curM+' returns the same new/returning customers and revenue the daily series computes for the same span. Only gross profit is ledger-only, because the daily feed does not carry margin.'],
   ['#7c869c','Walk-in receipts have no identity attached, so a shop &ldquo;new customer&rdquo; means the first time that registered customer appears in the POS ledger. Anonymous cash buyers are in the revenue and not in the customer counts.']];
- pnlCard(g,'odoo','Weekly audit &mdash; THE SEVEN SHOPS'+INFO('The offline twin of the Shopify weekly audit, on the same rows, from the POS ledger.'),
+ pnlCard(g,'odoo','Weekly audit &mdash; THE BRANCHES'+INFO('The offline twin of the Shopify weekly audit, on the same rows, from the POS ledger.'),
   '<b>SHOPS ONLY</b> &mdash; the seven branches, '+s+' &rarr; '+e+' against '+pw[0]+' &rarr; '+pw[1]+'. The webstore is not in any figure here; that is the Shopify table above.',
   h+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
 }
@@ -13146,7 +13191,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-124243';
+const BUILD='20260903-125343';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -13302,7 +13347,7 @@ function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28')
 /* Scope switch for the WHY tab. Two different businesses, one renderer. */
 function whyScopeChips(){const off=window.WHYSCOPE==='off';const on='background:#0f172a;color:#fff;border-color:#0f172a';
  return '<span class="chip" style="'+(off?'':on)+'" onclick="window.WHYSCOPE=\'shop\';rWHY()">SHOPIFY</span>'
-  +'<span class="chip" style="'+(off?on:'')+'" onclick="window.WHYSCOPE=\'off\';rWHY()">THE SEVEN SHOPS</span>'
+  +'<span class="chip" style="'+(off?on:'')+'" onclick="window.WHYSCOPE=\'off\';rWHY()">THE BRANCHES</span>'
   +'<span style="width:9px;display:inline-block"></span>';}
 function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27');g.innerHTML='';
  if(!window.WHYPIN)window.WHYW=whyAuto();
@@ -13314,7 +13359,7 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
  const OFFM=window.WHYSCOPE==='off';
  const Y=(OFFM?O.whyOff:O.why)||{};const W=(Y.win||{})[window.WHYW];
  document.getElementById('bn27').innerHTML='<b>WHY</b> — each number broken into the parts that moved it, down to vendors, products and stock. '
-  +(OFFM?'<b>THE SEVEN SHOPS</b> — POS receipt lines from Odoo, gross profit included.':'<b>SHOPIFY</b> — webstore order lines from Odoo (confirmed orders, shipping line excluded).')
+  +(OFFM?'<b>THE BRANCHES</b> — POS receipt lines from Odoo, gross profit included.':'<b>SHOPIFY</b> — webstore order lines from Odoo (confirmed orders, shipping line excluded).')
   +' Refreshed every sync'+(Y.pulled?' (pulled '+Y.pulled+')':'')+'.';
  if(!W){pnlCard(g,'odoo','Why tab &mdash; '+(OFFM?'the seven shops':'Shopify'),
    (OFFM?'The in-store root-cause pull ships with the next collector sync. ':'Root-cause data arrives on the next collector sync. ')+'Check back within 3 hours.',
