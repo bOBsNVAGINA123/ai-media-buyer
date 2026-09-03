@@ -4,7 +4,7 @@
 <script src="./data.js"></script>
 <style>
 :root{--ink:#161d2e;--mut:#7c869c;--red:#e23a63;--grn:#12b886;--teal:#1fc3b6;--blue:#3a9bff;--indigo:#5a5bf0;--violet:#9d6bff;--orange:#ff8b42;--pink:#ff5da2;--grey:#9aa3b5}
-*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}body{margin:0;zoom:1.09;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
 .wrap{max-width:1520px;margin:0 auto;padding:20px 22px 70px}
 .top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px}
 .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
@@ -1029,8 +1029,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1227,9 +1226,14 @@ function foldTail(t,grid){
 
  if(FOLD_SKIP[t]||!grid)return;
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
- const cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
+ let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const rest=cards.slice(FOLD_KEEP);
+ const PIN=/Did we make money\?|of gross profit burned/;
+ const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
+ if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
+  pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
+  cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));}
+ const rest=cards.slice(FOLD_KEEP+pinned.length);
  if(rest.length<2)return;
  /* Default OPEN. Hiding the working to save space costs more than it saves: the numbers are the
     evidence for the verdict and both need to be on the page. The control stays so anyone who
@@ -2223,7 +2227,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{netSplitCard(g);}catch(e){}try{glance(g,o);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{netSplitCard(g);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -6157,16 +6161,22 @@ function influencerCohort(g,PR,M,N){
  const klass=k=>VOUCHER.test(k)?'ONE-OFF':PARTNER.test(k)?'PARTNER':SITEWIDE.test(k)?'SITEWIDE':'INFLUENCER';
 
  const rows={};
- const add=(c,day,ord,rev,disc,gp)=>{const k=norm(c);
+ const add=(c,day,ord,rev,disc,gp,leg)=>{const k=norm(c);
   const r=rows[k]||(rows[k]={k:k,label:c,mon:{},ord:0,rev:0,disc:0,gp:0,gpRev:0,first:day,last:day,days:{}});
   if(String(c).length>r.label.length)r.label=c;
-  const m=day.slice(0,7); const t=r.mon[m]||(r.mon[m]={ord:0,rev:0});
-  t.ord+=ord; t.rev+=rev; r.ord+=ord; r.rev+=rev; r.disc+=disc; r.gp+=gp; r.gpRev+=gp?rev:0;
+  const m=day.slice(0,7); const t=r.mon[m]||(r.mon[m]={ord:0,rev:0,on:0,off:0});
+  t.ord+=ord; t.rev+=rev; t[leg]+=rev; r.ord+=ord; r.rev+=rev; r.disc+=disc; r.gp+=gp; r.gpRev+=gp?rev:0;
   r.days[day]=1; if(day<r.first)r.first=day; if(day>r.last)r.last=day;};
  Object.keys(ON).forEach(c=>Object.keys(ON[c]||{}).forEach(d=>{const v=ON[c][d]||[];
-  add(c,d,v[0]||0,v[1]||0,v[2]||0,0);}));
+  add(c,d,v[0]||0,v[1]||0,v[2]||0,0,'on');}));
  Object.keys(OFF).forEach(c=>Object.keys(OFF[c]||{}).forEach(d=>{const v=OFF[c][d]||[];
-  add(c,d,v[0]||0,v[1]||0,0,v[2]||0);}));
+  add(c,d,v[0]||0,v[1]||0,0,v[2]||0,'off');}));
+ /* customer mix per code, when the collector has pulled it (offMix[code][month]=[ord,unreg,new,ret]) */
+ const MIX=PR.offMix||null;
+ const mixOf=r=>{if(!MIX)return null;let o=0,u=0,nw=0,rt=0,hit=false;
+  Object.keys(MIX).forEach(c=>{if(norm(c)!==r.k)return;hit=true;
+   Object.values(MIX[c]||{}).forEach(v=>{o+=v[0]||0;u+=v[1]||0;nw+=v[2]||0;rt+=v[3]||0;});});
+  return hit&&o>0?{o,u,nw,rt}:null;};
 
  const all=Object.values(rows);
  const mons=[...new Set(all.flatMap(r=>Object.keys(r.mon)))].sort();
@@ -6200,14 +6210,18 @@ function influencerCohort(g,PR,M,N){
   const dead=jseq.length?jseq[jseq.length-1]===0:false;
   body+='<tr><td style="'+TD+';text-align:left"><b>'+esc(r.label)+'</b>'
    +'<div style="font-size:10px;color:#8a93a6">first seen '+r.first+' · used on '+Object.keys(r.days).length+' days · '+live+' of '+mons.length+' months</div></td>';
-  mons.forEach(m=>{const v=(r.mon[m]||{}).rev||0,o=(r.mon[m]||{}).ord||0;
+  mons.forEach(m=>{const c2=r.mon[m]||{};const v=c2.rev||0,o=c2.ord||0,von=c2.on||0,voff=c2.off||0;
    const w=Math.round(v/mx*100);
    body+='<td style="'+TD+';text-align:center;padding:4px 5px">'
-    +(v>0?('<div style="min-width:76px;border-radius:6px;padding:3px 5px;background:linear-gradient(90deg,#e7ecff '+w+'%,#f7f8fc '+w+'%);border:1px solid #e2e6ef">'
+    +(v>0?('<div style="min-width:92px;border-radius:6px;padding:3px 5px;background:linear-gradient(90deg,#e7ecff '+w+'%,#f7f8fc '+w+'%);border:1px solid #e2e6ef">'
       +'<div style="font-size:10.5px;font-weight:800;color:#26313f">'+M(v)+'</div>'
-      +'<div style="font-size:8.5px;color:#8a93a6">'+N(o)+' ord</div></div>')
+      +'<div style="font-size:8.5px;color:#8a93a6">'+N(o)+' ord · <span style="color:#3a3bd0">'+M(von)+' web</span> · <span style="color:#0f6e56">'+M(voff)+' store</span></div></div>')
      :'<span style="color:#d7dbe6">—</span>')+'</td>';});
+  const mx2=mixOf(r);
   body+='<td style="'+TD+';font-weight:800">'+M(r.rev)+'</td>'
+   +'<td style="'+TD+'">'+(mx2?('<b style="color:#0f6e56">'+Math.round(mx2.nw/mx2.o*100)+'%</b><div style="font-size:9px;color:#8a93a6">'+N(mx2.nw)+' of '+N(mx2.o)+'</div>'):'<span style="color:#c9ccd6" title="Arrives with the next collector sync — the till orders behind each code are being joined to their customers">—</span>')+'</td>'
+   +'<td style="'+TD+'">'+(mx2?Math.round(mx2.rt/mx2.o*100)+'%':'<span style="color:#c9ccd6">—</span>')+'</td>'
+   +'<td style="'+TD+'">'+(mx2?Math.round(mx2.u/mx2.o*100)+'%':'<span style="color:#c9ccd6">—</span>')+'</td>'
    +'<td style="'+TD+'">'+M(aov)+'</td>'
    +'<td style="'+TD+'">'+(r.disc>0?M(r.disc)+'<div style="font-size:9.5px;color:#8a93a6">'+(r.rev?(r.disc/(r.rev+r.disc)*100).toFixed(0):'0')+'% off</div>':'<span style="color:#c9ccd6">—</span>')+'</td>'
    +'<td style="'+TD+'">'+(r.gpRev>0?(r.gp/r.gpRev*100).toFixed(1)+'%':'<span style="color:#c9ccd6">—</span>')+'</td>'
@@ -6224,7 +6238,7 @@ function influencerCohort(g,PR,M,N){
  const top5=inf.slice(0,5).reduce((a,r)=>a+r.rev,0);
 
  pnlCard(g,'shopify','Influencers &mdash; every code, month by month'
-   +INFO('One row per influencer code, merged case-insensitively across the webstore and the tills. Cells are that code revenue in that month, online plus in store. AOV is its own basket; % off is the discount Shopify recorded against what the order would have been; GP% is the margin that survived in store.'),
+   +INFO('One row per influencer code, merged case-insensitively across the webstore and the tills. Each month cell shows the total with its web/store split underneath. New / Returning / Unregistered are the customers behind that code&rsquo;s TILL orders: new = their first-ever POS purchase was on this code, unregistered = the till never captured who they were. Shopify orders carry no such split. AOV is its own basket; % off is the discount Shopify recorded; GP% is the margin that survived in store.'),
   '<b>'+inf.length+' influencer codes</b> over '+mons[0]+' &rarr; '+mons[mons.length-1]+', worth '+M(totRev)+'. '
   +'The top five are '+Math.round(top5/totRev*100)+'% of it. '
   +(stopped.length?'<b>'+stopped.length+' have gone quiet</b> ('+M(stoppedRev)+' of lifetime volume with nothing at all in '+lastFull+', the last complete month) — either the partnership ended or the code was never re-promoted. ':'')
@@ -6232,7 +6246,10 @@ function influencerCohort(g,PR,M,N){
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
   +'<tr><th style="'+TH+';text-align:left">Influencer code</th>'
   +mons.map(m=>'<th style="'+TH+';text-align:center">'+m+(m===nowM?'<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#c08a3a">part month</div>':'')+'</th>').join('')
-  +'<th style="'+TH+'">Total</th><th style="'+TH+'">AOV</th><th style="'+TH+'">Given away</th>'
+  +'<th style="'+TH+'">Total</th>'
+  +'<th style="'+TH+'">New<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">% of store orders</div></th>'
+  +'<th style="'+TH+'">Returning</th><th style="'+TH+'">Unregistered</th>'
+  +'<th style="'+TH+'">AOV</th><th style="'+TH+'">Given away</th>'
   +'<th style="'+TH+'">In-store GP%</th><th style="'+TH+';text-align:left">Direction</th></tr>'+body+'</table></div>'
   +(inf.length>40?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(inf.length-40)+' smaller influencer codes not shown.</div>':'')
   +'<div class="ins" style="margin-top:9px">'
@@ -12287,6 +12304,46 @@ function rMETA(){
   okActCard(g,A,PW.ranged?('Reading '+PW.lbl+'.'):'The date box is empty, so this reads the last 7 days.');
  }catch(e){}
 
+ /* v9.35 THE ALARM GOES FIRST. The tab opened on a fatigue model while ads were returning
+    less than they cost; the reader had to derive the bleed themselves. This card is that
+    derivation: every live ad whose value -- BOTH legs, at real margins, at your attribution --
+    did not cover its spend over the days you picked, in pounds and per day. */
+ try{(function(){
+  const {gpOn:_go,gpSt:_gs}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
+  const days=PW.n||1;
+  const L2=[];let bleed=0,bleedSp=0,okGp=0,okSp=0;
+  ads.forEach(a=>{const d=a.d;let sp=0,pv=0,fv=0;
+   for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}
+   if(sp<1000)return;
+   const gp2=pv*fON*_go+fv*fOFF*_gs-sp;
+   if(gp2<0){bleed+=-gp2;bleedSp+=sp;L2.push({a,sp,gp:gp2,on:pv*fON*_go-sp});}
+   else{okGp+=gp2;okSp+=sp;}});
+  L2.sort((x,y)=>x.gp-y.gp);
+  if(!L2.length){
+   pnlCard(g,'meta','No live ad is losing money over these days',
+    'Every Meta ad with over E£1,000 of spend in '+PW.lbl+' covered its own cost at your margins and attribution. The winners below made '+M(okGp)+' after spend on '+M(okSp)+'.','' );
+  }else{
+   const rows2=L2.slice(0,8).map(x=>{const u=(typeof amURL==='function')?amURL('ad',x.a.id,x.a.acct):null;
+    return '<tr><td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:left"><b>'
+     +(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#a3271a;text-decoration:underline">'+esc((x.a.n||'').slice(0,44))+'</a>':esc((x.a.n||'').slice(0,44)))
+     +'</b><div style="font-size:10px;color:#b06a76">'+esc(x.a.cmp||'')+'</div></td>'
+     +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap">'+M(x.sp)+'</td>'
+     +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap;font-weight:800;color:#a3271a">&minus;'+M(Math.abs(x.gp))+'</td>'
+     +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap;color:'+(x.on<0?'#a3271a':'#5b6478')+'">'+(x.on>=0?'+':'&minus;')+M(Math.abs(x.on))+'</td></tr>';}).join('');
+   const el2=document.createElement('div');el2.className='card full';el2.dataset.a='meta';
+   el2.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
+    +'<div class="ct" style="color:#a3271a">'+M(bleed)+' of gross profit burned over '+days+' day'+(days===1?'':'s')+' — '+L2.length+' ads not covering their own cost</div>'
+    +'<div class="cs"><b>'+M(bleed/days)+' a day</b> at the current mix, on '+M(bleedSp)+' of spend, after BOTH legs are counted — website value and Meta&rsquo;s in-store claim, each at its real margin, at your selected attribution. '
+    +'Meanwhile the profitable ads made <b style="color:#0f6e56">+'+M(okGp)+'</b> on '+M(okSp)+'. The fix is reallocation, not more budget. Every name opens that exact ad in Ads Manager.</div></div></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff8fa;border-radius:9px">'
+    +'<tr><th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:left">Ad</th>'
+    +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Spend</th>'
+    +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Lost after spend</th>'
+    +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Online leg alone</th></tr>'+rows2+'</table></div>'
+    +(L2.length>8?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(L2.length-8)+' smaller losers not listed — the Do-this-first card below carries the full ranking.</div>':'');
+   g.insertBefore(el2,g.firstChild);}
+ })();}catch(e){}
+
  pnlCard(g,'meta','Triage — run it in this order'+INFO('The deck’s 60-second troubleshooting sequence. Only the steps that actually tripped are listed; skipping steps is how people change three things at once and learn nothing.'),
   tri.length?'These tripped their thresholds this week. Change one thing, wait two weeks, then assess.'
             :'Nothing tripped a threshold this week — no step of the sequence is calling for action.',
@@ -13004,7 +13061,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-001634';
+const BUILD='20260903-121525';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
