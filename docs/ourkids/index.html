@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -3421,7 +3420,7 @@ function dailyBE(g){
   (clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
   +(function(){try{const q=_gpPct();
     return '<b>Delivered margin '+(q.gpOn*100).toFixed(1)+'%</b> = '+(q.gpOnGross*100).toFixed(1)+'% gross &minus; '
-     +(q.dragShip*100).toFixed(1)+'% courier net of shipping collected (posted Odoo courier bills; a month not yet posted is estimated at the Bosta-calibrated per-order rate and the return-leg mix is Bosta&rsquo;s own API pull) &minus; '
+     +(q.dragShip*100).toFixed(1)+'% courier net ('+((q.dragCost||0)*100).toFixed(1)+'% full bill &minus; '+((q.dragCol||0)*100).toFixed(1)+'% shipping customers paid back; posted Odoo bills, unposted months at the Bosta-calibrated rate, return-leg mix from Bosta&rsquo;s own API) &minus; '
      +(q.dragPay*100).toFixed(1)+'% from the posted &ldquo;Payment &amp; collection fees&rdquo; GL account, measured on the last three ledger months. Break-even '+(1/q.gpOn).toFixed(2)+'&times; follows from it. '
      +'<span style="color:#b8621b">One caveat under review: that fees account is company-wide — if part of it is branch card acquiring rather than online COD collection, the online drag is overstated by that share.</span> ';}catch(e){return '';}})()
   +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
@@ -11691,7 +11690,7 @@ function _gpPct(){
  const gpOnGross=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.28);
  let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=v[1]||0;}));
  const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.28);
- let drag=0,_dragShip=0,_dragPay=0;
+ let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
   const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
   const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&PAm[m]&&PAm[m].g).slice(-3);
@@ -11705,9 +11704,10 @@ function _gpPct(){
    pay+=(_ex['Card fees \u2014 branches']!=null)?(_ex['Payment & collection fees']||0)
        :((_ex['Payment & collection fees']||0)*0.655);});
   if(net>0){_dragShip=Math.max(0,(cost-col)/net);_dragPay=Math.max(0,pay/net);
+   _dragCost=Math.max(0,cost/net);_dragCol=Math.max(0,col/net);
    drag=Math.max(0,Math.min(0.15,_dragShip+_dragPay));}
  }catch(e){}
- return {gpOn:Math.max(0.05,gpOnGross-drag),gpSt,gpOnGross,drag,dragShip:_dragShip,dragPay:_dragPay};}
+ return {gpOn:Math.max(0.05,gpOnGross-drag),gpSt,gpOnGross,drag,dragShip:_dragShip,dragPay:_dragPay,dragCost:_dragCost,dragCol:_dragCol};}
 // account-name -> act id, for deep links straight into Ads Manager with the object pre-selected
 const ACTID={'Ourkids EGP':'336343742536460','Basic':'652528128810469','Playmore 26 EGP Clean':'2619321185136291'};
 function amURL(lvl,id,acct){const a2=ACTID[acct];if(!a2||!id)return null;
@@ -12944,18 +12944,29 @@ function rMETA(){
   if(!(sp>1000&&pv>0))return;
   const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185,gpOnGross:0.266,gpSt:0.285,dragShip:0.034,dragPay:0.047,drag:0.081};}})();
   const incr=((O.attr&&O.attr.meta&&O.attr.meta.incr)||0.61);
+  /* the attribution step FOLLOWS the tab's selector: pick 7d-click or Incremental up top and
+     this bar becomes your chosen ladder; on the default (live) setting it shows Meta's own
+     incremental re-measure, because live takes full credit and a truth step of x1.00 would
+     hide the biggest known haircut. */
+  const AK2=(ST.att&&ST.att.meta)||'default';
+  const attF=AK2==='default'?incr:af('meta');
+  const attLab=AK2==='default'
+    ?'Meta&rsquo;s OWN incremental re-measure keeps '+(incr*100).toFixed(0)+'% — the rest was buying orders that were coming anyway. Switch the ATTR selector above and this bar becomes your chosen window.'
+    :'your selected window — '+attrLabel('meta',AK2)+' — keeps '+(attF*100).toFixed(0)+'% of the live claim (measured ladder on this account)';
   const R=pv/sp;                       // reported website ROAS at the live setting
   const v0=R*100;                      // E£ claimed back per E£100 of spend
-  const v1=v0*incr;                    // what survives Meta's own incremental re-measure
-  const goods=v1*(1-q.gpOnGross), courier=v1*(q.dragShip||0), fees=v1*(q.dragPay||0);
-  const left=v1-goods-courier-fees;    // gross profit delivered, per E£100
+  const v1=v0*attF;                    // what survives the chosen attribution truth
+  const goods=v1*(1-q.gpOnGross);
+  const courierBill=v1*(q.dragCost||0), shipBack=v1*(q.dragCol||0), fees=v1*(q.dragPay||0);
+  const left=v1-goods-courierBill+shipBack-fees;
   const net=left-100;                  // after the spend itself
   const M2=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
   const steps=[
    ['Meta claims back',v0,'#3a9bff','Ads Manager website conversion value ÷ spend — '+R.toFixed(2)+'× at your live 7d-click/1d-view setting'],
-   ['Attribution truth takes',-(v0-v1),'#8b5cf6','Meta&rsquo;s OWN incremental re-measure of the same conversions keeps '+(incr*100).toFixed(0)+'% — the rest was buying orders that were coming anyway'],
+   ['Attribution truth takes',-(v0-v1),'#8b5cf6',attLab],
    ['Goods take',-goods,'#e08a1e','COGS at your real '+(q.gpOnGross*100).toFixed(1)+'% gross margin (Odoo)'],
-   ['Courier takes',-courier,'#c05a7a','outbound + return legs + RTO, net of shipping collected — '+((q.dragShip||0)*100).toFixed(1)+'% of revenue (posted bills / Bosta mix)'],
+   ['The courier&rsquo;s FULL bill takes',-courierBill,'#c05a7a','every leg — outbound, both legs of returns, RTO — '+((q.dragCost||0)*100).toFixed(1)+'% of revenue (posted Odoo bills; unposted months at the Bosta-calibrated rate)'],
+   ['Customers pay shipping back',shipBack,'#12a06e','shipping fees collected at checkout cover most of that bill — '+((q.dragCol||0)*100).toFixed(1)+'% of revenue (Odoo shipping-revenue lines)'],
    ['Collection &amp; payment fees take',-fees,'#a3527a','Bosta COD collection + PayMob — '+((q.dragPay||0)*100).toFixed(1)+'% of revenue (GL, branch card fees excluded)'],
    ['The ad itself cost',-100,'#5b6478','the E£100 of spend']];
   /* running totals can dip below zero on a losing walk -- the scale runs from that floor
@@ -13704,7 +13715,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-220759';
+const BUILD='20260903-221435';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
