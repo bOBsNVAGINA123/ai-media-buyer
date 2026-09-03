@@ -4,13 +4,13 @@
 <script src="./data.js"></script>
 <style>
 :root{--ink:#161d2e;--mut:#7c869c;--red:#e23a63;--grn:#12b886;--teal:#1fc3b6;--blue:#3a9bff;--indigo:#5a5bf0;--violet:#9d6bff;--orange:#ff8b42;--pink:#ff5da2;--grey:#9aa3b5}
-*{box-sizing:border-box}body{margin:0;zoom:1.09;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
 .wrap{max-width:1520px;margin:0 auto;padding:20px 22px 70px}
 .top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px}
 .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
 h1{font-size:21px;margin:0;font-weight:800;letter-spacing:-.3px}.sub{color:var(--mut);font-size:12px;margin-top:3px}
 .pill{background:#fff;border:1px solid #e2e6ef;border-radius:11px;padding:8px 12px;font-size:12px;font-weight:600;color:#41495c}.pill b{color:var(--indigo)}
-.lbl9{font-size:10px;font-weight:800;color:#64748b;margin-right:5px}.tgroups{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:42;background:#eef1f7;padding:6px 0 4px}.tgrp{padding:6px 14px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;background:#fff;border:1px solid #d7dcec;color:#3b4256;white-space:nowrap}.tgrp.on{background:#161d2e;color:#fff;border-color:#161d2e}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;position:sticky;top:38px;z-index:40;background:#eef1f7;padding:4px 0 6px}.tab{padding:6px 12px;flex:0 0 auto;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}.tabq{flex:1 0 100%;font-size:11.5px;line-height:1.35;font-weight:600;color:#5a637a;padding:3px 1px 0}.tabq span{display:block;max-width:92ch}.ovt{width:100%;border-collapse:collapse;font-size:12.5px}.ovt th{text-align:right;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.4px;text-transform:uppercase;padding:0 10px 6px;white-space:nowrap}.ovt th:first-child{text-align:left}.ovt td{padding:6px 10px;border-top:1px solid #eef0f5;text-align:right;white-space:nowrap}.ovm{text-align:left!important;font-weight:700;color:#3b4256}.ovv{font-weight:800;color:#0F172A;font-variant-numeric:tabular-nums}.ovc{font-variant-numeric:tabular-nums}.ovn{color:#c8cede}.ovp{display:block;font-size:11.5px;color:#5b6478;font-weight:600}.ovh{text-align:left!important;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.5px;padding-top:12px!important;border-top:0!important}
+.lbl9{font-size:10px;font-weight:800;color:#64748b;margin-right:5px}.tgroups{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:42;background:#eef1f7;padding:6px 0 4px}.tgrp{padding:6px 14px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;background:#fff;border:1px solid #d7dcec;color:#3b4256;white-space:nowrap}.tgrp.on{background:#161d2e;color:#fff;border-color:#161d2e}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;position:sticky;top:38px;z-index:40;background:#eef1f7;padding:4px 0 6px}.tab{padding:6px 12px;flex:0 0 auto;border-radius:9px;font-weight:700;font-size:12px;line-height:1.2;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#51596b;white-space:nowrap}.tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}.tabq{flex:1 0 100%;font-size:12.5px;line-height:1.35;font-weight:600;color:#5a637a;padding:3px 1px 0}.tabq span{display:block;max-width:92ch}.ovt{width:100%;border-collapse:collapse;font-size:12.5px}.ovt th{text-align:right;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.4px;text-transform:uppercase;padding:0 10px 6px;white-space:nowrap}.ovt th:first-child{text-align:left}.ovt td{padding:6px 10px;border-top:1px solid #eef0f5;text-align:right;white-space:nowrap}.ovm{text-align:left!important;font-weight:700;color:#3b4256}.ovv{font-weight:800;color:#0F172A;font-variant-numeric:tabular-nums}.ovc{font-variant-numeric:tabular-nums}.ovn{color:#c8cede}.ovp{display:block;font-size:11.5px;color:#5b6478;font-weight:600}.ovh{text-align:left!important;font-size:10px;font-weight:800;color:#8a93a6;letter-spacing:.5px;padding-top:12px!important;border-top:0!important}
 .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid #e6e9f1;border-radius:14px;padding:11px 14px;margin-bottom:12px;position:sticky;top:86px;z-index:39;box-shadow:0 3px 10px rgba(20,30,60,.07)}
 .bar label{font-size:10.5px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe3ec;border-radius:9px;padding:7px 9px;background:#f7f8fb;color:#2b3346}
@@ -31,9 +31,9 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .drag{position:absolute;top:12px;left:9px;color:#cfd5e2;cursor:grab;font-size:13px;user-select:none}.card.drg{opacity:.4}
 .xp{position:absolute;top:10px;right:12px;color:#9aa3b5;cursor:pointer;font-size:15px;font-weight:800;padding:2px 6px;border-radius:7px}.xp:hover{background:#eef0fb;color:#5a5bf0}
 .chead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding-left:12px;padding-right:24px}
-.ct{font-size:15px;font-weight:800;letter-spacing:-.01em;line-height:1.25}.info{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#eceff5;color:#8a93a6;font-size:10px;font-weight:800;align-items:center;justify-content:center;cursor:help;margin-left:5px;vertical-align:middle;position:relative}
+.ct{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.25}.info{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#eceff5;color:#8a93a6;font-size:10px;font-weight:800;align-items:center;justify-content:center;cursor:help;margin-left:5px;vertical-align:middle;position:relative}
 .info:hover::after{content:attr(data-t);position:absolute;left:16px;top:0;width:300px;background:#161d2e;color:#fff;font-size:11px;font-weight:500;line-height:1.5;padding:8px 10px;border-radius:8px;z-index:40;white-space:normal}
-.cs{font-size:11px;color:var(--mut);margin-top:3px;font-weight:500;line-height:1.45;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;max-width:760px}.cs.open{-webkit-line-clamp:unset;display:block}.cs:not(.open):after{content:''}
+.cs{font-size:12.5px;color:var(--mut);margin-top:3px;font-weight:500;line-height:1.45;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;max-width:760px}.cs.open{-webkit-line-clamp:unset;display:block}.cs:not(.open):after{content:''}
 .bg{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 6px;border-radius:20px;margin-left:6px;text-transform:uppercase}
 .b-odoo{background:#eae9ff;color:#5a5bf0}.b-shop{background:#e5f7ee;color:#12a06e}.b-meta{background:#e6f0ff;color:#2f7fe0}.b-blend{background:#e4f7f4;color:#12b0a4}.b-live{background:#e5f7ee;color:#12a06e}
 .kpis{display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end}.kpi{text-align:right}.kpi .l{font-size:11px;color:var(--mut);font-weight:600}.kpi .v{font-size:20px;font-weight:800;line-height:1.15}.kpi .d{font-size:11px;font-weight:700;margin-top:1px}.kpi .d .pv{display:block;font-size:9.5px;color:#b4bccb;font-weight:600;letter-spacing:.1px}
@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2142,7 +2141,30 @@ function glance(g,o){
   const cur=calcNP(o.gp[0],o.sp[0],ST.s,ST.e);
   const _pw2=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
   const prev=(_pw2&&o.gp[1]!=null)?calcNP(o.gp[1],o.sp[1],_pw2[0],_pw2[1]):null;
-  return cur==null?null:{cur,prev,bm};
+  /* the webstore's own net: its GP, its share of ads (Google+TikTok whole, Meta by its own
+     window value split web vs in-store), its OpEx (direct accounts + revenue share of the
+     shared pool, from the same complete month) */
+  const exm=O.exp[bm]||{};
+  const brSal=Object.keys(O.bcost||{}).reduce((a,b2)=>a+(((O.bcost[b2]||{})[bm]||{}).sal||0),0);
+  const onDirect=(exm['Packing & bags']||0)+(exm['Payment & collection fees']||0)+(exm['Cargo & transport']||0);
+  const shared=(exm['Rent — HQ / warehouses / flats']||0)+(exm['Comms & internet']||0)+(exm['Other OpEx']||0)
+    +Math.max(0,(exm['Payroll & benefits']||0)-brSal);
+  const PAm=pnlAgg().M[bm]||{};const onRevM=(PAm.g||0)-(PAm.r||0);
+  const wOn=(onRevM+br)>0?onRevM/(onRevM+br):0.2;
+  const opxOnD=(onDirect+shared*wOn)/dim2;
+  const t0a=Date.parse((O.ad&&O.ad.start)||'');
+  const aix=d2=>Math.round((Date.parse(d2)-t0a)/864e5);
+  const webNP=(gp2,a,b)=>{if(isNaN(t0a))return null;
+   const i0a=Math.max(0,aix(a)),i1a=Math.min(O.ad.n-1,aix(b));if(i1a<i0a)return null;
+   let gs2=0,ts2=0,ms2=0,web2=0,st2=0;
+   for(let k=i0a;k<=i1a;k++){gs2+=(O.ad.gspend||[])[k]||0;ts2+=(O.ad.tspend||[])[k]||0;ms2+=(O.ad.mspend||[])[k]||0;
+    web2+=(O.ad.mecomrev||[])[k]||0;st2+=(O.ad.instoreMeta||[])[k]||0;}
+   const mOn=(web2+st2)>0?web2/(web2+st2):1;
+   const d3=Math.max(1,span(a,b));
+   return gp2-(gs2+ts2+ms2*mOn)-opxOnD*d3;};
+  const curW=webNP(o.gp[0],ST.s,ST.e);
+  const prevW=(_pw2&&o.gp[1]!=null)?webNP(o.gp[1],_pw2[0],_pw2[1]):null;
+  return cur==null?null:{cur,prev,bm,curW,prevW};
  }catch(e){return null;}})();
  const tiles=[
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web'],
@@ -2153,6 +2175,10 @@ function glance(g,o){
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web'],
   ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web']
  ];
+ if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
+   '<span style="color:'+(NP.curW>=0?'#0f6e56':'#a3271a')+'">'+(NP.curW>=0?'+':'\u2212')+M(NP.curW)+'</span>',
+   (NP.prevW!=null&&NP.prevW!==0)?((NP.curW-NP.prevW)/Math.abs(NP.prevW)*100):null,true,
+   'webstore GP minus ITS share of ads (Meta split by its own web/store value) and its OpEx','web']);
  if(NP)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.cur>=0?'#0f6e56':'#a3271a')+'">'+(NP.cur>=0?'+':'\u2212')+M(NP.cur)+'</span>',
    (NP.prev!=null&&NP.prev!==0)?((NP.cur-NP.prev)/Math.abs(NP.prev)*100):null,true,
@@ -13197,7 +13223,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-130136';
+const BUILD='20260903-131244';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
