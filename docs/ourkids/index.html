@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2145,30 +2144,35 @@ function glance(g,o){
   return cur==null?null:{cur,prev,bm};
  }catch(e){return null;}})();
  const tiles=[
-  ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'webstore, after returns'],
-  ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin'],
-  ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'all platforms'],
-  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'breakeven '+be.toFixed(2)+'×'],
-  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only'],
-  ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket'],
-  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one']
+  ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web'],
+  ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web'],
+  ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co'],
+  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'webstore revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web'],
+  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web'],
+  ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web'],
+  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web']
  ];
- if(NP)tiles.splice(3,0,['Net profit · whole company, est',
+ if(NP)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.cur>=0?'#0f6e56':'#a3271a')+'">'+(NP.cur>=0?'+':'\u2212')+M(NP.cur)+'</span>',
    (NP.prev!=null&&NP.prev!==0)?((NP.cur-NP.prev)/Math.abs(NP.prev)*100):null,true,
-   'after ads and every cost, OpEx charged per day from '+NP.bm]);
+   'after ads and every cost, OpEx charged per day from '+NP.bm,'co']);
  /* The webstore is not the business. Blended puts the seven shops in the numerator against the
     same ad spend, which is the only version of these two ratios that answers "are we growing". */
  if(BA)tiles.push(
-  ['MER · whole business', BA.mer.toFixed(2)+'×', BAp?pc(BA.mer,BAp.mer):null, true,
-   'webstore + branches'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':'')],
-  ['aMER · whole business', BA.amer.toFixed(2)+'×', BAp?pc(BA.amer,BAp.amer):null, true,
-   'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':'')]);
- const tileH=tiles.map(t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
+  ['MER', BA.mer.toFixed(2)+'×', BAp?pc(BA.mer,BAp.mer):null, true,
+   'everything sold ÷ ALL spend'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':''),'co'],
+  ['aMER', BA.amer.toFixed(2)+'×', BAp?pc(BA.amer,BAp.amer):null, true,
+   'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':''),'co']);
+ const _tile=t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
   +'<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'+dl(t[2],t[3])
-  +'<span style="font-size:10.5px;color:#8a93a6">'+t[4]+'</span></div></div>').join('');
+  +'<span style="font-size:10.5px;color:#8a93a6">'+t[4]+'</span></div></div>';
+ const _band=(label,col2,bg2,list)=>list.length?('<div style="border:1px solid '+col2+'22;border-left:4px solid '+col2+';border-radius:12px;background:'+bg2+';padding:9px 11px 11px;margin-bottom:9px">'
+  +'<div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:'+col2+';margin:0 1px 7px">'+label+'</div>'
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+list.map(_tile).join('')+'</div></div>'):'';
+ const tileH=_band('The webstore \u2014 Shopify only','#3a3bd0','#f7f8ff',tiles.filter(t=>t[5]==='web'))
+            +_band('The whole company \u2014 webstore + branches, one ad budget','#0f6e56','#f4fbf7',tiles.filter(t=>t[5]==='co'));
 
  /* ---- 2. WHAT MOVED IT --------------------------------------------------- */
  /* Ranked by money, not by how interesting the metric is. A driver only earns a line if it moved
@@ -2263,7 +2267,7 @@ function glance(g,o){
   +'<div class="ct">The week at a glance — '+ST.s+' to '+ST.e+'</div>'
   +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
   +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:2px 0 14px">'+tileH+'</div>'
+  +'<div style="margin:2px 0 14px">'+tileH+'</div>'
   +(BA?'<div style="margin:-4px 0 13px;padding:8px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
     +'<b>Read the two whole-business ratios as scale, not as ad performance.</b> They put '+M(BA.storeRev)+' of shop revenue over the same '+M(BA.spend)+' of spend, '
     +'and regression on this account has shown Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled. '
@@ -13192,7 +13196,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-125343';
+const BUILD='20260903-130136';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
