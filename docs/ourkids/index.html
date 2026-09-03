@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1282,7 +1281,7 @@ function foldTail(t,grid){
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const PIN=/Did we make money\?|of gross profit burned|Every day against break-even/;
+ const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes/;
  const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
  if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
   pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
@@ -12932,6 +12931,61 @@ function rMETA(){
    g.insertBefore(el2,g.firstChild);}
  })();}catch(e){}
 
+ /* v9.49 WHERE THE ROAS ACTUALLY GOES. Ads Manager hands over one big multiple; by the time
+    the goods, the courier, the collection fees and the attribution truth have taken their
+    bites there is a much smaller number left, and nobody could see WHICH bite did the damage.
+    This walks E£100 of spend through every deduction, each one sourced, in order of who takes
+    it first. Website leg only -- the in-store claim is shown beside it, clearly marked, because
+    it backfills for ~6 days and is a claim, not a measurement. */
+ try{(function(){
+  let sp=0,pv=0,fv=0;
+  ads.forEach(a=>{const d=a.d;for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}});
+  if(!(sp>1000&&pv>0))return;
+  const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185,gpOnGross:0.266,gpSt:0.285,dragShip:0.034,dragPay:0.047,drag:0.081};}})();
+  const incr=((O.attr&&O.attr.meta&&O.attr.meta.incr)||0.61);
+  const R=pv/sp;                       // reported website ROAS at the live setting
+  const v0=R*100;                      // E£ claimed back per E£100 of spend
+  const v1=v0*incr;                    // what survives Meta's own incremental re-measure
+  const goods=v1*(1-q.gpOnGross), courier=v1*(q.dragShip||0), fees=v1*(q.dragPay||0);
+  const left=v1-goods-courier-fees;    // gross profit delivered, per E£100
+  const net=left-100;                  // after the spend itself
+  const M2=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const steps=[
+   ['Meta claims back',v0,'#3a9bff','Ads Manager website conversion value ÷ spend — '+R.toFixed(2)+'× at your live 7d-click/1d-view setting'],
+   ['Attribution truth takes',-(v0-v1),'#8b5cf6','Meta&rsquo;s OWN incremental re-measure of the same conversions keeps '+(incr*100).toFixed(0)+'% — the rest was buying orders that were coming anyway'],
+   ['Goods take',-goods,'#e08a1e','COGS at your real '+(q.gpOnGross*100).toFixed(1)+'% gross margin (Odoo)'],
+   ['Courier takes',-courier,'#c05a7a','outbound + return legs + RTO, net of shipping collected — '+((q.dragShip||0)*100).toFixed(1)+'% of revenue (posted bills / Bosta mix)'],
+   ['Collection &amp; payment fees take',-fees,'#a3527a','Bosta COD collection + PayMob — '+((q.dragPay||0)*100).toFixed(1)+'% of revenue (GL, branch card fees excluded)'],
+   ['The ad itself cost',-100,'#5b6478','the E£100 of spend']];
+  /* running totals can dip below zero on a losing walk -- the scale runs from that floor
+     to the opening claim, and every bar is positioned inside it */
+  let _r=0;const runs=[0];steps.forEach(st2=>{_r+=st2[1];runs.push(_r);});
+  const lo=Math.min(0,Math.min.apply(null,runs)),span=v0-lo||1;
+  const X=v=>((v-lo)/span*100).toFixed(1);
+  let run=0,rows2='';
+  steps.forEach(st2=>{const from=run;run+=st2[1];
+   const l=Math.min(from,run),w=Math.abs(st2[1]);
+   rows2+='<div style="display:grid;grid-template-columns:210px 1fr 110px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #f2f4f9">'
+    +'<div style="font-size:12px;font-weight:700;color:#26313f">'+st2[0]+'<div style="font-size:9.5px;font-weight:500;color:#8a93a6;line-height:1.35">'+st2[3]+'</div></div>'
+    +'<div style="position:relative;height:18px;background:#f4f6fb;border-radius:5px;overflow:hidden">'
+     +'<div style="position:absolute;left:'+X(l)+'%;width:'+Math.max(0.4,w/span*100).toFixed(1)+'%;top:0;bottom:0;background:'+st2[2]+';border-radius:3px"></div>'
+     +(lo<0?'<div style="position:absolute;left:'+X(0)+'%;top:-2px;bottom:-2px;width:1px;background:#c9ccd6" title="zero"></div>':'')
+     +'<div style="position:absolute;left:'+X(100)+'%;top:-2px;bottom:-2px;width:2px;background:#a3271a" title="E£100 — the spend line: a claim that never reaches this line cannot pay for its own ad"></div></div>'
+    +'<div style="text-align:right;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(st2[1]>=0?'#26313f':'#a3271a')+'">'+(st2[1]>=0?'':'−')+M2(st2[1])+'</div></div>';});
+  const worst=steps.slice(1).reduce((a,b)=>Math.abs(b[1])>Math.abs(a[1])?b:a);
+  const stClaim=fv*afo()*q.gpSt/sp*100;
+  pnlCard(g,'meta','Where the ROAS actually goes — every E£100 of Meta spend, walked through'
+   +INFO('Website leg over the days you picked, at Meta&rsquo;s reported live value. Each bar is one deduction, in the order the money leaves: the attribution haircut is Meta&rsquo;s own incremental column measured on this account; goods at the real Odoo margin; courier and collection fees at the measured three-month rates. The red line is the E£100 of spend itself — a walk that ends left of it lost money on the webstore leg.'),
+   'Reported <b>'+R.toFixed(2)+'×</b> becomes <b style="color:'+(net>=0?'#0f6e56':'#a3271a')+'">'+(net>=0?'+':'−')+M2(net)+' per E£100</b> once everything is charged. '
+   +'The biggest bite is <b>'+worst[0].replace(/&amp;/g,'&').replace(/ takes?$| take$| cost$/,'')+'</b> at '+M2(worst[1])+' — that is where it gets fucked, and that is the lever. '
+   +'The in-store leg is beside the walk, not inside it: Meta separately claims '+M2(stClaim)+' of branch gross profit per E£100 at your attribution — a claim that backfills ~6 days and does not move with spend once trend is controlled.',
+   '<div style="margin:4px 0 2px">'+rows2
+   +'<div style="display:grid;grid-template-columns:210px 1fr 110px;gap:10px;align-items:center;padding:8px 0 2px">'
+    +'<div style="font-size:12.5px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">LEFT AFTER EVERYTHING</div>'
+    +'<div style="font-size:10.5px;color:#8a93a6">website leg only · '+PW.lbl+' · E£'+Math.round(sp).toLocaleString()+' actual spend in the window scales this to '+(net>=0?'+':'−')+M2(Math.abs(net)*sp/100)+'</div>'
+    +'<div style="text-align:right;font-size:15px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">'+(net>=0?'+':'−')+M2(net)+'</div></div></div>');
+ })();}catch(e){}
+
  pnlCard(g,'meta','Triage — run it in this order'+INFO('The deck’s 60-second troubleshooting sequence. Only the steps that actually tripped are listed; skipping steps is how people change three things at once and learn nothing.'),
   tri.length?'These tripped their thresholds this week. Change one thing, wait two weeks, then assess.'
             :'Nothing tripped a threshold this week — no step of the sequence is calling for action.',
@@ -13649,7 +13703,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-220256';
+const BUILD='20260903-220759';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
