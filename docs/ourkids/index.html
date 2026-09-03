@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 the shops'],['mi','All three side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Shops P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -5810,7 +5809,12 @@ function rFOCUS(){
     read a year no matter what you picked */
  const _c=m=>A.indexOf(m)>=0?m:(m<A[0]?A[0]:A[A.length-1]);
  const m0=_c((ST.s||'').slice(0,7)), m1=_c((ST.e||'').slice(0,7));
- const cur=A.filter(m=>m>=m0&&m<=m1);
+ let cur=A.filter(m=>m>=m0&&m<=m1);
+ /* v9.37 the running month is a couple of days old; reading "2026-08 -> 2026-09" for an L7D
+    selection made a 7-day pick look like a 2-month window and dragged every vs-prior figure.
+    Part month is dropped whenever a complete month is in the range. */
+ const nowMF=(O.today||'').slice(0,7);
+ if(cur.length>1)cur=cur.filter(m=>m!==nowMF);
  const i0=A.indexOf(cur[0]);
  const prev=A.slice(Math.max(0,i0-cur.length),i0);
  const wRev=(r,ms)=>ms.reduce((a,m)=>a+(((r.mon||{})[m]||[0,0])[0]||0),0);
@@ -5825,7 +5829,10 @@ function rFOCUS(){
  const Praw=build(PV), Vraw=build(VD);
  if(!Praw.length&&!Vraw.length){bn.innerHTML='No product or vendor revenue inside '+cur[0]+' → '+cur[cur.length-1]+'. Widen the range.';return;}
 
- bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Reading <b>'+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'')+'</b> ('+cur.length+' month'+(cur.length===1?'':'s')+')'
+ const _selD2=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
+ bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. '
+  +(_selD2&&_selD2<28?'<b style="color:#b8621b">Your date box asks for '+_selD2+' days — product and vendor money only exists at MONTH grain in this feed, so the tab reads the complete month(s) your range touches.</b> ':'')
+  +'Reading <b>'+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'')+'</b> ('+cur.length+' month'+(cur.length===1?'':'s')+')'
   +(prev.length?', against the '+prev.length+' month'+(prev.length===1?'':'s')+' before it ('+prev[0]+(prev.length>1?' → '+prev[prev.length-1]:'')+')':', with no prior months in the ledger to compare against')
   +'. Products are the top '+PV.length+' templates by revenue plus the top lines of every vendor on the board; vendors are the '+VD.length+' covering '+(((O.vend||{}).cov||{}).revPct||0).toFixed(0)+'% of retail. Retail till revenue and Odoo margin, plus the Shopify leg where the same template sells online.';
 
@@ -5889,6 +5896,46 @@ function rFOCUS(){
   'Attention is the scarce input, not stock. This says how short the list of things worth attention actually is &mdash; and how much of the catalogue you can safely stop thinking about.',
   '<div style="display:flex;gap:12px;flex-wrap:wrap">'+pTile(pV)+pTile(pP)+'</div>'
   +'<div class="ins" style="margin-top:9px"><div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>Use the vendor number for negotiation and the product number for the shelf.</b> A short vendor list means your buying leverage is concentrated in a handful of conversations; a short product list means most of your shelf space is earning nothing and could hold something else. They are different actions and the two counts are rarely similar.</span></div></div>');
+
+ /* ---------- 1b. CATEGORY MIX — the shape of the shop ---------- */
+ (function(){
+  const fold=c=>String(c||'Various').replace(/\s*\(Consignment\)\s*/,'').trim()||'Various';
+  const cats={};
+  (VD||[]).forEach(r=>{const c=fold(r.cat);
+   const e=cats[c]||(cats[c]={rev:0,gp:0,pRev:0,life:0,lifeOn:0,n:0});
+   e.rev+=wRev(r,cur); e.gp+=wGp(r,cur); e.pRev+=wRev(r,prev);
+   e.life+=r.r||0; e.lifeOn+=r.orev||0; e.n++;});
+  const L3=Object.entries(cats).map(([c,v])=>({c,...v,mg:v.rev?v.gp/v.rev*100:0,
+    dp:v.pRev>0?(v.rev/v.pRev-1)*100:null,onSh:(v.life+v.lifeOn)>0?v.lifeOn/(v.life+v.lifeOn)*100:0}))
+   .filter(x=>x.rev>0).sort((a,b)=>b.rev-a.rev);
+  if(!L3.length)return;
+  const tot3=L3.reduce((a,x)=>a+x.rev,0);
+  const mxOn=Math.max.apply(null,L3.map(x=>x.onSh))||1;
+  let b3='';
+  L3.forEach(x=>{const sh=x.rev/tot3*100;
+   b3+='<tr><td style="'+TD+';text-align:left"><b>'+esc(x.c)+'</b><div style="font-size:10px;color:#8a93a6">'+x.n+' vendors</div></td>'
+    +'<td style="'+TD+'"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'
+      +'<div style="width:130px;height:13px;border-radius:4px;background:#eef0f5;overflow:hidden"><div style="width:'+sh.toFixed(1)+'%;height:100%;background:#5a5bf0"></div></div>'
+      +'<b style="min-width:40px">'+sh.toFixed(1)+'%</b></div></td>'
+    +'<td style="'+TD+';font-weight:800">'+M(x.rev)+'</td>'
+    +'<td style="'+TD+'">'+M(x.gp)+'<div style="font-size:9.5px;color:'+(x.mg>=28?'#0f6e56':x.mg<20?'#a3271a':'#8a93a6')+'">'+x.mg.toFixed(1)+'%</div></td>'
+    +'<td style="'+TD+'">'+(x.dp==null?'<span style="color:#c9ccd6">new</span>':'<b style="color:'+(x.dp>=0?'#0f6e56':'#a3271a')+'">'+(x.dp>=0?'+':'−')+Math.abs(x.dp).toFixed(0)+'%</b>')+'</td>'
+    +'<td style="'+TD+'"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'
+      +'<div style="width:110px;height:13px;border-radius:4px;overflow:hidden;display:flex">'
+       +'<div style="width:'+x.onSh.toFixed(1)+'%;background:#3a3bd0" title="online"></div>'
+       +'<div style="flex:1;background:#8fd6b8" title="in the branches"></div></div>'
+      +'<b style="min-width:38px">'+x.onSh.toFixed(1)+'%</b></div></td></tr>';});
+  const most=L3.slice().sort((a,b)=>b.onSh-a.onSh)[0], least=L3.slice().sort((a,b)=>a.onSh-b.onSh)[0];
+  pnlCard(g,'ins','The shape of the shop — category by category, online against the branches'
+    +INFO('Vendors folded into their parent category (consignment merged in). Revenue and GP are the months your range touches, retail till money at real Odoo margin. Online share is that category&rsquo;s webstore revenue against its total since Aug 2024 — the split is not shipped at month grain, so it is a structural read, not a window one.'),
+   'Where the money actually sits. <b>'+esc(L3[0].c)+'</b> is '+ (L3[0].rev/tot3*100).toFixed(0)+'% of the window&rsquo;s retail revenue. '
+   +'<b>'+esc(most.c)+'</b> is the most online-shifted category ('+most.onSh.toFixed(0)+'% webstore); <b>'+esc(least.c)+'</b> the least ('+least.onSh.toFixed(0)+'%) — the gap between those two is where the webstore&rsquo;s range work should start.',
+   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+   +'<tr><th style="'+TH+';text-align:left">Category</th><th style="'+TH+'">Share of window revenue</th>'
+   +'<th style="'+TH+'">Revenue</th><th style="'+TH+'">Gross profit</th><th style="'+TH+'">vs prior</th>'
+   +'<th style="'+TH+'">Online share <span style="font-weight:600;text-transform:none;color:#8a93a6">(lifetime)</span></th></tr>'+b3+'</table></div>'
+   +'<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>Read the two bars together.</b> A category with a fat share of revenue and a thin online share — Toys is the standing example — is money the webstore is not even competing for; that is a listing and merchandising gap, not a demand one. A category already online-heavy grows through media; one that is not grows through range first.</span></div></div>');
+ })();
 
  /* ---------- 2. best sellers, on profit ---------- */
  const bestTable=(rows,what,extra)=>{
@@ -13098,7 +13145,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-123453';
+const BUILD='20260903-124243';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
