@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1661,7 +1660,23 @@ function cards(){CARDS=[
      options:{responsive:1,maintainAspectRatio:0,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c3=>c3.dataset.label+': E£ '+Math.round(c3.parsed.y).toLocaleString()}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:6,font:{size:8.5}}},y:{grid:{color:'#eef0f5'},ticks:{font:{size:9},maxTicksLimit:4,callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':Math.round(v/1000)+'k'}},y2:{position:'right',grid:{display:false},ticks:{font:{size:9},maxTicksLimit:4,callback:v=>Math.round(v/1000)+'k'}}}}}));});}},
  {id:'tr',a:'blend',t:'Total ROAS — incl. Offline',src:'broas',cs:'(Website value + Meta REAL in-store value) ÷ spend. The two Meta legs are drawn separately because Meta discounts them very differently — they are no longer added together into one “omni” line.',ad:1,k:o=>[['Total incl. offline',o.totroas[0],o.totroas[1],'x',1],['Website only',o.broas[0],o.broas[1],'x',1],['Meta website value',aSum('mecomrev',o.ra)*af('meta'),o.rc?aSum('mecomrev',o.rc)*af('meta'):null,'cur',1],['Meta in-store value',o.instore[0],o.instore[1],'cur',1]],c:o=>({ad:[{l:'Meta website value',k:'mecomrev',m:af('meta'),c:C.blue,f:1},{l:'Meta in-store value',k:'instoreMeta',m:afo(),c:C.teal,f:1},{l:'Total spend',k:'spend',c:C.orange,y2:1}],tip:'cur'})},
  {id:'mer',a:'odoo',t:'MER & aMER — net of returns',src:'mer',cs:'MER = Shopify-channel revenue minus ACTUAL credit notes ÷ spend. aMER = new-customer net revenue ÷ spend. <a href="javascript:void(0)" onclick="window.MERDEL=!window.MERDEL;rOn()" style="color:#5a5bf0;font-weight:800">'+(window.MERDEL?'☑':'☐')+' delivered only</a> scales by the window’s real kept-rate (kept value ÷ kept+returned).',ad:1,k:o=>{const dv=(function(){if(!window.MERDEL)return 1;const S2=O.ship2;if(!S2||!S2.m)return .86;const m0=(ST.s||'').slice(0,7),m1=(ST.e||'').slice(0,7);let kv=0,rv=0;S2.m.forEach((m,i)=>{if(m>=m0&&m<=m1){kv+=(S2.keptV||[])[i]||0;rv+=(S2.retV||[])[i]||0;}});return (kv+rv)?kv/(kv+rv):.86;})();const L=window.MERDEL?' · delivered':'';const f=v=>v==null?null:v*dv;return [['MER (Shopify, net)'+L,f(o.merStore[0]),f(o.merStore[1]),'x',1],['aMER (net)'+L,f(o.amer[0]),f(o.amer[1]),'x',1],['All-channel net ÷ spend'+L,f(o.mer[0]),f(o.mer[1]),'x',1]];},c:o=>({ad:[{l:'Spend',k:'spend',c:C.orange,f:1}],tip:'cur'})},
- {id:'cac',t:'CAC & New Customers',src:'cacgp',cs:'CAC = total spend ÷ new customers (Shopify first-time orders). Cost / order = total spend ÷ confirmed orders. GP : CAC = first-order GP-per-order ÷ CAC.',ad:1,k:o=>[['CAC',o.cac[0],o.cac[1],'cur',0],['Cost / order',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order)',o.gpcac[0],o.gpcac[1],'x',1],['New customers',o.nc[0],o.nc[1],'n',1]]},
+ {id:'cac',t:'CAC & New Customers — online + branches',src:'cacgp',cs:'The first four figures are ONLINE ONLY: CAC = total spend ÷ Shopify first-time orders; Cost / order, GP : CAC likewise webstore. The last two add the branches from the daily POS crawl: registered first-timers at the tills, and blended CAC = the same total spend ÷ new customers of BOTH businesses.',ad:1,k:o=>{
+   const base=[['CAC — online only',o.cac[0],o.cac[1],'cur',0],['Cost / order — online',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order, online)',o.gpcac[0],o.gpcac[1],'x',1],['New customers — online',o.nc[0],o.nc[1],'n',1]];
+   try{
+    const W2=O.bnrD&&O.bnrD._w;if(!W2)return base;
+    const t0=Date.parse(W2.start);
+    const sumB=(a,b)=>{let t=0,hit=false;
+     for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t0)/864e5);if(i<0||i>=W2.n)continue;
+      Object.keys(O.bnrD).forEach(br=>{if(br==='_w')return;t+=(O.bnrD[br].nc||[])[i]||0;hit=true;});}
+     return hit?t:null;};
+    const pw2=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
+    const bNow=sumB(ST.s,ST.e), bPrev=pw2?sumB(pw2[0],pw2[1]):null;
+    if(bNow==null)return base;
+    const sp0=o.sp?o.sp[0]:null,sp1=o.sp?o.sp[1]:null;
+    base.push(['New customers — branches (registered, POS)',bNow,bPrev,'n',1]);
+    if(sp0&&(o.nc[0]+bNow)>0)base.push(['Blended CAC — both businesses',sp0/(o.nc[0]+bNow),(sp1&&o.nc[1]!=null&&bPrev!=null&&(o.nc[1]+bPrev)>0)?sp1/(o.nc[1]+bPrev):null,'cur',0]);
+   }catch(e){}
+   return base;}},
  {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
  {id:'kv',a:'blend',t:'The essentials — Shopify online',src:'gross',cs:'SHOPIFY CHANNEL ONLY (Odoo confirmed orders, marketplaces &amp; branch POS excluded — branches live on the Branches tab). Revenue net of actual credit notes, GP, what a NEW vs RETURNING customer spends per order, and site conversion.',
@@ -2619,8 +2634,13 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   const mm=+curM.slice(5,7);
   const sumf=(fn,ms3)=>ms3.reduce((t,m)=>t+(fn(m)||0),0);
   // row spec: [label, [cur,prev], fmt, goodUp, num(m), den(m)|null, adSrc]
+  /* v9.42 the money order the reader actually wants: what went in, what came back, at what
+     rate -- Spend, Revenue, MER, aMER lead; the anatomy follows. */
   const R=[
+   ['Ad spend (whole account)',o2.sp,'cur',0,m=>AD(m).sp,null,1],
    ['Revenue (net of returns)',o2.net,'cur',1,m=>F(m).rev-F(m).ref,null,0],
+   ['MER (net ÷ spend)',o2.mer,'x',1,m=>F(m).rev-F(m).ref,m=>AD(m).sp,1],
+   ['aMER',o2.amer,'x',1,m=>AD(m).ncrev,m=>AD(m).sp,1],
    ['Gross sales',o2.gross,'cur',1,m=>F(m).rev,null,0],
    ['Returns (credit notes)',o2.ref,'cur',0,m=>F(m).ref,null,0],
    ['Orders',o2.ord,'n',1,m=>F(m).ord,null,0],
@@ -2632,18 +2652,15 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
    ['AOV — returning',o2.rcaov,'cur',1,m=>N(m).rrev,m=>N(m).rord,0],
    ['Gross profit',o2.gp,'cur',1,m=>F(m).gp,null,0],
    ['GP %',o2.gpct,'pct',1,m=>F(m).gp,m=>F(m).rev-F(m).ref,0],
-   ['Ad spend',o2.sp,'cur',0,m=>AD(m).sp,null,1],
-   ['MER (net ÷ spend)',o2.mer,'x',1,m=>F(m).rev-F(m).ref,m=>AD(m).sp,1],
-   ['aMER',o2.amer,'x',1,m=>AD(m).ncrev,m=>AD(m).sp,1],
    /* The two rows the webstore-only MER and aMER above cannot answer: what the WHOLE
       business returns on the one budget. The same ads work on the site and in the shops at
       once and the spend cannot be split, so the honest version puts every pound of revenue
       over every pound of spend. Store revenue and store NEW-customer revenue come from the
       monthly branch ledger (O.pos / O.bnr), which reaches back to 2024-08, so these compare
       against last year wherever the ad feed does. */
-   ['MER incl. the 7 shops',o2.merAll,'x',1,
+   ['MER incl. branches',o2.merAll,'x',1,
      m=>(F(m).rev-F(m).ref)+SREV(m), m=>AD(m).sp,1],
-   ['aMER incl. the 7 shops',o2.amerAll,'x',1,
+   ['aMER incl. branches',o2.amerAll,'x',1,
      m=>AD(m).ncrev+SNC(m), m=>AD(m).sp,1],
    ['nCAC (spend ÷ new customers)',o2.cac,'cur',0,m=>AD(m).sp,m=>N(m).nord,1],
    ['Sessions',o2.sess,'n',1,m=>AD(m).sess,null,1],
@@ -6644,8 +6661,28 @@ function offAudit(g){
  const pc=(a,b)=>(a==null||b==null||!b)?null:(a/b-1)*100;
  const dc=(v,good)=>v==null?'<td style="color:#c2c8d4">—</td>'
    :'<td style="font-weight:800;color:'+(((v>=0)===!!good)?'#12a06e':'#e23a63')+'">'+(v>=0?'▲ +':'▼ −')+Math.abs(v).toFixed(0)+'%</td>';
+ /* v9.42 the same money order as the Shopify table: spend, revenue, the two rates. The spend
+    is the WHOLE account -- it cannot be split between the businesses -- so the rates here are
+    branch revenue over ALL spend, the same convention as the daily break-even table. */
+ const _adm=(function(){try{return adMonthly();}catch(e){return {};}})();
+ const _aM=m=>((_adm[m]||{}).s)||null;
+ const _aS=ms3=>{let t=0,any=false;ms3.forEach(m=>{const v=_aM(m);if(v!=null&&adFull(m)){t+=v;any=true;}});return any?t:null;};
+ const _spW=(function(){try{const t0=Date.parse(O.ad.start);let t=0;
+   for(let d=Date.parse(s);d<=Date.parse(e);d+=864e5){const i=Math.round((d-t0)/864e5);if(i>=0&&i<O.ad.n)t+=(O.ad.spend||[])[i]||0;}return t||null;}catch(x){return null;}})();
+ const _spP=(function(){try{const t0=Date.parse(O.ad.start);let t=0;
+   for(let d=Date.parse(pw[0]);d<=Date.parse(pw[1]);d+=864e5){const i=Math.round((d-t0)/864e5);if(i>=0&&i<O.ad.n)t+=(O.ad.spend||[])[i]||0;}return t||null;}catch(x){return null;}})();
+ const _spM=adFull(curM)?_aM(curM):null,_spMly=adFull(lyM)?_aM(lyM):null;
+ const _spY=_aS(monthsOf(yr,mm)),_spYly=_aS(monthsOf(String(+yr-1),mm));
+ const X1=v=>v==null?'—':v.toFixed(2)+'×';
  const R=[
+  ['Ad spend (whole account)', M(_spW), M(_spP), pc(_spW,_spP),0, M(_spM), pc(_spM,_spMly), M(_spY), pc(_spY,_spYly)],
   ['Revenue (POS)', M(C.rev), M(P&&P.rev), pc(C.rev,P&&P.rev),1, M(mNow&&mNow.rev), pc(mNow&&mNow.rev,mLy&&mLy.rev), M(yNow&&yNow.rev), pc(yNow&&yNow.rev,yLy&&yLy.rev)],
+  ['MER — branches ÷ ALL spend', X1(_spW?C.rev/_spW:null), X1(_spP&&P?P.rev/_spP:null), pc(_spW?C.rev/_spW:null,_spP&&P?P.rev/_spP:null),1,
+    X1(_spM&&mNow?mNow.rev/_spM:null), pc(_spM&&mNow?mNow.rev/_spM:null,_spMly&&mLy?mLy.rev/_spMly:null),
+    X1(_spY&&yNow?yNow.rev/_spY:null), pc(_spY&&yNow?yNow.rev/_spY:null,_spYly&&yLy?yLy.rev/_spYly:null)],
+  ['aMER — branch first-timers ÷ ALL spend', X1(_spW?C.nrev/_spW:null), X1(_spP&&P?P.nrev/_spP:null), pc(_spW?C.nrev/_spW:null,_spP&&P?P.nrev/_spP:null),1,
+    X1(_spM&&gv(bmNow,'nrev')?gv(bmNow,'nrev')/_spM:null), pc(_spM&&gv(bmNow,'nrev')?gv(bmNow,'nrev')/_spM:null,_spMly&&gv(bmLy,'nrev')?gv(bmLy,'nrev')/_spMly:null),
+    X1(_spY&&gv(byNow,'nrev')?gv(byNow,'nrev')/_spY:null), pc(_spY&&gv(byNow,'nrev')?gv(byNow,'nrev')/_spY:null,_spYly&&gv(byLy,'nrev')?gv(byLy,'nrev')/_spYly:null)],
   ['Receipts (orders)', N(C.ord), N(P&&P.ord), pc(C.ord,P&&P.ord),1, N(mNow&&mNow.ord), pc(mNow&&mNow.ord,mLy&&mLy.ord), N(yNow&&yNow.ord), pc(yNow&&yNow.ord,yLy&&yLy.ord)],
   ['New customers', N(C.nc), N(P&&P.nc), pc(C.nc,P&&P.nc),1, N(gv(bmNow,'nc')), pc(gv(bmNow,'nc'),gv(bmLy,'nc')), N(gv(byNow,'nc')), pc(gv(byNow,'nc'),gv(byLy,'nc'))],
   ['Returning customers', N(C.rc), N(P&&P.rc), pc(C.rc,P&&P.rc),1, N(gv(bmNow,'rc')), pc(gv(bmNow,'rc'),gv(bmLy,'rc')), N(gv(byNow,'rc')), pc(gv(byNow,'rc'),gv(byLy,'rc'))],
@@ -6686,7 +6723,7 @@ function offAudit(g){
    +'<td style="'+TD+'">'+r[5]+'</td>'+dc(r[6],1)
    +'<td style="'+TD+'">'+r[7]+'</td>'+dc(r[8],1)+'</tr>';});
  h+='</table></div>';
- const notes=[['#e23a63','<b>No MER, aMER or CAC here, and that is deliberate.</b> One ad budget works on the webstore and the shops at the same time and cannot be split between them, so any per-scope return would be an allocation presented as a measurement. For a return on the whole budget use <b>The whole business</b>, where the entire spend sits against the entire revenue.'],
+ const notes=[['#e23a63','<b>The spend row is the WHOLE account, on purpose.</b> One budget works on the webstore and the branches at once and cannot be split, so the MER and aMER here put branch revenue over ALL spend — the same convention as the Shopify table&rsquo;s &ldquo;incl. branches&rdquo; rows and the daily break-even table, so the two always reconcile. A ratio built on an allocated share of spend would be a made-up number.'],
   ['#3a9bff','<b>The period block is the daily POS series; the month and year blocks are the monthly ledger, which reaches back to 2024-08.</b> Both carry new-versus-returning, and they agree: summing the ledger for '+curM+' returns the same new/returning customers and revenue the daily series computes for the same span. Only gross profit is ledger-only, because the daily feed does not carry margin.'],
   ['#7c869c','Walk-in receipts have no identity attached, so a shop &ldquo;new customer&rdquo; means the first time that registered customer appears in the POS ledger. Anonymous cash buyers are in the revenue and not in the customer counts.']];
  pnlCard(g,'odoo','Weekly audit &mdash; THE BRANCHES'+INFO('The offline twin of the Shopify weekly audit, on the same rows, from the POS ledger.'),
@@ -13305,7 +13342,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-192757';
+const BUILD='20260903-193910';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
