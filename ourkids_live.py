@@ -5237,6 +5237,53 @@ def pull_promos():
             given += abs(float(g.get("price_subtotal_incl") or 0))
         out["pos"] = {"probes": probes, "lines": tot, "given": round(given),
                       "any": any(v > 0 for v in probes.values())}
+
+        # v9.36 CUSTOMER MIX PER CODE. Who is actually behind each code's till orders:
+        # unregistered (no partner captured / walk-in), new (this order's day IS that
+        # partner's first-ever POS day), returning. offMix[code][month] = [ord,unreg,new,ret].
+        try:
+            porders = []
+            for i in range(0, len(oids), 800):
+                porders += oexec("pos.order", "search_read",
+                                 [[["id", "in", oids[i:i + 800]]], ["partner_id"]],
+                                 {"limit": 900}) or []
+            pmap = {}
+            for r in porders:
+                p = r.get("partner_id")
+                pmap[r["id"]] = p[0] if isinstance(p, list) else (p or None)
+            WALKIN = 1654
+            pids = sorted({p for p in pmap.values() if p and p != WALKIN})
+            first_seen = {}
+            for i in range(0, len(pids), 500):
+                for row in (ogroup("report.pos.order",
+                                   [["partner_id", "in", pids[i:i + 500]]],
+                                   ["date:min"], ["partner_id"]) or []):
+                    pp = row.get("partner_id")
+                    ppid = pp[0] if isinstance(pp, list) else pp
+                    dm = str(row.get("date") or "")[:10]
+                    if ppid and dm:
+                        first_seen[ppid] = dm
+            mix = {}
+            for oid, c in code.items():
+                dy = day_of.get(oid)
+                if not dy:
+                    continue
+                m = dy[:7]
+                cell = mix.setdefault(c, {}).setdefault(m, [0, 0, 0, 0])
+                cell[0] += 1
+                p = pmap.get(oid)
+                if not p or p == WALKIN:
+                    cell[1] += 1
+                elif first_seen.get(p) == dy:
+                    cell[2] += 1
+                else:
+                    cell[3] += 1
+            out["offMix"] = mix
+            log("promos: customer mix for", len(mix), "codes,",
+                len(pids), "partners first-seen resolved")
+        except Exception as e:
+            log("promos customer-mix failed", str(e)[:140])
+
         log("promos: in-store codes", len(out["off"]), "orders", len(oids),
             "baseline days", len(out["offBase"]))
     except Exception as e:
