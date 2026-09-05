@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2378,25 +2377,35 @@ function glance(g,o){
       const pw4=cmpWr(ST.s,ST.e);
       if(pw4&&pw4[0]){const r1=rng(ST.s,ST.e),r0=rng(pw4[0],pw4[1]);
        const SUM=(k,r2)=>{let t2=0;for(let i=r2[0];i<=r2[1];i++)t2+=(A3[k]||[])[i]||0;return t2;};
-       const plat=[['Meta','mclk'],['Google','gclk'],['TikTok','tclk']].map(p4=>({n:p4[0],c:SUM(p4[1],r1),p:SUM(p4[1],r0)}))
+       /* clicks AND the money behind them: a click fall with spend flat is rising cost;
+          with spend down harder, it is a budget decision -- opposite fixes */
+       const plat=[['Meta','mclk','mspend'],['Google','gclk','gspend'],['TikTok','tclk','tspend']]
+         .map(p4=>({n:p4[0],c:SUM(p4[1],r1),p:SUM(p4[1],r0),sc:SUM(p4[2],r1),sp2:SUM(p4[2],r0)}))
          .map(p4=>({...p4,d:p4.c-p4.p})).sort((a,b)=>a.d-b.d);
        const fell=plat.filter(p4=>p4.d<0);const totF=fell.reduce((a,p4)=>a+p4.d,0);
+       const why4=p4=>{const dc=p4.p?(p4.c/p4.p-1)*100:0,ds=p4.sp2?(p4.sc/p4.sp2-1)*100:0;
+        return ds<=dc-5?'budget cut':(ds>=dc+5?'clicks got more expensive':'both moved together');};
        let campBit='';
        try{const W3=O.madsW,P3=pfWin(W3);const byCmp={};
         (O.mads||[]).forEach(ad3=>{if(!ad3.d||!ad3.d.oc)return;
-         const e3=byCmp[ad3.cid]||(byCmp[ad3.cid]={n:ad3.cmp||ad3.cid,acct:ad3.acct,id:ad3.cid,c:0,p:0});
-         for(let k=P3.a;k<=P3.b;k++)e3.c+=ad3.d.oc[k]||0;
-         if(P3.ok)for(let k=P3.pa;k<=P3.pb;k++)e3.p+=ad3.d.oc[k]||0;});
+         const e3=byCmp[ad3.cid]||(byCmp[ad3.cid]={n:ad3.cmp||ad3.cid,acct:ad3.acct,id:ad3.cid,c:0,p:0,sc:0,sp2:0});
+         for(let k=P3.a;k<=P3.b;k++){e3.c+=ad3.d.oc[k]||0;e3.sc+=(ad3.d.sp||[])[k]||0;}
+         if(P3.ok)for(let k=P3.pa;k<=P3.pb;k++){e3.p+=ad3.d.oc[k]||0;e3.sp2+=(ad3.d.sp||[])[k]||0;}});
         const drops=Object.values(byCmp).map(x=>({...x,d:x.c-x.p})).filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
         const totD=drops.reduce((a,x)=>a+x.d,0);
-        if(drops.length)campBit=' Inside Meta, the fall is: '+drops.slice(0,3).map(x=>{
+        if(drops.length)campBit=' Inside Meta: '+drops.slice(0,3).map(x=>{
           const u=(typeof amURL==='function')?amURL('campaign',x.id,x.acct):null;
-          const nm=esc(String(x.n).slice(0,30));
-          return (u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)+' '+Math.round(x.d/totD*100)+'%';
-         }).join(' · ')+' of the lost clicks.';
+          const nm=esc(String(x.n).slice(0,28));
+          const ds=x.sp2>0?(x.sc/x.sp2-1)*100:null,dc=x.p>0?(x.c/x.p-1)*100:null;
+          const tag=(ds!=null&&dc!=null)?(ds<=dc-5?'budget cut':(ds>=dc+5?'costlier clicks':'')):'';
+          return (u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)
+           +' '+Math.round(x.d/totD*100)+'% of lost clicks'
+           +(ds!=null?' · spend '+(ds>=0?'+':'−')+Math.abs(ds).toFixed(0)+'% ('+M(x.sc)+')':'')
+           +(tag?' · <b>'+tag+'</b>':'');
+         }).join(' &nbsp;·&nbsp; ')+'.';
        }catch(e3){}
-       if(fell.length)culTraffic='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>who lost the traffic:</b> '
-        +fell.map(p4=>p4.n+' clicks '+((p4.c/p4.p-1)*100).toFixed(0)+'% ('+Math.round(p4.d/totF*100)+'% of the fall)').join(' · ')+'.'+campBit+'</div>';}
+       if(fell.length)culTraffic='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>who lost the traffic, and whether the money left with it:</b> '
+        +fell.map(p4=>p4.n+' clicks '+((p4.c/p4.p-1)*100).toFixed(0)+'% ('+Math.round(p4.d/totF*100)+'% of the fall) · spend '+((p4.sp2?(p4.sc/p4.sp2-1)*100:0)>=0?'+':'−')+Math.abs(p4.sp2?(p4.sc/p4.sp2-1)*100:0).toFixed(0)+'% — <b>'+why4(p4)+'</b>').join(' &nbsp;·&nbsp; ')+'.'+campBit+'</div>';}
      }catch(e2){}
      try{ // basket: which products stopped selling, from the WHY crawl's closest window
       const d4=Math.max(1,span(ST.s,ST.e));const wk2=d4<=3?'1':(d4<=17?'7':'28');
@@ -13897,7 +13906,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260905-192550';
+const BUILD='20260905-193447';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
