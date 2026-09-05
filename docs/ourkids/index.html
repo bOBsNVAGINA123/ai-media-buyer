@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1666,12 +1665,7 @@ function cards(){CARDS=[
  {id:'cac',t:'CAC & New Customers — online + branches',src:'cacgp',cs:'The first four figures are ONLINE ONLY: CAC = total spend ÷ Shopify first-time orders; Cost / order, GP : CAC likewise webstore. The last two add the branches from the daily POS crawl: registered first-timers at the tills, and blended CAC = the same total spend ÷ new customers of BOTH businesses.',ad:1,k:o=>{
    const base=[['CAC — online only',o.cac[0],o.cac[1],'cur',0],['Cost / order — online',o.cpo?o.cpo[0]:null,o.cpo?o.cpo[1]:null,'cur',0],['GP : CAC (first order, online)',o.gpcac[0],o.gpcac[1],'x',1],['New customers — online',o.nc[0],o.nc[1],'n',1]];
    try{
-    const W2=O.bnrD&&O.bnrD._w;if(!W2)return base;
-    const t0=Date.parse(W2.start);
-    const sumB=(a,b)=>{let t=0,hit=false;
-     for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t0)/864e5);if(i<0||i>=W2.n)continue;
-      Object.keys(O.bnrD).forEach(br=>{if(br==='_w')return;t+=(O.bnrD[br].nc||[])[i]||0;hit=true;});}
-     return hit?t:null;};
+    const sumB=(a,b)=>{const q2=okBranchNC(a,b,'nc');return q2?Math.round(q2.v):null;};
     const pw2=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
     const bNow=sumB(ST.s,ST.e), bPrev=pw2?sumB(pw2[0],pw2[1]):null;
     if(bNow==null)return base;
@@ -2090,6 +2084,31 @@ function okCauses(o){
    period. Now it takes the window, so the same function answers for both and the two
    headline ratios finally carry a change like every other tile. onlineNew/spend still
    come from the caller's `o`, so pass the prior-period figures alongside prior dates. */
+/* v9.51 THE 400-DAY CLIFF. O.bnrD is a fixed 400-day crawl (start 2025-07-25), and every
+   consumer guarded it with "if the window fits, use it, else null" -- so on 2026-08-29 the
+   crawl's end slid past today and aMER-whole-business, the CAC card's branch line and anything
+   else reading it went to a dash overnight. This reads the daily series where it exists and
+   apportions the uncovered tail from the monthly branch ledger (nc x elapsed-days share), so
+   the figure degrades to an estimate instead of to nothing. */
+function okBranchNC(a,b,key){
+ try{
+  const BD=O.bnrD;if(!BD||!BD._w)return null;
+  const W=BD._w,t0=Date.parse(W.start);
+  let v=0,est=false,covered=0,total=0;
+  const names=Object.keys(BD).filter(k=>k!=='_w');
+  const dim2=m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();};
+  for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){
+   total++;
+   const i=Math.round((d-t0)/864e5);
+   if(i>=0&&i<W.n){covered++;names.forEach(n2=>{v+=((BD[n2]||{})[key]||[])[i]||0;});}
+   else{est=true;
+    const day=new Date(d).toISOString().slice(0,10),m=day.slice(0,7);
+    names.forEach(n2=>{let mm=((O.bnr||{})[n2]||{})[m],md=m;
+     if(!mm){const ks=Object.keys((O.bnr||{})[n2]||{}).sort();md=ks[ks.length-1];mm=md?O.bnr[n2][md]:null;}
+     if(mm){const mk=key==='nc'?mm.nc:(key==='nrev'?mm.nrev:mm[key]);
+      if(mk)v+=mk/dim2(md);}});}}
+  return total?{v:v,est:est,covered:covered,total:total}:null;
+ }catch(e){return null;}}
 function okBlendedAmer(o,sIn,eIn,onlineNewIn,spendIn){
  try{
   const BL=O.bl; if(!BL||!BL.b)return null;
@@ -2108,6 +2127,10 @@ function okBlendedAmer(o,sIn,eIn,onlineNewIn,spendIn){
     storeRev+=v; if(shr!=null)storeNew+=v*shr;
    }
   });
+  /* v9.51 two aMER-whole figures were on the page at once: this apportionment and the weekly
+     audit's MEASURED daily first-timer revenue (bnrD). Measured wins whenever it exists; the
+     apportionment stays only as the fallback, so tile and table can no longer disagree. */
+  try{const q3=okBranchNC(S,E,'nrev');if(q3&&q3.v>0)storeNew=q3.v;}catch(e){}
   const onlineNew=(onlineNewIn!=null)?onlineNewIn:((o.ncrev&&o.ncrev[0])||0);
   const spend=(spendIn!=null)?spendIn:((o.sp&&o.sp[0])||0);
   if(!spend)return null;
@@ -2209,6 +2232,11 @@ function glance(g,o){
    'everything sold ÷ ALL spend'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':''),'co'],
   ['aMER', BA.amer.toFixed(2)+'×', BAp?pc(BA.amer,BAp.amer):null, true,
    'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':''),'co']);
+ const _bnc=(function(){try{return okBranchNC(ST.s,ST.e,'nc');}catch(e){return null;}})();
+ const _bncP=(function(){try{const w=cmpWr(ST.s,ST.e);return w&&w[0]?okBranchNC(w[0],w[1],'nc'):null;}catch(e){return null;}})();
+ if(_bnc)tiles.push(['New customers · branches',N(Math.round(_bnc.v)),
+   _bncP&&_bncP.v?((_bnc.v/_bncP.v-1)*100):null,true,
+   'registered first-timers at the tills (POS crawl'+(_bnc.est?', tail apportioned from the monthly ledger':'')+')','co']);
  const _tile=t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
@@ -2313,7 +2341,38 @@ function glance(g,o){
   +'<div class="ct">The week at a glance — '+ST.s+' to '+ST.e+'</div>'
   +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
   +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
-  +'<div style="margin:2px 0 14px">'+tileH+'</div>'
+  +'<div style="margin:2px 0 14px">'+tileH
+  +(function(){ /* v9.51 the aMER drill: which input actually moved it, both scopes */
+    try{
+     const nc0=o.nc[0],nc1=o.nc[1],nv0=(o.ncrev&&o.ncrev[0])||0,nv1=(o.ncrev&&o.ncrev[1])||0;
+     const sp0=o.sp[0],sp1=o.sp[1];
+     if(!(sp0&&sp1&&nv1))return '';
+     const aov0=nc0?nv0/nc0:0,aov1=nc1?nv1/nc1:0;
+     let _worstAbs=0;const _mark=d2=>{if(d2!=null&&Math.abs(d2)>_worstAbs)_worstAbs=Math.abs(d2);return d2;};
+     const LN=(lab,c2,p2,inv,src,soloWorst)=>{const d2=pc(c2,p2);
+      const guilty=d2!=null&&(soloWorst?Math.abs(d2)>=_worstAbs-0.01&&Math.abs(d2)>=8:Math.abs(d2)>=8);
+      return '<div style="display:flex;gap:9px;align-items:baseline;padding:3px 0 3px 18px;border-left:2px solid #eef0f5;margin-left:7px">'
+       +'<span style="flex:0 0 auto;font-size:11.5px;color:#3D4763;font-weight:'+(guilty?'800':'600')+'">'+lab+'</span>'
+       +dl(d2,inv===false?false:true)
+       +'<span style="font-size:10.5px;color:#8a93a6">'+src+(guilty?' <b style="color:#a3271a">&larr; this is the one</b>':'')+'</span></div>';};
+     const drops=[['New customers won',pc(nc0,nc1)],['Their first basket',pc(aov0,aov1)],['Spend',-(pc(sp0,sp1)||0)]]
+       .filter(x=>x[1]!=null).sort((x,y)=>x[1]-y[1]);
+     let bl='';
+     if(BA&&BAp){const dOn=pc(BA.onlineNew,BAp.onlineNew),dSt=pc(BA.storeNew,BAp.storeNew);
+      bl='<div style="margin-top:7px;font-size:11.5px;font-weight:800;color:#0f6e56">Whole business — aMER '+BA.amer.toFixed(2)+'× '+(dl(pc(BA.amer,BAp.amer),true))+'</div>'
+       +LN('First-order revenue · webstore',BA.onlineNew,BAp.onlineNew,true,'Shopify first-ever orders')
+       +LN('First-order revenue · branches',BA.storeNew,BAp.storeNew,true,'daily till revenue × the month&rsquo;s registered new-customer share — an apportionment, not a measurement')
+       +LN('Ad spend (divides both)',sp0,sp1,false,'the one budget');}
+     return '<details style="margin:-6px 0 12px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#5a5bf0;list-style:none">&#9656; Why aMER moved — the drivers, ranked (click)</summary>'
+      +'<div style="padding:7px 2px 2px">'
+      +'<div style="font-size:11.5px;font-weight:800;color:#3a3bd0">Webstore — aMER '+(o.amer[0]||0).toFixed(2)+'× '+dl(pc(o.amer[0],o.amer[1]),true)+' = new customers × first basket ÷ spend</div>'
+      +LN('New customers won',nc0,nc1,true,M(o.cac[0])+' each · the volume lever — Meta tab &amp; What-to-do-next own this')
+      +LN('Their first basket',aov0,aov1,true,M(aov0)+' vs '+M(aov1)+' · the mix lever — what ads sell to strangers (hook products, Where to focus)')
+      +LN('Ad spend (the divisor)',sp0,sp1,false,'spending more with flat new-customer revenue drags aMER down by arithmetic alone')
+      +'<div style="font-size:11px;color:#8a93a6;padding:4px 0 0 18px">Biggest drag this window: <b>'+esc(drops[0]?drops[0][0]:'—')+'</b>.</div>'
+      +bl+'</div></details>';
+    }catch(e){return '';}})()
+  +'</div>'
   +(BA?'<div style="margin:-4px 0 13px;padding:8px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
     +'<b>Read the two whole-business ratios as scale, not as ad performance.</b> They put '+M(BA.storeRev)+' of shop revenue over the same '+M(BA.spend)+' of spend, '
     +'and regression on this account has shown Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled. '
@@ -3291,6 +3350,7 @@ function ovRange(a,b){
  if(W&&a>=W.start){const t0=new Date(W.start+'T00:00:00Z').getTime();
   const i0=Math.round((new Date(a+'T00:00:00Z')-t0)/864e5),i1=Math.round((new Date(b+'T00:00:00Z')-t0)/864e5);
   if(i1<W.n){bNcRev=0;names.forEach(n=>{const z=BD[n];if(!z)return;for(let i=Math.max(0,i0);i<=i1;i++)bNcRev+=(z.nrev||[])[i]||0;});}}
+ if(bNcRev==null){const q2=okBranchNC(a,b,'nrev');if(q2)bNcRev=q2.v;}
  out.bNcRev=bNcRev;
  /* ---- delivery: monthly ledger, apportioned by days like the branch figures ----
     Website only, so it is labelled that way. Uses s2() so an unsettled month arrives modelled
@@ -13716,7 +13776,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260903-221435';
+const BUILD='20260905-183510';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
