@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2216,7 +2215,8 @@ function glance(g,o){
   ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'webstore revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web'],
   ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web'],
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web'],
-  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web']
+  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web'],
+  ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web']
  ];
  if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.curW>=0?'#0f6e56':'#a3271a')+'">'+(NP.curW>=0?'+':'\u2212')+M(NP.curW)+'</span>',
@@ -2238,7 +2238,12 @@ function glance(g,o){
  if(_bnc)tiles.push(['New customers · branches',N(Math.round(_bnc.v)),
    _bncP&&_bncP.v?((_bnc.v/_bncP.v-1)*100):null,true,
    'registered first-timers at the tills (POS crawl'+(_bnc.est?', tail apportioned from the monthly ledger':'')+')','co']);
- const _tile=t=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff">'
+ const _brc=(function(){try{return okBranchNC(ST.s,ST.e,'rc');}catch(e){return null;}})();
+ const _brcP=(function(){try{const w=cmpWr(ST.s,ST.e);return w&&w[0]?okBranchNC(w[0],w[1],'rc'):null;}catch(e){return null;}})();
+ if(_brc)tiles.push(['Returning · branches',N(Math.round(_brc.v)),
+   _brcP&&_brcP.v?((_brc.v/_brcP.v-1)*100):null,true,
+   'registered repeat buyers at the tills'+(_brc.est?' (tail apportioned)':''),'co']);
+ const _tile=t=>'<div '+(t[0]==='aMER'?'onclick="var d=document.getElementById(\'amerDrill\');if(d){d.open=!d.open;if(d.open)d.scrollIntoView({block:\'center\'});}" title="Click for the full breakdown — every reason with its % of the move" ':'')+'style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff'+(t[0]==='aMER'?';cursor:pointer;box-shadow:inset 0 -2px 0 #5a5bf0':'')+'">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
   +'<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'+dl(t[2],t[3])
@@ -2343,35 +2348,103 @@ function glance(g,o){
   +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
   +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
   +'<div style="margin:2px 0 14px">'+tileH
-  +(function(){ /* v9.51 the aMER drill: which input actually moved it, both scopes */
+  +(function(){ /* v9.52 the aMER drill, done properly: not a list of deltas but an ATTRIBUTION.
+     ln(aMER1/aMER0) splits exactly into traffic + new-customer conversion + first basket
+     − spend, so each driver carries its true % of the move. On top: the day-mix check
+     (was the previous window just richer in Fridays?), the prospecting-spend answer from
+     the audience-mix classification, and the per-branch spread for the whole-business leg. */
     try{
-     const nc0=o.nc[0],nc1=o.nc[1],nv0=(o.ncrev&&o.ncrev[0])||0,nv1=(o.ncrev&&o.ncrev[1])||0;
-     const sp0=o.sp[0],sp1=o.sp[1];
-     if(!(sp0&&sp1&&nv1))return '';
-     const aov0=nc0?nv0/nc0:0,aov1=nc1?nv1/nc1:0;
-     let _worstAbs=0;const _mark=d2=>{if(d2!=null&&Math.abs(d2)>_worstAbs)_worstAbs=Math.abs(d2);return d2;};
-     const LN=(lab,c2,p2,inv,src,soloWorst)=>{const d2=pc(c2,p2);
-      const guilty=d2!=null&&(soloWorst?Math.abs(d2)>=_worstAbs-0.01&&Math.abs(d2)>=8:Math.abs(d2)>=8);
-      return '<div style="display:flex;gap:9px;align-items:baseline;padding:3px 0 3px 18px;border-left:2px solid #eef0f5;margin-left:7px">'
-       +'<span style="flex:0 0 auto;font-size:11.5px;color:#3D4763;font-weight:'+(guilty?'800':'600')+'">'+lab+'</span>'
-       +dl(d2,inv===false?false:true)
-       +'<span style="font-size:10.5px;color:#8a93a6">'+src+(guilty?' <b style="color:#a3271a">&larr; this is the one</b>':'')+'</span></div>';};
-     const drops=[['New customers won',pc(nc0,nc1)],['Their first basket',pc(aov0,aov1)],['Spend',-(pc(sp0,sp1)||0)]]
-       .filter(x=>x[1]!=null).sort((x,y)=>x[1]-y[1]);
+     const nc0=o.nc[0],nc1=o.nc[1];
+     const sp0=o.sp[0],sp1=o.sp[1],ss0=(o.sess&&o.sess[0])||0,ss1=(o.sess&&o.sess[1])||0;
+     /* reconstruct the EXACT numerator the aMER tile divides by spend, so this tree and the
+        tile can never disagree */
+     const nv0=(o.amer&&o.amer[0]!=null)?o.amer[0]*sp0:((o.ncrev&&o.ncrev[0])||0);
+     const nv1=(o.amer&&o.amer[1]!=null)?o.amer[1]*sp1:((o.ncrev&&o.ncrev[1])||0);
+     if(!(sp0&&sp1&&nv1&&nv0&&nc0&&nc1))return '';
+     const L2=x=>Math.log(x);
+     const comps=[];
+     const cvr0=ss0&&nc0?nc0/ss0:null,cvr1=ss1&&nc1?nc1/ss1:null;
+     if(cvr0&&cvr1){comps.push(['Traffic (sessions)',L2(ss0/ss1),N(ss0)+' vs '+N(ss1)]);
+      comps.push(['New-customer conversion (NC ÷ sessions)',L2(cvr0/cvr1),(cvr0*100).toFixed(2)+'% vs '+(cvr1*100).toFixed(2)+'%']);}
+     else comps.push(['New customers won',L2(nc0/nc1),N(nc0)+' vs '+N(nc1)]);
+     comps.push(['First basket (NC revenue ÷ NC)',L2((nv0/nc0)/(nv1/nc1)),M(nv0/nc0)+' vs '+M(nv1/nc1)]);
+     comps.push(['Spend (the divisor)',-L2(sp0/sp1),M(sp0)+' vs '+M(sp1)]);
+     const tot=comps.reduce((a,c2)=>a+c2[1],0);
+     comps.sort((a,b)=>a[1]-b[1]);
+     const totalPct=(Math.exp(tot)-1)*100;
+     const dragLead=comps[0], offLead=comps[comps.length-1];
+     let rows3='';
+     comps.forEach(c2=>{const alone=(Math.exp(c2[1])-1)*100;const drag=c2[1]<0;
+      const isDrag=c2===dragLead&&c2[1]<0, isOff=c2===offLead&&c2[1]>0;
+      rows3+='<div style="display:flex;gap:9px;align-items:baseline;padding:3px 0 3px 18px;border-left:2px solid #eef0f5;margin-left:7px">'
+       +'<span style="flex:0 0 96px;text-align:right;font-size:13px;font-weight:800;color:'+(drag?'#a3271a':'#0f6e56')+'">'+(alone>=0?'+':'−')+Math.abs(alone).toFixed(1)+'%</span>'
+       +'<span style="font-size:11.5px;color:#3D4763;font-weight:'+((isDrag||isOff)?'800':'600')+'">'+c2[0]+'</span>'
+       +'<span style="font-size:10.5px;color:#8a93a6">'+c2[2]
+       +(isDrag?' <b style="color:#a3271a">&larr; the biggest drag</b>':'')
+       +(isOff?' <b style="color:#0f6e56">&larr; the offset holding it up</b>':'')+'</span></div>';});
+     rows3+='<div style="padding:3px 0 0 18px;margin-left:7px;font-size:10.5px;color:#8a93a6">Each line is what that input ALONE would have done to aMER; they compound (multiply), landing at '+(totalPct>=0?'+':'−')+Math.abs(totalPct).toFixed(1)+'%.</div>';
+
+     /* -- day-mix: what would aMER have done on weekday means alone -- */
+     let calLine='';
+     try{const A2=O.ad,t02=Date.parse(A2.start);
+      const wm=[0,0,0,0,0,0,0],wc=[0,0,0,0,0,0,0];
+      for(let i=Math.max(0,A2.n-56);i<A2.n;i++){const wd2=new Date(t02+i*864e5).getUTCDay();wm[wd2]+=(A2.ncrev||[])[i]||0;wc[wd2]++;}
+      const mean=d2=>wm[d2]/(wc[d2]||1);
+      const expW=(a,b)=>{let t2=0;for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5)t2+=mean(new Date(d).getUTCDay());return t2;};
+      const pw3=cmpWr(ST.s,ST.e);
+      if(pw3&&pw3[0]){const e1=expW(ST.s,ST.e),e0=expW(pw3[0],pw3[1]);
+       const wk=(a,b)=>{let n2=0;for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const w2=new Date(d).getUTCDay();if(w2===5||w2===6)n2++;}return n2;};
+       const calLn=L2(e1/e0),calPct=tot?Math.round(calLn/tot*100):0;
+       calLine='<div style="padding:5px 0 3px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:11px;color:#5b6478">'
+        +'<b>Day-mix check:</b> this window has '+wk(ST.s,ST.e)+' weekend day'+(wk(ST.s,ST.e)===1?'':'s')+' (Fri/Sat) vs '+wk(pw3[0],pw3[1])+' before, and both are '+span(ST.s,ST.e)+' complete days. On the last 8 weeks&rsquo; weekday averages alone, aMER would have moved '+((Math.exp(calLn)-1)*100).toFixed(1)+'%'
+        +(Math.abs(calPct)>=15?' — <b>the calendar explains about '+Math.abs(calPct)+'% of this move</b>; the rest is real.':' — the calendar is NOT the story here; the move is real.')+'</div>';}
+     }catch(e2){}
+
+     /* -- prospecting spend: the "am I spending less on new audiences" answer -- */
+     let prosLine='';
+     try{const AM2=(O.audMix&&O.audMix.cmp)||{};const W2=O.madsW;
+      if(W2&&Object.keys(AM2).length){const P2=pfWin(W2);
+       const sums=(a,b)=>{let pr=0,all=0;(O.mads||[]).forEach(ad2=>{if(!ad2.d||!ad2.cid)return;
+         const nf=(AM2[ad2.cid]||{}).n||0;
+         for(let k=a;k<=b;k++){const v=(ad2.d.sp||[])[k]||0;all+=v;pr+=v*nf;}});
+        return {pr,all};};
+       const c2=sums(P2.a,P2.b),p3=P2.ok?sums(P2.pa,P2.pb):null;
+       if(c2.all&&p3&&p3.all){
+        const s1p=c2.pr/c2.all*100,s0p=p3.pr/p3.all*100;
+        prosLine='<div style="padding:3px 0 3px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:11px;color:#5b6478">'
+         +'<b>New-audience spend check:</b> prospecting took <b>'+s1p.toFixed(0)+'%</b> of Meta spend ('+M(c2.pr)+') vs '+s0p.toFixed(0)+'% ('+M(p3.pr)+') before — prospecting money itself moved '+((p3.pr>0?(c2.pr/p3.pr-1)*100:0)>=0?'+':'')+(p3.pr>0?((c2.pr/p3.pr-1)*100).toFixed(1):'0')+'%'
+         +(Math.abs(s1p-s0p)<3?'. The mix barely moved — this is not a budget-mix story.':'. The mix shifted — read the Launches &amp; budgets tab for which campaign did it.')+'</div>';}}
+     }catch(e2){}
+
+     /* -- whole business + branch spread -- */
      let bl='';
-     if(BA&&BAp){const dOn=pc(BA.onlineNew,BAp.onlineNew),dSt=pc(BA.storeNew,BAp.storeNew);
-      bl='<div style="margin-top:7px;font-size:11.5px;font-weight:800;color:#0f6e56">Whole business — aMER '+BA.amer.toFixed(2)+'× '+(dl(pc(BA.amer,BAp.amer),true))+'</div>'
-       +LN('First-order revenue · webstore',BA.onlineNew,BAp.onlineNew,true,'Shopify first-ever orders')
-       +LN('First-order revenue · branches',BA.storeNew,BAp.storeNew,true,'daily till revenue × the month&rsquo;s registered new-customer share — an apportionment, not a measurement')
-       +LN('Ad spend (divides both)',sp0,sp1,false,'the one budget');}
-     return '<details style="margin:-6px 0 12px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#5a5bf0;list-style:none">&#9656; Why aMER moved — the drivers, ranked (click)</summary>'
+     if(BA&&BAp){
+      let spread='';
+      try{const pw3=cmpWr(ST.s,ST.e);const BD2=O.bnrD;
+       if(pw3&&pw3[0]&&BD2&&BD2._w){const t03=Date.parse(BD2._w.start);
+        const bsum=(br,a,b)=>{let t2=0,any=false;
+         for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t03)/864e5);
+          if(i>=0&&i<BD2._w.n){t2+=((BD2[br]||{}).nrev||[])[i]||0;any=true;}}
+         return any?t2:null;};
+        const moves=Object.keys(BD2).filter(k=>k!=='_w').map(br=>{const c3=bsum(br,ST.s,ST.e),p4=bsum(br,pw3[0],pw3[1]);
+          return (c3!=null&&p4)?{br,c:c3,p:p4,d:c3-p4}:null;}).filter(Boolean);
+        if(moves.length>=5){const down=moves.filter(m2=>m2.d<0);const totDown=down.reduce((a,m2)=>a+m2.d,0);
+         down.sort((a,b)=>a.d-b.d);
+         spread='<div style="padding:3px 0 3px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:11px;color:#5b6478">'
+          +'<b>Branch spread:</b> '+down.length+' of '+moves.length+' branches down on first-order revenue'
+          +(down.length?'; biggest: '+down.slice(0,2).map(m2=>'<b>'+esc(m2.br)+'</b> '+((m2.c/m2.p-1)*100).toFixed(0)+'% ('+Math.round(m2.d/totDown*100)+'% of the branch-side drop)').join(', ')
+           +(down.length>=moves.length-1?' — this is ACROSS the network, not one shop.':' — concentrated, not network-wide.'):'')+'</div>';}}
+      }catch(e2){}
+      bl='<div style="margin-top:8px;font-size:11.5px;font-weight:800;color:#0f6e56">Whole business — aMER '+BA.amer.toFixed(2)+'× '+(dl(pc(BA.amer,BAp.amer),true))+'</div>'
+       +'<div style="padding:2px 0 2px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:11px;color:#5b6478">Webstore first-order revenue '+dl(pc(BA.onlineNew,BAp.onlineNew),true)+' · branches first-order revenue '+dl(pc(BA.storeNew,BAp.storeNew),true)+' · one spend divides both '+dl(-(pc(sp0,sp1)||0),true)+'</div>'
+       +spread;}
+
+     return '<details id="amerDrill" style="margin:-6px 0 12px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#5a5bf0;list-style:none">&#9656; aMER '+dl(pc(o.amer[0],o.amer[1]),true)+' — every reason, with its % of the move (click, or click either aMER tile)</summary>'
       +'<div style="padding:7px 2px 2px">'
-      +'<div style="font-size:11.5px;font-weight:800;color:#3a3bd0">Webstore — aMER '+(o.amer[0]||0).toFixed(2)+'× '+dl(pc(o.amer[0],o.amer[1]),true)+' = new customers × first basket ÷ spend</div>'
-      +LN('New customers won',nc0,nc1,true,M(o.cac[0])+' each · the volume lever — Meta tab &amp; What-to-do-next own this')
-      +LN('Their first basket',aov0,aov1,true,M(aov0)+' vs '+M(aov1)+' · the mix lever — what ads sell to strangers (hook products, Where to focus)')
-      +LN('Ad spend (the divisor)',sp0,sp1,false,'spending more with flat new-customer revenue drags aMER down by arithmetic alone')
-      +'<div style="font-size:11px;color:#8a93a6;padding:4px 0 0 18px">Biggest drag this window: <b>'+esc(drops[0]?drops[0][0]:'—')+'</b>.</div>'
-      +bl+'</div></details>';
+      +'<div style="font-size:11.5px;font-weight:800;color:#3a3bd0">Webstore aMER '+(o.amer[0]||0).toFixed(2)+'× moved '+(totalPct>=0?'+':'−')+Math.abs(totalPct).toFixed(1)+'% — its inputs, each shown as the move it alone would have caused:</div>'
+      +rows3+calLine+prosLine+bl
+      +'<div style="font-size:10px;color:#8a93a6;padding:5px 0 0 18px">The input lines are the ratio&rsquo;s own arithmetic and multiply back to the exact move. The checks beneath them are evidence, not arithmetic.</div>'
+      +'</div></details>';
     }catch(e){return '';}})()
   +'</div>'
   +(BA?'<div style="margin:-4px 0 13px;padding:8px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
@@ -13777,7 +13850,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260905-183510';
+const BUILD='20260905-185719';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
