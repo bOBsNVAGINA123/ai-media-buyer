@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2370,6 +2369,45 @@ function glance(g,o){
      else comps.push(['New customers won',L2(nc0/nc1),N(nc0)+' vs '+N(nc1)]);
      comps.push(['First basket (NC revenue ÷ NC)',L2((nv0/nc0)/(nv1/nc1)),M(nv0/nc0)+' vs '+M(nv1/nc1)]);
      comps.push(['Spend (the divisor)',-L2(sp0/sp1),M(sp0)+' vs '+M(sp1)]);
+     /* -- CULPRITS: the arithmetic says WHICH input moved; these say WHO did it -- */
+     let culTraffic='',culBasket='';
+     try{ // traffic: which platform's clicks fell, and which Meta campaigns did the falling
+      const A3=O.ad,t04=Date.parse(A3.start);
+      const rng=(a,b)=>[Math.max(0,Math.round((Date.parse(a)-t04)/864e5)),Math.min(A3.n-1,Math.round((Date.parse(b)-t04)/864e5))];
+      const pw4=cmpWr(ST.s,ST.e);
+      if(pw4&&pw4[0]){const r1=rng(ST.s,ST.e),r0=rng(pw4[0],pw4[1]);
+       const SUM=(k,r2)=>{let t2=0;for(let i=r2[0];i<=r2[1];i++)t2+=(A3[k]||[])[i]||0;return t2;};
+       const plat=[['Meta','mclk'],['Google','gclk'],['TikTok','tclk']].map(p4=>({n:p4[0],c:SUM(p4[1],r1),p:SUM(p4[1],r0)}))
+         .map(p4=>({...p4,d:p4.c-p4.p})).sort((a,b)=>a.d-b.d);
+       const fell=plat.filter(p4=>p4.d<0);const totF=fell.reduce((a,p4)=>a+p4.d,0);
+       let campBit='';
+       try{const W3=O.madsW,P3=pfWin(W3);const byCmp={};
+        (O.mads||[]).forEach(ad3=>{if(!ad3.d||!ad3.d.oc)return;
+         const e3=byCmp[ad3.cid]||(byCmp[ad3.cid]={n:ad3.cmp||ad3.cid,acct:ad3.acct,id:ad3.cid,c:0,p:0});
+         for(let k=P3.a;k<=P3.b;k++)e3.c+=ad3.d.oc[k]||0;
+         if(P3.ok)for(let k=P3.pa;k<=P3.pb;k++)e3.p+=ad3.d.oc[k]||0;});
+        const drops=Object.values(byCmp).map(x=>({...x,d:x.c-x.p})).filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
+        const totD=drops.reduce((a,x)=>a+x.d,0);
+        if(drops.length)campBit=' Inside Meta, the fall is: '+drops.slice(0,3).map(x=>{
+          const u=(typeof amURL==='function')?amURL('campaign',x.id,x.acct):null;
+          const nm=esc(String(x.n).slice(0,30));
+          return (u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)+' '+Math.round(x.d/totD*100)+'%';
+         }).join(' · ')+' of the lost clicks.';
+       }catch(e3){}
+       if(fell.length)culTraffic='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>who lost the traffic:</b> '
+        +fell.map(p4=>p4.n+' clicks '+((p4.c/p4.p-1)*100).toFixed(0)+'% ('+Math.round(p4.d/totF*100)+'% of the fall)').join(' · ')+'.'+campBit+'</div>';}
+     }catch(e2){}
+     try{ // basket: which products stopped selling, from the WHY crawl's closest window
+      const d4=Math.max(1,span(ST.s,ST.e));const wk2=d4<=3?'1':(d4<=17?'7':'28');
+      const W4=((O.why||{}).win||{})[wk2];
+      const pr4=(W4&&W4.prods)||[];
+      const fell4=pr4.map(x=>({...x,d:(x.r||0)-(x.pr||0)})).filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
+      const totB=fell4.reduce((a,x)=>a+x.d,0);
+      if(fell4.length)culBasket='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>what stopped selling</b> (all orders, '+wk2+'d crawl — the closest product grain to your window): '
+       +fell4.slice(0,3).map(x=>{const nm=esc(String(x.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,26));
+         return (x.url?'<a href="'+x.url+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)+' \u2212'+M(Math.abs(x.d))+(x.st!=null&&x.st<=3?' <b style="color:#a3271a">('+x.st+' units left — a STOCK problem, not a demand one)</b>':'');
+        }).join(' · ')+' — together '+Math.round((fell4[0].d+((fell4[1]||{}).d||0)+((fell4[2]||{}).d||0))/totB*100)+'% of everything that fell.</div>';
+     }catch(e2){}
      const tot=comps.reduce((a,c2)=>a+c2[1],0);
      comps.sort((a,b)=>a[1]-b[1]);
      const totalPct=(Math.exp(tot)-1)*100;
@@ -2382,7 +2420,9 @@ function glance(g,o){
        +'<span style="font-size:11.5px;color:#3D4763;font-weight:'+((isDrag||isOff)?'800':'600')+'">'+c2[0]+'</span>'
        +'<span style="font-size:10.5px;color:#8a93a6">'+c2[2]
        +(isDrag?' <b style="color:#a3271a">&larr; the biggest drag</b>':'')
-       +(isOff?' <b style="color:#0f6e56">&larr; the offset holding it up</b>':'')+'</span></div>';});
+       +(isOff?' <b style="color:#0f6e56">&larr; the offset holding it up</b>':'')+'</span></div>'
+       +(/Traffic/.test(c2[0])&&c2[1]<0?culTraffic:'')
+       +(/First basket/.test(c2[0])&&c2[1]<0?culBasket:'');});
      rows3+='<div style="padding:3px 0 0 18px;margin-left:7px;font-size:10.5px;color:#8a93a6">Each line is what that input ALONE would have done to aMER; they compound (multiply), landing at '+(totalPct>=0?'+':'−')+Math.abs(totalPct).toFixed(1)+'%.</div>';
 
      /* -- day-mix: what would aMER have done on weekday means alone -- */
@@ -2401,21 +2441,26 @@ function glance(g,o){
         +(Math.abs(calPct)>=15?' — <b>the calendar explains about '+Math.abs(calPct)+'% of this move</b>; the rest is real.':' — the calendar is NOT the story here; the move is real.')+'</div>';}
      }catch(e2){}
 
-     /* -- prospecting spend: the "am I spending less on new audiences" answer -- */
+     /* -- audience-mix: classified from each ad set's TARGETING SPEC, so only two classes are
+          honest: EXPLICITLY retargeting/existing audiences, and everything else (broad /
+          Advantage+), which Meta serves to new AND existing people alike. Calling broad
+          "prospecting" would overstate new-audience spend, so it is not called that. -- */
      let prosLine='';
      try{const AM2=(O.audMix&&O.audMix.cmp)||{};const W2=O.madsW;
       if(W2&&Object.keys(AM2).length){const P2=pfWin(W2);
-       const sums=(a,b)=>{let pr=0,all=0;(O.mads||[]).forEach(ad2=>{if(!ad2.d||!ad2.cid)return;
-         const nf=(AM2[ad2.cid]||{}).n||0;
-         for(let k=a;k<=b;k++){const v=(ad2.d.sp||[])[k]||0;all+=v;pr+=v*nf;}});
-        return {pr,all};};
+       const sums=(a,b)=>{let rt=0,all=0;(O.mads||[]).forEach(ad2=>{if(!ad2.d||!ad2.cid)return;
+         const xf=((AM2[ad2.cid]||{}).x||0)+((AM2[ad2.cid]||{}).e||0);
+         for(let k=a;k<=b;k++){const v=(ad2.d.sp||[])[k]||0;all+=v;rt+=v*xf;}});
+        return {rt,all};};
        const c2=sums(P2.a,P2.b),p3=P2.ok?sums(P2.pa,P2.pb):null;
        if(c2.all&&p3&&p3.all){
-        const s1p=c2.pr/c2.all*100,s0p=p3.pr/p3.all*100;
+        const s1p=c2.rt/c2.all*100,s0p=p3.rt/p3.all*100;
         prosLine='<div style="padding:3px 0 3px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:11px;color:#5b6478">'
-         +'<b>New-audience spend check:</b> prospecting took <b>'+s1p.toFixed(0)+'%</b> of Meta spend ('+M(c2.pr)+') vs '+s0p.toFixed(0)+'% ('+M(p3.pr)+') before — prospecting money itself moved '+((p3.pr>0?(c2.pr/p3.pr-1)*100:0)>=0?'+':'')+(p3.pr>0?((c2.pr/p3.pr-1)*100).toFixed(1):'0')+'%'
-         +(Math.abs(s1p-s0p)<3?'. The mix barely moved — this is not a budget-mix story.':'. The mix shifted — read the Launches &amp; budgets tab for which campaign did it.')+'</div>';}}
+         +'<b>Audience-mix check:</b> spend on EXPLICITLY retargeting/existing audiences was <b>'+s1p.toFixed(1)+'%</b> ('+M(c2.rt)+') vs '+s0p.toFixed(1)+'% ('+M(p3.rt)+') before; the other '+(100-s1p).toFixed(0)+'% is broad-targeted, and <b>broad reaches existing customers too</b> — the targeting spec cannot split that, so treat this as a mix read, not a true new-customer spend figure.'
+         +(Math.abs(s1p-s0p)<3?' The mix barely moved — the aMER drop did not come from a shift toward retargeting.':' The mix shifted toward retargeting — that pulls aMER down mechanically; Launches &amp; budgets names the campaign.')+'</div>';}}
      }catch(e2){}
+
+
 
      /* -- whole business + branch spread -- */
      let bl='';
@@ -13851,7 +13896,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260905-185719';
+const BUILD='20260905-192550';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
