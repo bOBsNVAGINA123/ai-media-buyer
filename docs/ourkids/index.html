@@ -13474,12 +13474,13 @@ function rGOOG(){
   const TD2='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
   const wlbl=GW.length===2?('60 days ('+GW[0]+' &rarr; '+GW[1]+')'):'60 days';
   const pct=v=>v.toFixed(2)+'%';
+  const NETSP=(GA.net||[]).reduce((a,n)=>a+(n.sp||0),0);
   const KW=(GA.kw||[]);
   if(KW.length){
    const mx=Math.max.apply(null,KW.map(k=>k.sp))||1, top=KW.slice(0,15);
    const tsp=KW.reduce((a,k)=>a+k.sp,0), tcv=KW.reduce((a,k)=>a+k.cv,0);
-   pnlCard(g,'google','Keywords &mdash; where the click money goes'+INFO('Paid keywords from keyword_view, ranked by cost. Search and Shopping only: PMax has no keywords, so its spend is not in this table -- see the network panel for how much of the account that is.'),
-    'Last '+wlbl+', fixed &mdash; not the date box. '+KW.length+' keywords took '+M(tsp)+' and returned '+M(tcv)+' ('+(tsp?(tcv/tsp).toFixed(2):'0')+'&times; reported).',
+   pnlCard(g,'google','Keywords &mdash; where the click money goes'+INFO('Paid keywords from keyword_view, ranked by cost. Only keyword-targeted Search ad groups appear here at all: Shopping bids on product groups and PMax bids on nothing you can name, so most of the account has no keyword to rank. That is a property of the account structure, not a gap in this table.'),
+    'Last '+wlbl+', fixed &mdash; not the date box. '+KW.length+' keywords took '+M(tsp)+' and returned '+M(tcv)+' ('+(tsp?(tcv/tsp).toFixed(2):'0')+'&times; reported)'+(NETSP?' &mdash; that is '+(tsp/NETSP*100).toFixed(0)+'% of the '+M(NETSP)+' the account spent. The other '+(100-tsp/NETSP*100).toFixed(0)+'% went through Shopping product groups and PMax, where there is no keyword to rank.':'.'),
     '<div style="overflow-x:auto"><table class="bt" style="min-width:640px;width:100%">'
     +'<tr><th style="'+TH2+';text-align:left">Keyword</th><th style="'+TH2+'">Cost</th><th style="'+TH2+'">Clicks</th><th style="'+TH2+'">CTR</th><th style="'+TH2+'">CPC</th><th style="'+TH2+'">Conv</th><th style="'+TH2+'">ROAS</th></tr>'
     +top.map(k=>{const ro=k.sp?k.cv/k.sp:0;
