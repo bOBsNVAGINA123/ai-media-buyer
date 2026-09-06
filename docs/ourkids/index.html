@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -6449,14 +6448,24 @@ function rFOCUS(){
     Part month is dropped whenever a complete month is in the range. */
  const nowMF=(O.today||'').slice(0,7);
  if(cur.length>1)cur=cur.filter(m=>m!==nowMF);
+ /* an MTD pick early in the month leaves ONLY the running month, whose ledger rows barely
+    exist yet -- every vendor read E£0 with a fake -100%. Fall back to the last complete month
+    and say so, rather than ranking a book of zeroes. */
+ let _foFell=false;
+ if(cur.length===1&&cur[0]===nowMF){const j=A.indexOf(nowMF);
+  if(j>0){cur=[A[j-1]];_foFell=true;}}
  const i0=A.indexOf(cur[0]);
  const prev=A.slice(Math.max(0,i0-cur.length),i0);
  const wRev=(r,ms)=>ms.reduce((a,m)=>a+(((r.mon||{})[m]||[0,0])[0]||0),0);
  const wGp =(r,ms)=>ms.reduce((a,m)=>a+(((r.mon||{})[m]||[0,0])[1]||0),0);
 
+ const lyOf=m=>(+m.slice(0,4)-1)+m.slice(4);
+ const curLY=cur.map(lyOf);
  const build=list=>list.map(r=>{
    const rev=wRev(r,cur), gp=wGp(r,cur), pRev=wRev(r,prev), pGp=wGp(r,prev);
-   return {r:r,n:r.n,rev:rev,gp:gp,pRev:pRev,pGp:pGp,
+   const lyRev=wRev(r,curLY), lyGp=wGp(r,curLY);
+   return {r:r,n:r.n,rev:rev,gp:gp,pRev:pRev,pGp:pGp,lyRev:lyRev,lyGp:lyGp,
+           yoy:lyGp>0?(gp/lyGp-1)*100:null,
            mg:rev?gp/rev*100:0, d:rev-pRev, dp:pRev>0?(rev/pRev-1)*100:null,
            url:r.url||null, st:r.st||null, vn:r.vn||null, cat:r.cat||null};
   }).filter(x=>x.rev>0||x.pRev>0);
@@ -6466,6 +6475,7 @@ function rFOCUS(){
  const _selD2=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
  bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. '
   +(_selD2&&_selD2<28?'<b style="color:#b8621b">Your date box asks for '+_selD2+' days — product and vendor money only exists at MONTH grain in this feed, so the tab reads the complete month(s) your range touches.</b> ':'')
+  +(_foFell?'<b style="color:#b8621b">The running month has almost no ledger rows yet, so the tab reads the last COMPLETE month instead of a book of zeroes.</b> ':'')
   +'Reading <b>'+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'')+'</b> ('+cur.length+' month'+(cur.length===1?'':'s')+')'
   +(prev.length?', against the '+prev.length+' month'+(prev.length===1?'':'s')+' before it ('+prev[0]+(prev.length>1?' → '+prev[prev.length-1]:'')+')':', with no prior months in the ledger to compare against')
   +'. Products are the top '+PV.length+' templates by revenue plus the top lines of every vendor on the board; vendors are the '+VD.length+' covering '+(((O.vend||{}).cov||{}).revPct||0).toFixed(0)+'% of retail. Retail till revenue and Odoo margin, plus the Shopify leg where the same template sells online.';
@@ -6593,10 +6603,13 @@ function rFOCUS(){
    +'<td style="'+TD+'">'+M(x.rev)+'</td>'
    +'<td style="'+TD+';color:'+(x.mg>=30?'#0f6e56':x.mg<18?'#a3271a':'#334155')+'">'+x.mg.toFixed(1)+'%</td>'
    +'<td style="'+TD+'">'+move(x)+'</td>'
+   +'<td style="'+TD+'">'+(x.yoy==null?'<span style="color:#c9ccd6" title="No sales in the same months last year — or it did not exist yet">new vs LY</span>'
+     :'<span style="color:'+(x.yoy>=0?'#0f6e56':'#a3271a')+';font-weight:700">'+(x.yoy>=0?'+':'−')+Math.abs(x.yoy).toFixed(0)+'%</span><div style="font-size:9.5px;color:#8a93a6">'+M(x.lyGp)+' GP then</div>')+'</td>'
    +(extra?extra(x):'')+'</tr>';});
   return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
    +'<tr><th style="'+TH+';text-align:left">#</th><th style="'+TH+';text-align:left">'+what+'</th>'
    +'<th style="'+TH+'">Gross profit</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th><th style="'+TH+'">vs prior</th>'
+   +'<th style="'+TH+'">GP vs same months LY</th>'
    +(extra?'<th style="'+TH+'">Stock</th>':'')+'</tr>'+b2+'</table></div>';};
  const stockCell=x=>{const st=x.st;if(!st)return '<td style="'+TD+'"><span style="color:#c9ccd6">—</span></td>';
   const cov=(x.rev&&st.u)?null:null;
@@ -6726,9 +6739,19 @@ function rDC(){
  const _mrange=(k)=>{const POS=O.pos||{},m0=win[0].slice(0,7),m1=win[1].slice(0,7);let t=0;
    Object.keys(POS).forEach(b=>Object.keys(POS[b]||{}).forEach(m=>{
      if(m<m0||m>m1)return; t+=(POS[b][m]||[])[k]||0;}));return t;};
- const offBordM=_mrange(2), offBrevM=_mrange(0);
+ const offBordM=_mrange(2), offBrevM=_mrange(0), offBgpM=_mrange(1);
  const offBaov=offBordM?offBrevM/offBordM:null;
+ const offBgpo=offBordM?offBgpM/offBordM:null;   // GP an ORDINARY receipt leaves, same months
 
+ const MIXD=(PR.offMix)||null;
+ const _n2=c=>String(c).toLowerCase().replace(/\s+/g,' ').trim();
+ const mixFor=c=>{if(!MIXD)return null;let o=0,u=0,nw=0,rt=0,hit=false;
+  const m0m=win[0].slice(0,7),m1m=win[1].slice(0,7);
+  Object.keys(MIXD).forEach(k=>{if(_n2(k)!==_n2(c))return;
+   Object.keys(MIXD[k]).forEach(m=>{if(m<m0m||m>m1m)return;const v=MIXD[k][m];
+    o+=v[0];u+=v[1];nw+=v[2];rt+=v[3];hit=true;});});
+  if(!hit||!o)return null;
+  return {o,u,nw,rt,broken:(u===o&&o>3)};};
  let L=Object.values(codes).map(r=>{
   const on=r.onC||[0,0,0,0], off=r.offC||[0,0,0];
   const onP=r.onP||[0,0,0,0], offP=r.offP||[0,0,0];
@@ -6742,7 +6765,8 @@ function rDC(){
   return {c:r.c,ord,rev,disc,gp,pOrd,pRev,
           onOrd:on[0],onRev:on[1],onDisc:on[2],
           offOrd:off[0],offRev:off[1],offGp:off[2],
-          aov:ord?rev/ord:null,
+          aov:ord?rev/ord:null, mix:mixFor(r.c),
+          gpo:off[0]?off[2]/off[0]:null,
           gpPct:(off[1]?off[2]/off[1]*100:null)};
  }).filter(r=>r.ord>0);
  L.sort((a,b)=>b.rev-a.rev);
@@ -6819,7 +6843,16 @@ function rDC(){
    +'<td style="'+TD+'">'+(r.offOrd?N(r.offOrd):'<span style="color:#c9ccd6">—</span>')+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(r.offGp<0?'#a3271a':'#161d2e')+'">'+(r.offRev?((r.offGp<0?'−':'')+M(r.offGp)):'—')+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(r.gpPct==null?'#8a93a6':(r.gpPct<0?'#a3271a':(offBgp!=null&&r.gpPct<offBgp?'#a35a1a':'#0f6e56')))+'">'
-     +(r.gpPct==null?'—':r.gpPct.toFixed(1)+'%')+'</td></tr>';});
+     +(r.gpPct==null?'—':r.gpPct.toFixed(1)+'%')+'</td>'
+   +(function(){const m2=r.mix;
+     if(!m2)return '<td style="'+TD+'"><span style="color:#c9ccd6" title="Customer mix lands with the next collector run">—</span></td>';
+     if(m2.broken)return '<td style="'+TD+'"><span style="color:#c08a3a" title="The last crawl could not read who these customers were — fixed in the collector, refills on the next run">resyncing</span></td>';
+     return '<td style="'+TD+';white-space:nowrap"><b style="color:#0f6e56">'+Math.round(m2.nw/m2.o*100)+'%</b> / '+Math.round(m2.rt/m2.o*100)+'% / <span style="color:#8a93a6">'+Math.round(m2.u/m2.o*100)+'%</span></td>';})()
+   +(function(){if(r.gpo==null)return '<td style="'+TD+'"><span style="color:#c9ccd6">—</span></td>';
+     const d2=offBgpo?(r.gpo/offBgpo-1)*100:null;
+     return '<td style="'+TD+';font-weight:800;color:'+(d2==null?'#26313f':(d2>=0?'#0f6e56':'#a3271a'))+'">'+M(r.gpo)
+      +(d2!=null?'<div style="font-size:9.5px;font-weight:700">'+(d2>=0?'+':'−')+Math.abs(d2).toFixed(0)+'% vs an un-coded receipt ('+M(offBgpo)+')</div>':'')+'</td>';})()
+   +'</tr>';});
 
  /* ---- month rollup ---- */
  let monthBlock='';
@@ -6862,7 +6895,9 @@ function rDC(){
   +'<tr><th style="'+TH+';text-align:left">Code</th><th style="'+TH+'">Orders</th><th style="'+TH+'">Revenue</th>'
   +'<th style="'+TH+'">AOV</th><th style="'+TH+'">Given away</th>'
   +'<th style="'+TH+'">Online ord</th><th style="'+TH+'">In-store ord</th>'
-  +'<th style="'+TH+'">In-store GP</th><th style="'+TH+'">GP %</th></tr>'+body+'</table></div>'
+  +'<th style="'+TH+'">In-store GP</th><th style="'+TH+'">GP %</th>'
+  +'<th style="'+TH+'">Customers<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">new / returning / unregistered</div></th>'
+  +'<th style="'+TH+'">GP per receipt<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">better or worse than un-coded</div></th></tr>'+body+'</table></div>'
   +(L.length>40?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(L.length-40)+' smaller codes not shown.</div>':'')
   +monthBlock
   +'<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
@@ -8782,9 +8817,10 @@ function atToast(p){try{const k=ST.att[p];const lab=((O.attr.labels||{})[k]||k);
    platform tabs now grey out the two selectors they ignore and put the applied multiplier in
    the title of the one they use. Every other tab is blended and reads all three, so all three
    stay live there. */
-const ATGATE={mt:['meta'],gg:['google'],tk:['tt']};
+const ATGATE={mt:['meta'],gg:['google'],tk:['tt'],dc:[],fo:[],tm:[],rp:[],cs:[]};
 function atGate(){try{
  const use=ATGATE[TAB]; if(!use)var all=1;
+ /* an EMPTY list means NO selector applies on this tab (ledger data, not ad-attributed) */
  const map={am:'meta',am2:'meta',ag:'google',ag2:'google',ax:'tt',ax2:'tt'};
  const mark=function(el,p){if(!el)return;const on=all?true:use.indexOf(p)>=0;
   el.disabled=!on;el.style.opacity=on?'1':'.32';el.style.cursor=on?'':'not-allowed';
@@ -14012,7 +14048,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260906-124218';
+const BUILD='20260906-125251';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
