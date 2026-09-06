@@ -13463,6 +13463,87 @@ function rGOOG(){
    +'<b>At the assumed incremental rate of '+incr.toFixed(2)+' that '+cur.roas.toFixed(2)+'× is '+(cur.roas*incr).toFixed(2)+'×.</b> '
    +'Google sells no incrementality measurement and none has been run on this account, so that multiplier is an assumption, not a finding.</div>':''));
 
+ /* ---- 1b. GOOGLE'S OWN OVERVIEW, rebuilt.
+    Three panels the Ads Overview page shows and this tab never did: which keywords the money
+    goes to, which network it goes to, and which conversion actions are still firing. All three
+    come off the 60d gattr pack, NOT the date box -- the label says so. Google's Overview stops
+    at cost/clicks/CTR; conversions and ROAS are added here because a keyword table without
+    them ranks spend, not value. */
+ (function(){ const GA=O.gattr||{}, GW=(GA.win||[]);
+  const TH2='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+  const TD2='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
+  const wlbl=GW.length===2?('60 days ('+GW[0]+' &rarr; '+GW[1]+')'):'60 days';
+  const pct=v=>v.toFixed(2)+'%';
+  const KW=(GA.kw||[]);
+  if(KW.length){
+   const mx=Math.max.apply(null,KW.map(k=>k.sp))||1, top=KW.slice(0,15);
+   const tsp=KW.reduce((a,k)=>a+k.sp,0), tcv=KW.reduce((a,k)=>a+k.cv,0);
+   pnlCard(g,'google','Keywords &mdash; where the click money goes'+INFO('Paid keywords from keyword_view, ranked by cost. Search and Shopping only: PMax has no keywords, so its spend is not in this table -- see the network panel for how much of the account that is.'),
+    'Last '+wlbl+', fixed &mdash; not the date box. '+KW.length+' keywords took '+M(tsp)+' and returned '+M(tcv)+' ('+(tsp?(tcv/tsp).toFixed(2):'0')+'&times; reported).',
+    '<div style="overflow-x:auto"><table class="bt" style="min-width:640px;width:100%">'
+    +'<tr><th style="'+TH2+';text-align:left">Keyword</th><th style="'+TH2+'">Cost</th><th style="'+TH2+'">Clicks</th><th style="'+TH2+'">CTR</th><th style="'+TH2+'">CPC</th><th style="'+TH2+'">Conv</th><th style="'+TH2+'">ROAS</th></tr>'
+    +top.map(k=>{const ro=k.sp?k.cv/k.sp:0;
+     return '<tr><td style="'+TD2+';text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis">'
+      +'<b style="font-weight:700">'+esc(k.t)+'</b> <span style="font-size:9.5px;color:#94a3b8">'+k.mt+'</span></td>'
+      +'<td style="'+TD2+';position:relative">'
+       +'<div style="position:absolute;left:4px;top:5px;bottom:5px;width:'+(k.sp/mx*100).toFixed(1)+'%;background:#dbe4ff;border-radius:4px"></div>'
+       +'<span style="position:relative;font-weight:700">'+M(k.sp)+'</span></td>'
+      +'<td style="'+TD2+'">'+N(k.ck)+'</td>'
+      +'<td style="'+TD2+'">'+(k.im?pct(k.ck/k.im*100):'&mdash;')+'</td>'
+      +'<td style="'+TD2+'">'+(k.ck?M(k.sp/k.ck):'&mdash;')+'</td>'
+      +'<td style="'+TD2+'">'+(k.cn||0)+'</td>'
+      +'<td style="'+TD2+';font-weight:800;color:'+(ro>=2?'#0f6e56':(ro>0?'#a35d1a':'#a3271a'))+'">'+(k.sp?ro.toFixed(2)+'&times;':'&mdash;')+'</td></tr>';}).join('')
+    +'</table></div>'
+    +(KW.length>15?'<div style="font-size:10.5px;color:#8a93a6;margin-top:6px">Top 15 of '+KW.length+' by cost.</div>':''));
+  }
+  const NT=(GA.net||[]);
+  if(NT.length){
+   const NM={'SEARCH':'Google search','SEARCH_PARTNERS':'Search partners','CONTENT':'Display','MIXED':'Cross-network (PMax)','YOUTUBE':'YouTube','YOUTUBE_WATCH':'YouTube','UNKNOWN':'Other'};
+   const NC={'SEARCH':'#3457d5','SEARCH_PARTNERS':'#9db4f0','MIXED':'#12a06e','CONTENT':'#ff8b42','YOUTUBE':'#e23a63','YOUTUBE_WATCH':'#e23a63','UNKNOWN':'#94a3b8'};
+   const T=k=>NT.reduce((a,n)=>a+(n[k]||0),0);
+   const rowsN=[['Conv. value','cv',v=>M(v)],['Spend','sp',v=>M(v)],['Conversions','cn',v=>N(v)],['Clicks','ck',v=>N(v)]];
+   const bar=(key,fmt)=>{const t=T(key)||1;
+    return '<div style="margin:10px 0 2px"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B;margin-bottom:4px">'+key.toUpperCase()+'</div>'
+     +'<div style="display:flex;height:20px;border-radius:6px;overflow:hidden;background:#f1f4fa">'
+     +NT.map(n=>{const w=(n[key]||0)/t*100; if(w<0.4)return '';
+       return '<div title="'+(NM[n.n]||n.n)+': '+fmt(n[key]||0)+'" style="width:'+w.toFixed(2)+'%;background:'+(NC[n.n]||'#94a3b8')+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800">'+(w>7?w.toFixed(1)+'%':'')+'</div>';}).join('')
+     +'</div></div>';};
+   const sp0=T('sp')||1, cv0=T('cv')||1;
+   const worst=NT.slice().filter(n=>n.sp>0).sort((a,b)=>(a.cv/a.sp)-(b.cv/b.sp))[0];
+   pnlCard(g,'google','Where the account actually serves'+INFO('segments.ad_network_type on the account. MIXED is cross-network, which on this account means Performance Max -- it is the only row that can serve Search, Shopping, Display, YouTube and Gmail off one budget, which is exactly why its spend cannot be traced to a keyword.'),
+    'Last '+wlbl+', fixed &mdash; not the date box. '+NT.map(n=>'<b>'+(NM[n.n]||n.n)+'</b> '+(n.sp/sp0*100).toFixed(0)+'% of spend for '+(n.cv/cv0*100).toFixed(0)+'% of value').join(' &middot; ')+'.',
+    '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:4px">'
+    +NT.map(n=>'<span style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#26313f"><span style="width:10px;height:10px;border-radius:3px;background:'+(NC[n.n]||'#94a3b8')+'"></span>'+(NM[n.n]||n.n)+'</span>').join('')+'</div>'
+    +rowsN.map(r=>bar(r[1],r[2])).join('')
+    +'<div style="overflow-x:auto;margin-top:10px"><table class="bt" style="min-width:520px;width:100%">'
+    +'<tr><th style="'+TH2+';text-align:left">Network</th><th style="'+TH2+'">Spend</th><th style="'+TH2+'">Impr</th><th style="'+TH2+'">CTR</th><th style="'+TH2+'">CPC</th><th style="'+TH2+'">Conv value</th><th style="'+TH2+'">ROAS</th></tr>'
+    +NT.map(n=>{const ro=n.sp?n.cv/n.sp:0;
+     return '<tr><td style="'+TD2+';text-align:left;font-weight:700">'+(NM[n.n]||n.n)+'</td>'
+      +'<td style="'+TD2+'">'+M(n.sp)+'</td><td style="'+TD2+'">'+N(n.im)+'</td>'
+      +'<td style="'+TD2+'">'+(n.im?pct(n.ck/n.im*100):'&mdash;')+'</td>'
+      +'<td style="'+TD2+'">'+(n.ck?M(n.sp/n.ck):'&mdash;')+'</td>'
+      +'<td style="'+TD2+'">'+M(n.cv)+'</td>'
+      +'<td style="'+TD2+';font-weight:800;color:'+(ro>=2?'#0f6e56':'#a3271a')+'">'+ro.toFixed(2)+'&times;</td></tr>';}).join('')
+    +'</table></div>'
+    +(worst?'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.55"><b>'+(NM[worst.n]||worst.n)+' is the weakest network at '+(worst.cv/worst.sp).toFixed(2)+'&times; on '+M(worst.sp)+'.</b> '+(worst.n==='SEARCH_PARTNERS'?'Search partners is a single checkbox on every Search campaign and can be turned off without touching bids.':'It cannot be excluded independently &mdash; it is a campaign-type decision, not a setting.')+'</div>':''));
+  }
+  const CT=(GA.ctrack||[]);
+  if(CT.length){
+   const live=CT.filter(a=>a.c7>0), dead=CT.filter(a=>!a.c7);
+   const deadPri=dead.filter(a=>a.pri);
+   const bl=(lbl,n,c)=>'<div style="display:flex;align-items:center;gap:9px;margin:5px 0"><span style="flex:0 0 150px;font-size:11.5px;font-weight:700;color:#26313f;text-align:right">'+lbl+'</span>'
+     +'<div style="flex:1;height:22px;background:#f1f4fa;border-radius:5px;overflow:hidden"><div style="width:'+(CT.length?n/CT.length*100:0).toFixed(1)+'%;height:100%;background:'+c+'"></div></div>'
+     +'<b style="flex:0 0 34px;font-size:13px;color:#161d2e">'+n+'</b></div>';
+   pnlCard(g,'google','Conversion tracking status'+INFO('Every ENABLED conversion action, split by whether it recorded anything in the last 7 days. Google Overview also shows "tag inactive" and "unverified" buckets -- those come from its tag-diagnostics UI and are not exposed in the API, so they are not guessed at here.'),
+    CT.length+' enabled conversion actions. '+live.length+' recorded something in the last 7 days, '+dead.length+' recorded nothing'+(deadPri.length?' &mdash; and '+deadPri.length+' of those silent ones is set as a PRIMARY bidding goal, which is a live problem: Smart Bidding is optimising toward an event it never sees.':'.'),
+    bl('Recording conversions',live.length,'#12a06e')+bl('No recent conversions',dead.length,'#3457d5')
+    +(dead.length?'<div style="margin-top:10px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B">SILENT FOR 7 DAYS</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">'
+      +dead.slice(0,40).map(a=>'<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:'+(a.pri?'#fff1ee':'#f4f6fb')+';color:'+(a.pri?'#a3271a':'#5b6478')+';border:1px solid '+(a.pri?'#f6cfc6':'#e6eaf2')+';font-weight:'+(a.pri?'800':'600')+'">'+esc(a.n)+(a.pri?' &middot; PRIMARY':'')+'</span>').join('')
+      +'</div>'+(dead.length>40?'<div style="font-size:10.5px;color:#8a93a6;margin-top:6px">'+(dead.length-40)+' more.</div>':''):''));
+  }
+ })();
+
  /* ---- 2. where the auction was lost ---- */
  const IS=S.is||{}, LY=S.isLY||{};
  const rows=Object.keys(IS).map(k=>({k,...IS[k],ly:(LY[k]||{}).is})).filter(r=>r.is!=null)
