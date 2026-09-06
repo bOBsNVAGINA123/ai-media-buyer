@@ -5242,15 +5242,20 @@ def pull_promos():
         # unregistered (no partner captured / walk-in), new (this order's day IS that
         # partner's first-ever POS day), returning. offMix[code][month] = [ord,unreg,new,ret].
         try:
+            # v9.56 pos.order is NOT readable by this account (search_read returns []), which
+            # silently classified every coded order as unregistered. report.pos.order IS
+            # readable and carries partner_id per order line -- one partner per order.
             porders = []
             for i in range(0, len(oids), 800):
-                porders += oexec("pos.order", "search_read",
-                                 [[["id", "in", oids[i:i + 800]]], ["partner_id"]],
-                                 {"limit": 900}) or []
+                porders += oexec("report.pos.order", "search_read",
+                                 [[["order_id", "in", oids[i:i + 800]]],
+                                  ["order_id", "partner_id"]], {"limit": 4000}) or []
             pmap = {}
             for r in porders:
+                o9 = r.get("order_id")
+                oid9 = o9[0] if isinstance(o9, list) else o9
                 p = r.get("partner_id")
-                pmap[r["id"]] = p[0] if isinstance(p, list) else (p or None)
+                pmap[oid9] = p[0] if isinstance(p, list) else (p or None)
             WALKIN = 1654
             pids = sorted({p for p in pmap.values() if p and p != WALKIN})
             first_seen = {}
