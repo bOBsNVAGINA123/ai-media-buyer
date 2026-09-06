@@ -2880,6 +2880,41 @@ def pull_google_attr():
     # v9.2: per-campaign CONVERSION-ACTION breakdown -- proves WHICH events each campaign
     # counts. metrics.conversions only counts actions used for bidding, all_conversions
     # counts everything -- the gap per row exposes valueless actions steering spend.
+    # v9.61: the three panels Google's own Overview page shows and this dashboard never did --
+    # keywords by cost, the network split (search vs partners vs cross-network/PMax), and which
+    # conversion actions are actually recording. Same 60d window as the rest of this pack.
+    out["kw"] = []
+    for r in q("SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, "
+               "campaign.name, %s FROM keyword_view %s AND metrics.impressions > 0" % (M, W)):
+        k = ((r.get("adGroupCriterion") or {}).get("keyword") or {}); m = r.get("metrics", {})
+        sp = float(m.get("costMicros", 0)) / 1e6
+        if sp < 1: continue
+        out["kw"].append({"t": (k.get("text") or "")[:60], "mt": (k.get("matchType") or "")[:6],
+                          "cmp": (r.get("campaign", {}).get("name") or "")[:50],
+                          "sp": round(sp), "ck": int(m.get("clicks", 0)), "im": int(m.get("impressions", 0)),
+                          "cn": round(float(m.get("conversions", 0)), 1),
+                          "cv": round(float(m.get("conversionsValue", 0)))})
+    out["kw"].sort(key=lambda x: -x["sp"]); out["kw"] = out["kw"][:60]
+    out["net"] = []
+    for r in q("SELECT segments.ad_network_type, %s FROM customer %s" % (M, W)):
+        m = r.get("metrics", {}); n = (r.get("segments") or {}).get("adNetworkType") or ""
+        out["net"].append({"n": n, "sp": round(float(m.get("costMicros", 0)) / 1e6),
+                           "im": int(m.get("impressions", 0)), "ck": int(m.get("clicks", 0)),
+                           "cn": round(float(m.get("conversions", 0)), 1),
+                           "cv": round(float(m.get("conversionsValue", 0)))})
+    out["net"].sort(key=lambda x: -x["sp"])
+    # conversion-action health: ENABLED actions with vs without a conversion in the last 7 days.
+    # Google's Overview also buckets "tag inactive"/"unverified" -- those come from its tag
+    # diagnostics UI, not from GAQL, so they are not faked here.
+    _c7 = {}
+    _d7 = (END - datetime.timedelta(days=6)).isoformat()
+    for r in q("SELECT segments.conversion_action_name, metrics.all_conversions FROM customer "
+               "WHERE segments.date BETWEEN '%s' AND '%s' AND metrics.all_conversions > 0" % (_d7, c1)):
+        nm3 = ((r.get("segments") or {}).get("conversionActionName") or "")[:60]
+        _c7[nm3] = _c7.get(nm3, 0) + float((r.get("metrics") or {}).get("allConversions") or 0)
+    out["ctrack"] = [{"n": a5["n"], "pri": a5["pri"], "t": a5.get("t", ""),
+                      "c7": round(_c7.get(a5["n"], 0), 1)} for a5 in out["actions"]]
+    out["ctrack"].sort(key=lambda x: (-x["c7"], x["n"]))
     out["cmpAct"] = []
     for r in q("SELECT campaign.name, segments.conversion_action_name, "
                "segments.conversion_action_category, metrics.conversions, metrics.conversions_value, "
