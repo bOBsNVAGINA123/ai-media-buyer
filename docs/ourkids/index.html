@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -1282,7 +1281,7 @@ function foldTail(t,grid){
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes/;
+ const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes|economics of one order/;
  const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
  if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
   pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
@@ -2485,6 +2484,11 @@ function glance(g,o){
        const fell=plat.filter(p4=>p4.d<0);const totF=fell.reduce((a,p4)=>a+p4.d,0);
        const why4=p4=>{const dc=p4.p?(p4.c/p4.p-1)*100:0,ds=p4.sp2?(p4.sc/p4.sp2-1)*100:0;
         return ds<=dc-5?'budget cut':(ds>=dc+5?'clicks got more expensive':'both moved together');};
+       const _cline=(nm2,pct2,sp3,tag2,u2)=>'<div style="display:flex;gap:8px;align-items:baseline;padding:2px 0 2px 14px">'
+        +'<span style="font-size:10.5px;color:#3D4763;font-weight:700;min-width:170px">'+(u2?'<a href="'+u2+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm2+'</a>':nm2)+'</span>'
+        +'<span style="font-size:10.5px;color:#5b6478;min-width:120px">'+pct2+'</span>'
+        +'<span style="font-size:10.5px;color:#5b6478;min-width:130px">'+sp3+'</span>'
+        +(tag2?'<b style="font-size:10.5px;color:#a35a1a">'+tag2+'</b>':'')+'</div>';
        let campBit='';
        try{const W3=O.madsW,P3=pfWin(W3);const byCmp={};
         (O.mads||[]).forEach(ad3=>{if(!ad3.d||!ad3.d.oc)return;
@@ -2493,19 +2497,19 @@ function glance(g,o){
          if(P3.ok)for(let k=P3.pa;k<=P3.pb;k++){e3.p+=ad3.d.oc[k]||0;e3.sp2+=(ad3.d.sp||[])[k]||0;}});
         const drops=Object.values(byCmp).map(x=>({...x,d:x.c-x.p})).filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
         const totD=drops.reduce((a,x)=>a+x.d,0);
-        if(drops.length)campBit=' Inside Meta: '+drops.slice(0,3).map(x=>{
+        if(drops.length)campBit=drops.slice(0,3).map(x=>{
           const u=(typeof amURL==='function')?amURL('campaign',x.id,x.acct):null;
-          const nm=esc(String(x.n).slice(0,28));
           const ds=x.sp2>0?(x.sc/x.sp2-1)*100:null,dc=x.p>0?(x.c/x.p-1)*100:null;
           const tag=(ds!=null&&dc!=null)?(ds<=dc-5?'budget cut':(ds>=dc+5?'costlier clicks':'')):'';
-          return (u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)
-           +' '+Math.round(x.d/totD*100)+'% of lost clicks'
-           +(ds!=null?' · spend '+(ds>=0?'+':'−')+Math.abs(ds).toFixed(0)+'% ('+M(x.sc)+')':'')
-           +(tag?' · <b>'+tag+'</b>':'');
-         }).join(' &nbsp;·&nbsp; ')+'.';
+          return _cline(esc(String(x.n).slice(0,26)),Math.round(x.d/totD*100)+'% of lost clicks',
+            ds!=null?('spend '+(ds>=0?'+':'−')+Math.abs(ds).toFixed(0)+'% · '+M(x.sc)):'',tag,u);}).join('');
        }catch(e3){}
-       if(fell.length)culTraffic='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>who lost the traffic, and whether the money left with it:</b> '
-        +fell.map(p4=>p4.n+' clicks '+((p4.c/p4.p-1)*100).toFixed(0)+'% ('+Math.round(p4.d/totF*100)+'% of the fall) · spend '+((p4.sp2?(p4.sc/p4.sp2-1)*100:0)>=0?'+':'−')+Math.abs(p4.sp2?(p4.sc/p4.sp2-1)*100:0).toFixed(0)+'% — <b>'+why4(p4)+'</b>').join(' &nbsp;·&nbsp; ')+'.'+campBit+'</div>';}
+       if(fell.length)culTraffic='<div style="padding:2px 0 4px 34px">'
+        +'<div style="font-size:10px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px">Who lost the traffic</div>'
+        +fell.map(p4=>_cline(p4.n,'clicks '+((p4.c/p4.p-1)*100).toFixed(0)+'% · '+Math.round(p4.d/totF*100)+'% of the fall',
+          'spend '+((p4.sp2?(p4.sc/p4.sp2-1)*100:0)>=0?'+':'−')+Math.abs(p4.sp2?(p4.sc/p4.sp2-1)*100:0).toFixed(0)+'%',why4(p4),null)).join('')
+        +(campBit?'<div style="font-size:10px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.04em;padding:4px 0 2px">Inside Meta, by campaign</div>'+campBit:'')
+        +'</div>';}
      }catch(e2){}
      try{ // basket: which products stopped selling, from the WHY crawl's closest window
       const d4=Math.max(1,span(ST.s,ST.e));const wk2=d4<=3?'1':(d4<=17?'7':'28');
@@ -2513,10 +2517,14 @@ function glance(g,o){
       const pr4=(W4&&W4.prods)||[];
       const fell4=pr4.map(x=>({...x,d:(x.r||0)-(x.pr||0)})).filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
       const totB=fell4.reduce((a,x)=>a+x.d,0);
-      if(fell4.length)culBasket='<div style="padding:2px 0 3px 34px;font-size:10.5px;color:#5b6478">&#8627; <b>what stopped selling</b> (all orders, '+wk2+'d crawl — the closest product grain to your window): '
-       +fell4.slice(0,3).map(x=>{const nm=esc(String(x.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,26));
-         return (x.url?'<a href="'+x.url+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)+' \u2212'+M(Math.abs(x.d))+(x.st!=null&&x.st<=3?' <b style="color:#a3271a">('+x.st+' units left — a STOCK problem, not a demand one)</b>':'');
-        }).join(' · ')+' — together '+Math.round((fell4[0].d+((fell4[1]||{}).d||0)+((fell4[2]||{}).d||0))/totB*100)+'% of everything that fell.</div>';
+      if(fell4.length)culBasket='<div style="padding:2px 0 4px 34px">'
+       +'<div style="font-size:10px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px">What stopped selling ('+wk2+'d crawl, all orders)</div>'
+       +fell4.slice(0,3).map(x=>{const nm=esc(String(x.n||'').replace(/^\[[^\]]*\]\s*/,'').slice(0,30));
+         return '<div style="display:flex;gap:8px;align-items:baseline;padding:2px 0 2px 14px">'
+          +'<span style="font-size:10.5px;font-weight:700;min-width:200px">'+(x.url?'<a href="'+x.url+'" target="_blank" rel="noopener" style="color:#3a3bd0">'+nm+'</a>':nm)+'</span>'
+          +'<span style="font-size:10.5px;color:#a3271a;font-weight:700;min-width:80px">\u2212'+M(Math.abs(x.d))+'</span>'
+          +(x.st!=null&&x.st<=3?'<b style="font-size:10.5px;color:#a3271a">'+x.st+' units left — restock, don\u2019t re-market</b>':'')+'</div>';}).join('')
+       +'</div>';
      }catch(e2){}
      const tot=comps.reduce((a,c2)=>a+c2[1],0);
      comps.sort((a,b)=>a[1]-b[1]);
@@ -2649,7 +2657,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{orderLadder(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -3724,6 +3732,66 @@ function dailyBE(g){
   +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th></tr>'
   +b+'</table></div>');
 }
+/* v9.57 ONE ORDER, TOP TO BOTTOM. Platform ROAS, then the break-even it has to clear, then
+   every cost one average order carries — goods, courier, fees, its share of OpEx, its share
+   of ad spend — down to what one order actually leaves. Big numbers, one line each. */
+function orderLadder(g,o){
+ try{
+  if(!o||!o.ord||!o.ord[0]||!o.sp||!o.sp[0])return;
+  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const q=_gpPct();
+  const aov=o.net[0]/o.ord[0];
+  const goods=aov*(1-q.gpOnGross);
+  const courier=aov*(q.dragCost||0), shipBack=aov*(q.dragCol||0), fees=aov*(q.dragPay||0);
+  /* two honest ways to charge the ads: the whole budget (purist), or the webstore's own
+     share (Meta split by its measured web/in-store value — the same split the net-profit
+     card uses, so the two cards can never disagree) */
+  const adPo=o.sp[0]/o.ord[0];
+  const mShare=(function(){try{const t9=Date.parse(O.ad.start);let w9=0,st9=0;
+    for(let d=Date.parse(ST.s);d<=Date.parse(ST.e);d+=864e5){const i=Math.round((d-t9)/864e5);
+     if(i>=0&&i<O.ad.n){w9+=(O.ad.mecomrev||[])[i]||0;st9+=(O.ad.instoreMeta||[])[i]||0;}}
+    return (w9+st9)>0?w9/(w9+st9):1;}catch(e){return 1;}})();
+  const adPoShare=(function(){try{const gs9=(o.gsp&&o.gsp[0])||0,ts9=(o.tsp&&o.tsp[0])||0,ms9=(o.msp&&o.msp[0])||0;
+    return (gs9+ts9+ms9*mShare)/o.ord[0];}catch(e){return adPo;}})();
+  const opxPo=(function(){try{
+    const A2=_allM();const nowM=(O.today||'').slice(0,7);
+    const bm=A2.filter(m=>m!==nowM&&O.exp&&O.exp[m]).slice(-1)[0];if(!bm)return null;
+    const ex=O.exp[bm];const brSal=Object.keys(O.bcost||{}).reduce((a,b2)=>a+(((O.bcost[b2]||{})[bm]||{}).sal||0),0);
+    const onDirect=(ex['Packing & bags']||0)+(ex['Cargo & transport']||0);
+    const shared=(ex['Rent — HQ / warehouses / flats']||0)+(ex['Comms & internet']||0)+(ex['Other OpEx']||0)+Math.max(0,(ex['Payroll & benefits']||0)-brSal);
+    const PAm=pnlAgg().M[bm]||{};const onR=(PAm.g||0)-(PAm.r||0);
+    let br2=0;Object.keys(O.pos||{}).forEach(b3=>{const v3=O.pos[b3][bm];if(v3)br2+=v3[0]||0;});
+    const wOn=(onR+br2)>0?onR/(onR+br2):0.2;
+    return (onDirect+shared*wOn)/((PAm.o||1));}catch(e){return null;}})();
+  const net=aov-goods-courier+shipBack-fees-adPoShare-(opxPo||0);
+  const netFull=aov-goods-courier+shipBack-fees-adPo-(opxPo||0);
+  const be=1/q.gpOn;
+  const roasClaim=(o.broas&&o.broas[0])||0;
+  let run=aov;
+  const L=[['One average order pays you',aov,null,'net revenue ÷ orders, your window'],
+   ['Goods',-goods,null,(q.gpOnGross*100).toFixed(1)+'% real margin — the product costs the rest'],
+   ['Courier — full bill',-courier,null,'outbound + return legs + RTO'],
+   ['Shipping the customer paid',+shipBack,null,'collected at checkout — covers part of the bill'],
+   ['COD & payment fees',-fees,null,'Bosta collection + PayMob'],
+   ['Its share of ads',-adPoShare,null,'Google + TikTok whole, Meta at its measured '+Math.round(mShare*100)+'% web share — the same split the net-profit card uses'],
+   ['Its share of OpEx',-(opxPo||0),null,opxPo!=null?'packing, cargo, HQ share — last complete month per order':'(no complete month posted)']];
+  let rows='';
+  L.forEach((r,i)=>{run= i===0?r[1]:run+r[1];
+   rows+='<div style="display:flex;align-items:baseline;gap:12px;padding:7px 4px;border-bottom:1px solid #f0f2f8">'
+    +'<span style="flex:1;font-size:14px;font-weight:'+(i===0?'800':'600')+';color:#26313f">'+r[0]
+    +' <span style="font-size:11px;font-weight:500;color:#8a93a6">'+r[3]+'</span></span>'
+    +'<span style="font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(r[1]>=0?(i===0?'#161d2e':'#0f6e56'):'#a3271a')+'">'+(i===0?'':(r[1]>=0?'+':'−'))+M(r[1])+'</span>'
+    +'<span style="width:96px;text-align:right;font-size:12px;color:#8a93a6;font-variant-numeric:tabular-nums">'+(i===0?'':('= '+ (run>=0?'':'−')+M(run)))+'</span></div>';});
+  rows+='<div style="display:flex;align-items:baseline;gap:12px;padding:10px 4px 2px">'
+   +'<span style="flex:1;font-size:15px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">ONE ORDER LEAVES</span>'
+   +'<span style="font-size:24px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">'+(net>=0?'+':'−')+M(net)+'</span>'
+   +'<span style="width:96px"></span></div>'
+   +'<div style="font-size:11.5px;color:#5b6478;padding:2px 4px 4px">Charge the <b>whole</b> budget to the webstore instead — every pound, including what worked in the branches — and one order leaves <b style="color:'+(netFull>=0?'#0f6e56':'#a3271a')+'">'+(netFull>=0?'+':'−')+M(netFull)+'</b> (ads −'+M(adPo)+'/order). The truth is between the two, and closer to the first: Meta&rsquo;s own value split says most of its money worked in the branches this window.</div>';
+  pnlCard(g,'blend','The economics of one order — '+ST.s+' → '+ST.e
+   +INFO('Everything an average webstore order carries, one line each, computed on your selected days: real Odoo margin, the measured three-month courier and fee rates, this window\\u2019s actual spend per order, and the posted OpEx book per order from the last complete month.'),
+   '<b>Platforms claim '+roasClaim.toFixed(2)+'× ROAS. The break-even they actually have to clear is '+be.toFixed(2)+'×</b> — because after goods, the courier and the fees, only '+(q.gpOn*100).toFixed(1)+'% of each pound is real. This ladder is why.',
+   '<div style="max-width:760px">'+rows+'</div>');
+ }catch(e){}}
 function netSplitCard(g){
  if(!O.exp||!O.pos||!O.fin)return;
  const PA=pnlAgg().M, AM=adMonthly(), BC=O.bcost||{}, PS=O.pos||{};
@@ -14049,7 +14117,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260906-125251';
+const BUILD='20260906-130308';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
