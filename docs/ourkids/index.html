@@ -1034,8 +1034,7 @@ const TABGROUPS=[
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['P&L',[['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
- ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
+ ['Traffic & creative',[['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]]
 ];
 const TABQ={
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -2210,41 +2209,139 @@ function glance(g,o){
   return cur==null?null:{cur,prev,bm,curW,prevW};
  }catch(e){return null;}})();
  const tiles=[
-  ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web'],
-  ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web'],
-  ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co'],
-  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'webstore revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web'],
-  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web'],
-  ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web'],
-  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web'],
-  ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web']
+  ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web','net'],
+  ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web','gp'],
+  ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co','sp'],
+  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'webstore revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web','mer'],
+  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web','amer'],
+  ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web','ord'],
+  ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web','nc'],
+  ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web','rc']
  ];
  if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.curW>=0?'#0f6e56':'#a3271a')+'">'+(NP.curW>=0?'+':'\u2212')+M(NP.curW)+'</span>',
    (NP.prevW!=null&&NP.prevW!==0)?((NP.curW-NP.prevW)/Math.abs(NP.prevW)*100):null,true,
-   'webstore GP minus ITS share of ads (Meta split by its own web/store value) and its OpEx','web']);
+   'webstore GP minus ITS share of ads (Meta split by its own web/store value) and its OpEx','web','npw']);
  if(NP)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.cur>=0?'#0f6e56':'#a3271a')+'">'+(NP.cur>=0?'+':'\u2212')+M(NP.cur)+'</span>',
    (NP.prev!=null&&NP.prev!==0)?((NP.cur-NP.prev)/Math.abs(NP.prev)*100):null,true,
-   'after ads and every cost, OpEx charged per day from '+NP.bm,'co']);
+   'after ads and every cost, OpEx charged per day from '+NP.bm,'co','npc']);
  /* The webstore is not the business. Blended puts the seven shops in the numerator against the
     same ad spend, which is the only version of these two ratios that answers "are we growing". */
  if(BA)tiles.push(
   ['MER', BA.mer.toFixed(2)+'×', BAp?pc(BA.mer,BAp.mer):null, true,
-   'everything sold ÷ ALL spend'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':''),'co'],
+   'everything sold ÷ ALL spend'+(BAp?' · was '+BAp.mer.toFixed(2)+'×':''),'co','merc'],
   ['aMER', BA.amer.toFixed(2)+'×', BAp?pc(BA.amer,BAp.amer):null, true,
-   'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':''),'co']);
+   'first-time buyers, both businesses'+(BAp?' · was '+BAp.amer.toFixed(2)+'×':''),'co','amer']);
+ /* branch daily revenue for the window (net of VAT), plus the prior window */
+ const _blW=(a,b)=>{try{if(!O.bl)return null;const t5=Date.parse(O.bl.start);let t2=0,hit=false;
+   for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t5)/864e5);
+    if(i>=0&&i<O.bl.n){Object.keys(O.bl.b).forEach(bb=>{t2+=O.bl.b[bb][i]||0;});hit=true;}}
+   return hit?t2:null;}catch(e){return null;}};
+ const _pwG=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
+ const _bRev=_blW(ST.s,ST.e), _bRevP=_pwG&&_pwG[0]?_blW(_pwG[0],_pwG[1]):null;
+ const _stMgG=(function(){try{const nowM3=(O.today||'').slice(0,7);
+   const pm3=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM3).slice(-1)[0];
+   let r3=0,g3=0;if(pm3)Object.keys(O.pos).forEach(b3=>{const v3=O.pos[b3][pm3];if(v3){r3+=v3[0]||0;g3+=v3[1]||0;}});
+   return r3>0?g3/r3:0.24;}catch(e){return 0.24;}})();
+ if(_bRev!=null){
+  tiles.push(['Revenue',M(o.net[0]+_bRev),
+    (_bRevP!=null&&(o.net[1]+_bRevP))?(( (o.net[0]+_bRev)/(o.net[1]+_bRevP)-1)*100):null,true,
+    'webstore net + branch tills (daily, net of VAT)','co','revc']);
+  tiles.push(['Gross profit, est',M(o.gp[0]+_bRev*_stMgG),
+    (_bRevP!=null&&(o.gp[1]+_bRevP*_stMgG))?(((o.gp[0]+_bRev*_stMgG)/(o.gp[1]+_bRevP*_stMgG)-1)*100):null,true,
+    'webstore actual + branch revenue at last month\u2019s POS margin','co','gpc']);}
  const _bnc=(function(){try{return okBranchNC(ST.s,ST.e,'nc');}catch(e){return null;}})();
  const _bncP=(function(){try{const w=cmpWr(ST.s,ST.e);return w&&w[0]?okBranchNC(w[0],w[1],'nc'):null;}catch(e){return null;}})();
  if(_bnc)tiles.push(['New customers · branches',N(Math.round(_bnc.v)),
    _bncP&&_bncP.v?((_bnc.v/_bncP.v-1)*100):null,true,
-   'registered first-timers at the tills (POS crawl'+(_bnc.est?', tail apportioned from the monthly ledger':'')+')','co']);
+   'registered first-timers at the tills (POS crawl'+(_bnc.est?', tail apportioned from the monthly ledger':'')+')','co','bnc']);
  const _brc=(function(){try{return okBranchNC(ST.s,ST.e,'rc');}catch(e){return null;}})();
  const _brcP=(function(){try{const w=cmpWr(ST.s,ST.e);return w&&w[0]?okBranchNC(w[0],w[1],'rc'):null;}catch(e){return null;}})();
  if(_brc)tiles.push(['Returning · branches',N(Math.round(_brc.v)),
    _brcP&&_brcP.v?((_brc.v/_brcP.v-1)*100):null,true,
-   'registered repeat buyers at the tills'+(_brc.est?' (tail apportioned)':''),'co']);
- const _tile=t=>'<div '+(t[0]==='aMER'?'onclick="var d=document.getElementById(\'amerDrill\');if(d){d.open=!d.open;if(d.open)d.scrollIntoView({block:\'center\'});}" title="Click for the full breakdown — every reason with its % of the move" ':'')+'style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff'+(t[0]==='aMER'?';cursor:pointer;box-shadow:inset 0 -2px 0 #5a5bf0':'')+'">'
+   'registered repeat buyers at the tills'+(_brc.est?' (tail apportioned)':''),'co','brc']);
+ const TD={};
+ (function(){
+  const row=(lab,c2,p2,inv,src)=>'<div style="display:flex;gap:9px;align-items:baseline;padding:3px 0 3px 18px;border-left:2px solid #eef0f5;margin-left:7px">'
+   +'<span style="font-size:11.5px;color:#3D4763;font-weight:700">'+lab+'</span>'+dl(pc(c2,p2),inv===false?false:true)
+   +'<span style="font-size:10.5px;color:#8a93a6">'+src+'</span></div>';
+  const txt=t2=>'<div style="padding:3px 0 3px 18px;margin-left:7px;border-left:2px solid #eef0f5;font-size:10.5px;color:#5b6478">'+t2+'</div>';
+  const hd=t2=>'<div style="font-size:11.5px;font-weight:800;color:#3a3bd0;margin-bottom:2px">'+t2+'</div>';
+  const chMove=(function(){try{const out=[];Object.keys(o.ch||{}).forEach(n2=>{const d3=(o.ch[n2]||0)-((o.chP||{})[n2]||0);out.push({n:n2,d:d3});});
+    out.sort((a,b)=>a.d-b.d);return out;}catch(e){return [];}})();
+  TD.net=hd('Net revenue '+M(o.net[0])+' — webstore = orders × basket, beside the branches')
+   +row('Orders',o.ord[0],o.ord[1],true,N(o.ord[0])+' vs '+N(o.ord[1]))
+   +row('Basket (AOV)',o.aov[0],o.aov[1],true,M(o.aov[0])+' vs '+M(o.aov[1]))
+   +row('Returns taken out',o.ref[0],o.ref[1],false,M(o.ref[0])+' vs '+M(o.ref[1]))
+   +(chMove.length?txt('Biggest channel move: <b>'+esc(chMove[0].n)+'</b> '+(chMove[0].d>=0?'+':'−')+M(chMove[0].d)+'.'):'')
+   +(_bRev!=null?row('BRANCHES revenue (same days)',_bRev,_bRevP,true,M(_bRev)+' vs '+(_bRevP!=null?M(_bRevP):'—')+' — the other half of the company'):'');
+  TD.gp=hd('Gross profit '+M(o.gp[0])+' = revenue × margin')
+   +row('Net revenue',o.net[0],o.net[1],true,M(o.net[0]))
+   +row('Margin',o.gpct[0],o.gpct[1],true,(o.gpct[0]||0).toFixed(1)+'% vs '+(o.gpct[1]||0).toFixed(1)+'% — mix or discounting')
+   +(_bRev!=null?row('BRANCHES GP, est (same days)',_bRev*_stMgG,_bRevP!=null?_bRevP*_stMgG:null,true,'branch revenue at last month\u2019s '+( _stMgG*100).toFixed(1)+'% POS margin'):'');
+  TD.sp=hd('Ad spend '+M(o.sp[0])+' — one budget, split by platform')
+   +row('Meta',o.msp&&o.msp[0],o.msp&&o.msp[1],false,M((o.msp&&o.msp[0])||0))
+   +row('Google',o.gsp&&o.gsp[0],o.gsp&&o.gsp[1],false,M((o.gsp&&o.gsp[0])||0))
+   +row('TikTok',o.tsp&&o.tsp[0],o.tsp&&o.tsp[1],false,M((o.tsp&&o.tsp[0])||0))
+   +txt('This money works on the webstore AND the branches at once — it cannot be split between them, which is why both bands divide by all of it.');
+  TD.mer=hd('MER '+(o.mer[0]||0).toFixed(2)+'× = webstore net ÷ ALL spend')
+   +row('Webstore net revenue',o.net[0],o.net[1],true,M(o.net[0]))
+   +row('All ad spend',o.sp[0],o.sp[1],false,M(o.sp[0]))
+   +(BA?txt('The branches add '+M(BA.storeRev)+' on the same spend — MER incl. branches is <b>'+BA.mer.toFixed(2)+'×</b> (its tile is in the company band).'):'');
+  const _bOrd=(function(){try{const a=okBranchNC(ST.s,ST.e,'nord'),b=okBranchNC(ST.s,ST.e,'rord');return (a&&b)?a.v+b.v:null;}catch(e){return null;}})();
+  const _bOrdP=(function(){try{if(!_pwG||!_pwG[0])return null;const a=okBranchNC(_pwG[0],_pwG[1],'nord'),b=okBranchNC(_pwG[0],_pwG[1],'rord');return (a&&b)?a.v+b.v:null;}catch(e){return null;}})();
+  TD.ord=hd('Orders '+N(o.ord[0])+' — who they came from, both legs')
+   +row('Online — first-time buyers',o.nc[0],o.nc[1],true,N(o.nc[0]))
+   +row('Online — returning buyers',o.rcn&&o.rcn[0],o.rcn&&o.rcn[1],true,N((o.rcn&&o.rcn[0])||0))
+   +(_bOrd!=null?row('BRANCH registered receipts (same days)',_bOrd,_bOrdP,true,N(Math.round(_bOrd))+' — walk-ins without identity are on top of this'):'');
+  TD.nc=hd('New customers '+N(o.nc[0])+' — both businesses')
+   +row('Online first-timers',o.nc[0],o.nc[1],true,M(o.cac[0])+' each')
+   +(o.sess&&o.sess[0]?row('Sessions behind them',o.sess[0],o.sess[1],true,N(o.sess[0])):'')
+   +(_bnc?row('BRANCH first-timers (registered)',_bnc.v,_bncP&&_bncP.v,true,N(Math.round(_bnc.v))+(_bnc.est?' — tail apportioned':'')):'')
+   +txt('The full why-tree (traffic, basket, calendar, audiences) is under the aMER tile.');
+  TD.rc=hd('Returning customers — both businesses')
+   +row('Online returning',o.rcn&&o.rcn[0],o.rcn&&o.rcn[1],true,N((o.rcn&&o.rcn[0])||0)+' · basket '+M(o.rcaov?o.rcaov[0]:0))
+   +row('Their revenue',o.rcrev&&o.rcrev[0],o.rcrev&&o.rcrev[1],true,M((o.rcrev&&o.rcrev[0])||0))
+   +(_brc?row('BRANCH returning (registered)',_brc.v,_brcP&&_brcP.v,true,N(Math.round(_brc.v))):'');
+  TD.npw=hd('Webstore net profit, est '+(NP&&NP.curW!=null?((NP.curW>=0?'+':'−')+M(NP.curW)):'')+' = its GP − its ads share − its OpEx')
+   +row('Webstore gross profit',o.gp[0],o.gp[1],true,M(o.gp[0]))
+   +row('All-platform spend (its share is charged)',o.sp[0],o.sp[1],false,M(o.sp[0]))
+   +txt('OpEx charged per day from the last complete month. The exact month-grain waterfall with the courier line is the <b>Did we make money?</b> card just below — this tile is the day-true estimate of the same thing.');
+  TD.npc=hd('Company net profit, est '+(NP?((NP.cur>=0?'+':'−')+M(NP.cur)):''))
+   +(NP&&NP.curW!=null?row('of which webstore',NP.curW,NP.prevW,true,(NP.curW>=0?'+':'−')+M(NP.curW)):'')
+   +(NP&&NP.curW!=null?row('of which branches (the rest)',NP.cur-NP.curW,(NP.prev!=null&&NP.prevW!=null)?NP.prev-NP.prevW:null,true,(NP.cur-NP.curW>=0?'+':'−')+M(NP.cur-NP.curW)):'')
+   +txt('Month-grain exact version with contribution margin and the courier line: the <b>Did we make money?</b> card below.');
+  TD.merc=hd('MER whole business '+(BA?BA.mer.toFixed(2)+'×':'')+' = (webstore + branches) ÷ ALL spend')
+   +row('Webstore net',o.net[0],o.net[1],true,M(o.net[0]))
+   +(BA?row('Branch tills (daily, net of VAT)',BA.storeRev,BAp&&BAp.storeRev,true,M(BA.storeRev)):'')
+   +row('All ad spend',o.sp[0],o.sp[1],false,M(o.sp[0]))
+   +txt('Scale, not ad performance: regression on this account shows Meta spend does not predict branch revenue once trend and Fri/Sat are controlled.');
+  TD.revc=hd('Company revenue '+M(o.net[0]+(_bRev||0))+' — the two legs')
+   +row('Webstore (net of returns)',o.net[0],o.net[1],true,M(o.net[0])+' · '+Math.round(o.net[0]/(o.net[0]+(_bRev||1))*100)+'% of the company')
+   +(_bRev!=null?row('Branches (tills, net of VAT)',_bRev,_bRevP,true,M(_bRev)+' · '+Math.round(_bRev/(o.net[0]+_bRev)*100)+'%'):'');
+  TD.gpc=hd('Company gross profit, est — the two legs')
+   +row('Webstore GP (actual)',o.gp[0],o.gp[1],true,M(o.gp[0]))
+   +(_bRev!=null?row('Branch GP (revenue × '+( _stMgG*100).toFixed(1)+'% last-month POS margin)',_bRev*_stMgG,_bRevP!=null?_bRevP*_stMgG:null,true,M(_bRev*_stMgG)+' — estimate; the exact figure posts monthly on Branches P&L'):'');
+  const brDrill=key2=>{try{const BD5=O.bnrD;if(!BD5||!BD5._w)return '';
+    const t6=Date.parse(BD5._w.start);const pw6=_pwG;
+    const per=(br,a,b)=>{let t7=0,hit=false;for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t6)/864e5);
+      if(i>=0&&i<BD5._w.n){t7+=((BD5[br]||{})[key2]||[])[i]||0;hit=true;}}return hit?t7:null;};
+    if(!pw6||!pw6[0])return '';
+    const mv=Object.keys(BD5).filter(k=>k!=='_w').map(br=>{const c7=per(br,ST.s,ST.e),p7=per(br,pw6[0],pw6[1]);
+      return (c7!=null&&p7)?{br,c:c7,p:p7,dp:(c7/p7-1)*100}:null;}).filter(Boolean).sort((a,b)=>a.dp-b.dp);
+    if(!mv.length)return txt('Per-branch split needs the daily crawl to cover this window — it currently ends '+new Date(t6+(BD5._w.n-1)*864e5).toISOString().slice(0,10)+'.');
+    return txt('By branch: '+mv.map(m5=>'<b>'+esc(m5.br)+'</b> '+(m5.dp>=0?'+':'−')+Math.abs(m5.dp).toFixed(0)+'%').join(' · ')+'.');}catch(e){return '';}};
+  TD.bnc=hd('Branch first-timers '+(_bnc?N(Math.round(_bnc.v)):''))+(_bnc?row('All seven branches',_bnc.v,_bncP&&_bncP.v,true,''):'')+brDrill('nc');
+  TD.brc=hd('Branch returning '+(_brc?N(Math.round(_brc.v)):''))+(_brc?row('All seven branches',_brc.v,_brcP&&_brcP.v,true,''):'')+brDrill('rc');
+ })();
+ window.__TD=TD;
+ window.okTileGo=function(k){
+  if(k==='amer'){const d5=document.getElementById('amerDrill');if(d5){d5.open=!d5.open;if(d5.open)d5.scrollIntoView({block:'center'});}return;}
+  const dr=document.getElementById('tileDrawer');if(!dr)return;
+  if(dr.dataset.k===k&&dr.style.display!=='none'){dr.style.display='none';dr.dataset.k='';return;}
+  dr.innerHTML=(window.__TD&&window.__TD[k])||'';dr.dataset.k=k;dr.style.display='';dr.scrollIntoView({block:'nearest'});};
+ const _tile=t=>'<div '+(t[6]?'onclick="okTileGo(\''+t[6]+'\')" title="Click to expand — online and branches, side by side" ':'')+'style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff'+(t[6]?';cursor:pointer;box-shadow:inset 0 -2px 0 '+(t[6]==='amer'?'#5a5bf0':'#dfe4f2'):'')+'">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
   +'<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'+dl(t[2],t[3])
@@ -2349,6 +2446,7 @@ function glance(g,o){
   +'<div class="cs">Everything that happened, in the order you need it: where the numbers are, what moved them, what to do. The '
   +'full working is in the cards below, collapsed so you are not scrolling past it to get here.</div></div></div>'
   +'<div style="margin:2px 0 14px">'+tileH
+  +'<div id="tileDrawer" data-k="" style="display:none;margin:2px 0 10px;padding:10px 13px;border:1px solid #dfe4f2;border-radius:11px;background:#fbfcff"></div>'
   +(function(){ /* v9.52 the aMER drill, done properly: not a list of deltas but an ATTRIBUTION.
      ln(aMER1/aMER0) splits exactly into traffic + new-customer conversion + first basket
      − spend, so each driver carries its true % of the move. On top: the day-mix check
@@ -13091,36 +13189,42 @@ function rMETA(){
  try{(function(){
   const {gpOn:_go,gpSt:_gs}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
   const days=PW.n||1;
-  const L2=[];let bleed=0,bleedSp=0,okGp=0,okSp=0;
+  /* grouped by AD SET: the budget lever lives there, so the row must too */
+  const AS={};let okGp=0,okSp=0;
   ads.forEach(a=>{const d=a.d;let sp=0,pv=0,fv=0;
    for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}
-   if(sp<1000)return;
-   const gp2=pv*fON*_go+fv*fOFF*_gs-sp;
-   if(gp2<0){bleed+=-gp2;bleedSp+=sp;L2.push({a,sp,gp:gp2,on:pv*fON*_go-sp});}
-   else{okGp+=gp2;okSp+=sp;}});
-  L2.sort((x,y)=>x.gp-y.gp);
+   if(sp<200)return;
+   const key=a.asid||('?'+a.cid);
+   const e5=AS[key]||(AS[key]={asid:a.asid,as:a.as||'(unnamed ad set)',cmp:a.cmp,acct:a.acct,sp:0,pv:0,fv:0,n:0});
+   e5.sp+=sp;e5.pv+=pv;e5.fv+=fv;e5.n++;});
+  const L2=[];let bleed=0,bleedSp=0;
+  Object.values(AS).forEach(x=>{if(x.sp<1000)return;
+   const gp2=x.pv*fON*_go+x.fv*fOFF*_gs-x.sp;
+   if(gp2<0){bleed+=-gp2;bleedSp+=x.sp;L2.push({x,sp:x.sp,gp:gp2,on:x.pv*fON*_go-x.sp});}
+   else{okGp+=gp2;okSp+=x.sp;}});
+  L2.sort((a,b)=>a.gp-b.gp);
   if(!L2.length){
-   pnlCard(g,'meta','No live ad is losing money over these days',
-    'Every Meta ad with over E£1,000 of spend in '+PW.lbl+' covered its own cost at your margins and attribution. The winners below made '+M(okGp)+' after spend on '+M(okSp)+'.','' );
+   pnlCard(g,'meta','No ad set is losing money over these days',
+    'Every Meta ad set with over E£1,000 of spend in '+PW.lbl+' covered its own cost at your delivered margins and attribution. The winners made '+M(okGp)+' after spend on '+M(okSp)+'.','' );
   }else{
-   const rows2=L2.slice(0,8).map(x=>{const u=(typeof amURL==='function')?amURL('ad',x.a.id,x.a.acct):null;
+   const rows2=L2.slice(0,8).map(x=>{const u=(typeof amURL==='function')?amURL('adset',x.x.asid,x.x.acct):null;
     return '<tr><td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:left"><b>'
-     +(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#a3271a;text-decoration:underline">'+esc((x.a.n||'').slice(0,44))+'</a>':esc((x.a.n||'').slice(0,44)))
-     +'</b><div style="font-size:10px;color:#b06a76">'+esc(x.a.cmp||'')+'</div></td>'
+     +(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#a3271a;text-decoration:underline">'+esc((x.x.as||'').slice(0,44))+'</a>':esc((x.x.as||'').slice(0,44)))
+     +'</b><div style="font-size:10px;color:#b06a76">'+esc(x.x.cmp||'')+' · '+x.x.n+' ad'+(x.x.n===1?'':'s')+'</div></td>'
      +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap">'+M(x.sp)+'</td>'
      +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap;font-weight:800;color:#a3271a">&minus;'+M(Math.abs(x.gp))+'</td>'
      +'<td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:right;white-space:nowrap;color:'+(x.on<0?'#a3271a':'#5b6478')+'">'+(x.on>=0?'+':'&minus;')+M(Math.abs(x.on))+'</td></tr>';}).join('');
    const el2=document.createElement('div');el2.className='card full';el2.dataset.a='meta';
    el2.innerHTML='<div class="chead" style="padding-left:0;padding-right:0"><div>'
-    +'<div class="ct" style="color:#a3271a">'+M(bleed)+' of gross profit burned over '+days+' day'+(days===1?'':'s')+' — '+L2.length+' ads not covering their own cost</div>'
+    +'<div class="ct" style="color:#a3271a">'+M(bleed)+' of gross profit burned over '+days+' day'+(days===1?'':'s')+' — '+L2.length+' AD SETS not covering their own cost</div>'
     +'<div class="cs"><b>'+M(bleed/days)+' a day</b> at the current mix, on '+M(bleedSp)+' of spend, after BOTH legs are counted — website value at the DELIVERED margin (goods, courier both ways, COD &amp; payment fees) and Meta&rsquo;s in-store claim at the POS margin, at your selected attribution. '
     +'Meanwhile the profitable ads made <b style="color:#0f6e56">+'+M(okGp)+'</b> on '+M(okSp)+'. The fix is reallocation, not more budget. Every name opens that exact ad in Ads Manager.</div></div></div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff8fa;border-radius:9px">'
-    +'<tr><th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:left">Ad</th>'
+    +'<tr><th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:left">Ad set — where the budget lives</th>'
     +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Spend</th>'
     +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Lost after spend</th>'
     +'<th style="padding:6px 8px;border-bottom:2px solid #efc3cd;font-size:9.5px;font-weight:800;color:#a3271a;text-transform:uppercase;text-align:right">Online leg alone</th></tr>'+rows2+'</table></div>'
-    +(L2.length>8?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(L2.length-8)+' smaller losers not listed — the Do-this-first card below carries the full ranking.</div>':'');
+    +(L2.length>8?'<div style="font-size:11px;color:#8a93a6;margin-top:5px">'+(L2.length-8)+' smaller losing ad sets not listed — the Do-this-first card below carries the ad-level ranking.</div>':'');
    g.insertBefore(el2,g.firstChild);}
  })();}catch(e){}
 
@@ -13907,7 +14011,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260905-193447';
+const BUILD='20260906-124218';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
