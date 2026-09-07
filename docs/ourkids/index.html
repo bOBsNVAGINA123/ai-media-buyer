@@ -754,15 +754,33 @@ function trCard(p,idx,showAds){const nv=p.variants?p.variants.length:1,vid='tc'+
     routed to a half-empty shelf converts badly for a reason no bid or creative can fix. */
  +(function(){try{
    if(!/collection/i.test(p.type||''))return '';
-   const STK=(trRaw()||{}).stock;if(!STK)return '';
+   const R9=trRaw()||{};const STK=R9.stock;if(!STK)return '';
    const path=(p.canon||p.path||'');const m9=path.match(/\/collections\/([^\/?]+)/);
-   const st9=m9?STK[m9[1]]:null;if(!st9||!st9.t)return '';
+   const h9=m9?m9[1]:null;const st9=h9?STK[h9]:null;if(!st9||!st9.t)return '';
    const pct9=st9.o/st9.t*100;
+   /* the sentence that joins the two facts: CVR move over the window, and how the SHELF
+      moved over the same days -- from the dated snapshots the collector keeps */
+   let joined='';
+   try{const H9=R9.stockHist||{};const ds9=Object.keys(H9).sort();
+    if(ds9.length>=2){
+     const tgt=(function(){const want=new Date(Date.now()-TRS.win*864e5).toISOString().slice(0,10);
+       let best=ds9[0];ds9.forEach(d2=>{if(Math.abs(Date.parse(d2)-Date.parse(want))<Math.abs(Date.parse(best)-Date.parse(want)))best=d2;});return best;})();
+     const old9=(H9[tgt]||{})[h9];
+     if(old9&&old9.t){const dOos=st9.o-old9.o;
+      const cvrTxt=(p.pSessions>0&&p.dCvr!=null)?('Converting <b>'+(p.dCvr>=0?'+':'−')+Math.abs(p.dCvr*100).toFixed(0)+'%</b> vs the prior '+TRS.win+'d'):null;
+      if(dOos>0&&cvrTxt&&p.dCvr<0){
+       joined='<b style="color:#a3271a">'+cvrTxt.replace('Converting','Converting')+' — and '+dOos+' more product'+(dOos===1?'':'s')+' ('+Math.round(dOos/st9.t*100)+'% of the shelf) went SOLD OUT since '+tgt+'. The shelf emptied and the conversion followed.</b>';}
+      else if(dOos>0){joined=dOos+' product'+(dOos===1?'':'s')+' went SOLD OUT since '+tgt+'.';}
+      else if(cvrTxt&&p.dCvr<0){joined=cvrTxt+', with the shelf '+(dOos<0?(Math.abs(dOos)+' products BACK in stock'):'unchanged')+' since '+tgt+' — <b>stock is not the reason here</b>.';}
+      else if(dOos<0){joined=Math.abs(dOos)+' product'+(dOos===-1?'':'s')+' came BACK in stock since '+tgt+'.';}}}
+   }catch(e2){}
    const col9=pct9>=25?'#a3271a':(pct9>=10?'#a35a1a':'#0f6e56');
    return '<div style="margin-top:7px;font-size:11.5px;font-weight:700;color:'+col9+'">'
-    +st9.o+' of '+st9.t+' products in this collection are SOLD OUT online ('+pct9.toFixed(0)+'%'+(st9.s?', first 250 checked':'')+')'
-    +(pct9>=25?' — <b>a quarter of this shelf is empty; fix stock before sending more traffic</b>':'')
-    +' <span style="font-weight:500;color:#8a93a6">· Shopify&rsquo;s own product state, not Odoo</span></div>';
+    +st9.o+' of '+st9.t+' products SOLD OUT online ('+pct9.toFixed(0)+'%'+(st9.s?', first 250 checked':'')+')'
+    +(pct9>=25&&!joined?' — <b>a quarter of this shelf is empty; fix stock before sending more traffic</b>':'')
+    +' <span style="font-weight:500;color:#8a93a6">· Shopify&rsquo;s own product state, not Odoo</span>'
+    +(joined?'<div style="margin-top:3px;font-weight:600;color:#26313f">'+joined+'</div>':'<div style="margin-top:3px;font-size:10.5px;font-weight:500;color:#8a93a6">The since-last-week comparison appears once the collector has a few days of snapshots.</div>')
+    +'</div>';
   }catch(e){return '';}})();
  if(TRS.grouped&&nv>1&&TRS.open[vid]){h+='<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:8px;font-size:11px">'
   +p.variants.map(v=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:#666"><a href="'+trUrl(v)+'" target="_blank" rel="noopener" style="color:var(--ink);word-break:break-all">'+v.path+'</a><span>'+trN(v.sessions)+' sess · '+trPct(v.cvr)+' CVR</span></div>').join('')+'</div>';}
@@ -14214,7 +14232,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260907-204923';
+const BUILD='20260907-205224';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
