@@ -888,6 +888,28 @@ def _collection_stock(handles):
     return out
 
 
+def _cvr_with_stock_hist(cur, prev):
+    """v9.59 a sold-out count with no history cannot say 'went OOS since last week'. Keep a
+    dated snapshot per day (one entry per calendar day, last 15 days) so the tab can put the
+    CVR drop and the shelf emptying in the SAME sentence."""
+    try:
+        if not isinstance(cur, dict):
+            return cur
+        hist = dict(((prev.get("cvr") or {}).get("stockHist")) or {})
+        stock = cur.get("stock")
+        if stock:
+            hist[END.isoformat()] = {h: {"t": v.get("t"), "o": v.get("o")}
+                                     for h, v in stock.items()}
+        for k in sorted(hist)[:-15]:
+            hist.pop(k, None)
+        if hist:
+            cur = dict(cur)
+            cur["stockHist"] = hist
+    except Exception as e:
+        log("stock hist failed", str(e)[:120])
+    return cur
+
+
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -5714,7 +5736,7 @@ def build():
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
-              "cvr": XTRA.get("cvr") or prev.get("cvr") or {},
+              "cvr": _cvr_with_stock_hist(XTRA.get("cvr") or prev.get("cvr") or {}, prev),
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
