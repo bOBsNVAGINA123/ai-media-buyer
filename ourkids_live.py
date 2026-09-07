@@ -851,6 +851,43 @@ def pull_tiktok_shopify(win):
         round(sum(out["ttShopRev"].values())), ":: orders", int(sum(out["ttShopOrd"].values())))
     return out
 
+def _collection_stock(handles):
+    """v9.58 sold-out counts per collection, straight from Shopify's own product state --
+    a collection page sent traffic while half its shelf is SOLD OUT is a routing problem
+    no bid fixes. status ACTIVE + tracksInventory + totalInventory<=0 is exactly the badge
+    the storefront shows (the theme grid hard-skips those products entirely)."""
+    store = os.environ.get("SHOPIFY_STORE", "").strip()
+    tok = os.environ.get("SHOPIFY_TOKEN", "").strip()
+    if not store or not tok or not handles:
+        return {}
+    host = store if ".myshopify.com" in store else store + ".myshopify.com"
+    out = {}
+    hs = list(dict.fromkeys(handles))[:40]
+    for i in range(0, len(hs), 3):     # 3 collections x 250 products stays inside the cost cap
+        parts = []
+        for j, h in enumerate(hs[i:i + 3]):
+            parts.append('c%d: collectionByHandle(handle:"%s"){ handle productsCount{count} '
+                         'products(first:250){nodes{status tracksInventory totalInventory}} }'
+                         % (j, h.replace('"', '')))
+        d = http_json("https://%s/admin/api/2025-07/graphql.json" % host,
+                      {"query": "{ " + " ".join(parts) + " }"},
+                      {"X-Shopify-Access-Token": tok}) or {}
+        data = d.get("data") or {}
+        for k, c in data.items():
+            if not c:
+                continue
+            nodes = ((c.get("products") or {}).get("nodes")) or []
+            total = ((c.get("productsCount") or {}).get("count")) or len(nodes)
+            oos = sum(1 for n in nodes
+                      if n.get("status") == "ACTIVE" and n.get("tracksInventory")
+                      and (n.get("totalInventory") or 0) <= 0)
+            out[c.get("handle")] = {"t": int(total), "o": int(oos),
+                                    "s": 1 if total > len(nodes) else 0}
+    log("collection stock:", len(out), "collections,",
+        sum(v["o"] for v in out.values()), "sold-out products")
+    return out
+
+
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -878,6 +915,16 @@ def pull_cvr_routing():
         log("cvr routing :: no rows -- keeping whatever data.js already had")
         return
     P = dict(base)
+    try:
+        handles = []
+        for w in wins.values():
+            for r in (w.get("rows") or []):
+                p9 = str(r[0] or "")
+                if p9.startswith("/collections/"):
+                    handles.append(p9.split("/collections/", 1)[1].split("/")[0].split("?")[0])
+        P["stock"] = _collection_stock(handles)
+    except Exception as e:
+        log("collection stock failed", str(e)[:140])
     P.update({"types": CVR_TY, "wins": wins,
               "windows": sorted(int(k) for k in wins if k.isdigit()),
               "countries": ["", "Egypt"],
