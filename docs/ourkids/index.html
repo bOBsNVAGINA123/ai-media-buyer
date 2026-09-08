@@ -2294,6 +2294,31 @@ function glance(g,o){
  if(_brc)tiles.push(['Returning · branches',N(Math.round(_brc.v)),
    _brcP&&_brcP.v?((_brc.v/_brcP.v-1)*100):null,true,
    'registered repeat buyers at the tills'+(_brc.est?' (tail apportioned)':''),'co','brc']);
+ /* v9.60 the third kind of customer: the walk-in the till never identified. Total receipts
+    exist only in the monthly POS ledger, so the window total is apportioned per day and the
+    registered daily counts are subtracted -- an estimate, labelled, but the one number that
+    has been quietly climbing all year belongs on the scoreboard, not buried in an audit row. */
+ const _unrW=(function(){
+  const tot=(a,b)=>{try{if(!O.pos)return null;let t=0;
+    const dim9=m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();};
+    const nowM9=(O.today||'').slice(0,7),elapsed9=Math.max(1,+(O.today||'').slice(8,10)-1);
+    for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const m=new Date(d).toISOString().slice(0,7);
+     Object.keys(O.pos).forEach(b2=>{let v=O.pos[b2][m],md=m;
+      if(!v){const ks=Object.keys(O.pos[b2]).sort();md=ks[ks.length-1];v=md?O.pos[b2][md]:null;}
+      /* a part month divides by its ELAPSED days, not the calendar's 30 -- dividing a week of
+         receipts by a month of days made the total read below the registered count */
+      if(v&&v[2])t+=v[2]/(md===nowM9?elapsed9:dim9(md));});}
+    return t||null;}catch(e){return null;}};
+  const reg=(a,b)=>{try{const x=okBranchNC(a,b,'nord'),y=okBranchNC(a,b,'rord');
+    return (x&&y)?x.v+y.v:null;}catch(e){return null;}};
+  const t1=tot(ST.s,ST.e),r1=reg(ST.s,ST.e);
+  const t0=_pwG&&_pwG[0]?tot(_pwG[0],_pwG[1]):null,r0=_pwG&&_pwG[0]?reg(_pwG[0],_pwG[1]):null;
+  if(t1==null||r1==null)return null;
+  const u1=Math.max(0,t1-r1),u0=(t0!=null&&r0!=null)?Math.max(0,t0-r0):null;
+  return {u:u1,uP:u0,sh:t1?u1/t1*100:null,shP:(u0!=null&&t0)?u0/t0*100:null,t:t1,r:r1};})();
+ if(_unrW)tiles.push(['Unregistered · branches',N(Math.round(_unrW.u)),
+   (_unrW.uP&&_unrW.uP>0)?((_unrW.u/_unrW.uP-1)*100):null,false,
+   (_unrW.sh!=null?_unrW.sh.toFixed(0)+'% of receipts have NO identity attached':'walk-ins the till never captured')+' — est, receipts apportioned from the monthly ledger','co','unr']);
  const TD={};
  (function(){
   const row=(lab,c2,p2,inv,src)=>'<div style="display:flex;gap:9px;align-items:baseline;padding:3px 0 3px 18px;border-left:2px solid #eef0f5;margin-left:7px">'
@@ -2367,6 +2392,11 @@ function glance(g,o){
     return txt('By branch: '+mv.map(m5=>'<b>'+esc(m5.br)+'</b> '+(m5.dp>=0?'+':'−')+Math.abs(m5.dp).toFixed(0)+'%').join(' · ')+'.');}catch(e){return '';}};
   TD.bnc=hd('Branch first-timers '+(_bnc?N(Math.round(_bnc.v)):''))+(_bnc?row('All seven branches',_bnc.v,_bncP&&_bncP.v,true,''):'')+brDrill('nc');
   TD.brc=hd('Branch returning '+(_brc?N(Math.round(_brc.v)):''))+(_brc?row('All seven branches',_brc.v,_brcP&&_brcP.v,true,''):'')+brDrill('rc');
+  if(_unrW)TD.unr=hd('Unregistered walk-ins '+N(Math.round(_unrW.u))+' — receipts with nobody attached')
+   +row('All branch receipts (est, monthly ledger per day)',_unrW.t,null,true,N(Math.round(_unrW.t)))
+   +row('Registered buyers (POS crawl)',_unrW.r,null,true,N(Math.round(_unrW.r)))
+   +row('Unregistered share',_unrW.sh,_unrW.shP,false,(_unrW.sh||0).toFixed(1)+'% vs '+(_unrW.shP!=null?_unrW.shP.toFixed(1)+'%':'—')+' of receipts')
+   +txt('Every unregistered receipt is revenue with no customer behind it: no repeat tracking, no Meta match, no LTV. The identity-capture card on the <b>Branches</b> tab tracks this per branch — it is the number that quietly fell from ~93% captured to ~81% this year.');
  })();
  window.__TD=TD;
  window.okTileGo=function(k){
@@ -14232,7 +14262,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260907-205224';
+const BUILD='20260908-132608';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
