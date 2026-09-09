@@ -910,6 +910,84 @@ def _cvr_with_stock_hist(cur, prev):
     return cur
 
 
+def _google_at():
+    """One Google access token from the Ads OAuth trio already in the run env. The same
+    refresh token carries analytics.readonly (ga4_read.py proves it locally), so GA4 costs
+    zero new secrets."""
+    try:
+        data = urllib.parse.urlencode({"client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "refresh_token": os.environ.get("GOOGLE_REFRESH_TOKEN", ""),
+            "grant_type": "refresh_token"}).encode()
+        req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data,
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read()).get("access_token")
+    except Exception as e:
+        log("google token", str(e)[:120]); return None
+
+
+def pull_ga4_funnel(days=60):
+    """v9.61 GA4 funnel by landing page, DAILY, Egypt only (the audit's standing rule:
+    foreign sessions are 8% of traffic and ~0% of orders). Sessions / add-to-carts /
+    checkouts / purchases / revenue / users per page per day, top pages by sessions --
+    so the tab can cut ANY date window, compare, filter by sessions, and price a user
+    in gross profit. ShopifyQL cannot do this: it has no revenue per landing page and
+    no arbitrary dates."""
+    at = _google_at()
+    if not at:
+        return None
+    prop = os.environ.get("GA4_PROPERTY", "297783390")
+    end = END.isoformat()
+    start = (END - datetime.timedelta(days=days - 1)).isoformat()
+    body = {"dateRanges": [{"startDate": start, "endDate": end}],
+            "dimensions": [{"name": "date"}, {"name": "landingPagePlusQueryString"}],
+            "metrics": [{"name": "sessions"}, {"name": "addToCarts"}, {"name": "checkouts"},
+                        {"name": "ecommercePurchases"}, {"name": "purchaseRevenue"},
+                        {"name": "totalUsers"}],
+            "dimensionFilter": {"filter": {"fieldName": "country",
+                                           "stringFilter": {"value": "Egypt"}}},
+            "limit": 250000}
+    try:
+        req = urllib.request.Request(
+            "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
+            data=json.dumps(body).encode(),
+            headers={"Authorization": "Bearer " + at, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            d = json.loads(r.read())
+    except Exception as e:
+        log("ga4 funnel", str(e)[:200]); return None
+    rows = d.get("rows") or []
+    if not rows:
+        log("ga4 funnel: 0 rows ::", str(d)[:160]); return None
+    dix = {}
+    for i in range(days):
+        dix[(END - datetime.timedelta(days=days - 1 - i)).strftime("%Y%m%d")] = i
+    agg = {}
+    for r in rows:
+        dv = r["dimensionValues"]; mv = r["metricValues"]
+        di = dix.get(dv[0].get("value"))
+        if di is None:
+            continue
+        p = (dv[1].get("value") or "/").split("?")[0] or "/"
+        e = agg.get(p)
+        if e is None:
+            e = agg[p] = {"p": p, "tot": 0.0,
+                          "s": [0] * days, "a": [0] * days, "c": [0] * days,
+                          "pu": [0] * days, "r": [0.0] * days, "u": [0] * days}
+        vals = [float(m.get("value") or 0) for m in mv]
+        e["s"][di] += int(vals[0]); e["a"][di] += int(vals[1]); e["c"][di] += int(vals[2])
+        e["pu"][di] += int(vals[3]); e["r"][di] += vals[4]; e["u"][di] += int(vals[5])
+        e["tot"] += vals[0]
+    pages = sorted(agg.values(), key=lambda x: -x["tot"])[:140]
+    for p in pages:
+        p.pop("tot", None)
+        p["r"] = [round(v) for v in p["r"]]
+    log("ga4 funnel:", len(rows), "rows ->", len(pages), "pages, Egypt only,", days, "days")
+    return {"start": start, "n": days, "prop": prop, "eg": 1,
+            "pulled": END.isoformat(), "pages": pages}
+
+
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -952,6 +1030,10 @@ def pull_cvr_routing():
               "countries": ["", "Egypt"],
               "ts": _cvr_series(), "pulled": END.isoformat()})
     XTRA["cvr"] = P
+    try:
+        XTRA["ga4"] = pull_ga4_funnel()
+    except Exception as e:
+        log("ga4 funnel failed", str(e)[:160])
 
 GTOK = [None]
 # v7.8: did the API actually answer? Lets us tell "the feed is broken" apart from
@@ -5737,6 +5819,7 @@ def build():
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
               "cvr": _cvr_with_stock_hist(XTRA.get("cvr") or prev.get("cvr") or {}, prev),
+              "ga4": XTRA.get("ga4") or prev.get("ga4") or None,
               "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
