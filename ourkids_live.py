@@ -3282,15 +3282,17 @@ def pull_meta_ads(tok):
                         log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
                         return fb
                 except Exception: pass
-        def _f0(a2):
-            sp2 = a2["d"]["sp"]
-            for k in range(len(sp2)):
-                if sp2[k] > 0: return k
-            return -1
-        lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
-        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
+        # v9.8.1: this used to enrich only the top-40 by spend plus newly-launched ads,
+        # capped at 80 ids -- so 76 of 125 ads reached the dashboard with no thumbnail,
+        # no permalink and no status, and Traffic Routing listed them as unclickable
+        # text next to EGP 714K of spend. It is a plain object read, same as the
+        # landing-page lookup below, so cover every ad that actually spent.
+        ids = [a["id"] for a in ads if a.get("id") and (a.get("sp") or 0) > 0][:400]
         for i in range(0, len(ids), 25):
-            d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
+            try:
+                d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
+            except Exception as e:
+                log("meta ads :: creative lookup failed", str(e)[:120]); break
             for a in ads:
                 info = (d or {}).get(a["id"]) or {}
                 cr = info.get("creative") or {}
@@ -3298,6 +3300,7 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
+        log("meta ads :: creatives resolved", sum(1 for a in ads if a.get("th")), "of", len(ids))
         # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
         # as broken; without this you still have to hunt Ads Manager for who is pointing at
         # it. Plain object read (no insights), so it is cheap enough for every spending ad.
