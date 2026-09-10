@@ -3282,17 +3282,15 @@ def pull_meta_ads(tok):
                         log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
                         return fb
                 except Exception: pass
-        # v9.8.1: this used to enrich only the top-40 by spend plus newly-launched ads,
-        # capped at 80 ids -- so 76 of 125 ads reached the dashboard with no thumbnail,
-        # no permalink and no status, and Traffic Routing listed them as unclickable
-        # text next to EGP 714K of spend. It is a plain object read, same as the
-        # landing-page lookup below, so cover every ad that actually spent.
-        ids = [a["id"] for a in ads if a.get("id") and (a.get("sp") or 0) > 0][:400]
+        def _f0(a2):
+            sp2 = a2["d"]["sp"]
+            for k in range(len(sp2)):
+                if sp2[k] > 0: return k
+            return -1
+        lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
+        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
         for i in range(0, len(ids), 25):
-            try:
-                d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
-            except Exception as e:
-                log("meta ads :: creative lookup failed", str(e)[:120]); break
+            d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
                 info = (d or {}).get(a["id"]) or {}
                 cr = info.get("creative") or {}
@@ -3300,7 +3298,6 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
-        log("meta ads :: creatives resolved", sum(1 for a in ads if a.get("th")), "of", len(ids))
         # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
         # as broken; without this you still have to hunt Ads Manager for who is pointing at
         # it. Plain object read (no insights), so it is cheap enough for every spending ad.
@@ -5578,7 +5575,17 @@ def build():
                     if m and m[0]: return len(m[0]) < 6
         except Exception: pass
         return False
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or datetime.datetime.utcnow().hour < 3 or not (prev.get("bnrD")) or not (prev.get("hookV")) or not (prev.get("decB")) or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not (((prev.get("cube") or {}).get("scopes") or {}).get("ALL STORES")) or _cube_old(prev) or not any(
+    # v9.62: heavy used to fire only on UTC-hour<3 runs, but the workflow's freshness gate
+    # skips night slots whenever an evening run kept data.js fresh -- so bnrD/bnr froze for
+    # 13 days (Aug 28 -> Sep 10) while daytime syncs hummed along. Trigger on the payload's
+    # OWN staleness instead: first run of any day where the stored window doesn't reach END.
+    def _bnrd_stale(pv):
+        try:
+            w = (pv.get("bnrD") or {}).get("_w") or {}
+            return datetime.date.fromisoformat(w["start"]) + datetime.timedelta(days=int(w["n"]) - 1) < END
+        except Exception:
+            return True
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or _bnrd_stale(prev) or not (prev.get("bnrD")) or not (prev.get("hookV")) or not (prev.get("decB")) or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not (((prev.get("cube") or {}).get("scopes") or {}).get("ALL STORES")) or _cube_old(prev) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
@@ -5586,7 +5593,7 @@ def build():
         if not bnr: bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
     else:
         bnr, bstat, bcoh, bun = prev.get("bnr", {}), prev.get("bstat", {}), prev.get("bcoh", {}), prev.get("bun", {})
-        log("pos customers carried forward (heavy crawl runs on first sync of the day)")
+        log("pos customers carried forward (bnrD window already reaches today)")
     if heavy or not ((prev.get("rtCohPack") or {}).get("v2")):
         rtpk = safe(pull_cohorts_pack) or {}
         if not rtpk.get("coh"): rtpk = prev.get("rtCohPack") or {}
