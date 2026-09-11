@@ -3185,7 +3185,14 @@ def pull_meta_ads(tok):
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                               "spend,impressions,reach,outbound_clicks,actions,action_values",
+                               "spend,impressions,reach,outbound_clicks,actions,action_values,"
+                               # v9.8.2: watch depth. hook = 3-sec plays / impressions (already in
+                               # actions as video_view); hold = ThruPlays / impressions. The p25-p100
+                               # ladder is what tells you WHERE a video loses people, which a single
+                               # hold number cannot.
+                               "video_p25_watched_actions,video_p50_watched_actions,"
+                               "video_p75_watched_actions,video_p100_watched_actions,"
+                               "video_thruplay_watched_actions",
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3229,7 +3236,8 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv",
+                                                                        "v25", "v50", "v75", "v100", "tp")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3241,6 +3249,11 @@ def pull_meta_ads(tok):
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
+                        D["v25"][i] += _av(r.get("video_p25_watched_actions"), ("video_view",))
+                        D["v50"][i] += _av(r.get("video_p50_watched_actions"), ("video_view",))
+                        D["v75"][i] += _av(r.get("video_p75_watched_actions"), ("video_view",))
+                        D["v100"][i] += _av(r.get("video_p100_watched_actions"), ("video_view",))
+                        D["tp"][i] += _av(r.get("video_thruplay_watched_actions"), ("video_view",))
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3253,7 +3266,9 @@ def pull_meta_ads(tok):
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
-                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
+                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"])),
+                      "v25": int(sum(D["v25"])), "v50": int(sum(D["v50"])), "v75": int(sum(D["v75"])),
+                      "v100": int(sum(D["v100"])), "tp": int(sum(D["tp"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
