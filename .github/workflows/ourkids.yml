@@ -48,18 +48,27 @@ jobs:
     # v9.8.2: 50 was not enough once the audience backfills landed -- runs were killed
     # mid-upload, before data.js was ever written. The collector now writes the payload
     # first and budgets the uploads (SYNC_BUDGET_MIN), so this ceiling is a backstop.
-    timeout-minutes: 75
+    # v9.63 (13 Sep 2026): 75 killed every heavy-crawl run (they now run 75+ min), and a
+    # killed run still committed status.json -- which re-armed the broken gate below and
+    # blinded the next two hours of slots. data.js froze ~2 days while every run looked
+    # green-or-cancelled. Ceiling raised to a true backstop; the gate dedupes real runs.
+    timeout-minutes: 170
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 2}
       - name: Freshness gate (skip if data.js is still fresh)
         id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # v9.63: NEVER measure file age with `git log -- path` on a shallow checkout --
+          # the shallow boundary commit claims every file, so this reported the age of the
+          # last commit of ANY kind (status.json lands every run, even killed ones) and
+          # skipped slots while data.js sat 15h stale. Ask the API for the real thing.
           AGE=999999
-          if [ -f docs/ourkids/data.js ]; then
-            LAST=$(git log -1 --format=%ct -- docs/ourkids/data.js || echo 0)
-            NOW=$(date +%s)
-            AGE=$(( (NOW - LAST) / 60 ))
+          LAST=$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=docs/ourkids/data.js&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null || echo "")
+          if [ -n "$LAST" ]; then
+            AGE=$(( ( $(date +%s) - $(date -d "$LAST" +%s) ) / 60 ))
           fi
           echo "data.js is $AGE minutes old"
           if [ "${{ github.event_name }}" = "schedule" ] && [ "$AGE" -lt 110 ]; then
