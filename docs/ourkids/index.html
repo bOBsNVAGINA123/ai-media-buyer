@@ -1316,7 +1316,7 @@ function foldTail(t,grid){
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes|economics of one order/;
+ const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes|economics of one order|how wrong the platforms are/;
  const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
  if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
   pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
@@ -9439,6 +9439,58 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
     .concat(PF.map(x=>({l:x.n+' spend',d:dsp[x.k],c:PC[x.k],dash:1,w:1.6,pr:0,f:0}))),fC,{
   cmt:[[C.blue,'<b>Read the gap, not the line.</b> A blue solid line far above the blue dashed one is Meta earning; the two converging is Meta claiming barely more than it costs. Because the solid lines are each platform&rsquo;s own claim, the gap is the most generous possible read of that platform &mdash; if it is thin here it is thinner in reality.'],[C.orange,'<b>These lines double-count each other on purpose.</b> Meta, Google and TikTok each take full credit for the same order when a shopper saw more than one of them. That is why the sum of these three lines is larger than Odoo&rsquo;s Shopify revenue, and why aMER on the Media Efficiency tab &mdash; Odoo revenue divided by total spend &mdash; is the only honest cross-platform read.']]});
 
+ /* ---------- 2b. blended claim vs ledger -- the error margin, week by week ---------- */
+ (function(){
+  const FN=O.fin;if(!FN||!FN.rev||!O.ad||!O.ad.start)return;
+  const fOff=Math.round((Date.parse(O.ad.start)-Date.parse(FN.start))/864e5);
+  const wk={},ord=[];
+  for(let i=r[0];i<=r[1];i++){
+   const fi=i+fOff;if(fi<0||fi>=FN.n)continue;
+   const dt=new Date(Date.parse(O.ad.start)+i*864e5);
+   const mon=new Date(dt);mon.setUTCDate(dt.getUTCDate()-((dt.getUTCDay()+6)%7));
+   const k=mon.toISOString().slice(0,10);
+   if(!wk[k]){wk[k]={sp:0,cl:0,rv:0,d:0,a:dt.toISOString().slice(0,10)};ord.push(k);}
+   const w=wk[k];w.d++;w.b=dt.toISOString().slice(0,10);
+   w.sp+=(O.ad.spend||[])[i]||0;
+   w.cl+=((O.ad.mecomrev||[])[i]||0)*mf+((O.ad.gecomrev||[])[i]||0)*gf+((O.ad.ttValue||[])[i]||0)*tf;
+   w.rv+=(((FN.rev||[])[fi]||0)-((FN.refund||[])[fi]||0))*1000;}
+  if(!ord.length)return;
+  const eGrade=ov=>ov==null?'background:#f7f8fc;color:#c9ccd6'
+   :ov>1?'background:#a3271a;color:#fff':ov>0.5?'background:#fbdde5;color:#a3271a'
+   :ov>0.15?'background:#fdeed9;color:#8a5a1a':ov>0?'background:#fdf6e9;color:#8a5a1a'
+   :'background:#dcf3e8;color:#0f6e56';
+  const TD2='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+  const TH2='padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+  const pill=(st,txt)=>'<span style="display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 7px;font-weight:800;'+st+'">'+txt+'</span>';
+  const fmtRow=(lbl,w,bold)=>{
+   const bro=w.sp>0?w.cl/w.sp:null,mer=w.sp>0?w.rv/w.sp:null;
+   const ov=w.rv>0?(w.cl-w.rv)/w.rv:null;
+   return '<tr'+(bold?' style="font-weight:800;background:#f7f8fc"':'')+'>'
+    +'<td style="'+TD2+';text-align:left;font-weight:700">'+lbl+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.sp)+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.cl)+'</td>'
+    +'<td style="'+TD2+'">'+(bro==null?'&mdash;':d2(bro)+'x')+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.rv)+'</td>'
+    +'<td style="'+TD2+'">'+(mer==null?'&mdash;':d2(mer)+'x')+'</td>'
+    +'<td style="'+TD2+'">'+pill(eGrade(ov),ov==null?'&mdash;':(ov>=0?'+':'&minus;')+Math.abs(ov*100).toFixed(0)+'%')+'</td>'
+    +'<td style="'+TD2+'">'+(bro&&mer?Math.min(100,mer/bro*100).toFixed(0)+'%':'&mdash;')+'</td></tr>';};
+  let tb='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:6px">'
+   +'<tr><th style="'+TH2+';text-align:left">Week</th><th style="'+TH2+'">Blended spend</th><th style="'+TH2+'">Platforms claim</th><th style="'+TH2+'">Blended ROAS</th><th style="'+TH2+'">Store really took</th><th style="'+TH2+'">Blended MER</th><th style="'+TH2+'">Error margin</th><th style="'+TH2+'">E&pound;1 claimed = real</th></tr>';
+  const tot={sp:0,cl:0,rv:0,d:0};
+  ord.forEach(k=>{const w=wk[k];tot.sp+=w.sp;tot.cl+=w.cl;tot.rv+=w.rv;tot.d+=w.d;
+   tb+=fmtRow(w.a.slice(5)+' &rarr; '+w.b.slice(5)+(w.d<7?' <span style="font-size:9px;color:#8a93a6">'+w.d+'d</span>':''),w);});
+  tb+=fmtRow('TOTAL',tot,1)+'</table></div>';
+  const tOv=tot.rv>0?(tot.cl-tot.rv)/tot.rv:null;
+  const tAcc=(tot.cl>0&&tot.rv>0)?Math.min(1,tot.rv/tot.cl):null;
+  const verdict=tOv==null?''
+   :tOv>0?'<b>The platforms together claim E&pound; '+money(tot.cl)+' &mdash; the whole webstore only took E&pound; '+money(tot.rv)+'. That is '+(tOv*100).toFixed(0)+'% more revenue than exists</b>, so AT LEAST that share of claimed value is double-counted or would have happened anyway. Every E&pound;1 of claimed value bought at most E&pound; '+tAcc.toFixed(2)+' of real revenue &mdash; multiply any ROAS a platform shows you by '+tAcc.toFixed(2)+' before believing it. '
+   :'<b>Claims (E&pound; '+money(tot.cl)+') fit inside real revenue (E&pound; '+money(tot.rv)+') this window.</b> That does not prove they are accurate &mdash; it only means the over-claim cannot be shown from totals alone; organic covers the difference. The incremental read on the Meta tab is the sharper test. ';
+  pnlCard(g,'ads','Blended claim vs ledger &mdash; how wrong the platforms are'
+   +INFO('Each week inside your selected range. Blended spend = Meta + Google + TikTok daily spend summed. Platforms claim = each platform&#39;s own Shopify conversion value, summed across all three (they overlap on purpose &mdash; each takes full credit for shared orders), scaled by your attribution selector. Blended ROAS = claim / spend. Store really took = Shopify net revenue (refunds out) for the same days &mdash; ALL of it, organic included. Blended MER = real revenue / spend. Error margin = (claim &minus; real) / real: +40% means the platforms claim 40% more money than the entire store took, a mathematical floor on over-claiming since organic exists too. Last column: how much real revenue E&pound;1 of claimed value actually bought, capped at 100%.'),
+   ST.s+' &rarr; '+ST.e+' &middot; at your current attribution setting (Meta &times;'+mf.toFixed(2)+', Google &times;'+gf.toFixed(2)+') &mdash; change it and the error margin moves with it. '+verdict
+   +'Red = claiming more revenue than exists. Green = claims at least fit inside reality. The error margin can only understate the truth &mdash; organic and repeat customers mean the honest number is worse than the floor shown.',tb);
+ })();
+
  /* ---------- 3. every funded entity across all three platforms ---------- */
 /* v9.31 THIS CARD IGNORED THE DATE BOX. Every entity row read a.sp / a.ov / a.imp, which are
    the WHOLE 60-day collector pull, while the header above it said "5 days". On 2026-08-28 ->
@@ -14349,7 +14401,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260909-215107';
+const BUILD='20260913-213515';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
