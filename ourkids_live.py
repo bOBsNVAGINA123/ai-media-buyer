@@ -3184,6 +3184,12 @@ def pull_meta_ads(tok):
                 allnc = _ALLNC.get(acct) or [MCC_ALLNC]
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
+                     # v9.8.3: per-ad attribution windows. The account-level pull already
+                     # does this; without it every ad on the dashboard is the account
+                     # default only, with no way to see how much credit a stricter window
+                     # takes away. Canonical values only - "incrementality" runs in its
+                     # own isolated request below so a rejection cannot kill the ad pull.
+                     "action_attribution_windows": json.dumps(["default", "7d_click", "1d_click"]),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
                                "spend,impressions,reach,outbound_clicks,actions,action_values,"
                                # v9.8.2: watch depth. hook = 3-sec plays / impressions (already in
@@ -3237,7 +3243,8 @@ def pull_meta_ads(tok):
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
                                           "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv",
-                                                                        "v25", "v50", "v75", "v100", "tp")}}
+                                                                        "v25", "v50", "v75", "v100", "tp",
+                                                                        "pv7", "pv1", "fv7", "fv1")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3246,6 +3253,10 @@ def pull_meta_ads(tok):
                         D["oc"][i] += _av(r.get("outbound_clicks"), ("outbound_click",))
                         D["pv"][i] += _av(av, ("offsite_conversion.fb_pixel_purchase",))
                         D["fv"][i] += _av(av, ("offline_conversion.purchase",))
+                        D["pv7"][i] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "7d_click")
+                        D["pv1"][i] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "1d_click")
+                        D["fv7"][i] += _avw(av, ("offline_conversion.purchase",), "7d_click")
+                        D["fv1"][i] += _avw(av, ("offline_conversion.purchase",), "1d_click")
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
@@ -3268,7 +3279,9 @@ def pull_meta_ads(tok):
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"])),
                       "v25": int(sum(D["v25"])), "v50": int(sum(D["v50"])), "v75": int(sum(D["v75"])),
-                      "v100": int(sum(D["v100"])), "tp": int(sum(D["tp"]))})
+                      "v100": int(sum(D["v100"])), "tp": int(sum(D["tp"])),
+                      "pv7": round(sum(D["pv7"])), "pv1": round(sum(D["pv1"])),
+                      "fv7": round(sum(D["fv7"])), "fv1": round(sum(D["fv1"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
@@ -3297,13 +3310,12 @@ def pull_meta_ads(tok):
                         log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
                         return fb
                 except Exception: pass
-        def _f0(a2):
-            sp2 = a2["d"]["sp"]
-            for k in range(len(sp2)):
-                if sp2[k] > 0: return k
-            return -1
-        lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
-        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
+        # v9.8.1: this used to enrich only the top-40 by spend plus newly-launched ads,
+        # capped at 80 ids - so most ads reached the dashboard with no thumbnail, no
+        # permalink and no status, and Traffic Routing listed them as unclickable text
+        # next to real spend. It is a plain object read, same as the landing-page lookup
+        # below, so cover every ad that actually spent.
+        ids = [a["id"] for a in ads if a.get("id") and (a.get("sp") or 0) > 0][:400]
         for i in range(0, len(ids), 25):
             d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
@@ -3313,6 +3325,7 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
+        log("meta ads :: creatives resolved", sum(1 for a in ads if a.get("th")), "of", len(ids))
         # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
         # as broken; without this you still have to hunt Ads Manager for who is pointing at
         # it. Plain object read (no insights), so it is cheap enough for every spending ad.
@@ -3332,6 +3345,35 @@ def pull_meta_ads(tok):
                               if x.get("website_url")), None))
                 if u: a["lp"] = _lp_path(str(u))
         log("meta ads :: landing pages resolved", sum(1 for a in ads if a.get("lp")), "of", len(_lids))
+        # Per-ad incrementality, same window the account-level pull uses. It is not on the
+        # canonical insights enum, so it runs alone: a rejection costs this block only and
+        # the ads ship with every other number intact.
+        try:
+            _inc = {}
+            _cs2, _ce2 = _chunks[-1][0], _chunks[-1][1]
+            for acct in _accts:
+                _pi = {"level": "ad", "access_token": tok, "limit": 500,
+                       "time_range": json.dumps({"since": _cs2, "until": _ce2}),
+                       "fields": "ad_id,action_values",
+                       "action_attribution_windows": json.dumps(["incrementality"])}
+                _u = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(_pi))
+                _pg = 0
+                while _u and _pg < 20:
+                    _d = http_json(_u); _pg += 1
+                    if (_d or {}).get("error"): raise RuntimeError(str(_d["error"])[:120])
+                    for _r in (_d.get("data") or []):
+                        _avs = _r.get("action_values") or []
+                        _inc[_r.get("ad_id")] = (
+                            _avw(_avs, ("offsite_conversion.fb_pixel_purchase",), "incrementality")
+                            + _avw(_avs, ("offline_conversion.purchase",), "incrementality"))
+                    _u = (_d.get("paging") or {}).get("next")
+            _n = 0
+            for a in ads:
+                if _inc.get(a["id"]):
+                    a["inc"] = round(_inc[a["id"]]); _n += 1
+            log("meta ads :: incrementality resolved on", _n, "of", len(ads), "ads ::", _cs2, "..", _ce2)
+        except Exception as e:
+            log("meta ads :: incrementality unavailable (%s) - ads ship without it" % str(e)[:100])
         for a in ads:
             if a.get("im2"): a["im"] = a.pop("im2")
         log("meta ads v8.3 ::", len(ads), "ads with 60d daily series :: accounts",
