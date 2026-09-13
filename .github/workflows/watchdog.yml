@@ -1,0 +1,30 @@
+name: Data watchdog
+
+# Fails LOUDLY -- a red run and a GitHub notification email -- whenever
+# docs/ourkids/data.js has not been rebuilt for 6+ hours. Every silent-staleness
+# bug so far (dropped cron slots, the lying shallow-git freshness gate, the
+# timeout-killed heavy crawls) had exactly this symptom while the sync workflow
+# itself looked green or cancelled. One dumb check on the SYMPTOM catches the
+# whole class, including whatever variant comes next. Keep this workflow free of
+# cleverness: no gates, no state, no skipping.
+on:
+  schedule:
+    - cron: "43 */3 * * *"   # every 3h, off the :00 rush. Dropped slots are fine -- the next one fires.
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: data.js must be under 6 hours old
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LAST=$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=docs/ourkids/data.js&per_page=1" --jq '.[0].commit.committer.date')
+          AGE=$(( ( $(date +%s) - $(date -d "$LAST" +%s) ) / 60 ))
+          echo "data.js last rebuilt $AGE minutes ago ($LAST)"
+          if [ "$AGE" -gt 360 ]; then
+            echo "::error::data.js is ${AGE} minutes stale -- the sync pipeline is silently broken again. Open the OurKids Live Dashboard workflow runs and look for 0-minute successes (gate skipping wrongly) or ~timeout-length cancelled runs (heavy crawl killed)."
+            exit 1
+          fi
