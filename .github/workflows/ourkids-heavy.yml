@@ -1,0 +1,255 @@
+name: OurKids Heavy Crawl
+
+# Runs on GitHub's servers. Laptop off, nobody online. Rebuilds docs/ourkids/data.js
+# from the live APIs and commits it, so GitHub Pages always serves fresh numbers.
+#
+# v6.3 -- push-race hardening (28 Jul 2026); see the Commit step.
+# v6.2.1 -- hardened after two days of silent failure (25 Jul -> 27 Jul 2026).
+# What went wrong and what stops it recurring:
+#   * cron sat on minute :00, the busiest minute on GitHub's shared scheduler, where
+#     scheduled jobs get DROPPED rather than delayed  -> moved to :23
+#   * the commit step had no `if: always()`, so a crashed build never committed and
+#     looked identical to a run that never happened   -> commit is now always()
+#   * nothing was ever written when a run failed, so the dashboard kept serving old
+#     numbers with no visible reason                   -> status.json every run
+#   * no timeout, so one stuck run could hold the concurrency group for 6h and eat
+#     the next two schedules                           -> timeout-minutes: 50
+#   * no push trigger, so shipping a new collector meant waiting up to 3h to find
+#     out whether it even runs                         -> push trigger on the code
+on:
+  schedule:
+    # v9.64: the long crawl (branch daily NR, cohort cube, deciles -- 75+ min) lives HERE,
+    # alone, so it can never block, starve, or be timeout-killed alongside the hourly live
+    # sync again. Three night slots (Cairo 3:23 / 5:23 / 7:23 am): the first one that fires
+    # after midnight does the heavy crawl (the collector's staleness trigger decides); the
+    # later ones see a fresh window and land as cheap light syncs = free morning freshness.
+    # All three dropped by GitHub = bnrD lags ONE day, the dashboard's apportioned fallback
+    # covers it, and the collector's 3-day escape hatch lets hourly runs reclaim the crawl.
+    - cron: "23 0 * * *"
+    - cron: "23 2 * * *"
+    - cron: "23 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ourkids-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # v9.8.2: 50 was not enough once the audience backfills landed -- runs were killed
+    # mid-upload, before data.js was ever written. The collector now writes the payload
+    # first and budgets the uploads (SYNC_BUDGET_MIN), so this ceiling is a backstop.
+    # v9.63 (13 Sep 2026): 75 killed every heavy-crawl run (they now run 75+ min), and a
+    # killed run still committed status.json -- which re-armed the broken gate below and
+    # blinded the next two hours of slots. data.js froze ~2 days while every run looked
+    # green-or-cancelled. Ceiling raised to a true backstop; the gate dedupes real runs.
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the dashboard data
+        id: build
+        env:
+          ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:      ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:   ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY:  ${{ secrets.ODOO_APIKEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACCOUNT_ID:   ${{ secrets.META_ACCOUNT_ID }}
+          SHOPIFY_STORE:     ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:     ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:  ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
+          GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
+          GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          CLARITY_TOKEN:         ${{ secrets.CLARITY_TOKEN }}
+          BOSTA_API_KEY:         ${{ secrets.BOSTA_API_KEY }}
+          TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
+          TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+          # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
+          BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
+        run: python ourkids_live.py
+
+      # The collector exits 0 even on failure (it writes the reason into status.json),
+      # so this only fires on something the collector could not catch at all -- an
+      # interpreter crash, a runner OOM, a network stall killed by the timeout.
+      # One patient retry costs a minute and rescues most transient API blips.
+      - name: Retry once if the build failed
+        if: failure()
+        env:
+          ODOO_SERVER:  ${{ secrets.ODOO_SERVER }}
+          ODOO_DB:      ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN:   ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY:  ${{ secrets.ODOO_APIKEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACCOUNT_ID:   ${{ secrets.META_ACCOUNT_ID }}
+          SHOPIFY_STORE:     ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:     ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN:  ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_DEVELOPER_TOKEN }}
+          GOOGLE_LOGIN_CID:      ${{ secrets.GOOGLE_LOGIN_CID }}
+          GOOGLE_CUSTOMER_ID:    ${{ secrets.GOOGLE_CUSTOMER_ID }}
+          CLARITY_TOKEN:         ${{ secrets.CLARITY_TOKEN }}
+          BOSTA_API_KEY:         ${{ secrets.BOSTA_API_KEY }}
+          TIKTOK_TOKEN:          ${{ secrets.TIKTOK_TOKEN }}
+          TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
+          # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
+          BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
+        run: |
+          echo "first attempt failed; sleeping 60s and trying once more"
+          sleep 60
+          python ourkids_live.py
+
+      # ALWAYS commit. Even a failed run has something to say: status.json carries
+      # ok=false, the exception, and the last 60 log lines, and data.js carries a
+      # syncError + lastAttempt stamp. That turns the repo itself into the run log,
+      # readable with one fetch, without opening the Actions tab.
+      # v9.9.1 -- REWRITTEN. The old rebase loop had a fatal flaw: when `git pull --rebase`
+      # hit a conflict on one of these generated files it stopped MID-REBASE, which leaves
+      # the repo on a detached HEAD. Every later `git push` then died with "You are not
+      # currently on a branch", and the loop never ran `rebase --abort`, so all five
+      # attempts were guaranteed to fail. One conflict = the build is silently thrown away.
+      # That is what froze data.js at 14:58 UTC on 3 Aug while builds kept succeeding.
+      #
+      # These files are BUILD OUTPUTS, so merging them is meaningless -- the freshest build
+      # always wins. So: never rebase. Save the outputs, hard-reset onto origin/main, put
+      # the outputs back, commit, push. A conflict is now impossible by construction.
+      #
+      # index.html is deliberately NOT committed here: the collector never generates it,
+      # and including it meant this bot competed with real dashboard edits over the same
+      # file -- which is where the conflicts came from in the first place.
+      - name: Commit fresh data
+        if: always()
+        run: |
+          set -u
+          git config user.name "ourkids-dashboard"
+          git config user.email "bot@users.noreply.github.com"
+          OUT="docs/ourkids/data.js docs/ourkids/status.json docs/ourkids/mads_fallback.json"
+          TMP=$(mktemp -d)
+          KEPT=""
+          for f in $OUT; do
+            if [ -f "$f" ]; then mkdir -p "$TMP/$(dirname "$f")"; cp "$f" "$TMP/$f"; KEPT="$KEPT $f"; fi
+          done
+          if [ -z "$KEPT" ]; then echo "::warning::the build produced no output files"; exit 0; fi
+          for i in 1 2 3 4 5 6; do
+            git rebase --abort 2>/dev/null || true
+            git merge --abort 2>/dev/null || true
+            git fetch origin main --quiet || true
+            # -f is required: the freshly built outputs are sitting dirty in the work tree
+            # and a plain checkout refuses to clobber them. They are already saved in $TMP
+            # and get copied back on the next line, so discarding them here is safe.
+            git checkout -f -B main origin/main --quiet || { echo "checkout failed, retrying"; sleep $((i*5)); continue; }
+            for f in $KEPT; do cp "$TMP/$f" "$f"; done
+            git add $KEPT || true
+            if git diff --cached --quiet; then echo "no change vs origin/main -- nothing to commit"; exit 0; fi
+            git commit -q -m "auto: dashboard sync $(date -u +'%Y-%m-%d %H:%M UTC')"
+            if git push origin HEAD:main --quiet; then echo "pushed on attempt $i"; exit 0; fi
+            echo "attempt $i: someone pushed first, re-syncing onto the new head"
+            sleep $((i * 5))
+          done
+          echo "::error title=Dashboard data not committed::Six attempts to push the freshly built data.js all lost the race. The build itself was fine -- see the status.json summary below."
+          exit 1
+
+      # Prints the outcome on the run's summary page, so "is it healthy?" is answered
+      # by looking, not by reading logs.
+      - name: Report
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          p = "docs/ourkids/status.json"
+          print("## OurKids sync")
+          if not os.path.exists(p):
+              print("")
+              print("**status.json was never written** -- the collector died before it could report.")
+              print("That means an interpreter-level crash, not an API failure.")
+              raise SystemExit(0)
+          s = json.load(open(p))
+          d = s.get("data") or {}
+          print("")
+          print("| | |")
+          print("|---|---|")
+          print("| ok | %s |" % s.get("ok"))
+          print("| fresh | %s |" % s.get("fresh"))
+          print("| seconds | %s |" % s.get("seconds"))
+          print("| data.js bytes | %s |" % d.get("bytes"))
+          print("| lastSync | %s |" % d.get("lastSync"))
+          print("| window end | %s |" % d.get("windowEnd"))
+          print("| today (Cairo) | %s |" % s.get("todayCairo"))
+          if s.get("error"):
+              print("")
+              print("### Error")
+              print("```")
+              print(s["error"])
+              print("```")
+          log = s.get("log") or []
+          if log:
+              print("")
+              print("<details><summary>last %d log lines</summary>" % len(log))
+              print("")
+              print("```")
+              for ln in log: print(ln)
+              print("```")
+              print("")
+              print("</details>")
+          PY
+      # v9.11 (5 Aug 2026): the CLI deploy that used to live here is GONE, and on purpose.
+      #
+      # The mirror (ourkids-analytics -> ourkids-analytics-3bdelshafi.vercel.app, the URL
+      # the team actually opens) is now connected to this repo directly in Vercel, with
+      # Root Directory = docs. Every commit the step above makes therefore publishes
+      # itself. No token, nothing to expire.
+      #
+      # Why it was removed rather than fixed: this step deployed with a VERCEL_TOKEN that
+      # Vercel kept expiring -- it died three times in four days, and each time the run
+      # still reported SUCCESS (continue-on-error), so the mirror silently froze while
+      # Pages stayed fresh. That is what "the numbers are two days old" looked like from
+      # the outside on 3-5 Aug. It would also break now regardless: it ran `cd docs`, and
+      # with Root Directory set to docs, Vercel would look for docs/docs.
+      #
+      # The token deploy below is kept as a SECOND, independent publisher -- if the Git
+      # connection is ever lost or Vercel skips the build, this still pushes the same
+      # bytes. It now runs from the REPO ROOT, not docs/: Root Directory is applied by
+      # Vercel on top of whatever is uploaded, so `cd docs` would resolve to docs/docs.
+      - name: Publish to the private mirror (fallback -- Git integration is the primary)
+        if: always()
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning title=Vercel fallback skipped::VERCEL_TOKEN is empty. The Git integration publishes the mirror; Pages is unaffected."
+            exit 0
+          fi
+          # NOT `... | tee`: a pipeline reports the exit status of the LAST command, so the
+          # old step printed "mirror published" even when the deploy had just failed. That
+          # is how a broken mirror looked healthy in the logs for two days (5 Aug 2026).
+          set +e
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" > /tmp/v.log 2>&1
+          rc=$?
+          cat /tmp/v.log
+          if [ $rc -eq 0 ]; then
+            echo "mirror published (fallback path)"
+          else
+            if grep -q "not valid" /tmp/v.log; then
+              echo "::warning title=Vercel fallback token expired::VERCEL_TOKEN is rejected. Mint a NO-EXPIRATION token at https://vercel.com/account/settings/tokens (scope: ourkids-analytics) and set it with: gh secret set VERCEL_TOKEN -R bOBsNVAGINA123/ai-media-buyer. The mirror is still published by the Git integration, and Pages is UNAFFECTED."
+            else
+              echo "::warning title=Vercel fallback failed::See the log above. The Git integration still publishes the mirror; Pages is UNAFFECTED."
+            fi
+          fi
