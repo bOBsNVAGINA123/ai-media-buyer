@@ -106,6 +106,9 @@ jobs:
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
           # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
           BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
+          # v9.64: hourly runs NEVER do the 75+ min heavy crawl -- ourkids-heavy.yml owns
+          # it at night. Collector-side disaster escape ignores this after 3 stale days.
+          SKIP_HEAVY: "1"
         run: python ourkids_live.py
 
       # The collector exits 0 even on failure (it writes the reason into status.json),
@@ -136,6 +139,9 @@ jobs:
           TIKTOK_ADVERTISER_ID:  ${{ secrets.TIKTOK_ADVERTISER_ID }}
           # one-off wider re-scan of buyer history; unset for normal 4-day top-ups
           BUYERS_BACKFILL_DAYS:  ${{ vars.BUYERS_BACKFILL_DAYS }}
+          # v9.64: hourly runs NEVER do the 75+ min heavy crawl -- ourkids-heavy.yml owns
+          # it at night. Collector-side disaster escape ignores this after 3 stale days.
+          SKIP_HEAVY: "1"
         run: |
           echo "first attempt failed; sleeping 60s and trying once more"
           sleep 60
