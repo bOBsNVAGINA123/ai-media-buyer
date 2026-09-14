@@ -274,7 +274,12 @@ function rtM(){return Object.keys(O.nr||{}).sort();}
 function rtAddM(m,d){let y=+m.slice(0,4),mo=+m.slice(5,7)+d;while(mo<1){mo+=12;y--;}while(mo>12){mo-=12;y++;}return y+'-'+String(mo).padStart(2,'0');}
 function rtDefM(){const t=(O.today||'9999').slice(0,7);const M=rtM();for(let i=M.length-1;i>=0;i--)if(M[i]<t)return M[i];return M[M.length-1]||null;}
 function rtExpKey(m,sub){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.toLowerCase().indexOf(sub)>=0)t+=E[k];return t;}
-function rtExpTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)t+=E[k];return t;}
+/* v9.66: "Platform ads via bills (memo)" is the Meta/Google/TikTok invoices as posted to GL
+   31.01.05.03/.07 — the SAME money already charged everywhere as API ad spend. Every OpEx
+   total must exclude it or ads are counted twice. expTot() is the only sanctioned way to
+   total a month of O.exp. */
+function expTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.indexOf('(memo)')<0)t+=E[k];return t;}
+function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
 function rtBase(m){
  const nr=O.nr[m]||{};
@@ -2204,7 +2209,7 @@ function glance(g,o){
   if(!done.length)return null;
   const bm=done[done.length-1];
   const dim2=(m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();})(bm);
-  const opxD=Object.values(O.exp[bm]).reduce((a,b)=>a+b,0)/dim2;
+  const opxD=expTot(bm)/dim2;
   let br=0,bg=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][bm];if(v){br+=v[0]||0;bg+=v[1]||0;}});
   const stMg=br>0?bg/br:0.24;
   const blSum=(a,b)=>{if(!O.bl)return null;let t=0;
@@ -3790,8 +3795,8 @@ function dailyBE(g){
   +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
-  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore only</div></th>'
-  +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">first-time buyers</div></th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore &middot; refunds out &middot; graded vs delivered BE</div></th>'
+  +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">first-time buyers &middot; refunds out</div></th>'
   +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore only</div></th>'
   +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th>'
   +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th></tr>'
@@ -3892,8 +3897,21 @@ function netSplitCard(g){
  const adsOn=adG+adT+adM*mShareOn, adsSt=adM*(1-mShareOn);
 
  // --- opex, by what the account is ---
- const acc=(m,k)=>((O.exp[m]||{})[k]||0);
- const brSal=sum(m=>brs.reduce((a,b)=>a+(((BC[b]||{})[m]||{}).sal||0),0));
+ /* v9.66: when the range sits inside the RUNNING month, its expense ledger is mostly
+    unposted (Sep-14 real case: E£862k posted vs an E£11M normal month, payroll E£0) and
+    this card charged "operating costs −E£849" against E£3M of revenue — fantasy profit.
+    Fix: charge every bucket at the last FULLY-POSTED month's book, prorated to elapsed
+    days, whenever the running month's postings are under 40% of that book. Labelled below. */
+ const lastFull=A.filter(x=>x<nowM&&O.exp[x]&&expTot(x)>0).slice(-1)[0];
+ const EST=mons.length===1&&mons[0]===nowM&&!!lastFull&&expTot(nowM)<0.4*expTot(lastFull);
+ const dimN=EST?new Date(+nowM.slice(0,4),+nowM.slice(5,7),0).getDate():30;
+ const elapN=EST?Math.max(1,Math.min(dimN,parseInt((O.today||'').slice(8,10))||1)):0;
+ const scl=EST?elapN/dimN:0;
+ const acc=(m,k)=>{const v=(O.exp[m]||{})[k]||0;
+  if(EST&&m===nowM)return Math.max(v,((O.exp[lastFull]||{})[k]||0)*scl);
+  return v;};
+ let brSal=sum(m=>brs.reduce((a,b)=>a+(((BC[b]||{})[m]||{}).sal||0),0));
+ if(EST&&brSal<1)brSal=brs.reduce((a,b)=>a+(((BC[b]||{})[lastFull]||{}).sal||0),0)*scl;
  const stDirect=sum(m=>acc(m,'Rent — branches')+acc(m,'Utilities (elec/water/gas)')
                        +acc(m,'Maintenance')+acc(m,'Offline advertising & gifts')
                        +acc(m,'Card fees — branches'))+brSal;
@@ -3901,10 +3919,12 @@ function netSplitCard(g){
  const payAll=sum(m=>acc(m,'Payroll & benefits'));
  const shared=sum(m=>acc(m,'Rent — HQ / warehouses / flats')+acc(m,'Comms & internet')+acc(m,'Other OpEx'))
               +Math.max(0,payAll-brSal);
- const opxAll=sum(m=>Object.values(O.exp[m]||{}).reduce((a,b)=>a+b,0));
+ let opxAll=sum(m=>expTot(m));
+ if(EST)opxAll=Math.max(opxAll,expTot(lastFull)*scl);
  const opxOn=onDirect+shared*wOn, opxSt=stDirect+shared*(1-wOn);
 
- const shipN=sum(m=>s2h(m)?((s2('cost',m)||0)-(s2('col',m)||0)):0);
+ let shipN=sum(m=>s2h(m)?((s2('cost',m)||0)-(s2('col',m)||0)):0);
+ if(EST&&Math.abs(shipN)<1&&s2h(lastFull))shipN=((s2('cost',lastFull)||0)-(s2('col',lastFull)||0))*scl;
  const netOn=onGP-adsOn-opxOn-shipN, netSt=stGP-adsSt-opxSt, netAll=netOn+netSt;
  const per=(v,r2)=>r2?(v/r2*100):null;
 
@@ -3942,7 +3962,7 @@ function netSplitCard(g){
 
  pnlCard(g,'odoo','Did we make money? — online vs branches, after everything'
    +INFO('Gross profit is exact per channel (Odoo margin on Shopify orders; report.pos.order margin per branch). Google and TikTok spend is charged wholly to online; Meta is split by its own attributed value, website against in-store CAPI. Posted OpEx is split by what each account is, with HQ rent, comms, other OpEx and untagged payroll shared pro-rata on revenue. The courier bill is NOT in the 31.* expense book, so it is charged separately to online: the full Bosta cost minus the shipping customers paid.'),
-  lead+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
+  lead+(typeof EST!=='undefined'&&EST?'<span style="color:#b8621b"><b>'+nowM+' is the running month and its expense ledger is barely posted (E£'+Math.round(expTot(nowM)).toLocaleString()+' booked vs E£'+Math.round(expTot(lastFull)).toLocaleString()+' in '+lastFull+') — operating costs, payroll and courier below are charged at '+lastFull+'’s posted book × '+elapN+'/'+dimN+' elapsed days. Estimates, not postings.</b></span> ':'')+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
   +'Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '
   +'The shared overhead pool of '+M(shared)+' goes '+Math.round(wOn*100)+'% online / '+Math.round((1-wOn)*100)+'% shops, on revenue.',
   body
@@ -10586,12 +10606,12 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
     Lg.map(m=>m.slice(2)),[{l:'Gross margin %',c:'#9d6bff',w:3,d:gm}],v=>(+v).toFixed(0)+'%',{cmt:cm4});}
   // ---------- NET PROFIT OVER TIME ----------
   const Le=L.filter(m=>O.exp&&O.exp[m]&&M2[m]);
-  const eb=Le.map(m=>{const opx=Object.values(O.exp[m]).reduce((a,b)=>a+b,0);
+  const eb=Le.map(m=>{const opx=expTot(m);
    return onGp(m)+rtGp(m)-(A3[m]||0)-opx;});
   const pos2=eb.filter((v,i)=>v>0&&Le[i]<CURM).length,tot2=Le.filter(m=>m<CURM).length;
   const cmt5=[[pos2>=tot2/2?C.grn:C.red,'<b>Net profit = gross profit &minus; advertising &minus; every operating cost in the ledger</b> (salaries, rent, utilities, transport, packing, everything in the 31.* expense tree). It is the last line: what the company actually kept. '+pos2+' of '+tot2+' full months in this window are positive.']];
   if(Le.length){const lm5=Le.filter(m=>m<CURM).slice(-1)[0];
-   if(lm5){const i5=Le.indexOf(lm5),opx=Object.values(O.exp[lm5]).reduce((a,b)=>a+b,0);
+   if(lm5){const i5=Le.indexOf(lm5),opx=expTot(lm5);
     cmt5.push([C.indigo,'<b>Worked example, '+lm5+':</b> Shopify gross profit E&pound; '+money(onGp(lm5))+' + retail gross profit E&pound; '+money(rtGp(lm5))+' = E&pound; '+money(onGp(lm5)+rtGp(lm5))+' gross profit. Minus platform ad spend E&pound; '+money(A3[lm5]||0)+'. Minus operating costs E&pound; '+money(opx)+'. Net profit = <b>'+(eb[i5]<0?'&minus;':'')+'E&pound; '+money(Math.abs(eb[i5]))+'</b>.']);
     cmt5.push([C.orange,'<b>A minus here is a real loss</b> &mdash; unlike the minus signs in the momentum grid or the branch race, which are only changes versus the previous month. Green shading = profit, red shading = loss, and the black dashed line is zero.']);}}
   vzCard(g,'Net profit over time (company)'+INFO('Net profit = Shopify gross profit net of refunds + retail POS gross profit - platform ad spend - all accounting operating expenses for that month. Green area above the zero line is profit, red below is loss.'),
@@ -10850,7 +10870,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const retRev=m=>names.reduce((a2,n)=>a2+posRev(n,m),0);
    const onNet=m=>M[m].g-M[m].r,onGpN=m=>M[m].gp*(M[m].g?1-M[m].r/M[m].g:1);
    const PS2=O.pos||{};const retGp=m=>{let t=0,any=0;names.forEach(n=>{const P=PS2[n];if(P&&P[m]){t+=P[m][1];any=1;}});return any?t:retRev(m)*RM;};
-   const opx=m=>Object.values(O.exp[m]).reduce((a,b)=>a+b,0);
+   const opx=m=>expTot(m);
    const eb=m=>onGpN(m)+retGp(m)-(A[m]&&A[m].s?A[m].s:0)-opx(m);
    const CM=[
     {n:'Shopify net revenue (all channels)',f:m=>onNet(m),fmt:POS,sh:1},
@@ -11992,7 +12012,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?GPF(m)+shipNet(m)-A[m].s-EP:null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Now carries the shipping subsidy too.'},
    null,
    {n:'Cancelled orders, count',f:m=>CX[m]&&CX[m].n?CX[m].n:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,tt:'Shopify-team sale orders sitting in state = cancel, counted in the month they were placed. These never appear in any revenue line above &mdash; the P&L only ever counted confirmed orders. This row exists so the demand you lost is visible instead of silently absent.'},
-   {n:'Cancelled order value (memo &mdash; deducted at the top)',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,tt:'What those cancelled orders would have been worth at their own order value. Not a loss on the P&L &mdash; it is demand that walked, which is a different and often larger problem.'},
+   {n:'Cancelled order value (memo &mdash; in NO line above)',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,tt:'What those cancelled orders would have been worth. They never entered any revenue line on this table &mdash; this row is information only, charged nowhere, so nothing is deducted twice. It is the demand that walked, which is a different and often larger problem than a cost.'},
    {n:'Cancel rate, % of orders placed',f:m=>{const o=(SH[m]&&SH[m].o)||0,c=(CX[m]&&CX[m].n)||0;return o+c?c/(o+c)*100:null;},fmt:PCT,sh:1,gd:-1,tt:'Cancelled &divide; (confirmed + cancelled). The share of everyone who tried to buy and did not end up buying.'},
    {n:'Demand lost to cancellation, %',f:m=>{const g=(SH[m]&&SH[m].g)||0,v=(CX[m]&&CX[m].v)||0;return g+v?v/(g+v)*100:null;},fmt:PCT,sh:1,gd:-1,tt:'Cancelled value &divide; (gross sales + cancelled value). By money rather than by count &mdash; if this runs above the cancel rate, it is the big baskets that are cancelling.'},
    null,
@@ -12001,12 +12021,12 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1},
    {n:'GP margin, %',f:m=>SH[m]&&SH[m].g?SH[m].gp/SH[m].g*100:null,fmt:PCT,sh:1},
    {n:'MER, x (net &divide; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?(SH[m].g-SH[m].r)/A[m].s:null,fmt:X,sh:1}];
-  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Cancelled demand is now DEDUCTED at the top, and the four shipping flows &mdash; what you collect, the courier rebate, what the couriers take and what packing costs &mdash; are folded into the arithmetic instead of sitting in a side card. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons));}
+  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Cancelled orders never enter the revenue lines (the memo rows near the bottom show what walked), and the four shipping flows &mdash; what you collect, the courier rebate, what the couriers take and what packing costs &mdash; are folded into the arithmetic instead of sitting in a side card. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons));}
  // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
  if(O.exp&&Object.keys(O.exp).length){
-  const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Maintenance','Comms & internet','Other OpEx'];
-  const EL=GRP.map(gr=>({n:gr,f:m=>O.exp[m]&&O.exp[m][gr]?-O.exp[m][gr]:null,fmt:NEG,sh:1,tt:gr==='Offline advertising & gifts'?'ADV accounts incl. web/social &mdash; can overlap platform-reported ad spend where agencies invoice through bills':(gr==='Packing & bags'?'Wrapping and plastic bags account &mdash; the packing cost you asked for':'')}))
-   .concat([{n:'Total OpEx (accounting)',f:m=>O.exp[m]?-Object.values(O.exp[m]).reduce((a,b)=>a+b,0):null,fmt:NEG,sh:1,b:1}]);
+  const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Platform ads via bills (memo)','Maintenance','Comms & internet','Other OpEx'];
+  const EL=GRP.map(gr=>({n:gr,f:m=>O.exp[m]&&O.exp[m][gr]?-O.exp[m][gr]:null,fmt:NEG,sh:1,tt:gr==='Offline advertising & gifts'?'TRUE offline only now: billboards, print, events, customer gifts (GL 31.01.05 minus the web/social accounts). The ad invoices that used to inflate this line live in the memo row below.':(gr==='Platform ads via bills (memo)'?'The Meta/Google/TikTok invoices as they hit the ledger (GL 31.01.05.03 ADV Web + .07 ADV social media). Shown so the ledger reconciles \u2014 EXCLUDED from Total OpEx and from every profit card, because this exact money is already charged as ad spend from the platform APIs. Counting it here too was double-charging ads until v9.66.':(gr==='Packing & bags'?'Wrapping and plastic bags account &mdash; the packing cost you asked for':''))}))
+   .concat([{n:'Total OpEx (accounting)',f:m=>O.exp[m]?-expTot(m):null,fmt:NEG,sh:1,b:1,tt:'Every bucket above EXCEPT the platform-ads memo row \u2014 that money is already charged as ad spend from the APIs, so adding it here would count it twice.'}]);
   pnlCard(g,'odoo','OpEx &mdash; ACTUAL Monthly Expenses (Odoo 31.* accounts)','Straight from the posted expense ledger: salaries, real branch rent, utilities, packing, payment-collection fees &mdash; everything readable, by month.',T(EL,mons.filter(m=>O.exp[m])));}
  rDec(g,'Shopify',0);
  // ---- 3 · CUSTOMER-TYPE P&L ----
@@ -12016,7 +12036,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
   const CL=[
    {n:'Gross revenue (actual)',f:m=>R(m)||null,fmt:POS,sh:1,tt:'Odoo Shopify-channel orders split by whether it is the customer&rsquo;s first-ever order'},
    {n:'COGS (actual)',f:m=>R(m)?-(R(m)-G(m)):null,fmt:NEG,sh:0,tt:'Revenue &minus; real Odoo margin for exactly these orders'},
-   {n:'Gross profit (ACTUAL)',f:m=>R(m)?G(m):null,fmt:POS,sh:1,b:1},
+   {n:'Gross profit (ACTUAL)',f:m=>R(m)?G(m):null,fmt:POS,sh:1,b:1,tt:'Real Odoo margin on CONFIRMED orders only. Cancelled orders never enter any line here; returned/refunded orders are in at their NET margin (a full return contributes ~zero), so this is after returns, not before.'},
    {n:'Orders',f:m=>OD(m)||null,fmt:v=>Math.round(v).toLocaleString(),sh:1},
    {n:'AOV',f:m=>OD(m)?R(m)/OD(m):null,fmt:POS,sh:1},
    {n:'Ads (acquisition view)',f:m=>ck==='nc'&&A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Full ad spend charged to first-time; months before the ads feed show &mdash;'},
@@ -14401,7 +14421,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260913-213515';
+const BUILD='20260914-114217';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
