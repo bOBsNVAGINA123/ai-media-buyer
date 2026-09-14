@@ -1443,6 +1443,11 @@ EXPG = [("Payroll & benefits", ("31.01.01.", "31.01.09.")), ("Rent — branches"
         ("Utilities (elec/water/gas)", ("31.01.08.01", "31.01.08.02", "31.01.08.03")),
         ("Packing & bags", ("31.01.08.10",)), ("Payment & collection fees", ("31.01.08.31", "31.01.08.32", "31.01.08.33", "31.01.08.34", "31.01.08.35", "31.01.08.36", "31.01.08.37")), ("Card fees \u2014 branches", ("31.01.08.17",)),  # v9.48 Credit Card Expenses is branch acquiring, not online collection
         ("Cargo & transport", ("31.01.06.", "31.01.08.08", "31.01.08.09")),
+        # v9.66: GL probe showed 31.01.05 was E£6.61M of E£6.62M "ADV social media" (Jun-Aug) --
+        # the Meta/Google/TikTok invoices hitting the ledger. Bucketing them as "Offline
+        # advertising" made every OpEx total double-count ads already charged from the APIs.
+        # They now land in a memo bucket the dashboard excludes from all OpEx totals.
+        ("Platform ads via bills (memo)", ("31.01.05.03", "31.01.05.07")),
         ("Offline advertising & gifts", ("31.01.05.",)), ("Maintenance", ("31.01.02.",)),
         ("Comms & internet", ("31.01.03.",))]
 
