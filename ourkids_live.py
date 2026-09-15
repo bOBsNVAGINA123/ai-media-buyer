@@ -752,7 +752,7 @@ def pull_shopify(win):
     return out
 
 CVR_DAYS = 14      # default window, matches the "CVR routing" report the team exports by hand
-CVR_WINDOWS = (1, 3, 7, 14, 30, 60, 90)   # every window the tab can be switched to, each pulled at its own grain -- v9.37 widened so the date-box snap is never far off
+CVR_WINDOWS = (3, 7, 14, 30, 60, 90)   # every window the tab can be switched to, each pulled at its own grain -- v9.37 widened so the date-box snap is never far off
 CVR_LIMIT = 2500   # landing pages kept per window, ordered by sessions desc
 CVR_TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
           "Search", "Cart", "Checkout", "Other"]
@@ -988,47 +988,6 @@ def pull_ga4_funnel(days=60):
             "pulled": END.isoformat(), "pages": pages}
 
 
-def _cvr_sources(days, country=None):
-    """Per-landing-page referrer mix. Traffic Routing could say an ad was NOT the
-    source but had nothing to put in its place, so every zero-converting page read as
-    a mystery. Shopify knows: referrer_source (direct/social/search/email/unknown) and
-    referrer_name (facebook/instagram/google/...). This is also the only way to see a
-    scraper - a collection page that jumps from 2 sessions a day to 15,000, all
-    'direct', with zero cart additions, is a bot inflating the denominator behind every
-    conversion rate on the site."""
-    where = (" WHERE session_country = '%s'" % country.replace("'", "")) if country else ""
-    # country is in the grouping for the all-countries pull: the clearest bot tell is a
-    # page whose traffic is one foreign country, direct, with no cart additions.
-    # /collections/1instock did 31,347 sessions from Singapore in three days, 0 carts.
-    grp = "landing_page_path, referrer_source, referrer_name"
-    if not country:
-        grp += ", session_country"
-    ql = ("FROM sessions SHOW sessions, sessions_that_completed_checkout "
-          "GROUP BY " + grp + where +
-          " SINCE -%dd UNTIL today ORDER BY sessions DESC LIMIT 5000" % days)
-    rows = shopify_ql(ql, "cvrsrc%dd%s" % (days, country or ""))
-    if not rows:
-        return None
-    out = {}
-    for r in rows:
-        p = (r.get("landing_page_path") or "").strip()
-        if not p:
-            continue
-        src = (r.get("referrer_source") or "unknown").strip() or "unknown"
-        nm = (r.get("referrer_name") or "").strip()
-        try: sess = int(float(r.get("sessions") or 0))
-        except Exception: sess = 0
-        try: ords = int(float(r.get("sessions_that_completed_checkout") or 0))
-        except Exception: ords = 0
-        if sess <= 0:
-            continue
-        out.setdefault(p, []).append([src, nm, sess, ords, (r.get("session_country") or "").strip()])
-    # keep the page list tight - top sources per page, biggest first
-    for p in list(out.keys()):
-        out[p] = sorted(out[p], key=lambda x: -x[2])[:6]
-    log("cvr sources", str(days) + "d", country or "all", "pages", len(out))
-    return out
-
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -1051,22 +1010,11 @@ def pull_cvr_routing():
         we = _cvr_window(d, "Egypt")
         if we:
             wins[str(d) + "eg"] = we
-    # referrer mix on the windows the tab actually opens on
-    srcs = {}
-    for d in (1, 3, 7, 14):
-        try:
-            _s = _cvr_sources(d, "Egypt")
-            if _s: srcs[str(d) + "eg"] = _s
-            _sa = _cvr_sources(d)
-            if _sa: srcs[str(d)] = _sa
-        except Exception as e:
-            log("cvr sources %dd failed (%s)" % (d, str(e)[:90]))
     base = wins.get(str(CVR_DAYS)) or (list(wins.values())[0] if wins else None)
     if not base:
         log("cvr routing :: no rows -- keeping whatever data.js already had")
         return
     P = dict(base)
-    P["src"] = srcs
     try:
         handles = []
         for w in wins.values():
@@ -2311,7 +2259,7 @@ def anon_partner_ids():
 def pull_pos_customers():
     """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
-    bnr = {}; bstat = {}; bun = {}; bnrd = {}
+    bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
     VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
@@ -2350,6 +2298,13 @@ def pull_pos_customers():
                         _pm[0] += rv; _pm[1] += float(r.get("margin") or 0)
                     if pid in ANON:
                         bun.setdefault(br, {}).setdefault(_m7, set()).add(oid)
+                        # v9.70: the DAILY walk-in count. Without it the dashboard had to spread
+                        # the monthly figure flat across days and subtract the real daily
+                        # registered count -- which goes NEGATIVE in a busy week (receipts are
+                        # not flat: Fri/Sat spike), so the Unregistered tile clamped to zero and
+                        # printed "no prior". Counting the anonymous receipts per day removes the
+                        # apportionment entirely.
+                        bund.setdefault(br, {}).setdefault(r["date"][:10], set()).add(oid)
                         _bv = XTRA.setdefault("bunr", {}).setdefault(br, {})
                         _bv[_m7] = _bv.get(_m7, 0.0) + rv
                         continue
@@ -2719,6 +2674,11 @@ def pull_pos_customers():
                 except Exception: continue
                 if 0 <= _i < _n:
                     for k in _z: _z[k][_i] += _v.get(k, 0)
+            _z["un"] = [0] * _n
+            for _ds, _oids in (bund.get(_br) or {}).items():
+                try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
+                except Exception: continue
+                if 0 <= _i < _n: _z["un"][_i] += len(_oids)
             bnrDaily[_br] = _z
         bnrDaily["_w"] = {"start": _d0.isoformat(), "n": _n}
         globals()["_BNRD"] = bnrDaily
@@ -3242,17 +3202,7 @@ def pull_meta_ads(tok):
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                               "spend,impressions,reach,outbound_clicks,actions,action_values,"
-                               # v9.8.2: watch depth. hook = 3-sec plays / impressions (already
-                               # in actions as video_view); hold = ThruPlays / impressions. The
-                               # p25-p100 ladder shows WHERE a video loses people.
-                               "video_p25_watched_actions,video_p50_watched_actions,"
-                               "video_p75_watched_actions,video_p100_watched_actions,"
-                               "video_thruplay_watched_actions",
-                     # v9.8.3: per-ad attribution windows. The account-level pull already does
-                     # this; without it every ad on the dashboard is the account default only.
-                     # Canonical values only - "incrementality" runs isolated below.
-                     "action_attribution_windows": json.dumps(["default", "7d_click", "1d_click"]),
+                               "spend,impressions,reach,outbound_clicks,actions,action_values",
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3296,9 +3246,7 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv",
-                                                                        "v25", "v50", "v75", "v100", "tp",
-                                                                        "pv7", "pv1", "fv7", "fv1")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3310,15 +3258,6 @@ def pull_meta_ads(tok):
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
-                        D["v25"][i] += _av(r.get("video_p25_watched_actions"), ("video_view",))
-                        D["v50"][i] += _av(r.get("video_p50_watched_actions"), ("video_view",))
-                        D["v75"][i] += _av(r.get("video_p75_watched_actions"), ("video_view",))
-                        D["v100"][i] += _av(r.get("video_p100_watched_actions"), ("video_view",))
-                        D["tp"][i] += _av(r.get("video_thruplay_watched_actions"), ("video_view",))
-                        D["pv7"][i] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "7d_click")
-                        D["pv1"][i] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), "1d_click")
-                        D["fv7"][i] += _avw(av, ("offline_conversion.purchase",), "7d_click")
-                        D["fv1"][i] += _avw(av, ("offline_conversion.purchase",), "1d_click")
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3331,11 +3270,7 @@ def pull_meta_ads(tok):
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
-                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"])),
-                      "v25": int(sum(D["v25"])), "v50": int(sum(D["v50"])), "v75": int(sum(D["v75"])),
-                      "v100": int(sum(D["v100"])), "tp": int(sum(D["tp"])),
-                      "pv7": round(sum(D["pv7"])), "pv1": round(sum(D["pv1"])),
-                      "fv7": round(sum(D["fv7"])), "fv1": round(sum(D["fv1"]))})
+                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
@@ -3364,10 +3299,13 @@ def pull_meta_ads(tok):
                         log("meta ads :: fallback covers day", fdays, "-- keeping it, NOT overwriting")
                         return fb
                 except Exception: pass
-        # v9.8.1: enriching only the top-40 by spend plus new ads, capped at 80 ids, left
-        # most ads with no thumbnail, permalink or status. Plain object read, same as the
-        # landing-page lookup below, so cover every ad that actually spent.
-        ids = [a["id"] for a in ads if a.get("id") and (a.get("sp") or 0) > 0][:400]
+        def _f0(a2):
+            sp2 = a2["d"]["sp"]
+            for k in range(len(sp2)):
+                if sp2[k] > 0: return k
+            return -1
+        lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
+        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
         for i in range(0, len(ids), 25):
             d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
@@ -3377,7 +3315,6 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
-        log("meta ads :: creatives resolved", sum(1 for a in ads if a.get("th")), "of", len(ids))
         # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
         # as broken; without this you still have to hunt Ads Manager for who is pointing at
         # it. Plain object read (no insights), so it is cheap enough for every spending ad.
@@ -3397,34 +3334,6 @@ def pull_meta_ads(tok):
                               if x.get("website_url")), None))
                 if u: a["lp"] = _lp_path(str(u))
         log("meta ads :: landing pages resolved", sum(1 for a in ads if a.get("lp")), "of", len(_lids))
-        # Per-ad incrementality, the same window the account-level pull uses. Not on the
-        # canonical insights enum, so it runs alone: a rejection costs this block only.
-        try:
-            _inc = {}
-            _cs2, _ce2 = _chunks[-1][0], _chunks[-1][1]
-            for acct in _accts:
-                _pi = {"level": "ad", "access_token": tok, "limit": 500,
-                       "time_range": json.dumps({"since": _cs2, "until": _ce2}),
-                       "fields": "ad_id,action_values",
-                       "action_attribution_windows": json.dumps(["incrementality"])}
-                _u = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(_pi))
-                _pg = 0
-                while _u and _pg < 20:
-                    _d = http_json(_u); _pg += 1
-                    if (_d or {}).get("error"): raise RuntimeError(str(_d["error"])[:120])
-                    for _r in (_d.get("data") or []):
-                        _avs = _r.get("action_values") or []
-                        _inc[_r.get("ad_id")] = (
-                            _avw(_avs, ("offsite_conversion.fb_pixel_purchase",), "incrementality")
-                            + _avw(_avs, ("offline_conversion.purchase",), "incrementality"))
-                    _u = (_d.get("paging") or {}).get("next")
-            _n = 0
-            for a in ads:
-                if _inc.get(a["id"]):
-                    a["inc"] = round(_inc[a["id"]]); _n += 1
-            log("meta ads :: incrementality resolved on", _n, "of", len(ads), "ads")
-        except Exception as e:
-            log("meta ads :: incrementality unavailable (%s) - ads ship without it" % str(e)[:100])
         for a in ads:
             if a.get("im2"): a["im"] = a.pop("im2")
         log("meta ads v8.3 ::", len(ads), "ads with 60d daily series :: accounts",
