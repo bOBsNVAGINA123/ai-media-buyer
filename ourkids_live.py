@@ -2362,11 +2362,23 @@ def anon_partner_ids():
     Resolved by name every run so a new branch house account is caught automatically."""
     ids = {}
     try:
-        ps = oexec("res.partner", "search_read", [["|", ["name", "ilike", "pos customer"], ["name", "ilike", "ourkids"]]],
+        # v9.89: "MOA" is a Mall-of-Arabia house account carrying 612 receipts in 30 days (5.6%
+        # of the chain's receipts) and it was passing as a registered CUSTOMER because the name
+        # matched neither "pos customer" nor "ourkids". Every branch alias is checked now, and
+        # only as a WHOLE short name, so a real shopper called "Mohamed Dokki" is unaffected.
+        ps = oexec("res.partner", "search_read",
+                   [["|", "|", ["name", "ilike", "pos customer"], ["name", "ilike", "ourkids"],
+                     ["name", "in", ["MOA", "moa", "Moa", "Mall of Arabia", "Mall Of Arabia",
+                                     "MALL OF ARABIA", "Dokki", "Zayed", "Smouha", "October",
+                                     "Nasr City", "New Cairo", "Nasr", "Tagamo3"]]]],
                    {"fields": ["name"], "limit": 200})
         for p in ps:
             nm = (p.get("name") or "").strip().lower()
             if "pos customer" in nm:
+                ids[p["id"]] = p["name"]; continue
+            BRANCH_HOUSE = ("moa", "mall of arabia", "dokki", "zayed", "smouha", "october",
+                            "nasr city", "new cairo", "nasr", "tagamo3")
+            if nm in BRANCH_HOUSE:
                 ids[p["id"]] = p["name"]; continue
             if nm.startswith("ourkids") or nm.startswith("our kids"):
                 tail = nm.replace("our kids", "").replace("ourkids", "").strip()
