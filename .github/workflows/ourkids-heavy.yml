@@ -34,7 +34,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: ourkids-dashboard
+  # v9.74: this used to share "ourkids-dashboard" with the hourly sync. With three hourly
+  # crons each taking ~30 min the lane is busy almost continuously, and GitHub prunes the
+  # OLDER pending run in a group -- which was always this one. Every manual dispatch on
+  # 15 Sep was cancelled before it started a job. Own lane: it can never be pruned by a
+  # light sync again. The collector's crawl-rescue guard (v9.74) handles the overlap, so
+  # a light run that finishes later can no longer write the old crawl back over this one.
+  group: ourkids-heavy
   cancel-in-progress: false
 
 jobs:
