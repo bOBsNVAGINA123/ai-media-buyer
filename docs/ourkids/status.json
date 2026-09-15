@@ -2,14 +2,14 @@
  "ok": true,
  "error": "",
  "fresh": true,
- "startedUtc": "2026-09-15 15:13:46 UTC",
- "finishedUtc": "2026-09-15 16:39:54 UTC",
- "seconds": 5168,
- "runner": "34986725967",
+ "startedUtc": "2026-09-15 15:13:57 UTC",
+ "finishedUtc": "2026-09-15 16:42:36 UTC",
+ "seconds": 5319,
+ "runner": "34986998457",
  "attempt": "1",
  "todayCairo": "2026-09-15",
  "data": {
-  "bytes": 6414300,
+  "bytes": 6411566,
   "lastSync": "2026-09-15 18:13 Cairo",
   "windowEnd": "2026-09-15",
   "partial": "2026-09-15",
@@ -26,8 +26,6 @@
   ]
  },
  "log": [
-  "[ourkids]   clarity retry HTTP Error 429: Too Many Requests",
-  "[ourkids]   clarity retry HTTP Error 429: Too Many Requests",
   "[ourkids]   clarity retry HTTP Error 429: Too Many Requests",
   "[ourkids]   clarity retry HTTP Error 429: Too Many Requests",
   "[ourkids] clarity ok: 0 browser rows, 0 page rows",
@@ -53,9 +51,9 @@
   "[ourkids] deciles {'New Cairo': 10, 'ALL STORES': 10, 'October': 10, 'Dokki': 10, 'Nasr City': 10, 'Zayed': 10, 'Smouha': 10, 'Mall of Arabia': 10} lag gaps 274337",
   "[ourkids] branch daily NR 7 branches x 400 days",
   "[ourkids] pos customers 203252 branches ['New Cairo', 'October', 'Dokki', 'Nasr City', 'Zayed', 'Smouha', 'Mall of Arabia'] unregistered receipts 45241",
-  "[ourkids] cohorts crawl :: scopes 11 :: online ev 116753 :: store ev 1900241",
+  "[ourkids] cohorts crawl :: scopes 11 :: online ev 116753 :: store ev 1900260",
   "[ourkids] vendor retail Dokki 46464 templates",
-  "[ourkids] vendor retail New Cairo 46018 templates",
+  "[ourkids] vendor retail New Cairo 46020 templates",
   "[ourkids] vendor retail October 35518 templates",
   "[ourkids] vendor retail Zayed 38275 templates",
   "[ourkids] vendor retail Nasr City 38840 templates",
@@ -95,6 +93,8 @@
   "[ourkids] budget events :: act_652528128810469 :: {\"error\":{\"code\":1,\"message\":\"Please reduce the amount of data you're asking for, then retry your request\"}}",
   "[ourkids] budget events :: 56 changes in 60d",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
+  "[ourkids] HTTP 403 https://graph.facebook.com/v25.0/act_336343742536460/insight {\"error\":{\"message\":\"Application request limit reached\",\"type\":\"OAuthException\",\"is_transient\":true,\"code\":4,\"error_subcode\":1504022,\"error_user_title\":\"Too man",
+  "[ourkids] budget-object daily :: PAGE ERROR act_336343742536460 adset :: {\"error\":{\"message\":\"Application request limit reached\",\"type\":\"OAuthException\",\"is_transient\":true,\"code\":4,\"error_subcode\":1504022,\"error_",
   "[ourkids] budget-object daily series :: 18 of 18 event objects have delivery data",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
   "[ourkids] campaign reach :: 17 campaigns 60d daily",
@@ -123,7 +123,7 @@
   "[ourkids] promos: in-store codes 80 orders 6187 baseline days 90",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
   "[ourkids] HTTP 500 https://graph.facebook.com/v21.0/act_336343742536460/customa {\"error\":{\"code\":1,\"message\":\"Please reduce the amount of data you're asking for, then retry your request\"}}",
-  "[ourkids] meta audiences :: campaigns 17 sets 121 new sp 2701130 engaged sp 30351 existing sp 183383 cov 1.049",
+  "[ourkids] meta audiences :: campaigns 17 sets 121 new sp 2701153 engaged sp 30351 existing sp 183383 cov 1.049",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
   "[ourkids] meta accounts :: default pin :: act_336343742536460 (Ourkids EGP), act_652528128810469 (Basic)",
@@ -164,7 +164,7 @@
   "[ourkids] shopifyql chan90d row shape object :: first :: {'order_referrer_source': 'social', 'order_referrer_name': 'facebook', 'orders': '7016', 'total_sales': '8762825.45', 'net_sales': '8346300.45', 'gross_sales': ",
   "[ourkids] shopify channels 90 d :: 20 sources :: 25382959 EGP",
   "[ourkids] annotations 23",
-  "[ourkids] WROTE data.js 6414300 bytes  synced 2026-09-15 18:13 Cairo",
-  "[ourkids] audience syncs SKIPPED :: the read phase used the whole 40-minute budget (86.1 min elapsed). data.js is written; uploads resume next run."
+  "[ourkids] WROTE data.js 6411566 bytes  synced 2026-09-15 18:13 Cairo",
+  "[ourkids] audience syncs SKIPPED :: the read phase used the whole 40-minute budget (88.7 min elapsed). data.js is written; uploads resume next run."
  ]
 }
