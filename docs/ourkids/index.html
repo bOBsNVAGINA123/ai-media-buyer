@@ -207,6 +207,24 @@ let LSC='—',NXC='—',LSF='—';
    charted as finished). Two or more days behind means the sync is not running, and it
    says so in red across the whole screen. It also surfaces syncError/lastAttempt, which
    the collector stamps into data.js when a run fails, so the reason is on the page. */
+/* v9.67: a platform whose feed has stopped still reads E£0 spend for every day after it
+   stopped — silently, because zero looks like "didn't run". That understates blended spend
+   and FLATTERS every ROAS/MER/error-margin computed from it. Real case: TikTok frozen at
+   2026-08-31 (manual bridge file, no Marketing API token) while Meta/Google ran to today.
+   Any card that blends platforms must call srcGapNote() and say so on its face. */
+function srcGap(){if(!O.fresh)return [];const L={meta:['Meta','mspend'],google:['Google','gspend'],tiktok:['TikTok','tspend']};
+ const end=(ST.e<(O.today||'9999')?ST.e:(O.today||''));const out=[];
+ Object.keys(L).forEach(k=>{const v=O.fresh[k];if(!v||v==='off')return;
+  if(v<end){let sh=null;try{const A=O.ad,key=L[k][1];let mine=0,all=0;
+   for(let i=0;i<A.n;i++){const d=new Date(Date.parse(A.start)+i*864e5).toISOString().slice(0,10);
+    if(d>v||d<=v.slice(0,8)+'01')continue;mine+=(A[key]||[])[i]||0;all+=(A.spend||[])[i]||0;}
+   if(all>0)sh=mine/all*100;}catch(e){}
+   out.push({k:k,n:L[k][0],last:v,sh:sh});}});
+ return out;}
+function srcGapNote(){const g=srcGap();if(!g.length)return '';
+ return '<span style="color:#b8621b"><b>Missing feed: '+g.map(x=>x.n+' stops at '+x.last
+  +(x.sh!=null?' (it was '+x.sh.toFixed(1)+'% of spend in its last full month)':'')).join('; ')
+  +'.</b> Every day after that reads E&pound;0 for '+g.map(x=>x.n).join('/')+', so blended spend here is UNDERSTATED and the returns below are flattered by roughly that share.</span> ';}
 function srcHealth(){if(!O.fresh)return '';const lbl={odoo:'Odoo',shopify:'Shopify',meta:'Meta',google:'Google',tiktok:'TikTok'};
  const st=new Set(O.stale||[]),idl=new Set(O.idle||[]);
  return ' &nbsp;&middot;&nbsp; data: '+Object.keys(lbl).map(k=>{const v=O.fresh[k];const off=(v==='off');const bad=st.has(k);const idle=idl.has(k);
@@ -3786,7 +3804,7 @@ function dailyBE(g){
   +'</tr>';
  pnlCard(g,'blend','Every day against break-even'
   +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit, LESS the delivery drag (courier both ways, COD &amp; payment fees, net of shipping collected — measured at '+((_gpPct().drag||0)*100).toFixed(1)+'% of revenue over the last three ledger months), minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
-  (clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
+  srcGapNote()+(clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
   +(function(){try{const q=_gpPct();
     return '<b>Delivered margin '+(q.gpOn*100).toFixed(1)+'%</b> = '+(q.gpOnGross*100).toFixed(1)+'% gross &minus; '
      +(q.dragShip*100).toFixed(1)+'% courier net ('+((q.dragCost||0)*100).toFixed(1)+'% full bill &minus; '+((q.dragCol||0)*100).toFixed(1)+'% shipping customers paid back; posted Odoo bills, unposted months at the Bosta-calibrated rate, return-leg mix from Bosta&rsquo;s own API) &minus; '
@@ -9441,7 +9459,7 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
   +PF.map(x=>row(x)).join('')+row({n:'ALL PAID',sp:T.sp,imp:T.imp,clk:T.clk,cpm:T.cpm,ctr:T.ctr,cvr:T.cvr,cpc:T.cpc,on:T.on,off:T.off,ro:T.ro,rot:T.rot},1)
   +'</table></div>';
  pnlCard(g,'ads','Paid performance &mdash; Meta vs Google vs TikTok'+INFO('Every column is the platform&#39;s own reported number for the exact days you selected, summed. CPM = spend / impressions x 1000. CTR = clicks / impressions. CVR = purchases / clicks. CPC = spend / clicks. ROAS = Shopify conversion value / spend. Total ROAS adds the offline (in-store) conversion value the platform reports on top. No allocation, no modelling.'),
-  ST.s+' &rarr; '+ST.e+' &middot; '+span(ST.s,ST.e)+' days &middot; E&pound; '+money(T.sp)+' total paid spend. ROAS moves with the attribution selector on the Shopify tab &mdash; compare platforms inside one setting, never across two.',tbl);
+  srcGapNote()+ST.s+' &rarr; '+ST.e+' &middot; '+span(ST.s,ST.e)+' days &middot; E&pound; '+money(T.sp)+' total paid spend. ROAS moves with the attribution selector on the Shopify tab &mdash; compare platforms inside one setting, never across two.',tbl);
 
  /* ---------- 2. daily spend + value, by platform ---------- */
  const L=[],dsp={meta:[],google:[],tiktok:[]},dv={meta:[],google:[],tiktok:[]};
@@ -9507,7 +9525,7 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
    :'<b>Claims (E&pound; '+money(tot.cl)+') fit inside real revenue (E&pound; '+money(tot.rv)+') this window.</b> That does not prove they are accurate &mdash; it only means the over-claim cannot be shown from totals alone; organic covers the difference. The incremental read on the Meta tab is the sharper test. ';
   pnlCard(g,'ads','Blended claim vs ledger &mdash; how wrong the platforms are'
    +INFO('Each week inside your selected range. Blended spend = Meta + Google + TikTok daily spend summed. Platforms claim = each platform&#39;s own Shopify conversion value, summed across all three (they overlap on purpose &mdash; each takes full credit for shared orders), scaled by your attribution selector. Blended ROAS = claim / spend. Store really took = Shopify net revenue (refunds out) for the same days &mdash; ALL of it, organic included. Blended MER = real revenue / spend. Error margin = (claim &minus; real) / real: +40% means the platforms claim 40% more money than the entire store took, a mathematical floor on over-claiming since organic exists too. Last column: how much real revenue E&pound;1 of claimed value actually bought, capped at 100%.'),
-   ST.s+' &rarr; '+ST.e+' &middot; at your current attribution setting (Meta &times;'+mf.toFixed(2)+', Google &times;'+gf.toFixed(2)+') &mdash; change it and the error margin moves with it. '+verdict
+   srcGapNote()+ST.s+' &rarr; '+ST.e+' &middot; at your current attribution setting (Meta &times;'+mf.toFixed(2)+', Google &times;'+gf.toFixed(2)+') &mdash; change it and the error margin moves with it. '+verdict
    +'Red = claiming more revenue than exists. Green = claims at least fit inside reality. The error margin can only understate the truth &mdash; organic and repeat customers mean the honest number is worse than the floor shown.',tb);
  })();
 
@@ -14421,7 +14439,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260914-114217';
+const BUILD='20260915-155724';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
