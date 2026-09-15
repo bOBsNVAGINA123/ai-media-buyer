@@ -2348,7 +2348,12 @@ def pull_pos_customers():
         for pid, d, br, mg, oid, rv, qy in rows:
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
-            cd = bnrd.setdefault(br, {}).setdefault(d, {"nc": 0, "rc": 0, "nrev": 0, "rrev": 0, "nord": 0, "rord": 0})
+            cd = bnrd.setdefault(br, {}).setdefault(d, {"nc": 0, "rc": 0, "nrev": 0, "rrev": 0, "nord": 0, "rord": 0,
+                                                          "grev": 0, "retv": 0})
+            # v9.71: POS revenue is already NET -- returns ride along as negative lines, so the
+            # audit could never show "before returns / after returns". Split the two here.
+            if rv >= 0: cd["grev"] += round(rv)
+            else: cd["retv"] += round(-rv)
             isNew = pid not in newSeen and first[pid][0] == d and first[pid][1] == br
             if isNew: newSeen.add(pid); c["nc"] += 1; cd["nc"] += 1
             newOrd = oid and (pid, oid, "b") not in ordSeen
@@ -2668,7 +2673,7 @@ def pull_pos_customers():
         _d0 = END - datetime.timedelta(days=399); _n = (END - _d0).days + 1
         bnrDaily = {}
         for _br, _days in bnrd.items():
-            _z = {k: [0] * _n for k in ("nc", "rc", "nrev", "rrev", "nord", "rord")}
+            _z = {k: [0] * _n for k in ("nc", "rc", "nrev", "rrev", "nord", "rord", "grev", "retv")}
             for _ds, _v in _days.items():
                 try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
                 except Exception: continue
