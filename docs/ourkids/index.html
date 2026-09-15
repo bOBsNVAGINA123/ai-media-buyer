@@ -2308,6 +2308,26 @@ function glance(g,o){
   return cur==null?null:{cur,prev,bm,curW,prevW,opxD,dim2,stMg,
    st:blSum(ST.s,ST.e),mkt:mktGP(ST.s,ST.e),days:Math.max(1,span(ST.s,ST.e))};
  }catch(e){return null;}})();
+ /* v9.79 SPEND BY AUDIENCE INTENT, date-box true. The collector classifies every Meta ad SET
+    from its included custom audiences (existing = a purchaser/customer-list audience; engaged =
+    an engagement/cart/view audience; new = broad, interest or lookalike -- a lookalike OF buyers
+    is still prospecting). Ads carry their ad-set id and a daily spend series, so the split can
+    follow any window instead of the collector's fixed 60 days.
+    GOOGLE CANNOT BE SPLIT THIS WAY and the tiles say so: its audience lists are attached in
+    OBSERVATION mode, so ad_group_audience_view returns cost 0 on every row -- probed live. */
+ const _aud=(function(){try{const AM=O.audMix,W=O.madsW;if(!AM||!AM.sets||!W)return null;
+   const cls={};(AM.sets||[]).forEach(s=>{if(s&&s.id)cls[String(s.id)]=s.cls||'new';});
+   const t0=Date.parse(W.start+'T00:00:00Z');
+   const sum=(a,b)=>{const i0=Math.max(0,Math.round((Date.parse(a+'T00:00:00Z')-t0)/864e5));
+    const i1=Math.min(W.n-1,Math.round((Date.parse(b+'T00:00:00Z')-t0)/864e5));
+    if(i1<i0)return null;
+    const o={'new':0,engaged:0,existing:0,unknown:0};let any=false;
+    (O.mads||[]).forEach(ad=>{const d=ad&&ad.d&&ad.d.sp;if(!d)return;
+     const c=cls[String(ad.asid)]||'unknown';
+     for(let k=i0;k<=i1;k++){const v=d[k]||0;if(v){o[c]+=v;any=true;}}});
+    if(!any)return null;o.tot=o['new']+o.engaged+o.existing+o.unknown;return o;};
+   const w=cmpWr(ST.s,ST.e);
+   return {c:sum(ST.s,ST.e),p:(w&&w[0])?sum(w[0],w[1]):null};}catch(e){return null;}})();
  const _g4=(function(){try{const w=cmpWr(ST.s,ST.e);
    return {c:ga4Win(ST.s,ST.e),p:(w&&w[0])?ga4Win(w[0],w[1]):null};}catch(e){return {c:null,p:null};}})();
  /* branch baskets: the till crawl carries first-vs-repeat revenue AND receipts per day, so
@@ -2329,6 +2349,15 @@ function glance(g,o){
   ['NC AOV', M(o.ncaov[0]), pc(o.ncaov[0],o.ncaov[1]), true, 'what a first-time buyer spends','web','ncaov'],
   ['RC AOV', M(o.rcaov[0]), pc(o.rcaov[0],o.rcaov[1]), true, 'what they spend when they come back','web','rcaov']
  ];
+ if(_aud&&_aud.c&&_aud.c.tot){const AC=_aud.c,AP=_aud.p;
+  const shr=v=>AC.tot?' · '+Math.round(v/AC.tot*100)+'% of Meta spend':'';
+  tiles.push(
+   ['Spend · new audiences', M(AC['new']), (AP&&AP['new'])?pc(AC['new'],AP['new']):null, true,
+    'Meta prospecting — broad, interest, lookalike'+shr(AC['new']),'web','audN'],
+   ['Spend · engaged', M(AC.engaged), (AP&&AP.engaged)?pc(AC.engaged,AP.engaged):null, true,
+    'Meta warm — cart, view, engagement audiences'+shr(AC.engaged),'web','audE'],
+   ['Spend · existing', M(AC.existing), (AP&&AP.existing)?pc(AC.existing,AP.existing):null, true,
+    'Meta buyers — purchaser / customer-list audiences'+shr(AC.existing),'web','audX']);}
  if(_g4&&_g4.c)tiles.push(
   ['Sessions · real', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
    (_g4.c.clean?'GA4 all traffic minus '+N(_g4.c.bots)+' bot sessions ('+(_g4.c.botL||[]).slice(0,2).map(x=>x.c).join(', ')+(((_g4.c.botL||[]).length>2)?'…':'')+' \u2014 zero orders)':'GA4, Egypt only')+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
@@ -2509,6 +2538,20 @@ function glance(g,o){
    s+=(NP.curW!=null?row('of which branches + marketplaces',NP.cur-NP.curW,(NP.prev!=null&&NP.prevW!=null)?NP.prev-NP.prevW:null,true,(NP.cur-NP.curW>=0?'+':'−')+M(NP.cur-NP.curW)):'');
    s+=txt('Day-true where the ledger is daily (online GP, ad spend, till revenue). Month-true where costs only exist as monthly postings: the whole OpEx book and the branch margin come from <b>'+bkM+'</b>, the last complete accounting month, charged at a flat daily rate — September is barely posted, so using it would read as fake profit. The exact month-grain waterfall is the <b>Did we make money?</b> card below.');
    return s;})();
+  if(_aud&&_aud.c&&_aud.c.tot){const AC=_aud.c,AP=_aud.p;
+   const gsp=(function(){try{const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z');let g2=0,t2=0;
+     for(let d=Date.parse(ST.s+'T00:00:00Z');d<=Date.parse(ST.e+'T00:00:00Z');d+=864e5){
+      const i=Math.round((d-t0)/864e5);if(i>=0&&i<A.n){g2+=(A.gspend||[])[i]||0;t2+=(A.tspend||[])[i]||0;}}
+     return {g:g2,t:t2};}catch(e){return {g:0,t:0};}})();
+   const audD=hd('Where the ad money went by audience intent — '+ST.s+' → '+ST.e)
+    +row('New audiences (prospecting)',AC['new'],AP&&AP['new'],true,M(AC['new'])+' · '+Math.round(AC['new']/AC.tot*100)+'% of Meta spend')
+    +row('Engaged (warm, never bought)',AC.engaged,AP&&AP.engaged,true,M(AC.engaged)+' · '+Math.round(AC.engaged/AC.tot*100)+'%')
+    +row('Existing buyers',AC.existing,AP&&AP.existing,false,M(AC.existing)+' · '+Math.round(AC.existing/AC.tot*100)+'%')
+    +(AC.unknown?row('Meta spend on ad sets the crawl has not classified',AC.unknown,AP&&AP.unknown,false,M(AC.unknown)):'')
+    +row('Google — cannot be split',gsp.g,null,false,M(gsp.g)+' unsegmented')
+    +(gsp.t?row('TikTok — cannot be split',gsp.t,null,false,M(gsp.t)+' unsegmented'):'')
+    +txt('Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
+   TD.audN=audD;TD.audE=audD;TD.audX=audD;}
   TD.merc=hd('MER whole business '+(BA?BA.mer.toFixed(2)+'×':'')+' = (webstore + branches) ÷ ALL spend')
    +row('Webstore net',o.net[0],o.net[1],true,M(o.net[0]))
    +(BA?row('Branch tills (daily, net of VAT)',BA.storeRev,BAp&&BAp.storeRev,true,M(BA.storeRev)):'')
@@ -14830,7 +14873,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-181107';
+const BUILD='20260915-182552';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
