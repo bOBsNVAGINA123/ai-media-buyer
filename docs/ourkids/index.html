@@ -2171,12 +2171,23 @@ function okBranchNC(a,b,key){
    session count. Since 4 Sep 2026 roughly 60% of Shopify sessions are Singapore datacentre
    bots that never order, so a Shopify-sourced CVR reads as a collapse that never happened.
    GA4 keeps the top ~140 landing pages, which is effectively all real traffic. */
-function ga4Win(a,b){try{const G=O.ga4;if(!G||!G.pages||!G.pages.length)return null;
+function ga4Win(a,b){try{const G=O.ga4;if(!G)return null;
  const t0=Date.parse(G.start),ix=d=>Math.round((Date.parse(d)-t0)/864e5);
  const i0=Math.max(0,ix(a)),i1=Math.min(G.n-1,ix(b));if(i1<i0)return null;
  const want=Math.round((Date.parse(b)-Date.parse(a))/864e5)+1;
+ /* v9.72: TOTALS come from the no-page-dimension pull. The page table is keyed by landing
+    page WITH query string, so its top-140 slice holds only ~18% of sessions and purchases --
+    summing it printed 32 purchases for a day GA4 counted 173, and the scoreboard called that
+    "sales". Page rows stay for rankings; every total on the page comes from G.tot. */
+ const T=G.tot;
+ if(T&&T.s){let s=0,pu=0,r=0,a2=0,c2=0;
+  for(let k=i0;k<=i1;k++){s+=(T.s||[])[k]||0;pu+=(T.pu||[])[k]||0;r+=(T.r||[])[k]||0;a2+=(T.a||[])[k]||0;c2+=(T.c||[])[k]||0;}
+  let ps=0,ppu=0;(G.pages||[]).forEach(p=>{for(let k=i0;k<=i1;k++){ps+=(p.s||[])[k]||0;ppu+=(p.pu||[])[k]||0;}});
+  return s?{s:s,pu:pu,rev:r,atc:a2,cko:c2,cvr:pu/s*100,clip:(i1-i0+1)<want,
+            pageCov:s?ps/s*100:null,pagePu:ppu,full:true}:null;}
+ if(!G.pages||!G.pages.length)return null;
  let s=0,pu=0,r=0;G.pages.forEach(p=>{for(let k=i0;k<=i1;k++){s+=(p.s||[])[k]||0;pu+=(p.pu||[])[k]||0;r+=(p.r||[])[k]||0;}});
- return s?{s:s,pu:pu,rev:r,cvr:pu/s*100,clip:(i1-i0+1)<want}:null;}catch(e){return null;}}
+ return s?{s:s,pu:pu,rev:r,cvr:pu/s*100,clip:(i1-i0+1)<want,full:false}:null;}catch(e){return null;}}
 function okBlendedAmer(o,sIn,eIn,onlineNewIn,spendIn){
  try{
   const BL=O.bl; if(!BL||!BL.b)return null;
@@ -2299,7 +2310,7 @@ function glance(g,o){
  ];
  if(_g4&&_g4.c)tiles.push(
   ['Sessions · Egypt', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
-   'GA4, Egypt only \u2014 datacentre bots excluded'+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg'],
+   'GA4, Egypt only \u2014 the Singapore bot traffic is not in here'+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg'],
   ['CVR · Egypt', _g4.c.cvr.toFixed(2)+'%', _g4.p?pc(_g4.c.cvr,_g4.p.cvr):null, true,
    'GA4 purchases \u00f7 Egypt sessions','web','cvrg']);
  if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
@@ -6548,7 +6559,9 @@ function rCV(){
  const SK={s:r=>r.c.s,cvr:r=>r.c.cvr,arpu:r=>r.c.arpu,gpu:r=>r.c.gpu,atc:r=>r.c.atc,dcvr:r=>(r.pr&&r.pr.cvr)?r.c.cvr/r.pr.cvr:9};
  rows.sort((a,b)=>(SK[CVS.sort]||SK.s)(b)-(SK[CVS.sort]||SK.s)(a));
  const tot=rows.reduce((acc,r)=>{['s','a','c','pu','r','u'].forEach(k=>acc[k]=(acc[k]||0)+r.c[k]);return acc;},{});
- bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. GA4 property '+G4.prop+', <b>Egypt sessions only</b>, daily since '+G4.start+'. Reading <b>'+ST.s+' &rarr; '+ST.e+'</b>'+(clip?' (clipped to the 60-day GA4 history)':'')+(hasPrev?', against the '+nD+' days before':'')+'. GP per user prices every visitor at your DELIVERED '+(q.gpOn*100).toFixed(1)+'% margin — goods, courier and fees already charged.';
+ bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. GA4 property '+G4.prop+', <b>Egypt sessions only</b>, daily since '+G4.start+'. Reading <b>'+ST.s+' &rarr; '+ST.e+'</b>'+(clip?' (clipped to the 60-day GA4 history)':'')+(hasPrev?', against the '+nD+' days before':'')+'. GP per user prices every visitor at your DELIVERED '+(q.gpOn*100).toFixed(1)+'% margin — goods, courier and fees already charged.'
+  +(function(){try{const w=ga4Win(ST.s,ST.e);if(!w||!w.full)return '';
+    return ' <b style="color:#b8621b">The table below is the top landing pages only \u2014 '+Math.round(w.pageCov||0)+'% of the sessions and '+N2(w.pagePu)+' of the '+N2(w.pu)+' purchases GA4 recorded in this window.</b> Landing pages carry their query strings, so the long tail is thousands of one-off rows. Rank pages here; take totals from the totals line.';}catch(e){return '';}})();
  const dl2=(c2,p2,inv)=>{if(p2==null||!isFinite(p2)||p2===0)return '';const d2=(c2/p2-1)*100;if(!isFinite(d2))return '';
   const good=inv?d2<0:d2>=0;
   return '<div style="font-size:9.5px;font-weight:700;color:'+(Math.abs(d2)<1?'#8a93a6':(good?'#0f6e56':'#a3271a'))+'">'+(d2>=0?'▲':'▼')+Math.abs(d2).toFixed(0)+'%</div>';};
@@ -14588,7 +14601,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-163557';
+const BUILD='20260915-164221';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
