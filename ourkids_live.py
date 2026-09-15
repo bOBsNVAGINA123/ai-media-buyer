@@ -997,8 +997,14 @@ def _cvr_sources(days, country=None):
     'direct', with zero cart additions, is a bot inflating the denominator behind every
     conversion rate on the site."""
     where = (" WHERE session_country = '%s'" % country.replace("'", "")) if country else ""
+    # country is in the grouping for the all-countries pull: the clearest bot tell is a
+    # page whose traffic is one foreign country, direct, with no cart additions.
+    # /collections/1instock did 31,347 sessions from Singapore in three days, 0 carts.
+    grp = "landing_page_path, referrer_source, referrer_name"
+    if not country:
+        grp += ", session_country"
     ql = ("FROM sessions SHOW sessions, sessions_that_completed_checkout "
-          "GROUP BY landing_page_path, referrer_source, referrer_name" + where +
+          "GROUP BY " + grp + where +
           " SINCE -%dd UNTIL today ORDER BY sessions DESC LIMIT 5000" % days)
     rows = shopify_ql(ql, "cvrsrc%dd%s" % (days, country or ""))
     if not rows:
@@ -1016,7 +1022,7 @@ def _cvr_sources(days, country=None):
         except Exception: ords = 0
         if sess <= 0:
             continue
-        out.setdefault(p, []).append([src, nm, sess, ords])
+        out.setdefault(p, []).append([src, nm, sess, ords, (r.get("session_country") or "").strip()])
     # keep the page list tight - top sources per page, biggest first
     for p in list(out.keys()):
         out[p] = sorted(out[p], key=lambda x: -x[2])[:6]
