@@ -7448,15 +7448,47 @@ function offAudit(g){
  const bi=d=>Math.round((new Date(d+'T00:00:00Z')-new Date(W.start+'T00:00:00Z'))/864e5);
  const win=(a,b)=>{const i0=Math.max(0,bi(a)),i1=Math.min(W.n-1,bi(b));
   if(bi(b)<0||bi(a)>W.n-1)return null;
-  const o={nc:0,rc:0,nrev:0,rrev:0};
-  names.forEach(n=>{const z=BD[n]||{};for(let i=i0;i<=i1;i++){
-   o.nc+=(z.nc||[])[i]||0;o.rc+=(z.rc||[])[i]||0;o.nrev+=(z.nrev||[])[i]||0;o.rrev+=(z.rrev||[])[i]||0;}});
+  const o={nc:0,rc:0,nrev:0,rrev:0,un:0,grev:0,retv:0};
+  let hasUn=false,hasG=false;
+  names.forEach(n=>{const z=BD[n]||{};if(z.un)hasUn=true;if(z.grev)hasG=true;for(let i=i0;i<=i1;i++){
+   o.nc+=(z.nc||[])[i]||0;o.rc+=(z.rc||[])[i]||0;o.nrev+=(z.nrev||[])[i]||0;o.rrev+=(z.rrev||[])[i]||0;
+   o.un+=(z.un||[])[i]||0;o.grev+=(z.grev||[])[i]||0;o.retv+=(z.retv||[])[i]||0;}});
   o.rev=o.nrev+o.rrev; o.ord=o.nc+o.rc;
+  /* v9.71: walk-ins are counted per day now, so receipts finally reconcile:
+     registered receipts + walk-ins = every receipt the tills rang. */
+  o.hasUn=hasUn; o.unAll=hasUn?o.ord+o.un:null; o.unSh=(hasUn&&o.ord+o.un)?o.un/(o.ord+o.un)*100:null;
+  o.hasG=hasG; if(!hasG){o.grev=null;o.retv=null;}
   o.ncAov=o.nc?o.nrev/o.nc:null; o.rcAov=o.rc?o.rrev/o.rc:null;
   o.aov=o.ord?o.rev/o.ord:null;
   return o;};
  const C=win(s,e), P=win(pw[0],pw[1]);
  if(!C)return;
+ /* v9.71 SAME DAYS LAST YEAR. The daily crawl is a rolling 400-day window, so a window inside
+    the last ~13 months has a real LY twin; older than that and every LY cell says "—" rather
+    than borrowing a different grain. */
+ const lyD=d=>(+d.slice(0,4)-1)+d.slice(4);
+ const LY=win(lyD(s),lyD(e));
+ const _adW=(a,b)=>{try{const t0=Date.parse(O.ad.start);let t=0,hit=false;
+   for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t0)/864e5);
+    if(i>=0&&i<O.ad.n){t+=(O.ad.spend||[])[i]||0;hit=true;}}
+   return hit?t:null;}catch(x){return null;}};
+ const _offW=(a,b)=>{try{const t0=Date.parse(O.ad.start);let mv=0,tv=0,hit=false;
+   for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t0)/864e5);
+    if(i>=0&&i<O.ad.n){mv+=(O.ad.instoreMeta||[])[i]||0;tv+=(O.ad.ttOffValue||[])[i]||0;hit=true;}}
+   return hit?mv*afo()+tv*af('tt'):null;}catch(x){return null;}};
+ const _spLY=_adW(lyD(s),lyD(e));
+ /* v9.71: Meta only began sending in-store conversions partway through this history, so any
+    window before the first non-zero day has no claim to compare against -- printing +39204%
+    against a near-zero base is an artefact, not growth. Dash it and say why. */
+ const _offFirst=(function(){try{const t0=Date.parse(O.ad.start);
+   for(let i=0;i<O.ad.n;i++)if(((O.ad.instoreMeta||[])[i]||0)>0)return new Date(t0+i*864e5).toISOString().slice(0,10);
+   return null;}catch(x){return null;}})();
+ const _offOk=(a,b)=>!!_offFirst&&b>=_offFirst&&a>=_offFirst;
+ /* Even inside the feed's lifetime the early days are a ramp: Sep-2025 carried E£3,835 of
+    in-store claim against E£1.5M today, and dividing those prints +39204%, which says nothing
+    about the business. Suppress the percentage when the base is under a tenth of the current
+    figure -- the two values still sit side by side for anyone who wants the ratio. */
+ const _offPc=(cur,base)=>(cur!=null&&base!=null&&base>0&&base>=cur*0.1)?pc(cur,base):null;
  /* month + year columns come from the monthly POS ledger, which reaches back further than the
     daily series and carries margin the daily series does not */
  const mSum=(ms)=>{let rev=0,gp=0,ord=0,any=false;
@@ -7504,8 +7536,22 @@ function offAudit(g){
  const _spP=(function(){try{const t0=Date.parse(O.ad.start);let t=0;
    for(let d=Date.parse(pw[0]);d<=Date.parse(pw[1]);d+=864e5){const i=Math.round((d-t0)/864e5);if(i>=0&&i<O.ad.n)t+=(O.ad.spend||[])[i]||0;}return t||null;}catch(x){return null;}})();
  const _spM=adFull(curM)?_aM(curM):null,_spMly=adFull(lyM)?_aM(lyM):null;
- const _spY=_aS(monthsOf(yr,mm)),_spYly=_aS(monthsOf(String(+yr-1),mm));
+ const _spY=_aS(monthsOf(yr,mm));
+ /* v9.71: only compare YTD ratios when the LY ad feed covers the WHOLE YTD span. It starts
+    2025-06-12, so Jan-May 2025 spend is missing and any MER/aMER "vs LY" built on it flatters
+    last year and prints a fake collapse (it read -58% / -66% before this gate). */
+ const _lyYspan=monthsOf(String(+yr-1),mm);
+ const _adM0=((O.ad&&O.ad.start)||'9999-99-99').slice(0,7);
+ const _spYlyFull=_lyYspan.every(m=>m>_adM0)||(_lyYspan[0]>=_adM0&&((O.ad.start||'').slice(8,10)==='01'));
+ const _spYly=_spYlyFull?_aS(_lyYspan):null;
  const X1=v=>v==null?'—':v.toFixed(2)+'×';
+ const _spLYok=_spLY!=null&&_spLY>0;
+ const _beOn=(function(){try{const q=_gpPct();return q.gpOn>0?1/q.gpOn:null;}catch(x){return null;}})();
+ const _beSt=(function(){try{const m=mNow&&mNow.rev?mNow:(mLy||null);return (m&&m.rev&&m.gp)?m.rev/m.gp:null;}catch(x){return null;}})();
+ const _offC=_offOk(s,e)?_offW(s,e):null, _offP=_offOk(pw[0],pw[1])?_offW(pw[0],pw[1]):null,
+       _offLY=_offOk(lyD(s),lyD(e))?_offW(lyD(s),lyD(e)):null;
+ const _offM=_offOk(curM+'-01',(O.today||'').slice(0,10))?_offW(curM+'-01',(O.today||'').slice(0,10)):null,
+       _offMly=_offOk(lyM+'-01',lyM+'-28')?_offW(lyM+'-01',lyM+'-28'):null;
  const R=[
   ['Ad spend (whole account)', M(_spW), M(_spP), pc(_spW,_spP),0, M(_spM), pc(_spM,_spMly), M(_spY), pc(_spY,_spYly)],
   ['Revenue (POS)', M(C.rev), M(P&&P.rev), pc(C.rev,P&&P.rev),1, M(mNow&&mNow.rev), pc(mNow&&mNow.rev,mLy&&mLy.rev), M(yNow&&yNow.rev), pc(yNow&&yNow.rev,yLy&&yLy.rev)],
@@ -7527,10 +7573,10 @@ function offAudit(g){
      the rows above never reconciled to the total. The daily feed carries only new/returning,
      with no order or revenue total, so the PERIOD block cannot derive it -- the monthly
      ledger can, and that is where the year-on-year comparison lives anyway. */
-  ['Unregistered receipts', '—','—',null,0,
+  ['Unregistered receipts', N(C.hasUn?C.un:null), N(P&&P.hasUn?P.un:null), pc(C.hasUn?C.un:null,P&&P.hasUn?P.un:null),0,
    N(mNow&&bmNow?Math.max(0,mNow.ord-bmNow.ord):null), pc(mNow&&bmNow?Math.max(0,mNow.ord-bmNow.ord):null, mLy&&bmLy?Math.max(0,mLy.ord-bmLy.ord):null),
    N(yNow&&byNow?Math.max(0,yNow.ord-byNow.ord):null), pc(yNow&&byNow?Math.max(0,yNow.ord-byNow.ord):null, yLy&&byLy?Math.max(0,yLy.ord-byLy.ord):null)],
-  ['Unregistered, % of receipts', '—','—',null,0,
+  ['Unregistered, % of receipts', P1(C.unSh), P1(P&&P.unSh), pc(C.unSh,P&&P.unSh),0,
    (mNow&&bmNow&&mNow.ord)?P1(Math.max(0,mNow.ord-bmNow.ord)/mNow.ord*100):'—',
    pc((mNow&&bmNow&&mNow.ord)?Math.max(0,mNow.ord-bmNow.ord)/mNow.ord:null,(mLy&&bmLy&&mLy.ord)?Math.max(0,mLy.ord-bmLy.ord)/mLy.ord:null),
    (yNow&&byNow&&yNow.ord)?P1(Math.max(0,yNow.ord-byNow.ord)/yNow.ord*100):'—',
@@ -7538,25 +7584,54 @@ function offAudit(g){
   ['Unregistered revenue', '—','—',null,0,
    M(mNow&&bmNow?Math.max(0,mNow.rev-bmNow.rev):null), pc(mNow&&bmNow?Math.max(0,mNow.rev-bmNow.rev):null, mLy&&bmLy?Math.max(0,mLy.rev-bmLy.rev):null),
    M(yNow&&byNow?Math.max(0,yNow.rev-byNow.rev):null), pc(yNow&&byNow?Math.max(0,yNow.rev-byNow.rev):null, yLy&&byLy?Math.max(0,yLy.rev-byLy.rev):null)],
+  ['Revenue before returns (till gross)', M(C.grev), M(P&&P.grev), pc(C.grev,P&&P.grev),1, '—',null,'—',null],
+  ['Returns at the till', M(C.retv), M(P&&P.retv), pc(C.retv,P&&P.retv),0, '—',null,'—',null],
+  ['Revenue after returns (= Revenue POS)', M(C.hasG?C.grev-C.retv:null), M(P&&P.hasG?P.grev-P.retv:null), pc(C.hasG?C.grev-C.retv:null,P&&P.hasG?P.grev-P.retv:null),1, '—',null,'—',null],
+  ['Attributed in-store revenue (what the ads claim)', M(_offC), M(_offP), _offPc(_offC,_offP),1, M(_offM), _offPc(_offM,_offMly), '—',null],
+  ['Ads\u2019 claimed share of till revenue', (_offC&&C.rev)?P1(_offC/C.rev*100):'—', (_offP&&P&&P.rev)?P1(_offP/P.rev*100):'—', pc((_offC&&C.rev)?_offC/C.rev:null,(_offP&&P&&P.rev)?_offP/P.rev:null),1, '—',null,'—',null],
+  ['Break-even MER — branches (1 ÷ POS margin)', X1(_beSt), '—',null,0, '—',null,'—',null],
+  ['Break-even MER — online (delivered margin)', X1(_beOn), '—',null,0, '—',null,'—',null],
   ['Gross profit', '—','—',null,1, M(mNow&&mNow.gp), pc(mNow&&mNow.gp,mLy&&mLy.gp), M(yNow&&yNow.gp), pc(yNow&&yNow.gp,yLy&&yLy.gp)],
   ['GP %', '—','—',null,1,
    (mNow&&mNow.rev)?P1(mNow.gp/mNow.rev*100):'—', pc(mNow&&mNow.rev?mNow.gp/mNow.rev:null, mLy&&mLy.rev?mLy.gp/mLy.rev:null),
    (yNow&&yNow.rev)?P1(yNow.gp/yNow.rev*100):'—', pc(yNow&&yNow.rev?yNow.gp/yNow.rev:null, yLy&&yLy.rev?yLy.gp/yLy.rev:null)]
  ];
+  const LYC={};
+ LYC['Ad spend (whole account)']=[M(_spLY),pc(_spW,_spLY)];
+ LYC['Revenue (POS)']=[M(LY&&LY.rev),pc(C.rev,LY&&LY.rev)];
+ LYC['MER — branches ÷ ALL spend']=[X1((_spLYok&&LY)?LY.rev/_spLY:null),pc(_spW?C.rev/_spW:null,(_spLYok&&LY)?LY.rev/_spLY:null)];
+ LYC['aMER — branch first-timers ÷ ALL spend']=[X1((_spLYok&&LY)?LY.nrev/_spLY:null),pc(_spW?C.nrev/_spW:null,(_spLYok&&LY)?LY.nrev/_spLY:null)];
+ LYC['Receipts (orders)']=[N(LY&&LY.ord),pc(C.ord,LY&&LY.ord)];
+ LYC['New customers']=[N(LY&&LY.nc),pc(C.nc,LY&&LY.nc)];
+ LYC['Returning customers']=[N(LY&&LY.rc),pc(C.rc,LY&&LY.rc)];
+ LYC['NC revenue']=[M(LY&&LY.nrev),pc(C.nrev,LY&&LY.nrev)];
+ LYC['RC revenue']=[M(LY&&LY.rrev),pc(C.rrev,LY&&LY.rrev)];
+ LYC['AOV — new customers']=[M(LY&&LY.ncAov),pc(C.ncAov,LY&&LY.ncAov)];
+ LYC['AOV — returning']=[M(LY&&LY.rcAov),pc(C.rcAov,LY&&LY.rcAov)];
+ LYC['AOV — all']=[M(LY&&LY.aov),pc(C.aov,LY&&LY.aov)];
+ LYC['Unregistered receipts']=[N((LY&&LY.hasUn)?LY.un:null),pc(C.hasUn?C.un:null,(LY&&LY.hasUn)?LY.un:null)];
+ LYC['Unregistered, % of receipts']=[P1(LY&&LY.unSh),pc(C.unSh,LY&&LY.unSh)];
+ LYC['Revenue before returns (till gross)']=[M(LY&&LY.grev),pc(C.grev,LY&&LY.grev)];
+ LYC['Returns at the till']=[M(LY&&LY.retv),pc(C.retv,LY&&LY.retv)];
+ LYC['Revenue after returns (= Revenue POS)']=[M((LY&&LY.hasG)?LY.grev-LY.retv:null),pc(C.hasG?C.grev-C.retv:null,(LY&&LY.hasG)?LY.grev-LY.retv:null)];
+ LYC['Attributed in-store revenue (what the ads claim)']=[M(_offLY),_offPc(_offC,_offLY)];
  const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:7px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
  let h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
   +'<tr><th style="'+TH+';text-align:left">Metric</th><th style="'+TH+'">This period</th><th style="'+TH+'">Previous</th><th style="'+TH+'">Δ</th>'
+  +'<th style="'+TH+'">Same days LY</th><th style="'+TH+'">vs LY</th>'
   +'<th style="'+TH+'">Month '+curM+'</th><th style="'+TH+'">vs LY</th><th style="'+TH+'">YTD</th><th style="'+TH+'">vs LY</th></tr>';
  R.forEach(r=>{
   h+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r[0]+'</td>'
    +'<td style="'+TD+';font-weight:800">'+r[1]+'</td>'
    +'<td style="'+TD+';color:#5b6478">'+r[2]+'</td>'+dc(r[3],r[4])
+   +'<td style="'+TD+';color:#5b6478">'+((LYC[r[0]]||['—',null])[0])+'</td>'+dc((LYC[r[0]]||['—',null])[1],r[4])
    +'<td style="'+TD+'">'+r[5]+'</td>'+dc(r[6],1)
    +'<td style="'+TD+'">'+r[7]+'</td>'+dc(r[8],1)+'</tr>';});
  h+='</table></div>';
  const notes=[['#e23a63','<b>The spend row is the WHOLE account, on purpose.</b> One budget works on the webstore and the branches at once and cannot be split, so the MER and aMER here put branch revenue over ALL spend — the same convention as the Shopify table&rsquo;s &ldquo;incl. branches&rdquo; rows and the daily break-even table, so the two always reconcile. A ratio built on an allocated share of spend would be a made-up number.'],
   ['#3a9bff','<b>The period block is the daily POS series; the month and year blocks are the monthly ledger, which reaches back to 2024-08.</b> Both carry new-versus-returning, and they agree: summing the ledger for '+curM+' returns the same new/returning customers and revenue the daily series computes for the same span. Only gross profit is ledger-only, because the daily feed does not carry margin.'],
+  ['#b8621b','<b>Where a cell says \u2014 it is because the comparison would be false, not because the number is missing.</b> YTD vs LY is blank on the spend-fed rows: last year\u2019s ad feed only starts '+((O.ad&&O.ad.start)||'mid-2025')+', so a full-year ratio would divide this year\u2019s complete spend by a partial 2025 and print a collapse that never happened (it read \u221258% before this gate). The attributed in-store row is blank before '+(_offFirst||'the feed started')+' for the same reason \u2014 Meta was sending no in-store conversions then, so a percentage against ~zero is an artefact.'],
   ['#7c869c','Walk-in receipts have no identity attached, so a shop &ldquo;new customer&rdquo; means the first time that registered customer appears in the POS ledger. Anonymous cash buyers are in the revenue and not in the customer counts.']];
  pnlCard(g,'odoo','Weekly audit &mdash; THE BRANCHES'+INFO('The offline twin of the Shopify weekly audit, on the same rows, from the POS ledger.'),
   '<b>SHOPS ONLY</b> &mdash; the seven branches, '+s+' &rarr; '+e+' against '+pw[0]+' &rarr; '+pw[1]+'. The webstore is not in any figure here; that is the Shopify table above.',
@@ -9145,7 +9220,10 @@ function atToast(p){try{const k=ST.att[p];const lab=((O.attr.labels||{})[k]||k);
    platform tabs now grey out the two selectors they ignore and put the applied multiplier in
    the title of the one they use. Every other tab is blended and reads all three, so all three
    stay live there. */
-const ATGATE={mt:['meta'],gg:['google'],tk:['tt'],dc:[],fo:[],tm:[],rp:[],cs:[],cv:[]};
+/* v9.71: the Branches tab now carries an attributed in-store revenue row (Meta offline value
+   x the offline attribution factor, plus TikTok offline), so the Meta/TikTok selectors are
+   live here -- Google has no in-store conversion feed, so it stays greyed out. */
+const ATGATE={mt:['meta'],gg:['google'],tk:['tt'],dc:[],fo:[],tm:[],rp:[],cs:[],cv:[],off:['meta','tt']};
 function atGate(){try{
  const use=ATGATE[TAB]; if(!use)var all=1;
  /* an EMPTY list means NO selector applies on this tab (ledger data, not ad-attributed) */
@@ -14510,7 +14588,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-162131';
+const BUILD='20260915-163557';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
