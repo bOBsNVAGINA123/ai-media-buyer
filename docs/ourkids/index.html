@@ -2183,8 +2183,21 @@ function ga4Win(a,b){try{const G=O.ga4;if(!G)return null;
  if(T&&T.s){let s=0,pu=0,r=0,a2=0,c2=0;
   for(let k=i0;k<=i1;k++){s+=(T.s||[])[k]||0;pu+=(T.pu||[])[k]||0;r+=(T.r||[])[k]||0;a2+=(T.a||[])[k]||0;c2+=(T.c||[])[k]||0;}
   let ps=0,ppu=0;(G.pages||[]).forEach(p=>{for(let k=i0;k<=i1;k++){ps+=(p.s||[])[k]||0;ppu+=(p.pu||[])[k]||0;}});
-  return s?{s:s,pu:pu,rev:r,atc:a2,cko:c2,cvr:pu/s*100,clip:(i1-i0+1)<want,
-            pageCov:s?ps/s*100:null,pagePu:ppu,full:true}:null;}
+  /* v9.77: the denominator is ALL traffic MINUS the datacentre floods, not "Egypt". A country
+     that sent sessions and bought NOTHING across the whole window is a bot source, and it is
+     named rather than assumed -- measured 14 days: Singapore 316,627 sessions / 0 orders,
+     Brazil 51,280 / 0, against Egypt 315,746 / 2,915. Countries that do buy stay in, however
+     small (UK: 7,150 / 1). */
+  let bots=0,botL=[],eg=null,keep=0;
+  (G.cty||[]).forEach(c=>{let cs=0,cp=0;for(let k=i0;k<=i1;k++){cs+=(c.s||[])[k]||0;cp+=(c.pu||[])[k]||0;}
+   if(!cs)return;
+   if(c.c==='Egypt')eg={s:cs,pu:cp};
+   if(cp===0&&cs>=200){bots+=cs;botL.push({c:c.c,s:cs});}else keep+=cs;});
+  botL.sort((a,b)=>b.s-a.s);
+  const real=(G.cty&&G.cty.length)?Math.max(1,s-bots):s;
+  return s?{s:real,sAll:s,bots:bots,botL:botL,eg:eg,pu:pu,rev:r,atc:a2,cko:c2,
+            cvr:pu/real*100,clip:(i1-i0+1)<want,
+            pageCov:s?ps/s*100:null,pagePu:ppu,full:true,clean:!!(G.cty&&G.cty.length)}:null;}
  if(!G.pages||!G.pages.length)return null;
  let s=0,pu=0,r=0;G.pages.forEach(p=>{for(let k=i0;k<=i1;k++){s+=(p.s||[])[k]||0;pu+=(p.pu||[])[k]||0;r+=(p.r||[])[k]||0;}});
  return s?{s:s,pu:pu,rev:r,cvr:pu/s*100,clip:(i1-i0+1)<want,full:false}:null;}catch(e){return null;}}
@@ -2317,8 +2330,8 @@ function glance(g,o){
   ['RC AOV', M(o.rcaov[0]), pc(o.rcaov[0],o.rcaov[1]), true, 'what they spend when they come back','web','rcaov']
  ];
  if(_g4&&_g4.c)tiles.push(
-  ['Sessions · Egypt', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
-   'GA4, Egypt only \u2014 the Singapore bot traffic is not in here'+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
+  ['Sessions · real', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
+   (_g4.c.clean?'GA4 all traffic minus '+N(_g4.c.bots)+' bot sessions ('+(_g4.c.botL||[]).slice(0,2).map(x=>x.c).join(', ')+(((_g4.c.botL||[]).length>2)?'…':'')+' \u2014 zero orders)':'GA4, Egypt only')+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
  /* v9.75: the funnel leads the scoreboard. Three rates, same denominator (Egypt sessions),
     so they read as one ladder: of everyone who arrived, how many put something in the basket,
     how many started checkout, how many paid. Rates only \u2014 the counts behind them are in
@@ -2329,11 +2342,11 @@ function glance(g,o){
   const icoC=rate(_g4.c.cko,_g4.c.s), icoP=_g4.p?rate(_g4.p.cko,_g4.p.s):null;
   tiles.unshift(
    ['ATC %', atcC==null?'\u2014':atcC.toFixed(2)+'%', (atcC!=null&&atcP)?pc(atcC,atcP):null, true,
-    'added to cart \u00f7 Egypt sessions','web','atcg'],
+    'added to cart \u00f7 real sessions (bots out)','web','atcg'],
    ['ICO %', icoC==null?'\u2014':icoC.toFixed(2)+'%', (icoC!=null&&icoP)?pc(icoC,icoP):null, true,
-    'started checkout \u00f7 Egypt sessions','web','icog'],
+    'reached checkout \u00f7 real sessions (bots out)','web','icog'],
    ['CVR %', _g4.c.cvr.toFixed(2)+'%', _g4.p?pc(_g4.c.cvr,_g4.p.cvr):null, true,
-    'paid \u00f7 Egypt sessions','web','cvrg']);}
+    'paid \u00f7 real sessions (bots out)','web','cvrg']);}
  else if(_g4&&_g4.c)tiles.unshift(['CVR %', _g4.c.cvr.toFixed(2)+'%', _g4.p?pc(_g4.c.cvr,_g4.p.cvr):null, true,
    'GA4 purchases \u00f7 Egypt sessions','web','cvrg']);
  if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
@@ -2545,16 +2558,27 @@ function glance(g,o){
     +txt('The gap between those two rows is traffic GA4 does not count as Egyptian \u2014 overwhelmingly the Singapore datacentre flood that started 4 Sep 2026 and has never placed an order. Every session-based ratio on this scoreboard uses the GA4 number for exactly that reason. The branches have no footfall counter, so there is no in-store equivalent of this tile.');
    /* one funnel, three tiles: each drill shows the whole ladder so the reader sees WHERE the
       drop is, not just its own rate */
+   /* v9.77: ONE LADDER, read top to bottom. Each step shows its COUNT, what share of all real
+      sessions it is, and what share of the step directly above it survived -- the two are the
+      same event measured against different denominators, which is exactly what confused the
+      read before ("2.59% of sessions" next to "20.9% of carts" looked like two facts). The
+      step-to-step column is the one to act on; the of-sessions column is for scale. */
    const _fun=(title)=>{const s=_g4.c.s,a=_g4.c.atc,c=_g4.c.cko,p=_g4.c.pu;
-    const st=(lab,v,base,prev)=>row(lab+(base&&v!=null?' \u2014 '+(v/base*100).toFixed(2)+'% of sessions':''),v,prev,true,N(v||0));
+    const P=_g4.p;
+    const st=(lab,v,prevStep,prevWin,prevStepPrevWin,note)=>{
+     const ofS=(s&&v!=null)?(v/s*100):null, ofP=(prevStep&&v!=null)?(v/prevStep*100):null;
+     const val=N(v||0)
+      +(ofS!=null?' <span style="color:#8a93a6;font-weight:600">'+ofS.toFixed(2)+'% of all real sessions</span>':'')
+      +(ofP!=null?' <span style="color:#0f6e56;font-weight:700">\u00b7 '+ofP.toFixed(1)+'% of the step above survived</span>':'');
+     return row(lab+(note?' <span style="color:#9aa3b5">'+note+'</span>':''),v,prevWin,true,val);};
     return hd(title)
-     +st('Egypt sessions',s,null,_g4.p&&_g4.p.s)
-     +st('Added to cart',a,s,_g4.p&&_g4.p.atc)
-     +st('Started checkout',c,s,_g4.p&&_g4.p.cko)
-     +st('Paid',p,s,_g4.p&&_g4.p.pu)
-     +row('Cart \u2192 checkout',c&&a?c/a*100:null,(_g4.p&&_g4.p.atc)?_g4.p.cko/_g4.p.atc*100:null,true,(c&&a?(c/a*100).toFixed(1):'\u2014')+'% of carts reach checkout')
-     +row('Checkout \u2192 paid',p&&c?p/c*100:null,(_g4.p&&_g4.p.cko)?_g4.p.pu/_g4.p.cko*100:null,true,(p&&c?(p/c*100).toFixed(1):'\u2014')+'% of checkouts pay')
-     +txt('All four counts are GA4, Egypt only, from the property totals \u2014 not the landing-page table, which is a sample. The biggest gap between two consecutive rows is where the money is leaking; per-page versions of these same rates are on <b>Traffic &amp; creative \u2192 CVR doctor</b>. In-store has no equivalent: a shop has no session counter.');};
+     +st('Real sessions'+(_g4.c.clean?' (all traffic, bots removed)':''),s,null,P&&P.s,null,'')
+     +st('Added to cart',a,s,P&&P.atc,null,'')
+     +st('Reached checkout',c,a,P&&P.cko,null,'\u2014 of the people who had a cart')
+     +st('Paid',p,c,P&&P.pu,null,'\u2014 of the people who reached checkout')
+     +(_g4.c.clean?row('Bot sessions removed first',_g4.c.bots,null,false,N(_g4.c.bots)+' from '+(_g4.c.botL||[]).slice(0,3).map(x=>x.c+' '+N(x.s)).join(', ')+((_g4.c.botL||[]).length>3?' and '+((_g4.c.botL||[]).length-3)+' more':'')+' \u2014 every one of them placed ZERO orders in this window'):'')
+     +(_g4.c.eg?row('Of which Egypt',_g4.c.eg.s,null,true,N(_g4.c.eg.s)+' sessions \u00b7 '+N(_g4.c.eg.pu)+' orders \u00b7 '+(_g4.c.eg.s?(_g4.c.eg.pu/_g4.c.eg.s*100).toFixed(2):'\u2014')+'% CVR'):'')
+     +txt('Counts are GA4 property totals across ALL countries, minus the countries that sent traffic and bought nothing at all in this window \u2014 those are named above, not assumed. Percentages of the step above are the ones to act on: they say where people actually stop. Per-page versions of the same rates are on <b>Traffic &amp; creative \u2192 CVR doctor</b>. The shops have no equivalent \u2014 a branch has no session counter.');};
    TD.atcg=_fun('Add to cart '+((_g4.c.s&&_g4.c.atc)?(_g4.c.atc/_g4.c.s*100).toFixed(2)+'%':''));
    TD.icog=_fun('Reached checkout '+((_g4.c.s&&_g4.c.cko)?(_g4.c.cko/_g4.c.s*100).toFixed(2)+'%':''));
    TD.cvrg=hd('Egypt CVR '+_g4.c.cvr.toFixed(2)+'%')
@@ -7164,6 +7188,20 @@ function rDC(){
     o+=v[0];u+=v[1];nw+=v[2];rt+=v[3];hit=true;});});
   if(!hit||!o)return null;
   return {o,u,nw,rt,broken:(u===o&&o>3)};};
+ /* v9.76 THE BASELINE. A code's customer mix means nothing without the mix of the business
+    it is sitting inside, so compute what an ORDINARY week looks like on both sides:
+    offline from the till crawl (new / returning / walk-ins, counted per day), online from the
+    Shopify customer split (no walk-in concept online -- every web order carries a customer). */
+ const _mixBase=(function(){try{
+   const o={off:null,on:null};
+   const nc=okBranchNC(win[0],win[1],'nc'), rc=okBranchNC(win[0],win[1],'rc'), un=okBranchNC(win[0],win[1],'un');
+   if(nc&&rc){const u=(un&&un.v>0)?un.v:0, tot=nc.v+rc.v+u;
+    if(tot)o.off={nw:nc.v/tot*100, rt:rc.v/tot*100, un:u/tot*100, tot:tot, hasUn:!!(un&&un.v>0)};}
+   const A=O.ad;if(A&&A.newcust){const t0=Date.parse(A.start+'T00:00:00Z');
+    let n2=0,r2=0;for(let d=Date.parse(win[0]+'T00:00:00Z');d<=Date.parse(win[1]+'T00:00:00Z');d+=864e5){
+     const i=Math.round((d-t0)/864e5);if(i>=0&&i<A.n){n2+=(A.newcust||[])[i]||0;r2+=(A.retcust||[])[i]||0;}}
+    if(n2+r2)o.on={nw:n2/(n2+r2)*100, rt:r2/(n2+r2)*100, un:0, tot:n2+r2};}
+   return o;}catch(e){return {off:null,on:null};}})();
  let L=Object.values(codes).map(r=>{
   const on=r.onC||[0,0,0,0], off=r.offC||[0,0,0];
   const onP=r.onP||[0,0,0,0], offP=r.offP||[0,0,0];
@@ -14707,7 +14745,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-172122';
+const BUILD='20260915-173730';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
