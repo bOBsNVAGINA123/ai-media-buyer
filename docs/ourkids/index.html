@@ -2497,11 +2497,36 @@ function glance(g,o){
     return t?{nc:nc.v/t*100, rc:rc.v/t*100, un:u/t*100, hasUn:u>0}:null;};
    br=K(ST.s,ST.e);const w=cmpWr(ST.s,ST.e);if(w&&w[0])brP=K(w[0],w[1]);
    return {web:web,webP:webP,br:br,brP:brP};}catch(e){return null;}})();
+ /* v9.88: the money behind the mix. Counts and shares say who walks in; these say what each
+    group is actually worth, which is the pair the budget conversation needs. */
+ tiles.push(
+  ['NC revenue', M(o.ncrev[0]), pc(o.ncrev[0],o.ncrev[1]), true,
+   /* share of the SPLIT total, not of net revenue: the customer split is gross, net is after
+      returns, and dividing one by the other made the two shares sum to 151%. */
+   'first-time buyers · '+((o.ncrev[0]+o.rcrev[0])?Math.round(o.ncrev[0]/(o.ncrev[0]+o.rcrev[0])*100):0)+'% of gross webstore sales','web','ncrev'],
+  ['RC revenue', M(o.rcrev[0]), pc(o.rcrev[0],o.rcrev[1]), true,
+   'returning buyers · '+((o.ncrev[0]+o.rcrev[0])?Math.round(o.rcrev[0]/(o.ncrev[0]+o.rcrev[0])*100):0)+'% of gross webstore sales','web','rcrev']);
  if(_mixT&&_mixT.web)tiles.push(
   ['New customers %', _mixT.web.nc.toFixed(0)+'%', (_mixT.webP?pc(_mixT.web.nc,_mixT.webP.nc):null), true,
    'share of webstore orders · no walk-ins online','web','mixw'],
   ['Returning %', _mixT.web.rc.toFixed(0)+'%', (_mixT.webP?pc(_mixT.web.rc,_mixT.webP.rc):null), true,
    'share of webstore orders','web','mixw']);
+ /* branch revenue by customer type, from the same daily crawl the counts come from */
+ const _brRev=(function(){try{const nr=okBranchNC(ST.s,ST.e,'nrev'),rr=okBranchNC(ST.s,ST.e,'rrev'),
+    ur=okBranchNC(ST.s,ST.e,'unrev');
+   const w=cmpWr(ST.s,ST.e);
+   const P=(w&&w[0])?{n:okBranchNC(w[0],w[1],'nrev'),r:okBranchNC(w[0],w[1],'rrev'),u:okBranchNC(w[0],w[1],'unrev')}:null;
+   if(!nr||!rr)return null;
+   return {n:nr.v,r:rr.v,u:(ur&&ur.v>0)?ur.v:null,
+           pn:P&&P.n&&P.n.v,pr:P&&P.r&&P.r.v,pu:(P&&P.u&&P.u.v>0)?P.u.v:null};}catch(e){return null;}})();
+ if(_brRev)tiles.push(
+  ['NC revenue · branches', M(_brRev.n), _brRev.pn?pc(_brRev.n,_brRev.pn):null, true,
+   'first-time buyers at the tills','co','brrev'],
+  ['RC revenue · branches', M(_brRev.r), _brRev.pr?pc(_brRev.r,_brRev.pr):null, true,
+   'returning buyers at the tills','co','brrev'],
+  ['Unregistered revenue · branches', _brRev.u!=null?M(_brRev.u):'—',
+   (_brRev.u!=null&&_brRev.pu)?pc(_brRev.u,_brRev.pu):null, false,
+   _brRev.u!=null?'money with no customer behind it':'needs the nightly till crawl','co','brrev']);
  if(_bAOV&&_bAOV.c&&_bAOV.c.nc)tiles.push(['NC AOV · branches',M(_bAOV.c.nc),
    (_bAOV.p&&_bAOV.p.nc)?pc(_bAOV.c.nc,_bAOV.p.nc):null,true,
    'first receipt at the till'+(_bAOV.c.est?' (tail apportioned)':''),'co','bncaov']);
@@ -2656,6 +2681,16 @@ function glance(g,o){
      ?'This is <b>Meta\u2019s own split</b> \u2014 the same Engaged / Existing / New rows Ads Manager shows under an ad set, pulled daily through the user_segment_key breakdown, so it sees inside Advantage+ sets where targeting-spec guessing cannot. <b>Google cannot be split at all</b>: its audience lists run in observation mode, so Google reports zero cost against every audience row \u2014 that spend is real but carries no audience label. TikTok ships no per-audience feed.'
      :'Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
    TD.audN=audD;TD.audE=audD;TD.audX=audD;}
+  if(typeof _brRev!=='undefined'&&_brRev){const tot3=_brRev.n+_brRev.r+(_brRev.u||0);
+   const sh=v=>tot3?' · '+Math.round(v/tot3*100)+'% of till revenue':'';
+   TD.brrev=hd('Till revenue by who paid it')
+    +row('First-time buyers',_brRev.n,_brRev.pn,true,M(_brRev.n)+sh(_brRev.n))
+    +row('Returning buyers',_brRev.r,_brRev.pr,true,M(_brRev.r)+sh(_brRev.r))
+    +(_brRev.u!=null?row('Walk-ins (no identity)',_brRev.u,_brRev.pu,false,M(_brRev.u)+sh(_brRev.u)):'')
+    +row('All till revenue in this window (tax-inclusive, as the POS records it)',tot3,null,true,M(tot3))
+    +((typeof _bRev!=='undefined'&&_bRev)?row('The same window on the daily till feed (net of VAT)',_bRev,_bRevP,true,M(_bRev)+' — '+(tot3?(tot3/_bRev).toFixed(3):'—')+'× the net figure, which is the tax'):'')
+    +txt('The split above is taken from the POS crawl, which records receipts TAX-INCLUSIVE, while the revenue tiles and every ratio on this page use the daily till feed net of VAT — that is the whole of the gap between the two lines, not a data error. Every pound the tills took, split by who the customer was. The walk-in line is revenue you cannot attribute, re-market to, or measure a lifetime on \u2014 it is the cost of not capturing identity at the counter, in money rather than in receipts.');
+   TD.ncrev=TD.brrev;TD.rcrev=TD.brrev;}
   if(typeof _mixT!=='undefined'&&_mixT){
    TD.mixw=hd('Who is buying — the mix, both sides')
     +row('Webstore · first-time orders',o.nc[0],o.nc[1],true,N(o.nc[0])+' · '+(_mixT.web?_mixT.web.nc.toFixed(0):'—')+'%')
@@ -15105,7 +15140,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-192002';
+const BUILD='20260915-193021';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
