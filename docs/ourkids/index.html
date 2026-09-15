@@ -2315,7 +2315,23 @@ function glance(g,o){
     follow any window instead of the collector's fixed 60 days.
     GOOGLE CANNOT BE SPLIT THIS WAY and the tiles say so: its audience lists are attached in
     OBSERVATION mode, so ad_group_audience_view returns cost 0 on every row -- probed live. */
- const _aud=(function(){try{const AM=O.audMix,W=O.madsW;if(!AM||!AM.sets||!W)return null;
+ /* v9.80: Meta's OWN audience split when the feed is there (user_segment_key breakdown, daily),
+    falling back to the targeting-spec inference only if it is missing. The inference could not
+    see inside an Advantage+ ad set, which is why it reported engaged spend as zero while Ads
+    Manager was showing engaged money on the very same ad sets. */
+ const _audMeta=(function(){try{const A=O.ad;if(!A||!A.segNew)return null;
+   const t0=Date.parse(A.start+'T00:00:00Z');
+   const sum=(a,b)=>{const i0=Math.max(0,Math.round((Date.parse(a+'T00:00:00Z')-t0)/864e5));
+    const i1=Math.min(A.n-1,Math.round((Date.parse(b+'T00:00:00Z')-t0)/864e5));
+    if(i1<i0)return null;const o={'new':0,engaged:0,existing:0,unknown:0,nv:0,ev:0,xv:0};let any=false;
+    for(let k=i0;k<=i1;k++){const n=(A.segNew||[])[k]||0,e=(A.segEng||[])[k]||0,x=(A.segExist||[])[k]||0;
+     o['new']+=n;o.engaged+=e;o.existing+=x;
+     o.nv+=(A.segNewV||[])[k]||0;o.ev+=(A.segEngV||[])[k]||0;o.xv+=(A.segExistV||[])[k]||0;
+     if(n||e||x)any=true;}
+    if(!any)return null;o.tot=o['new']+o.engaged+o.existing;o.src='meta';return o;};
+   const w=cmpWr(ST.s,ST.e);
+   return {c:sum(ST.s,ST.e),p:(w&&w[0])?sum(w[0],w[1]):null};}catch(e){return null;}})();
+ const _audInfer=(function(){try{const AM=O.audMix,W=O.madsW;if(!AM||!AM.sets||!W)return null;
    const cls={};(AM.sets||[]).forEach(s=>{if(s&&s.id)cls[String(s.id)]=s.cls||'new';});
    const t0=Date.parse(W.start+'T00:00:00Z');
    const sum=(a,b)=>{const i0=Math.max(0,Math.round((Date.parse(a+'T00:00:00Z')-t0)/864e5));
@@ -2328,6 +2344,8 @@ function glance(g,o){
     if(!any)return null;o.tot=o['new']+o.engaged+o.existing+o.unknown;return o;};
    const w=cmpWr(ST.s,ST.e);
    return {c:sum(ST.s,ST.e),p:(w&&w[0])?sum(w[0],w[1]):null};}catch(e){return null;}})();
+ const _aud=(_audMeta&&_audMeta.c)?_audMeta:_audInfer;
+ const _audSrc=(_audMeta&&_audMeta.c)?'meta':'infer';
  const _g4=(function(){try{const w=cmpWr(ST.s,ST.e);
    return {c:ga4Win(ST.s,ST.e),p:(w&&w[0])?ga4Win(w[0],w[1]):null};}catch(e){return {c:null,p:null};}})();
  /* branch baskets: the till crawl carries first-vs-repeat revenue AND receipts per day, so
@@ -2353,11 +2371,11 @@ function glance(g,o){
   const shr=v=>AC.tot?' · '+Math.round(v/AC.tot*100)+'% of Meta spend':'';
   tiles.push(
    ['Spend · new audiences', M(AC['new']), (AP&&AP['new'])?pc(AC['new'],AP['new']):null, true,
-    'Meta prospecting — broad, interest, lookalike'+shr(AC['new']),'web','audN'],
+    (_audSrc==='meta'?'Meta’s own New-audience split':'Meta prospecting — broad, interest, lookalike (inferred)')+shr(AC['new']),'web','audN'],
    ['Spend · engaged', M(AC.engaged), (AP&&AP.engaged)?pc(AC.engaged,AP.engaged):null, true,
-    'Meta warm — cart, view, engagement audiences'+shr(AC.engaged),'web','audE'],
+    (_audSrc==='meta'?'Meta’s own Engaged-audience split':'Meta warm — cart/view audiences (inferred)')+shr(AC.engaged),'web','audE'],
    ['Spend · existing', M(AC.existing), (AP&&AP.existing)?pc(AC.existing,AP.existing):null, true,
-    'Meta buyers — purchaser / customer-list audiences'+shr(AC.existing),'web','audX']);}
+    (_audSrc==='meta'?'Meta’s own Existing-customers split':'Meta buyers — purchaser audiences (inferred)')+shr(AC.existing),'web','audX']);}
  if(_g4&&_g4.c)tiles.push(
   ['Sessions · real', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
    (_g4.c.clean?'GA4 all traffic minus '+N(_g4.c.bots)+' bot sessions ('+(_g4.c.botL||[]).slice(0,2).map(x=>x.c).join(', ')+(((_g4.c.botL||[]).length>2)?'…':'')+' \u2014 zero orders)':'GA4, Egypt only')+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
@@ -2550,7 +2568,11 @@ function glance(g,o){
     +(AC.unknown?row('Meta spend on ad sets the crawl has not classified',AC.unknown,AP&&AP.unknown,false,M(AC.unknown)):'')
     +row('Google — cannot be split',gsp.g,null,false,M(gsp.g)+' unsegmented')
     +(gsp.t?row('TikTok — cannot be split',gsp.t,null,false,M(gsp.t)+' unsegmented'):'')
-    +txt('Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
+    +(_audSrc==='meta'&&AC.nv!=null?row('ROAS by segment',null,null,true,
+      'new '+(AC['new']?(AC.nv/AC['new']).toFixed(2):'—')+'× · engaged '+(AC.engaged?(AC.ev/AC.engaged).toFixed(2):'—')+'× · existing '+(AC.existing?(AC.xv/AC.existing).toFixed(2):'—')+'×'):'')
+    +txt(_audSrc==='meta'
+     ?'This is <b>Meta\u2019s own split</b> \u2014 the same Engaged / Existing / New rows Ads Manager shows under an ad set, pulled daily through the user_segment_key breakdown, so it sees inside Advantage+ sets where targeting-spec guessing cannot. <b>Google cannot be split at all</b>: its audience lists run in observation mode, so Google reports zero cost against every audience row \u2014 that spend is real but carries no audience label. TikTok ships no per-audience feed.'
+     :'Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
    TD.audN=audD;TD.audE=audD;TD.audX=audD;}
   TD.merc=hd('MER whole business '+(BA?BA.mer.toFixed(2)+'×':'')+' = (webstore + branches) ÷ ALL spend')
    +row('Webstore net',o.net[0],o.net[1],true,M(o.net[0]))
@@ -14873,7 +14895,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-182552';
+const BUILD='20260915-183301';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
