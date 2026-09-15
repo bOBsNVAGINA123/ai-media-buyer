@@ -2167,6 +2167,16 @@ function okBranchNC(a,b,key){
       if(mk)v+=mk/dim2(md);}});}}
   return total?{v:v,est:est,covered:covered,total:total}:null;
  }catch(e){return null;}}
+/* v9.69: sessions and CVR for the scoreboard come from GA4, EGYPT ONLY -- never Shopify's
+   session count. Since 4 Sep 2026 roughly 60% of Shopify sessions are Singapore datacentre
+   bots that never order, so a Shopify-sourced CVR reads as a collapse that never happened.
+   GA4 keeps the top ~140 landing pages, which is effectively all real traffic. */
+function ga4Win(a,b){try{const G=O.ga4;if(!G||!G.pages||!G.pages.length)return null;
+ const t0=Date.parse(G.start),ix=d=>Math.round((Date.parse(d)-t0)/864e5);
+ const i0=Math.max(0,ix(a)),i1=Math.min(G.n-1,ix(b));if(i1<i0)return null;
+ const want=Math.round((Date.parse(b)-Date.parse(a))/864e5)+1;
+ let s=0,pu=0,r=0;G.pages.forEach(p=>{for(let k=i0;k<=i1;k++){s+=(p.s||[])[k]||0;pu+=(p.pu||[])[k]||0;r+=(p.r||[])[k]||0;}});
+ return s?{s:s,pu:pu,rev:r,cvr:pu/s*100,clip:(i1-i0+1)<want}:null;}catch(e){return null;}}
 function okBlendedAmer(o,sIn,eIn,onlineNewIn,spendIn){
  try{
   const BL=O.bl; if(!BL||!BL.b)return null;
@@ -2266,6 +2276,15 @@ function glance(g,o){
   const prevW=(_pw2&&o.gp[1]!=null)?webNP(o.gp[1],_pw2[0],_pw2[1]):null;
   return cur==null?null:{cur,prev,bm,curW,prevW};
  }catch(e){return null;}})();
+ const _g4=(function(){try{const w=cmpWr(ST.s,ST.e);
+   return {c:ga4Win(ST.s,ST.e),p:(w&&w[0])?ga4Win(w[0],w[1]):null};}catch(e){return {c:null,p:null};}})();
+ /* branch baskets: the till crawl carries first-vs-repeat revenue AND receipts per day, so
+    these are true AOVs (money / receipts), not money per person */
+ const _bAOV=(function(){try{const w=cmpWr(ST.s,ST.e);
+   const g=(a,b)=>{const nr=okBranchNC(a,b,'nrev'),no=okBranchNC(a,b,'nord'),rr=okBranchNC(a,b,'rrev'),ro=okBranchNC(a,b,'rord');
+    return {nc:(nr&&no&&no.v)?nr.v/no.v:null,rc:(rr&&ro&&ro.v)?rr.v/ro.v:null,
+            nrev:nr&&nr.v,nord:no&&no.v,rrev:rr&&rr.v,rord:ro&&ro.v,est:!!(nr&&nr.est)};};
+   return {c:g(ST.s,ST.e),p:(w&&w[0])?g(w[0],w[1]):null};}catch(e){return null;}})();
  const tiles=[
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web','net'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web','gp'],
@@ -2274,8 +2293,15 @@ function glance(g,o){
   ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web','amer'],
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web','ord'],
   ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web','nc'],
-  ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web','rc']
+  ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web','rc'],
+  ['NC AOV', M(o.ncaov[0]), pc(o.ncaov[0],o.ncaov[1]), true, 'what a first-time buyer spends','web','ncaov'],
+  ['RC AOV', M(o.rcaov[0]), pc(o.rcaov[0],o.rcaov[1]), true, 'what they spend when they come back','web','rcaov']
  ];
+ if(_g4&&_g4.c)tiles.push(
+  ['Sessions · Egypt', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
+   'GA4, Egypt only \u2014 datacentre bots excluded'+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg'],
+  ['CVR · Egypt', _g4.c.cvr.toFixed(2)+'%', _g4.p?pc(_g4.c.cvr,_g4.p.cvr):null, true,
+   'GA4 purchases \u00f7 Egypt sessions','web','cvrg']);
  if(NP&&NP.curW!=null)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.curW>=0?'#0f6e56':'#a3271a')+'">'+(NP.curW>=0?'+':'\u2212')+M(NP.curW)+'</span>',
    (NP.prevW!=null&&NP.prevW!==0)?((NP.curW-NP.prevW)/Math.abs(NP.prevW)*100):null,true,
@@ -2319,6 +2345,12 @@ function glance(g,o){
  if(_brc)tiles.push(['Returning · branches',N(Math.round(_brc.v)),
    _brcP&&_brcP.v?((_brc.v/_brcP.v-1)*100):null,true,
    'registered repeat buyers at the tills'+(_brc.est?' (tail apportioned)':''),'co','brc']);
+ if(_bAOV&&_bAOV.c&&_bAOV.c.nc)tiles.push(['NC AOV · branches',M(_bAOV.c.nc),
+   (_bAOV.p&&_bAOV.p.nc)?pc(_bAOV.c.nc,_bAOV.p.nc):null,true,
+   'first receipt at the till'+(_bAOV.c.est?' (tail apportioned)':''),'co','bncaov']);
+ if(_bAOV&&_bAOV.c&&_bAOV.c.rc)tiles.push(['RC AOV · branches',M(_bAOV.c.rc),
+   (_bAOV.p&&_bAOV.p.rc)?pc(_bAOV.c.rc,_bAOV.p.rc):null,true,
+   'repeat receipt at the till','co','brcaov']);
  /* v9.60 the third kind of customer: the walk-in the till never identified. Total receipts
     exist only in the monthly POS ledger, so the window total is apportioned per day and the
     registered daily counts are subtracted -- an estimate, labelled, but the one number that
@@ -2422,6 +2454,32 @@ function glance(g,o){
    +row('Registered buyers (POS crawl)',_unrW.r,null,true,N(Math.round(_unrW.r)))
    +row('Unregistered share',_unrW.sh,_unrW.shP,false,(_unrW.sh||0).toFixed(1)+'% vs '+(_unrW.shP!=null?_unrW.shP.toFixed(1)+'%':'—')+' of receipts')
    +txt('Every unregistered receipt is revenue with no customer behind it: no repeat tracking, no Meta match, no LTV. The identity-capture card on the <b>Branches</b> tab tracks this per branch — it is the number that quietly fell from ~93% captured to ~81% this year.');
+  /* v9.69 drills: each basket/traffic tile opens with BOTH sides where both exist */
+  const _aovD=(lab,rev,revP,ord,ordP,aov,aovP,bA,bAp,bRev,bOrd)=>hd(lab)
+   +row('Webstore revenue',rev,revP,true,M(rev||0))
+   +row('Webstore orders',ord,ordP,true,N(ord||0))
+   +row('Webstore basket',aov,aovP,true,M(aov||0))
+   +(bA?row('Branch basket (till receipts)',bA,bAp,true,M(bA)):'')
+   +(bRev?row('Branch revenue in this window',bRev,null,true,M(bRev)):'')
+   +(bOrd?row('Branch receipts',bOrd,null,true,N(bOrd)):'')
+   +txt('Webstore basket = that group\u2019s revenue \u00f7 its orders, from the Shopify customer split. Branch basket = the same arithmetic on the POS crawl, so the two are comparable. A first-time basket far below the repeat basket means discovery products are cheap and the money arrives on order two.');
+  TD.ncaov=_aovD('First-time basket \u2014 online vs the tills',o.ncrev[0],o.ncrev[1],o.nc[0],o.nc[1],o.ncaov[0],o.ncaov[1],
+   _bAOV&&_bAOV.c&&_bAOV.c.nc,_bAOV&&_bAOV.p&&_bAOV.p.nc,_bAOV&&_bAOV.c&&_bAOV.c.nrev,_bAOV&&_bAOV.c&&_bAOV.c.nord);
+  TD.rcaov=_aovD('Repeat basket \u2014 online vs the tills',o.rcrev[0],o.rcrev[1],o.rcn[0],o.rcn[1],o.rcaov[0],o.rcaov[1],
+   _bAOV&&_bAOV.c&&_bAOV.c.rc,_bAOV&&_bAOV.p&&_bAOV.p.rc,_bAOV&&_bAOV.c&&_bAOV.c.rrev,_bAOV&&_bAOV.c&&_bAOV.c.rord);
+  TD.bncaov=TD.ncaov;TD.brcaov=TD.rcaov;
+  if(_g4&&_g4.c){
+   TD.sessg=hd('Egypt sessions '+N(_g4.c.s))
+    +row('GA4 sessions (Egypt only)',_g4.c.s,_g4.p&&_g4.p.s,true,N(_g4.c.s))
+    +row('Purchases GA4 saw',_g4.c.pu,_g4.p&&_g4.p.pu,true,N(_g4.c.pu))
+    +row('Shopify sessions, same window',o.sess[0],o.sess[1],true,N(o.sess[0]||0)+(o.sess[0]>_g4.c.s?' \u2014 '+Math.round((o.sess[0]/_g4.c.s-1)*100)+'% more than GA4 counts':''))
+    +txt('The gap between those two rows is traffic GA4 does not count as Egyptian \u2014 overwhelmingly the Singapore datacentre flood that started 4 Sep 2026 and has never placed an order. Every session-based ratio on this scoreboard uses the GA4 number for exactly that reason. The branches have no footfall counter, so there is no in-store equivalent of this tile.');
+   TD.cvrg=hd('Egypt CVR '+_g4.c.cvr.toFixed(2)+'%')
+    +row('Purchases',_g4.c.pu,_g4.p&&_g4.p.pu,true,N(_g4.c.pu))
+    +row('Egypt sessions',_g4.c.s,_g4.p&&_g4.p.s,true,N(_g4.c.s))
+    +row('CVR',_g4.c.cvr,_g4.p&&_g4.p.cvr,true,_g4.c.cvr.toFixed(2)+'%')
+    +row('Same CVR on Shopify sessions (bots in)',o.sess[0]?_g4.c.pu/o.sess[0]*100:null,null,true,o.sess[0]?(_g4.c.pu/o.sess[0]*100).toFixed(2)+'% \u2014 what the bot traffic makes it look like':'\u2014')
+    +txt('Per-page CVR, add-to-cart and checkout rates, with live sold-out counts, are on <b>Traffic &amp; creative \u2192 CVR doctor</b>.');}
  })();
  window.__TD=TD;
  window.okTileGo=function(k){
@@ -14439,7 +14497,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-155724';
+const BUILD='20260915-161439';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
