@@ -1339,7 +1339,7 @@ function foldTail(t,grid){
  if(grid.querySelector(':scope > .foldwrap'))return;              // already folded this render
  let cards=[].slice.call(grid.children).filter(c=>c.classList&&c.classList.contains('card'));
  if(cards.length<FOLD_MIN)return;
- const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes|economics of one order|how wrong the platforms are/;
+ const PIN=/Did we make money\?|of gross profit burned|Every day against break-even|Where the ROAS actually goes|economics of one order|how wrong the platforms are|heat-mapped/;
  const pinned=cards.filter((c,i)=>i>=FOLD_KEEP&&PIN.test(((c.querySelector('.ct')||{}).textContent||'')));
  if(pinned.length){const anchor=cards[Math.min(FOLD_KEEP,cards.length)-1];
   pinned.reverse().forEach(c=>{grid.insertBefore(c,anchor.nextSibling);});
@@ -2922,7 +2922,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{orderLadder(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{merHeat(g);}catch(e){}try{glance(g,o);}catch(e){}try{orderLadder(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -3913,6 +3913,91 @@ function ovRange(a,b){
    The first table on the landing tab: one row per day of the selected range, MER, aMER and
    gross profit after ad spend, each graded against the real break-even, webstore-only beside
    webstore-plus-branches. The colour answers the question before the number does. */
+/* v9.78 THE FIRST THING YOU SEE: every day in the window, the three ratios that decide whether
+   the day paid for itself, each on BOTH sides of cancellation -- BEFORE = the demand that was
+   placed, AFTER = what survived to be booked. Odoo revenue already excludes cancelled orders,
+   so AFTER is the ledger and BEFORE adds the cancelled value back. Heat is graded against the
+   delivered break-even, so green means the day cleared its own costs. No 31-day clip: a whole
+   month (or quarter) of days renders. */
+function merHeat(g){
+ const A=O.ad,F=O.fin;if(!A||!F||!F.rev)return;
+ const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185};}})();
+ const be=q.gpOn>0?1/q.gpOn:5.4;
+ const mf=af('meta'),gf=af('google'),tf=af('tt');
+ const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
+ const ai=d=>Math.round((d-a0)/864e5), fi=d=>Math.round((d-f0)/864e5);
+ const dayRow=(ms)=>{const i=ai(ms),j=fi(ms);
+  if(i<0||i>=A.n||j<0||j>=F.n)return null;
+  const sp=(A.spend||[])[i]||0;
+  const net=(((F.rev||[])[j]||0)-((F.refund||[])[j]||0))*1000;
+  const canc=((F.cxv||[])[j]||0)*1000;
+  const gross=net+canc;
+  const nc=(A.ncrev||[])[i]||0;
+  const share=net>0?nc/net:0;                     /* cancelled baskets split like the day's own mix */
+  const claim=(((A.mecomrev||[])[i]||0)*mf)+(((A.gecomrev||[])[i]||0)*gf)+(((A.ttValue||[])[i]||0)*tf);
+  const keep=gross>0?net/gross:1;                  /* what share of placed demand survived */
+  return {sp:sp,net:net,gross:gross,canc:canc,cxr:gross?canc/gross*100:0,
+   merB:sp?gross/sp:null, merA:sp?net/sp:null,
+   amerB:sp?(nc+canc*share)/sp:null, amerA:sp?nc/sp:null,
+   roasB:sp?claim/sp:null, roasA:sp?claim*keep/sp:null};};
+ const days=[];for(let d=Date.parse(ST.s+'T00:00:00Z');d<=Date.parse(ST.e+'T00:00:00Z');d+=864e5)days.push(d);
+ const CAP=93;const clipped=days.length>CAP;const use=clipped?days.slice(-CAP):days;
+ const rows=use.map(ms=>{const r=dayRow(ms);if(!r)return null;
+  const dt=new Date(ms);r.d=dt.toISOString().slice(0,10);r.wd=dt.getUTCDay();return r;}).filter(Boolean);
+ if(rows.length<2)return;
+ const CMP=window.MHCMP!==0;
+ const pw=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
+ const off=(CMP&&pw&&pw[0])?Math.round((Date.parse(ST.s+'T00:00:00Z')-Date.parse(pw[0]+'T00:00:00Z'))/864e5):null;
+ const prev=off?{}:null;
+ if(off)rows.forEach(r=>{const p=dayRow(Date.parse(r.d+'T00:00:00Z')-off*864e5);if(p)prev[r.d]=p;});
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const heat=(v)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
+  const r=v/be;
+  return r>=1.5?'background:#0b5d49;color:#fff':r>=1.25?'background:#0f6e56;color:#fff'
+        :r>=1?'background:#dcf3e8;color:#0f6e56':r>=0.85?'background:#fdeed9;color:#8a5a1a'
+        :r>=0.6?'background:#fbdde5;color:#a3271a':'background:#f3b8c6;color:#6d1a12';};
+ const TD='padding:4px 6px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px';
+ const TH='padding:5px 6px;border-bottom:2px solid #e2e6ef;font-size:9px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const cell=(v,pv)=>{const d=(pv!=null&&pv&&v!=null)?((v/pv-1)*100):null;
+  return '<td style="'+TD+'"><span style="display:inline-block;min-width:46px;text-align:center;border-radius:6px;padding:2px 5px;font-weight:800;'+heat(v)+'">'
+   +(v==null?'—':v.toFixed(2)+'×')+'</span>'
+   +(d!=null?'<div style="font-size:8.5px;font-weight:700;color:'+(Math.abs(d)<2?'#8a93a6':(d>=0?'#0f6e56':'#a3271a'))+'">'+(d>=0?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>':'')+'</td>';};
+ let b='';
+ rows.forEach(r=>{const p=prev?prev[r.d]:null;const wk=(r.wd===5||r.wd===6);
+  b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
+   +'<td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+(wk?' <span style="font-size:8.5px;color:#8a93a6">'+(r.wd===5?'FR':'SA')+'</span>':'')+'</td>'
+   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +cell(r.merB,p&&p.merB)+cell(r.merA,p&&p.merA)
+   +cell(r.amerB,p&&p.amerB)+cell(r.amerA,p&&p.amerA)
+   +cell(r.roasB,p&&p.roasB)+cell(r.roasA,p&&p.roasA)
+   +'<td style="'+TD+';color:'+(r.cxr>=12?'#a3271a':'#5b6478')+'">'+r.cxr.toFixed(1)+'%</td></tr>';});
+ const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
+ const tSp=T('sp'),tNet=T('net'),tGross=T('gross'),tCanc=T('canc');
+ const tot={sp:tSp,merB:tSp?tGross/tSp:null,merA:tSp?tNet/tSp:null,
+  amerB:null,amerA:null,roasB:null,roasA:null};
+ const wavg=k=>{let n=0,d=0;rows.forEach(r=>{if(r[k]!=null){n+=r[k]*r.sp;d+=r.sp;}});return d?n/d:null;};
+ tot.amerB=wavg('amerB');tot.amerA=wavg('amerA');tot.roasB=wavg('roasB');tot.roasA=wavg('roasA');
+ b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
+  +'<td style="'+TD+'">'+M(tSp)+'</td>'
+  +cell(tot.merB,null)+cell(tot.merA,null)+cell(tot.amerB,null)+cell(tot.amerA,null)
+  +cell(tot.roasB,null)+cell(tot.roasA,null)
+  +'<td style="'+TD+'">'+(tGross?(tCanc/tGross*100).toFixed(1):'0')+'%</td></tr>';
+ const head='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
+  +'<th style="'+TH+'" colspan="2">MER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after cancellations</div></th>'
+  +'<th style="'+TH+'" colspan="2">aMER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after</div></th>'
+  +'<th style="'+TH+'" colspan="2">Blended ROAS<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after</div></th>'
+  +'<th style="'+TH+'">Cancel<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">% of demand</div></th></tr>'
+  +b+'</table></div>';
+ pnlCard(g,'blend','Every day, heat-mapped — MER, aMER and blended ROAS, before and after cancellations'
+  +INFO('BEFORE = the demand placed that day (booked revenue plus the value of orders later cancelled). AFTER = what survived into the ledger, which is what Odoo counts and what the rest of this page uses. aMER before splits the cancelled value by that day’s own new-customer share. Blended ROAS is what Meta + Google + TikTok each claimed, at your attribution setting, summed — they overlap, so it always flatters; the AFTER column discounts it by the day’s survival rate. Heat is graded against the delivered break-even of '+be.toFixed(2)+'×, the multiple a day must clear once goods, courier and fees are paid.'),
+  '<b>'+ST.s+' → '+ST.e+'</b> · '+rows.length+' days'
+  +(clipped?' (last '+CAP+' of a longer range)':'')
+  +' · break-even <b>'+be.toFixed(2)+'×</b> · '
+  +'<a href="javascript:void(0)" onclick="window.MHCMP=(window.MHCMP===0?1:0);rTab()" style="color:#5a5bf0;font-weight:800">'+(CMP?'☑':'☐')+' compare vs '+((pw&&pw[0])?pw[0]+' → '+pw[1]:'previous')+'</a>'
+  +' — the small arrow under each cell is that day against the same day of the compare window. '
+  +'Dark green = 50%+ clear of break-even · green = above it · amber = within 15% below · red = under water. Fridays and Saturdays shaded.',head);
+}
 function dailyBE(g){
  const A=O.ad,F=O.fin;if(!A||!F)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -14745,7 +14830,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-173730';
+const BUILD='20260915-181107';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
