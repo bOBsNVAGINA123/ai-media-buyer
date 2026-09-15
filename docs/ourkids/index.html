@@ -2502,14 +2502,6 @@ function glance(g,o){
    'share of webstore orders · no walk-ins online','web','mixw'],
   ['Returning %', _mixT.web.rc.toFixed(0)+'%', (_mixT.webP?pc(_mixT.web.rc,_mixT.webP.rc):null), true,
    'share of webstore orders','web','mixw']);
- if(_mixT&&_mixT.br)tiles.push(
-  ['New %  · branches', _mixT.br.nc.toFixed(0)+'%', (_mixT.brP?pc(_mixT.br.nc,_mixT.brP.nc):null), true,
-   'share of till receipts','co','mixb'],
-  ['Returning % · branches', _mixT.br.rc.toFixed(0)+'%', (_mixT.brP?pc(_mixT.br.rc,_mixT.brP.rc):null), true,
-   'share of till receipts','co','mixb'],
-  ['Unregistered % · branches', _mixT.br.hasUn?_mixT.br.un.toFixed(0)+'%':'—',
-   (_mixT.brP&&_mixT.brP.hasUn)?pc(_mixT.br.un,_mixT.brP.un):null, false,
-   _mixT.br.hasUn?'receipts with nobody attached':'needs the nightly till crawl','co','mixb']);
  if(_bAOV&&_bAOV.c&&_bAOV.c.nc)tiles.push(['NC AOV · branches',M(_bAOV.c.nc),
    (_bAOV.p&&_bAOV.p.nc)?pc(_bAOV.c.nc,_bAOV.p.nc):null,true,
    'first receipt at the till'+(_bAOV.c.est?' (tail apportioned)':''),'co','bncaov']);
@@ -2550,6 +2542,25 @@ function glance(g,o){
   /* with exact daily walk-ins the receipt total is exact too: registered + walk-ins */
   const T1=e1!=null?r1+e1:t1, T0=(e0!=null&&r0!=null)?r0+e0:t0;
   return {u:u1,uP:u0,sh:T1?u1/T1*100:null,shP:(u0!=null&&T0)?u0/T0*100:null,t:T1,r:r1,exact:e1!=null};})();
+ /* v9.87: the three shares must add to 100% of EVERY receipt, walk-ins included. They were
+    computed over registered receipts only, so New 32% + Returning 68% claimed to be "share of
+    till receipts" while a fifth of receipts had nobody attached and sat outside the denominator.
+    Use the exact daily walk-in count when the crawl carries it, and the apportioned estimate
+    (the same one behind the Unregistered tile) until it does -- labelled either way. */
+ if(_mixT&&_mixT.br){const _un=(_mixT.br.hasUn?null:(_unrW&&_unrW.u>0?_unrW.u:null));
+  const _reg=(_mixT.br.nc+_mixT.br.rc)||100;
+  const _regShare=_un&&_unrW&&_unrW.t?(1-_un/_unrW.t):1;
+  const N3=v=>(v*_regShare).toFixed(0)+'%';
+  const unPct=_mixT.br.hasUn?_mixT.br.un:((_un&&_unrW&&_unrW.t)?_un/_unrW.t*100:null);
+  const src=_mixT.br.hasUn?'counted per day at the till':'walk-ins estimated from the monthly ledger';
+  tiles.push(
+   ['New % · branches', N3(_mixT.br.nc), (_mixT.brP?pc(_mixT.br.nc,_mixT.brP.nc):null), true,
+    'share of ALL till receipts · '+src,'co','mixb'],
+   ['Returning % · branches', N3(_mixT.br.rc), (_mixT.brP?pc(_mixT.br.rc,_mixT.brP.rc):null), true,
+    'share of ALL till receipts','co','mixb'],
+   ['Unregistered % · branches', unPct!=null?unPct.toFixed(0)+'%':'—',
+    (_unrW&&_unrW.shP)?pc(unPct,_unrW.shP):null, false,
+    unPct!=null?'receipts with nobody attached — the three add to 100%':'needs the nightly till crawl','co','mixb']);}
  if(_unrW)tiles.push(['Unregistered · branches',N(Math.round(_unrW.u)),
    (_unrW.uP&&_unrW.uP>0)?((_unrW.u/_unrW.uP-1)*100):null,false,
    (_unrW.sh!=null?_unrW.sh.toFixed(0)+'% of receipts have NO identity attached':'walk-ins the till never captured')
@@ -2645,6 +2656,15 @@ function glance(g,o){
      ?'This is <b>Meta\u2019s own split</b> \u2014 the same Engaged / Existing / New rows Ads Manager shows under an ad set, pulled daily through the user_segment_key breakdown, so it sees inside Advantage+ sets where targeting-spec guessing cannot. <b>Google cannot be split at all</b>: its audience lists run in observation mode, so Google reports zero cost against every audience row \u2014 that spend is real but carries no audience label. TikTok ships no per-audience feed.'
      :'Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
    TD.audN=audD;TD.audE=audD;TD.audX=audD;}
+  if(typeof _mixT!=='undefined'&&_mixT){
+   TD.mixw=hd('Who is buying — the mix, both sides')
+    +row('Webstore · first-time orders',o.nc[0],o.nc[1],true,N(o.nc[0])+' · '+(_mixT.web?_mixT.web.nc.toFixed(0):'—')+'%')
+    +row('Webstore · returning orders',o.rcn[0],o.rcn[1],true,N(o.rcn[0])+' · '+(_mixT.web?_mixT.web.rc.toFixed(0):'—')+'%')
+    +((typeof _unrW!=='undefined'&&_unrW)?row('Branches · registered receipts',_unrW.r,null,true,N(_unrW.r)+' · '+Math.round(100-((_unrW.sh)||0))+'% of receipts'):'')
+    +((typeof _unrW!=='undefined'&&_unrW)?row('Branches · walk-ins (nobody attached)',_unrW.u,_unrW.uP,false,N(_unrW.u)+' · '+((_unrW.sh!=null)?_unrW.sh.toFixed(0):'—')+'% of receipts'):'')
+    +((typeof _unrW!=='undefined'&&_unrW)?row('Branches · all receipts',_unrW.t,null,true,N(_unrW.t)):'')
+    +txt('Online the two shares sum to 100% because every web order carries a customer record. In the shops they cannot: a walk-in leaves a receipt and no identity, so the branch percentages are taken over ALL receipts and it is the THREE — new, returning, unregistered — that add to 100%. '+((_mixT.br&&_mixT.br.hasUn)?'Walk-ins here are counted per day from the till crawl.':'Walk-ins here are still the monthly-ledger estimate; the nightly crawl replaces it with an exact daily count.'));
+   TD.mixb=TD.mixw;}
   if(typeof _offAtt!=='undefined'&&_offAtt&&_offAtt.c){TD.offatt=hd('Attributed in-store revenue '+M(_offAtt.c)+' — the claim, not the till')
    +row('What the platforms say they drove in store',_offAtt.c,_offAtt.p,true,M(_offAtt.c))
    +(_bRev!=null?row('What the tills actually took',_bRev,_bRevP,true,M(_bRev)+' — the claim is '+Math.round(_offAtt.c/_bRev*100)+'% of it'):'')
@@ -15085,7 +15105,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-191323';
+const BUILD='20260915-192002';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
