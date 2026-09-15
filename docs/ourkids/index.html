@@ -12690,6 +12690,60 @@ window.rVend=rVend;
 window.rVend=rVend;window.vsort=vsort;window.vfilt=vfilt;window.vbr=vbr;
 window.unlock=unlock;window.pnlCtl=pnlCtl;window.rMedia=rMedia;window.rAds=rAds;window.rRetail=rRetail;window.rViz=rViz;window.rIns=rIns;window.brWater=brWater;window.coWater=coWater;window.rPnl=rPnl;window.rPlan=rPlan;window.tab=tab;window.pre=pre;window.rOn=rOn;window.resetOff=resetOff;window.expand=expand;window.prov=prov;window.rReadme=rReadme;window.Q=Q;window.PRV=PRV;window.QK=QK;window.PGRP=PGRP;window.pBody=pBody;window.ctKey=ctKey;window.qsweep=qsweep;window.CTQ=CTQ;window.QGRID=QGRID;window.QT=QT;window.rCost=rCost;window.csCtl=csCtl;window.MKT=MKT;window.rDec=rDec;window.rCP=rCP;window.decCtl=decCtl;window.rReach=rReach;window.rLag=rLag;window.unmSel=unmSel;window.bmSel=bmSel;window.aoRk=aoRk;window.vtime=vtime;window.insWrap=insWrap;
 </script><script>
+/* v9.81 WHAT THEY ACTUALLY BUY. The journey crawl already knows, per first-purchase category,
+   how many customers started there, how many came back, how long they took, what they are worth
+   and what they bought NEXT -- separately for the tills and the webstore. It was only ever shown
+   as two dense tables on one tab. This reads it as one sentence per category so the behaviour is
+   obvious: the biggest doors in, which of them lead anywhere, and where people go afterwards. */
+function buyBehav(g){
+ const J=O.jour||{};const ST2=J.cat||{},ON=J.catON||{};
+ if(!Object.keys(ST2).length&&!Object.keys(ON).length)return;
+ const M=v=>'E£'+Math.round(v||0).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const nextOf=o=>{const nx=(o&&o.next)||[];if(!nx.length)return null;
+  const tot=nx.reduce((a,x)=>a+(x[1]||0),0);if(!tot)return null;
+  const top=nx.slice().sort((a,b)=>b[1]-a[1])[0];
+  return {c:top[0],sh:top[1]/tot*100};};
+ const build=(src,lab,col)=>{
+  const rows=Object.keys(src).map(k=>({c:k,o:src[k]})).filter(r=>r.o&&r.o.n>=40)
+   .sort((a,b)=>b.o.n-a.o.n).slice(0,8);
+  if(!rows.length)return '';
+  const tot=rows.reduce((a,r)=>a+r.o.n,0);
+  let h='<div style="flex:1;min-width:330px">'
+   +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:'+col+';margin-bottom:6px">'+lab+'</div>';
+  rows.forEach(r=>{const o=r.o,nx=nextOf(o);
+   const share=tot?o.n/tot*100:0;
+   const bar='<div style="height:4px;border-radius:3px;background:#eef1f7;margin:4px 0 5px"><div style="height:4px;border-radius:3px;background:'+col+';width:'+Math.max(2,Math.round(share))+'%"></div></div>';
+   h+='<div style="padding:7px 0;border-bottom:1px solid #eef0f5">'
+    +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">'
+     +'<span style="font-weight:800;font-size:12.5px">'+esc(r.c)+'</span>'
+     +'<span style="font-size:11.5px;color:#5b6478">'+N(o.n)+' customers started here <b>'+share.toFixed(0)+'%</b></span></div>'
+    +bar
+    +'<div style="font-size:11.5px;color:#26313f;line-height:1.55">'
+     +'<b style="color:'+(o.rep>=40?'#0f6e56':(o.rep>=25?'#8a5a1a':'#a3271a'))+'">'+Math.round(o.rep)+'% come back</b>'
+     +(o.med2?' · typically after <b>'+Math.round(o.med2)+' days</b>':'')
+     +(o.oyr?' · <b>'+(+o.oyr).toFixed(1)+'</b> orders a year':'')
+     +' · lifetime gross profit <b>'+M(o.ltgp)+'</b>'
+     +(nx?'<br><span style="color:#5b6478">then they buy <b>'+esc(nx.c)+'</b> ('+Math.round(nx.sh)+'% of what follows)</span>':'')
+    +'</div></div>';});
+  return h+'</div>';};
+ const body='<div style="display:flex;gap:18px;flex-wrap:wrap">'
+  +build(ST2,'In the shops — first purchase category','#0f6e56')
+  +build(ON,'Online — first purchase category','#5a5bf0')+'</div>';
+ /* the one-line read: biggest door vs stickiest door, both sides */
+ const best=(src)=>{const rs=Object.keys(src).map(k=>({c:k,o:src[k]})).filter(r=>r.o&&r.o.n>=40);
+  if(!rs.length)return null;
+  const big=rs.slice().sort((a,b)=>b.o.n-a.o.n)[0];
+  const sticky=rs.slice().sort((a,b)=>(b.o.rep||0)-(a.o.rep||0))[0];
+  return {big:big,sticky:sticky};};
+ const bS=best(ST2),bO=best(ON);
+ const verdict=(b,where)=>b?('<b>'+where+':</b> most people arrive through <b>'+esc(b.big.c)+'</b> ('+N(b.big.o.n)+' customers, '+Math.round(b.big.o.rep)+'% come back)'
+   +(b.sticky.c!==b.big.c?', but the category that actually keeps people is <b>'+esc(b.sticky.c)+'</b> at <b>'+Math.round(b.sticky.o.rep)+'%</b> repeat — worth pushing harder than its size suggests':', which is also the stickiest')+'. '):'';
+ pnlCard(g,'odoo','What customers actually buy — and what they do next'
+  +INFO('From the Odoo order history, by the category of a customer’s FIRST purchase: how many started there, how many ever came back, the median gap to that second order, orders a year, lifetime gross profit, and the category they most often buy next. The tills and the webstore are computed separately because they behave differently. Categories with fewer than 40 customers are not shown.'),
+  verdict(bS,'In store')+verdict(bO,'Online')
+  +'Read a row as a doorway: size is how many came in through it, the repeat number is whether it led anywhere, and “then they buy” is where they went.',body);
+}
 /* v8.3 — Customer Journeys + Budget Calls. Data: O.jour (Odoo order history),
    O.bev (Meta activity feed), O.mads[].d (per-ad 60d daily), O.cre (campaign reach). */
 function aD2(W,i){const d=new Date(W.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);}
@@ -12714,7 +12768,7 @@ function aoLv(v){ST.aoLvl=v;rAds();}
 function aoAc(v){ST.aoAcct=v;rAds();}
 function _jbars(arr,lab,fmt){const money=v=>Math.round(v).toLocaleString();const f=fmt||money;const mx=Math.max.apply(null,arr.concat([1]));
  return arr.map((v,i)=>'<div style="display:flex;align-items:center;gap:8px;margin:2px 0"><div style="width:150px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+lab(i)+'">'+lab(i)+'</div><div style="flex:1;background:#eef0f5;border-radius:5px;height:14px"><div style="width:'+(v/mx*100).toFixed(1)+'%;background:#5a5bf0;height:14px;border-radius:5px"></div></div><div style="width:100px;font-size:11px;text-align:right">'+f(v)+'</div></div>').join('');}
-function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16');g.innerHTML='';
+function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16');g.innerHTML='';try{buyBehav(g);}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{};const SC=J.scopes||{};
  document.getElementById('bn16').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Customer journeys from the REAL Odoo order history: what a first purchase turns into &mdash; repeat odds, time to the 2nd order, orders per year, lifetime value and gross profit, and what those customers go on to buy. Store scopes = registered-customer POS crawl; SHOPIFY = Shopify order history. No modelling anywhere in this tab except where a ratio is labelled with its own formula.';
@@ -14895,7 +14949,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-183301';
+const BUILD='20260915-184601';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
