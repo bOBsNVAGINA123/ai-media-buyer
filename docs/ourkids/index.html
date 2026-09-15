@@ -2540,7 +2540,19 @@ function glance(g,o){
   if(k==='amer'){const d5=document.getElementById('amerDrill');if(d5){d5.open=!d5.open;if(d5.open)d5.scrollIntoView({block:'center'});}return;}
   const dr=document.getElementById('tileDrawer');if(!dr)return;
   if(dr.dataset.k===k&&dr.style.display!=='none'){dr.style.display='none';dr.dataset.k='';return;}
-  dr.innerHTML=(window.__TD&&window.__TD[k])||'';dr.dataset.k=k;dr.style.display='';dr.scrollIntoView({block:'nearest'});};
+  /* v9.74: clicking the same tile always toggled, but there was no VISIBLE way out -- no
+     close control, and any re-render (date box, attribution) reset dataset.k so the next
+     click re-opened instead of closing. Give the drawer its own X, an Esc key, and a state
+     that survives re-render. */
+  dr.innerHTML='<div style="display:flex;justify-content:flex-end;margin:-2px -2px 4px 0">'
+   +'<button onclick="okTileClose()" title="Close (Esc)" style="border:1px solid #e6eaf2;background:#fff;border-radius:8px;cursor:pointer;font-size:11px;font-weight:800;color:#64748B;padding:3px 9px">\u2715 CLOSE</button></div>'
+   +((window.__TD&&window.__TD[k])||'');
+  dr.dataset.k=k;dr.style.display='';dr.scrollIntoView({block:'nearest'});};
+ window.okTileClose=function(){const dr=document.getElementById('tileDrawer');
+  if(dr){dr.style.display='none';dr.dataset.k='';dr.innerHTML='';}
+  const d5=document.getElementById('amerDrill');if(d5)d5.open=false;};
+ if(!window.__okEsc){window.__okEsc=1;
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')try{okTileClose();}catch(x){}});}
  const _tile=t=>'<div '+(t[6]?'onclick="okTileGo(\''+t[6]+'\')" title="Click to expand — online and branches, side by side" ':'')+'style="border:1px solid #e6eaf2;border-radius:11px;padding:10px 12px;background:#fff'+(t[6]?';cursor:pointer;box-shadow:inset 0 -2px 0 '+(t[6]==='amer'?'#5a5bf0':'#dfe4f2'):'')+'">'
   +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
   +'<div style="font-size:21px;font-weight:800;color:#161d2e;line-height:1.15;margin:2px 0 1px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
@@ -8341,6 +8353,41 @@ function bostaCard(g){
     y:{stacked:true,beginAtZero:true,grid:{color:'#eef0f5'},title:{display:true,text:'parcels handled',font:{size:10}},ticks:{font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(v<10000&&v%1000?1:0)+'k':v}}}}}));
 }
 
+/* v9.74: the four customer numbers for the shops, in the order they get asked for --
+   TOTAL receipts, then new, then returning, then the walk-in nobody captured -- each against
+   the previous window AND the same days last year. The daily till crawl carries all four
+   (walk-ins since v9.70), so no apportionment is involved unless the window runs off the end
+   of the 400-day crawl, which is labelled when it happens. */
+function bCustKPI(g){
+ const BD=O.bnrD;if(!BD||!BD._w)return;
+ const lyD=d=>((+d.slice(0,4)-1)+d.slice(4));
+ const pw=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
+ const K=(a,b)=>{try{const nc=okBranchNC(a,b,'nc'),rc=okBranchNC(a,b,'rc'),un=okBranchNC(a,b,'un');
+   if(!nc||!rc)return null;const u=(un&&un.v>0)?un.v:null;
+   return {nc:nc.v,rc:rc.v,un:u,tot:nc.v+rc.v+(u||0),est:!!nc.est};}catch(e){return null;}};
+ const C=K(ST.s,ST.e);if(!C)return;
+ const P=(pw&&pw[0])?K(pw[0],pw[1]):null, L=K(lyD(ST.s),lyD(ST.e));
+ const N=v=>v==null?'&mdash;':Math.round(v).toLocaleString();
+ const dl2=(c,p,lab)=>{if(c==null||p==null||!p)return '<div style="font-size:10.5px;color:#9aa3b5">'+lab+' &mdash;</div>';
+  const d=(c/p-1)*100;const col=Math.abs(d)<1?'#8a93a6':(d>=0?'#0f6e56':'#a3271a');
+  return '<div style="font-size:10.5px;font-weight:700;color:'+col+'">'+lab+' '+(d>=0?'\u25b2':'\u25bc')+' '+Math.abs(d).toFixed(0)+'%<span style="color:#9aa3b5;font-weight:600"> ('+N(p)+')</span></div>';};
+ const tile=(lab,cur,prev,ly,note)=>'<div style="flex:1;min-width:180px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e6eaf2">'
+  +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B;text-transform:uppercase">'+lab+'</div>'
+  +'<div style="font-size:27px;font-weight:800;line-height:1.15;margin:2px 0 4px">'+N(cur)+'</div>'
+  +dl2(cur,prev,'vs prev')+dl2(cur,ly,'vs LY')
+  +(note?'<div style="font-size:10px;color:#8a93a6;margin-top:5px">'+note+'</div>':'')+'</div>';
+ const body='<div style="display:flex;gap:10px;flex-wrap:wrap">'
+  +tile('Total receipts',C.tot,P&&P.tot,L&&L.tot,'registered + walk-ins')
+  +tile('New customers',C.nc,P&&P.nc,L&&L.nc,'first ever receipt at any branch')
+  +tile('Returning',C.rc,P&&P.rc,L&&L.rc,'came back and bought again')
+  +tile('Unregistered walk-ins',C.un,P&&P.un,L&&L.un,C.un==null?'needs the nightly till crawl':(C.tot?Math.round(C.un/C.tot*100)+'% of receipts have nobody attached':''))
+  +'</div>';
+ pnlCard(g,'odoo','Who walked in \u2014 the tills, '+ST.s+' \u2192 '+ST.e+''
+  +INFO('Counted per day from the POS crawl for the days you selected, for all seven branches together. Total = new + returning + walk-ins, so it reconciles to every receipt rung. New means first-ever receipt anywhere in the chain, not first at that branch. Walk-ins are receipts with no customer attached \u2014 they are in revenue and in no customer count.'),
+  (C.un==null?'<span style="color:#b8621b">Walk-ins land with the next nightly crawl.</span> ':'')
+  +(C.est?'<span style="color:#b8621b">Part of this window is older than the 400-day daily crawl, so its tail is apportioned from the monthly ledger.</span> ':'')
+  +'Against the previous window and the same days last year.',body);
+}
 function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_bnrAll();const names=Object.keys(O.pos||{}).sort();if(!BL.b||!names.length)return;
  const pw=cmpWr(ST.s,ST.e);
  const t0=new Date(BL.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
@@ -8746,7 +8793,7 @@ function yoyChannels(g){
     }catch(e){return '';}})(),
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+head+body+tot+'</table></div>'+note);
 }
-function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{idCapture(g);}catch(e){}try{yoyChannels(g);}catch(e){}
+function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{bCustKPI(g);}catch(e){}try{idCapture(g);}catch(e){}try{yoyChannels(g);}catch(e){}
  try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}
  try{offAudit(g);}catch(e){}try{promoCard(g);}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
  const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
@@ -14631,7 +14678,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-165253';
+const BUILD='20260915-170807';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
