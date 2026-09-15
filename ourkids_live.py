@@ -5909,6 +5909,32 @@ def build():
     off = json.load(open(offp)) if os.path.exists(offp) else json.loads(OFFLINE_JSON)
     off["meta"]["offlineValue"] = int(round(sum(meta.get("instoreMeta", {}).values()))) or off["meta"].get("offlineValue", 0)
     off["meta"]["offlinePur"] = int(round(sum(meta.get("metaOfflinePur", {}).values()))) or off["meta"].get("offlinePur", 0)
+    # v9.74 DO NOT CLOBBER THE NIGHT CRAWL. A light run reads prev at START and carries the
+    # heavy keys forward; if the heavy workflow commits while that light run is mid-flight,
+    # the light run then writes the OLD crawl back over it and the walk-ins / gross-vs-returns
+    # / cohort work is lost until the next night. Re-read the CURRENT published payload right
+    # before writing and keep whichever crawl is newer. Cheap: one fetch, once per light run.
+    if os.environ.get("SKIP_HEAVY"):
+        try:
+            with urllib.request.urlopen(
+                    "https://raw.githubusercontent.com/bOBsNVAGINA123/ai-media-buyer/main/docs/ourkids/data.js",
+                    timeout=90) as _r:
+                cur = _r.read().decode("utf-8", "ignore")
+            r0 = json.loads(cur[cur.index("window.O=") + 9: cur.index(";\nwindow.F=")])
+            def _wend(p):
+                w = ((p or {}).get("bnrD") or {}).get("_w") or {}
+                try: return datetime.date.fromisoformat(w["start"]) + datetime.timedelta(days=int(w["n"]) - 1)
+                except Exception: return None
+            mine, theirs = _wend(online), _wend(r0)
+            if theirs and (not mine or theirs > mine):
+                keep = ["bnrD", "bnr", "bstat", "bcoh", "bun", "cube", "dec", "decB", "hookV",
+                        "xchan", "mcross", "rtCohPack", "vinv", "bunr", "vmon", "pmon"]
+                took = [k for k in keep if r0.get(k)]
+                for k in took: online[k] = r0[k]
+                log("crawl rescue :: a newer heavy crawl landed mid-run (window", theirs.isoformat(),
+                    "vs ours", mine.isoformat() if mine else "none", ") -- kept", len(took), "heavy keys from it")
+        except Exception as e:
+            log("crawl rescue skipped", str(e)[:120])
     out = "window.O=" + json.dumps(online, separators=(",", ":"), ensure_ascii=True) + ";\n"
     out += "window.F=" + json.dumps(off, separators=(",", ":"), ensure_ascii=True) + ";"
     open(os.path.join(DOCS, "data.js"), "w").write(out)
