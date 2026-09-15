@@ -983,9 +983,39 @@ def pull_ga4_funnel(days=60):
     for p in pages:
         p.pop("tot", None)
         p["r"] = [round(v) for v in p["r"]]
+    # v9.72 THE PAGE TABLE IS A SAMPLE, NOT THE TOTAL. landingPagePlusQueryString explodes
+    # cardinality (every utm/variant is its own row), so the top-140 slice held only ~18% of
+    # Egypt sessions and purchases -- the dashboard read 32 purchases for 13 Sep when GA4's
+    # own total was 173, and printed it as the day's sales. Pull the TOTALS separately, with
+    # no page dimension, and let every headline number come from these instead.
+    tot = None
+    try:
+        tbody = {"dateRanges": [{"startDate": start, "endDate": end}],
+                 "dimensions": [{"name": "date"}],
+                 "metrics": body["metrics"],
+                 "dimensionFilter": body["dimensionFilter"],
+                 "limit": 5000}
+        treq = urllib.request.Request(
+            "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
+            data=json.dumps(tbody).encode(),
+            headers={"Authorization": "Bearer " + at, "Content-Type": "application/json"})
+        with urllib.request.urlopen(treq, timeout=120) as r:
+            td = json.loads(r.read())
+        tot = {k: [0] * days for k in ("s", "a", "c", "pu", "r", "u")}
+        for r2 in (td.get("rows") or []):
+            di = dix.get(r2["dimensionValues"][0].get("value"))
+            if di is None:
+                continue
+            v = [float(m.get("value") or 0) for m in r2["metricValues"]]
+            tot["s"][di] = int(v[0]); tot["a"][di] = int(v[1]); tot["c"][di] = int(v[2])
+            tot["pu"][di] = int(v[3]); tot["r"][di] = round(v[4]); tot["u"][di] = int(v[5])
+        log("ga4 totals (Egypt, no page dim): sessions", sum(tot["s"]), "purchases", sum(tot["pu"]),
+            "| page table covers", (round(100.0 * sum(sum(p["pu"]) for p in pages) / max(1, sum(tot["pu"])))), "% of them")
+    except Exception as e:
+        log("ga4 totals failed", str(e)[:160])
     log("ga4 funnel:", len(rows), "rows ->", len(pages), "pages, Egypt only,", days, "days")
     return {"start": start, "n": days, "prop": prop, "eg": 1,
-            "pulled": END.isoformat(), "pages": pages}
+            "pulled": END.isoformat(), "pages": pages, "tot": tot}
 
 
 def pull_cvr_routing():
