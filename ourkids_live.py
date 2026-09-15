@@ -990,10 +990,14 @@ def pull_ga4_funnel(days=60):
     # no page dimension, and let every headline number come from these instead.
     tot = None
     try:
+        # v9.77: NO country filter here. "Egypt only" was a stand-in for "no bots", but it
+        # also threw away real foreign buyers, and it asked the reader to trust the swap.
+        # Pull ALL traffic, then pull it again split by country so the dashboard can name the
+        # zero-order floods (Singapore 316,627 sessions / 0 orders in 14 days) and subtract
+        # exactly those instead of a whole continent.
         tbody = {"dateRanges": [{"startDate": start, "endDate": end}],
                  "dimensions": [{"name": "date"}],
                  "metrics": body["metrics"],
-                 "dimensionFilter": body["dimensionFilter"],
                  "limit": 5000}
         treq = urllib.request.Request(
             "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
@@ -1009,13 +1013,43 @@ def pull_ga4_funnel(days=60):
             v = [float(m.get("value") or 0) for m in r2["metricValues"]]
             tot["s"][di] = int(v[0]); tot["a"][di] = int(v[1]); tot["c"][di] = int(v[2])
             tot["pu"][di] = int(v[3]); tot["r"][di] = round(v[4]); tot["u"][di] = int(v[5])
-        log("ga4 totals (Egypt, no page dim): sessions", sum(tot["s"]), "purchases", sum(tot["pu"]),
+        log("ga4 totals (ALL traffic, no page dim): sessions", sum(tot["s"]), "purchases", sum(tot["pu"]),
             "| page table covers", (round(100.0 * sum(sum(p["pu"]) for p in pages) / max(1, sum(tot["pu"])))), "% of them")
     except Exception as e:
         log("ga4 totals failed", str(e)[:160])
-    log("ga4 funnel:", len(rows), "rows ->", len(pages), "pages, Egypt only,", days, "days")
+    cty = None
+    try:
+        cbody = {"dateRanges": [{"startDate": start, "endDate": end}],
+                 "dimensions": [{"name": "date"}, {"name": "country"}],
+                 "metrics": [{"name": "sessions"}, {"name": "ecommercePurchases"}],
+                 "limit": 100000}
+        creq = urllib.request.Request(
+            "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
+            data=json.dumps(cbody).encode(),
+            headers={"Authorization": "Bearer " + at, "Content-Type": "application/json"})
+        with urllib.request.urlopen(creq, timeout=120) as r:
+            cd = json.loads(r.read())
+        agg2 = {}
+        for r2 in (cd.get("rows") or []):
+            dv = r2["dimensionValues"]
+            di = dix.get(dv[0].get("value"))
+            if di is None:
+                continue
+            nm = dv[1].get("value") or "(not set)"
+            e = agg2.get(nm)
+            if e is None:
+                e = agg2[nm] = {"c": nm, "s": [0] * days, "pu": [0] * days, "tot": 0}
+            v = [float(m.get("value") or 0) for m in r2["metricValues"]]
+            e["s"][di] += int(v[0]); e["pu"][di] += int(v[1]); e["tot"] += v[0]
+        cty = sorted(agg2.values(), key=lambda x: -x["tot"])[:40]
+        for c in cty: c.pop("tot", None)
+        log("ga4 countries:", len(agg2), "->", len(cty), "kept ::",
+            ", ".join("%s %d/%d" % (c["c"], sum(c["s"]), sum(c["pu"])) for c in cty[:4]))
+    except Exception as e:
+        log("ga4 countries failed", str(e)[:160])
+    log("ga4 funnel:", len(rows), "rows ->", len(pages), "pages (Egypt-only page table),", days, "days")
     return {"start": start, "n": days, "prop": prop, "eg": 1,
-            "pulled": END.isoformat(), "pages": pages, "tot": tot}
+            "pulled": END.isoformat(), "pages": pages, "tot": tot, "cty": cty}
 
 
 def pull_cvr_routing():
@@ -4890,7 +4924,12 @@ def pull_vendor_inventory():
     Keyed by vendor code to join the vend rows (r['v'])."""
     inv = {}
     try:
-        for r in _page("product.template", [["qty_available", ">", 0]],
+        # v9.77: product.template.standard_price READS BACK 0.0 for this account (the value
+        # lives on the variant), so 24 vendors -- Jello, Dream, Cubs, Kabo ... -- reported
+        # zero stock cost and therefore no GMROI at all, and every vendor's tied-up capital
+        # was understated. Probe: template read = 0.0 while product.product read = 550.0 on
+        # the same item; Jello alone is E£750,759 of stock the tab was calling nothing.
+        for r in _page("product.product", [["qty_available", ">", 0]],
                        ["vendor_num", "qty_available", "standard_price", "list_price"], 5000, 300000):
             v = (r.get("vendor_num") or "").strip()
             if not v:
@@ -4910,7 +4949,8 @@ def pull_vendor_inventory():
         inv[v]["u"] = round(inv[v]["u"])
         inv[v]["c"] = round(inv[v]["c"])
         inv[v]["rt"] = round(inv[v]["rt"])
-    log("vendor inventory", len(inv), "vendors with stock on hand")
+    log("vendor inventory", len(inv), "vendors with stock on hand ::",
+        sum(1 for v in inv.values() if v["c"] > 0), "with a real cost value")
     return inv
 
 
@@ -5522,6 +5562,52 @@ def pull_promos():
                 else:
                     cell[3] += 1
             out["offMix"] = mix
+            # v9.76 LTGP AND STICKINESS PER CODE. The tab has always said a code cannot be
+            # followed to the customer because the coupon line carries no partner id -- but
+            # pmap above already resolves order -> partner, so the people behind a code ARE
+            # reachable. For each code take its distinct partners, then ask the ledger what
+            # those same people are worth in TOTAL (every branch receipt they have ever left,
+            # not just the coded one) and how many of them came back at all.
+            try:
+                cpart = {}
+                for oid, c in code.items():
+                    p = pmap.get(oid)
+                    if p and p != WALKIN:
+                        cpart.setdefault(c, set()).add(p)
+                allp = sorted({p for ps in cpart.values() for p in ps})
+                life = {}
+                for i in range(0, len(allp), 500):
+                    for row in (ogroup("report.pos.order",
+                                       [["partner_id", "in", allp[i:i + 500]]],
+                                       ["price_total", "margin", "order_id:count_distinct"],
+                                       ["partner_id"]) or []):
+                        pp = row.get("partner_id")
+                        ppid = pp[0] if isinstance(pp, list) else pp
+                        if not ppid:
+                            continue
+                        life[ppid] = (float(row.get("price_total") or 0),
+                                      float(row.get("margin") or 0),
+                                      int(row.get("order_id") or row.get("order_id_count") or 0))
+                ltv = {}
+                for c, ps in cpart.items():
+                    have = [life[p] for p in ps if p in life]
+                    if not have:
+                        continue
+                    n = len(have)
+                    rep = sum(1 for h in have if h[2] > 1)
+                    ltv[c] = [n, round(sum(h[0] for h in have) / n), round(sum(h[1] for h in have) / n),
+                              round(100.0 * rep / n, 1), round(sum(h[2] for h in have) / n, 2)]
+                # the yardstick: every registered POS customer, same fields, same method
+                if life:
+                    base = list(life.values())
+                    ltv["_ALL_CODED"] = [len(base), round(sum(h[0] for h in base) / len(base)),
+                                         round(sum(h[1] for h in base) / len(base)),
+                                         round(100.0 * sum(1 for h in base if h[2] > 1) / len(base), 1),
+                                         round(sum(h[2] for h in base) / len(base), 2)]
+                out["codeLTV"] = ltv
+                log("promos: lifetime value resolved for", len(ltv) - 1, "codes over", len(life), "customers")
+            except Exception as e:
+                log("promos codeLTV failed", str(e)[:140])
             log("promos: customer mix for", len(mix), "codes,",
                 len(pids), "partners first-seen resolved")
         except Exception as e:
