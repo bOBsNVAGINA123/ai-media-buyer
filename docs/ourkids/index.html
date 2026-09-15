@@ -2374,6 +2374,29 @@ function glance(g,o){
   ['NC AOV', M(o.ncaov[0]), pc(o.ncaov[0],o.ncaov[1]), true, 'what a first-time buyer spends','web','ncaov'],
   ['RC AOV', M(o.rcaov[0]), pc(o.rcaov[0],o.rcaov[1]), true, 'what they spend when they come back','web','rcaov']
  ];
+ /* v9.83: what the SAME budget claims it drove into the shops, so the webstore tiles are not
+    read as the whole return on that money. Moves with the offline attribution selector. */
+ const _offAtt=(function(){try{const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z');
+   const sum=(a,b)=>{let m=0,t=0,hit=false;
+    for(let d=Date.parse(a+'T00:00:00Z');d<=Date.parse(b+'T00:00:00Z');d+=864e5){
+     const i2=Math.round((d-t0)/864e5);
+     if(i2>=0&&i2<A.n){m+=(A.instoreMeta||[])[i2]||0;t+=(A.ttOffValue||[])[i2]||0;hit=true;}}
+    return hit?m*afo()+t*af('tt'):null;};
+   const w=cmpWr(ST.s,ST.e);
+   return {c:sum(ST.s,ST.e),p:(w&&w[0])?sum(w[0],w[1]):null};}catch(e){return null;}})();
+ /* v9.84: the money itself, and what each platform says it returned on its own slice of it.
+    Meta/Google ROAS are each platform's OWN claim over that platform's OWN spend, at the
+    attribution setting selected above -- so they are comparable to each other but never to
+    MER, which puts real revenue over the WHOLE budget. */
+ tiles.push(['Ad spend · total', M(o.sp[0]), pc(o.sp[0],o.sp[1]), false,
+   'Meta '+M(o.msp[0])+' · Google '+M(o.gsp[0])+(o.tsp&&o.tsp[0]?' · TikTok '+M(o.tsp[0]):''),'web','sp']);
+ if(o.mroas&&o.mroas[0])tiles.push(['Meta ROAS', (o.mroas[0]||0).toFixed(2)+'×',
+   pc(o.mroas[0],o.mroas[1]), true, 'Meta’s claim ÷ Meta spend ('+M(o.msp[0])+')','web','mroas']);
+ if(o.groas&&o.groas[0])tiles.push(['Google ROAS', (o.groas[0]||0).toFixed(2)+'×',
+   pc(o.groas[0],o.groas[1]), true, 'Google’s claim ÷ Google spend ('+M(o.gsp[0])+')','web','groas']);
+ if(_offAtt&&_offAtt.c)tiles.push(['Attributed in-store revenue', M(_offAtt.c),
+   _offAtt.p?pc(_offAtt.c,_offAtt.p):null, true,
+   'what this same ad money claims it drove into the shops','co','offatt']);
  if(_aud&&_aud.c&&_aud.c.tot){const AC=_aud.c,AP=_aud.p;
   const shr=v=>AC.tot?' · '+Math.round(v/AC.tot*100)+'% of Meta spend':'';
   tiles.push(
@@ -2581,6 +2604,20 @@ function glance(g,o){
      ?'This is <b>Meta\u2019s own split</b> \u2014 the same Engaged / Existing / New rows Ads Manager shows under an ad set, pulled daily through the user_segment_key breakdown, so it sees inside Advantage+ sets where targeting-spec guessing cannot. <b>Google cannot be split at all</b>: its audience lists run in observation mode, so Google reports zero cost against every audience row \u2014 that spend is real but carries no audience label. TikTok ships no per-audience feed.'
      :'Meta is split by each ad SET\u2019s included custom audiences: <b>existing</b> = a purchaser or customer-list audience, <b>engaged</b> = a cart / view / engagement audience, <b>new</b> = broad, interest or lookalike (a lookalike of buyers is still prospecting, and the broad sets EXCLUDE purchasers). <b>Google cannot be split at all</b> — its audience lists are attached in observation mode, so Google reports zero cost against every audience row; that spend is real, it simply carries no audience label. TikTok ships no per-audience feed. So read these three as \u201cthe Meta budget by intent\u201d, not as the whole account.');
    TD.audN=audD;TD.audE=audD;TD.audX=audD;}
+  if(typeof _offAtt!=='undefined'&&_offAtt&&_offAtt.c){TD.offatt=hd('Attributed in-store revenue '+M(_offAtt.c)+' — the claim, not the till')
+   +row('What the platforms say they drove in store',_offAtt.c,_offAtt.p,true,M(_offAtt.c))
+   +(_bRev!=null?row('What the tills actually took',_bRev,_bRevP,true,M(_bRev)+' — the claim is '+Math.round(_offAtt.c/_bRev*100)+'% of it'):'')
+   +row('All ad spend in this window',o.sp[0],o.sp[1],false,M(o.sp[0]))
+   +txt('Meta\u2019s in-store conversion value (plus TikTok offline events) at your offline attribution setting \u2014 shop sales it recognised as buyers it had reached, NOT the shops\u2019 POS takings. It moves with the attribution selector. Regression on this account shows Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled, so read it as a claim to audit, not as revenue the ads created.');}
+  TD.mroas=hd('Meta ROAS '+((o.mroas&&o.mroas[0])?o.mroas[0].toFixed(2)+'×':''))
+   +row('Meta spend',o.msp[0],o.msp[1],false,M(o.msp[0]))
+   +row('Meta’s claimed webstore value',o.msp[0]*(o.mroas?o.mroas[0]:0),(o.msp[1]&&o.mroas&&o.mroas[1])?o.msp[1]*o.mroas[1]:null,true,M(o.msp[0]*((o.mroas&&o.mroas[0])||0)))
+   +(_offAtt&&_offAtt.c?row('Meta’s claimed IN-STORE value (same spend)',_offAtt.c,_offAtt.p,true,M(_offAtt.c)):'')
+   +txt('Each platform scores its own homework: this is Meta’s reported value over Meta’s spend at the attribution you picked. It is never comparable with MER, which divides REAL revenue by the WHOLE budget — that is why MER is '+((o.mer&&o.mer[0])?o.mer[0].toFixed(2):'—')+'× while this reads higher. The honest cross-platform check is the accuracy card on <b>All platforms side by side</b>.');
+  TD.groas=hd('Google ROAS '+((o.groas&&o.groas[0])?o.groas[0].toFixed(2)+'×':''))
+   +row('Google spend',o.gsp[0],o.gsp[1],false,M(o.gsp[0]))
+   +row('Google’s claimed value',o.gsp[0]*((o.groas&&o.groas[0])||0),(o.gsp[1]&&o.groas&&o.groas[1])?o.gsp[1]*o.groas[1]:null,true,M(o.gsp[0]*((o.groas&&o.groas[0])||0)))
+   +txt('Google’s own reported conversion value over Google spend, at the attribution model selected above. Google cannot split this by audience type — its lists run in observation mode — so there is no new/engaged/existing version of this number.');
   TD.merc=hd('MER whole business '+(BA?BA.mer.toFixed(2)+'×':'')+' = (webstore + branches) ÷ ALL spend')
    +row('Webstore net',o.net[0],o.net[1],true,M(o.net[0]))
    +(BA?row('Branch tills (daily, net of VAT)',BA.storeRev,BAp&&BAp.storeRev,true,M(BA.storeRev)):'')
@@ -4006,12 +4043,17 @@ function merHeat(g){
   const gross=net+canc;
   const nc=(A.ncrev||[])[i]||0;
   const share=net>0?nc/net:0;                     /* cancelled baskets split like the day's own mix */
-  const claim=(((A.mecomrev||[])[i]||0)*mf)+(((A.gecomrev||[])[i]||0)*gf)+(((A.ttValue||[])[i]||0)*tf);
+  const claimOn=(((A.mecomrev||[])[i]||0)*mf)+(((A.gecomrev||[])[i]||0)*gf)+(((A.ttValue||[])[i]||0)*tf);
+  /* what the platforms say they drove INTO THE SHOPS on the same money -- Meta's in-store
+     conversion value at the offline attribution setting, plus TikTok's offline events */
+  const claimOff=(((A.instoreMeta||[])[i]||0)*afo())+(((A.ttOffValue||[])[i]||0)*tf);
   const keep=gross>0?net/gross:1;                  /* what share of placed demand survived */
   return {sp:sp,net:net,gross:gross,canc:canc,cxr:gross?canc/gross*100:0,
    merB:sp?gross/sp:null, merA:sp?net/sp:null,
    amerB:sp?(nc+canc*share)/sp:null, amerA:sp?nc/sp:null,
-   roasB:sp?claim/sp:null, roasA:sp?claim*keep/sp:null};};
+   roasOn:sp?claimOn*keep/sp:null, roasOff:sp?claimOff/sp:null,
+   roasAll:sp?(claimOn*keep+claimOff)/sp:null,
+   roasB:sp?claimOn/sp:null, roasA:sp?claimOn*keep/sp:null};};
  const days=[];for(let d=Date.parse(ST.s+'T00:00:00Z');d<=Date.parse(ST.e+'T00:00:00Z');d+=864e5)days.push(d);
  const CAP=93;const clipped=days.length>CAP;const use=clipped?days.slice(-CAP):days;
  const rows=use.map(ms=>{const r=dayRow(ms);if(!r)return null;
@@ -4023,17 +4065,24 @@ function merHeat(g){
  const prev=off?{}:null;
  if(off)rows.forEach(r=>{const p=dayRow(Date.parse(r.d+'T00:00:00Z')-off*864e5);if(p)prev[r.d]=p;});
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
- const heat=(v)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
+ /* v9.83 A REAL HEAT MAP: the cell IS the colour. No pills, no second line dangling under the
+    number. The ramp runs continuously either side of break-even so variation between 3x and 5x
+    is visible instead of everything below 6.19x reading as one flat red. */
+ const heat=(v)=>{if(v==null)return 'background:#fafbfd;color:#c9ccd6';
   const r=v/be;
-  return r>=1.5?'background:#0b5d49;color:#fff':r>=1.25?'background:#0f6e56;color:#fff'
-        :r>=1?'background:#dcf3e8;color:#0f6e56':r>=0.85?'background:#fdeed9;color:#8a5a1a'
-        :r>=0.6?'background:#fbdde5;color:#a3271a':'background:#f3b8c6;color:#6d1a12';};
+  const S=[[1.40,'#0a5c46','#ffffff'],[1.20,'#12855f','#ffffff'],[1.05,'#35a177','#ffffff'],
+           [0.95,'#8ecdb0','#10352a'],[0.85,'#cfe8d9','#14483a'],[0.75,'#fdf0cf','#6b5312'],
+           [0.65,'#fbdcb0','#6b4712'],[0.55,'#f8c3a8','#6b2f12'],[0.45,'#f3a394','#5f1c14'],
+           [0.00,'#e4786c','#ffffff']];
+  for(const s of S)if(r>=s[0])return 'background:'+s[1]+';color:'+s[2];
+  return 'background:#e4786c;color:#fff';};
  const TD='padding:4px 6px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px';
  const TH='padding:5px 6px;border-bottom:2px solid #e2e6ef;font-size:9px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const cell=(v,pv)=>{const d=(pv!=null&&pv&&v!=null)?((v/pv-1)*100):null;
-  return '<td style="'+TD+'"><span style="display:inline-block;min-width:46px;text-align:center;border-radius:6px;padding:2px 5px;font-weight:800;'+heat(v)+'">'
-   +(v==null?'—':v.toFixed(2)+'×')+'</span>'
-   +(d!=null?'<div style="font-size:8.5px;font-weight:700;color:'+(Math.abs(d)<2?'#8a93a6':(d>=0?'#0f6e56':'#a3271a'))+'">'+(d>=0?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>':'')+'</td>';};
+  return '<td style="'+TD+';text-align:center;padding:5px 7px;'+heat(v)+'">'
+   +'<span style="font-weight:800">'+(v==null?'—':v.toFixed(2)+'×')+'</span>'
+   +(d!=null?'<span style="opacity:.72;font-size:9px;font-weight:700;margin-left:5px">'+(d>=0?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>':'')
+   +'</td>';};
  let b='';
  rows.forEach(r=>{const p=prev?prev[r.d]:null;const wk=(r.wd===5||r.wd===6);
   b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
@@ -4041,24 +4090,25 @@ function merHeat(g){
    +'<td style="'+TD+'">'+M(r.sp)+'</td>'
    +cell(r.merB,p&&p.merB)+cell(r.merA,p&&p.merA)
    +cell(r.amerB,p&&p.amerB)+cell(r.amerA,p&&p.amerA)
-   +cell(r.roasB,p&&p.roasB)+cell(r.roasA,p&&p.roasA)
+   +cell(r.roasOn,p&&p.roasOn)+cell(r.roasOff,p&&p.roasOff)+cell(r.roasAll,p&&p.roasAll)
    +'<td style="'+TD+';color:'+(r.cxr>=12?'#a3271a':'#5b6478')+'">'+r.cxr.toFixed(1)+'%</td></tr>';});
  const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
  const tSp=T('sp'),tNet=T('net'),tGross=T('gross'),tCanc=T('canc');
  const tot={sp:tSp,merB:tSp?tGross/tSp:null,merA:tSp?tNet/tSp:null,
   amerB:null,amerA:null,roasB:null,roasA:null};
  const wavg=k=>{let n=0,d=0;rows.forEach(r=>{if(r[k]!=null){n+=r[k]*r.sp;d+=r.sp;}});return d?n/d:null;};
- tot.amerB=wavg('amerB');tot.amerA=wavg('amerA');tot.roasB=wavg('roasB');tot.roasA=wavg('roasA');
+ tot.amerB=wavg('amerB');tot.amerA=wavg('amerA');
+ tot.roasOn=wavg('roasOn');tot.roasOff=wavg('roasOff');tot.roasAll=wavg('roasAll');
  b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
   +'<td style="'+TD+'">'+M(tSp)+'</td>'
   +cell(tot.merB,null)+cell(tot.merA,null)+cell(tot.amerB,null)+cell(tot.amerA,null)
-  +cell(tot.roasB,null)+cell(tot.roasA,null)
+  +cell(tot.roasOn,null)+cell(tot.roasOff,null)+cell(tot.roasAll,null)
   +'<td style="'+TD+'">'+(tGross?(tCanc/tGross*100).toFixed(1):'0')+'%</td></tr>';
  const head='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
   +'<th style="'+TH+'" colspan="2">MER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after cancellations</div></th>'
   +'<th style="'+TH+'" colspan="2">aMER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after</div></th>'
-  +'<th style="'+TH+'" colspan="2">Blended ROAS<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after</div></th>'
+  +'<th style="'+TH+'" colspan="3">Blended ROAS<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">online | in-store | both</div></th>'
   +'<th style="'+TH+'">Cancel<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">% of demand</div></th></tr>'
   +b+'</table></div>';
  pnlCard(g,'blend','Every day, heat-mapped — MER, aMER and blended ROAS, before and after cancellations'
@@ -4067,8 +4117,9 @@ function merHeat(g){
   +(clipped?' (last '+CAP+' of a longer range)':'')
   +' · break-even <b>'+be.toFixed(2)+'×</b> · '
   +'<a href="javascript:void(0)" onclick="window.MHCMP=(window.MHCMP===0?1:0);rTab()" style="color:#5a5bf0;font-weight:800">'+(CMP?'☑':'☐')+' compare vs '+((pw&&pw[0])?pw[0]+' → '+pw[1]:'previous')+'</a>'
-  +' — the small arrow under each cell is that day against the same day of the compare window. '
-  +'Dark green = 50%+ clear of break-even · green = above it · amber = within 15% below · red = under water. Fridays and Saturdays shaded.',head);
+  +' — the small arrow inside each cell is that day against the same day of the compare window. '
+  +'<b>The three ROAS columns:</b> <b>online</b> = what Meta + Google + TikTok claim they drove on the webstore (discounted by that day\u2019s cancellations), <b>in-store</b> = what they claim they drove into the shops at your offline attribution setting, <b>both</b> = the two added. '
+  +'Colour runs continuously against break-even '+be.toFixed(2)+'\u00d7: deep green is 40%+ clear of it, pale green just above, sand just below, red well under water. Fridays and Saturdays are shaded on the day column.',head);
 }
 function dailyBE(g){
  const A=O.ad,F=O.fin;if(!A||!F)return;
@@ -14956,7 +15007,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-185136';
+const BUILD='20260915-185910';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
