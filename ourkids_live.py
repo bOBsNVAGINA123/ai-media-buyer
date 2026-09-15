@@ -110,6 +110,15 @@ def pull_odoo():
         except Exception: continue
         daily[d] = {"rev": r.get("amount_total") or 0, "gp": r.get("margin") or 0,
                     "orders": r.get("__count", 0) or 0}
+    # v9.86 UNITS ONLINE, so AOV can be read as items-per-basket x price-per-item rather than as
+    # one number with no explanation. Line level, because the order header carries no quantity.
+    for r in ogroup("sale.order.line",
+                    [["order_id.state", "in", st], ["order_id.date_order", ">=", FIN_START + " 00:00:00"],
+                     ["display_type", "=", False], ["product_id", "not in", [24]]],   # 24 = the Shopify shipping line
+                    ["product_uom_qty"], ["order_id.date_order:day"]):
+        try: d = dkey(r["order_id.date_order:day"])
+        except Exception: continue
+        if d in daily: daily[d]["qty"] = (daily[d].get("qty") or 0) + (r.get("product_uom_qty") or 0)
     rf = ogroup("account.move",
         [["move_type", "=", "out_refund"], ["state", "=", "posted"], ["invoice_date", ">=", FIN_START]],
         ["amount_total"], ["invoice_date:day"])
@@ -150,6 +159,7 @@ def pull_odoo():
            "gp": [k(daily.get(d, {}).get("gp", 0)) for d in ds],
            "refund": [k(refund.get(d, 0)) for d in ds],
            "orders": [int(daily.get(d, {}).get("orders", 0)) for d in ds],
+           "qty": [int(round(daily.get(d, {}).get("qty", 0))) for d in ds],
            "chD": {c: [k(chD[c].get(d, 0)) for d in ds] for c in chD},
            "cxv": [k(cx.get(d, 0)) for d in ds],
            "cxn": [int(cxn.get(d, 0)) for d in ds],
@@ -2460,7 +2470,11 @@ def pull_pos_customers():
             m = d[:7]
             c = bnr.setdefault(br, {}).setdefault(m, {"nc": 0, "ng": 0, "rc": 0, "rg": 0})
             cd = bnrd.setdefault(br, {}).setdefault(d, {"nc": 0, "rc": 0, "nrev": 0, "rrev": 0, "nord": 0, "rord": 0,
-                                                          "grev": 0, "retv": 0})
+                                                          "grev": 0, "retv": 0, "nqty": 0, "rqty": 0})
+            # v9.86 UNITS. An AOV on its own explains nothing: AOV = items per basket x price per
+            # item, and the two move for completely different reasons (a repeat buyer picking up
+            # one cheap top is not the same problem as one buying fewer of the same goods).
+            # report.pos.order already hands back product_qty per line, so carry it per day.
             # v9.71: POS revenue is already NET -- returns ride along as negative lines, so the
             # audit could never show "before returns / after returns". Split the two here.
             if rv >= 0: cd["grev"] += round(rv)
@@ -2472,8 +2486,10 @@ def pull_pos_customers():
             # v6.5: revenue and order counts split by FIRST-DAY (a customer's whole first-day basket
             # is new-customer money, not just its first line -- ng/rg kept as-is for continuity)
             isFD = first[pid][0] == d and first[pid][1] == br
-            if isFD: c["nrev"] = c.get("nrev", 0) + round(rv); cd["nrev"] += round(rv)
-            else: c["rrev"] = c.get("rrev", 0) + round(rv); cd["rrev"] += round(rv)
+            if isFD:
+                c["nrev"] = c.get("nrev", 0) + round(rv); cd["nrev"] += round(rv); cd["nqty"] += qy
+            else:
+                c["rrev"] = c.get("rrev", 0) + round(rv); cd["rrev"] += round(rv); cd["rqty"] += qy
             if newOrd:
                 if isFD: c["nord"] = c.get("nord", 0) + 1; cd["nord"] += 1
                 else: c["rord"] = c.get("rord", 0) + 1; cd["rord"] += 1
@@ -2784,7 +2800,7 @@ def pull_pos_customers():
         _d0 = END - datetime.timedelta(days=399); _n = (END - _d0).days + 1
         bnrDaily = {}
         for _br, _days in bnrd.items():
-            _z = {k: [0] * _n for k in ("nc", "rc", "nrev", "rrev", "nord", "rord", "grev", "retv")}
+            _z = {k: [0] * _n for k in ("nc", "rc", "nrev", "rrev", "nord", "rord", "grev", "retv", "nqty", "rqty")}
             for _ds, _v in _days.items():
                 try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
                 except Exception: continue
@@ -5792,7 +5808,7 @@ def build():
         try:
             bd = pv.get("bnrD") or {}
             br = [v for k, v in bd.items() if k != "_w" and isinstance(v, dict)]
-            if br and not all(("un" in b and "grev" in b) for b in br[:3]):
+            if br and not all(("un" in b and "grev" in b and "nqty" in b) for b in br[:3]):
                 return "bnrD missing walk-ins / till-gross"
             iv = (pv.get("vinv") or {})
             if iv and sum(1 for v in iv.values() if (v or {}).get("c")) < 0.6 * len(iv):
