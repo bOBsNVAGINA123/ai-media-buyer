@@ -2585,7 +2585,7 @@ function glance(g,o){
     'share of ALL till receipts','co','mixb'],
    ['Unregistered % · branches', unPct!=null?unPct.toFixed(0)+'%':'—',
     (_unrW&&_unrW.shP)?pc(unPct,_unrW.shP):null, false,
-    unPct!=null?'receipts with nobody attached — the three add to 100%':'needs the nightly till crawl','co','mixb']);}
+    unPct!=null?'receipts with nobody attached — the three add to 100% · '+src:'needs the nightly till crawl','co','mixb']);}
  if(_unrW)tiles.push(['Unregistered · branches',N(Math.round(_unrW.u)),
    (_unrW.uP&&_unrW.uP>0)?((_unrW.u/_unrW.uP-1)*100):null,false,
    (_unrW.sh!=null?_unrW.sh.toFixed(0)+'% of receipts have NO identity attached':'walk-ins the till never captured')
@@ -15140,7 +15140,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-193021';
+const BUILD='20260915-211818';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
