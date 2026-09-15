@@ -5735,7 +5735,28 @@ def build():
             return True
     _needed = _bnrd_stale(prev) or not (prev.get("bnrD")) or not (prev.get("hookV")) or not (prev.get("decB")) or not (prev.get("bnr")) or not (prev.get("bun")) or not (prev.get("dec")) or not (prev.get("xchan")) or not ((prev.get("jour") or {}).get("cat")) or not (prev.get("mcross")) or not (prev.get("cube")) or not (((prev.get("cube") or {}).get("scopes") or {}).get("ALL STORES")) or _cube_old(prev) or not any(
         r.get("ct") for rs in (prev.get("dec") or {}).values() for r in (rs or []))
-    heavy = os.environ.get("FORCE_CRAWL") == "1" or (_needed and (not os.environ.get("SKIP_HEAVY") or _bnrd_stale_days(prev, 3)))
+    # v9.78: the date check alone is blind to SHAPE. When the crawl learns a new field (walk-ins
+    # v9.70, till gross/returns v9.71) or a pull is corrected (vendor cost read from the variant
+    # v9.77), the stored payload is still "current" by date, so heavy never fired and the new
+    # columns stayed empty while every run reported success. Trigger on missing shape too; each
+    # check switches itself off as soon as the data it wants exists.
+    def _thin(pv):
+        try:
+            bd = pv.get("bnrD") or {}
+            br = [v for k, v in bd.items() if k != "_w" and isinstance(v, dict)]
+            if br and not all(("un" in b and "grev" in b) for b in br[:3]):
+                return "bnrD missing walk-ins / till-gross"
+            iv = (pv.get("vinv") or {})
+            if iv and sum(1 for v in iv.values() if (v or {}).get("c")) < 0.6 * len(iv):
+                return "vendor stock cost mostly zero (template-vs-variant read)"
+            if not ((pv.get("promo") or {}).get("codeLTV")):
+                return "promo codeLTV missing"
+        except Exception:
+            pass
+        return None
+    _shape = _thin(prev)
+    if _shape: log("heavy crawl forced ::", _shape)
+    heavy = os.environ.get("FORCE_CRAWL") == "1" or bool(_shape) or (_needed and (not os.environ.get("SKIP_HEAVY") or _bnrd_stale_days(prev, 3)))
     if heavy:
         _bc = safe(pull_pos_customers) or ({}, {}, {}, {})
         bnr, bstat, bcoh, bun = _bc if isinstance(_bc, tuple) and len(_bc) == 4 else ({}, {}, {}, {})
