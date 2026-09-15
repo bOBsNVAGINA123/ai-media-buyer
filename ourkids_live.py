@@ -752,7 +752,7 @@ def pull_shopify(win):
     return out
 
 CVR_DAYS = 14      # default window, matches the "CVR routing" report the team exports by hand
-CVR_WINDOWS = (3, 7, 14, 30, 60, 90)   # every window the tab can be switched to, each pulled at its own grain -- v9.37 widened so the date-box snap is never far off
+CVR_WINDOWS = (1, 3, 7, 14, 30, 60, 90)   # every window the tab can be switched to, each pulled at its own grain -- v9.37 widened so the date-box snap is never far off
 CVR_LIMIT = 2500   # landing pages kept per window, ordered by sessions desc
 CVR_TY = ["Homepage", "Product", "Collection", "Custom Page", "Blog Article",
           "Search", "Cart", "Checkout", "Other"]
@@ -988,6 +988,41 @@ def pull_ga4_funnel(days=60):
             "pulled": END.isoformat(), "pages": pages}
 
 
+def _cvr_sources(days, country=None):
+    """Per-landing-page referrer mix. Traffic Routing could say an ad was NOT the
+    source but had nothing to put in its place, so every zero-converting page read as
+    a mystery. Shopify knows: referrer_source (direct/social/search/email/unknown) and
+    referrer_name (facebook/instagram/google/...). This is also the only way to see a
+    scraper - a collection page that jumps from 2 sessions a day to 15,000, all
+    'direct', with zero cart additions, is a bot inflating the denominator behind every
+    conversion rate on the site."""
+    where = (" WHERE session_country = '%s'" % country.replace("'", "")) if country else ""
+    ql = ("FROM sessions SHOW sessions, sessions_that_completed_checkout "
+          "GROUP BY landing_page_path, referrer_source, referrer_name" + where +
+          " SINCE -%dd UNTIL today ORDER BY sessions DESC LIMIT 5000" % days)
+    rows = shopify_ql(ql, "cvrsrc%dd%s" % (days, country or ""))
+    if not rows:
+        return None
+    out = {}
+    for r in rows:
+        p = (r.get("landing_page_path") or "").strip()
+        if not p:
+            continue
+        src = (r.get("referrer_source") or "unknown").strip() or "unknown"
+        nm = (r.get("referrer_name") or "").strip()
+        try: sess = int(float(r.get("sessions") or 0))
+        except Exception: sess = 0
+        try: ords = int(float(r.get("sessions_that_completed_checkout") or 0))
+        except Exception: ords = 0
+        if sess <= 0:
+            continue
+        out.setdefault(p, []).append([src, nm, sess, ords])
+    # keep the page list tight - top sources per page, biggest first
+    for p in list(out.keys()):
+        out[p] = sorted(out[p], key=lambda x: -x[2])[:6]
+    log("cvr sources", str(days) + "d", country or "all", "pages", len(out))
+    return out
+
 def pull_cvr_routing():
     """The "CVR routing" Shopify report, pulled instead of exported by hand.
 
@@ -1010,11 +1045,22 @@ def pull_cvr_routing():
         we = _cvr_window(d, "Egypt")
         if we:
             wins[str(d) + "eg"] = we
+    # referrer mix on the windows the tab actually opens on
+    srcs = {}
+    for d in (1, 3, 7, 14):
+        try:
+            _s = _cvr_sources(d, "Egypt")
+            if _s: srcs[str(d) + "eg"] = _s
+            _sa = _cvr_sources(d)
+            if _sa: srcs[str(d)] = _sa
+        except Exception as e:
+            log("cvr sources %dd failed (%s)" % (d, str(e)[:90]))
     base = wins.get(str(CVR_DAYS)) or (list(wins.values())[0] if wins else None)
     if not base:
         log("cvr routing :: no rows -- keeping whatever data.js already had")
         return
     P = dict(base)
+    P["src"] = srcs
     try:
         handles = []
         for w in wins.values():
