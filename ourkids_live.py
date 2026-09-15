@@ -508,6 +508,53 @@ def _meta_incremental(acct, c0, c1, tok):
         off += _avw(av, ("offline_conversion.purchase",), "incrementality")
     return (pix, off), ""
 
+def pull_meta_segments(win):
+    """v9.80 SPEND BY AUDIENCE SEGMENT, straight from Meta. Ads Manager splits an ad set three
+    ways -- Engaged audience / Existing customers / New audience -- and the API exposes exactly
+    that as the `user_segment_key` breakdown (verified live on act_336343742536460: one ad set
+    returned engaged EGP42,106 at 9.15 ROAS). The dashboard used to INFER this from each ad
+    set\u2019s targeting spec, which cannot see inside an Advantage+ set and therefore reported
+    engaged spend as zero while Meta itself was reporting plenty. Daily, so any window sums."""
+    tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
+    out = {k: {d: 0.0 for d in win} for k in ("segNew", "segEng", "segExist")}
+    val = {k: {d: 0.0 for d in win} for k in ("segNewV", "segEngV", "segExistV")}
+    out.update(val)
+    if not tok:
+        return out
+    KEY = {"new": ("segNew", "segNewV"), "engaged": ("segEng", "segEngV"),
+           "existing": ("segExist", "segExistV")}
+    for acct in meta_accounts(tok):
+        a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
+        while a <= endd:
+            b = min(endd, a + datetime.timedelta(days=89))
+            p = {"level": "account", "access_token": tok,
+                 "time_range": json.dumps({"since": a.isoformat(), "until": b.isoformat()}),
+                 "time_increment": 1, "breakdowns": "user_segment_key",
+                 "fields": "spend,action_values", "limit": 500}
+            d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
+            rows = (d or {}).get("data")
+            if rows is None:
+                log("meta segments :: unavailable ::", str((d or {}).get("error", {}))[:140]); return out
+            for r in rows:
+                day = r.get("date_start")
+                if day not in out["segNew"]:
+                    continue
+                seg = str(r.get("user_segment_key") or "").lower()
+                k = None
+                for name, pair in KEY.items():
+                    if name in seg: k = pair; break
+                if not k:
+                    continue
+                out[k[0]][day] += float(r.get("spend") or 0)
+                for av in (r.get("action_values") or []):
+                    if av.get("action_type") in ("omni_purchase", "offsite_conversion.fb_pixel_purchase"):
+                        out[k[1]][day] += float(av.get("value") or 0); break
+            a = b + datetime.timedelta(days=1)
+    tot = {k: round(sum(v.values())) for k, v in out.items() if not k.endswith("V")}
+    log("meta segments ::", tot)
+    return out
+
+
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
     ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
@@ -5634,6 +5681,7 @@ def build():
     bl = safe(pull_branches)
     prod = safe(pull_products) or []
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
+    mseg = safe(pull_meta_segments, win) or {}
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
@@ -5881,6 +5929,9 @@ def build():
         return [round(m.get(d, 0), 2) if dec else int(round(m.get(d, 0))) for d in win]
     ad = {"start": win[0], "n": len(win),
           "mspend": arr(meta, "mspend"), "gspend": arr(goog, "gspend"), "tspend": arr(tik, "tspend"),
+          # v9.80 Meta's OWN audience split (Engaged / Existing / New), daily -- see pull_meta_segments
+          "segNew": arr(mseg, "segNew"), "segEng": arr(mseg, "segEng"), "segExist": arr(mseg, "segExist"),
+          "segNewV": arr(mseg, "segNewV"), "segEngV": arr(mseg, "segEngV"), "segExistV": arr(mseg, "segExistV"),
           "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"), "gconv": arr(goog, "gconv"),
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
           "metaOmniValue": arr(meta, "metaOmniValue"), "instoreMeta": arr(meta, "instoreMeta"),
