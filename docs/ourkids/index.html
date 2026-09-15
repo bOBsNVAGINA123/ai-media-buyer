@@ -2188,16 +2188,23 @@ function ga4Win(a,b){try{const G=O.ga4;if(!G)return null;
      named rather than assumed -- measured 14 days: Singapore 316,627 sessions / 0 orders,
      Brazil 51,280 / 0, against Egypt 315,746 / 2,915. Countries that do buy stay in, however
      small (UK: 7,150 / 1). */
-  let bots=0,botL=[],eg=null,keep=0;
+  /* v9.82: NEVER subtract one GA4 query from another. The country breakdown and the unfiltered
+     totals are separate reports that do not reconcile -- measured on a 7-day window, country
+     rows summed 506,962 while the totals pull said 382,415 (GA4 thresholds plus its "(other)"
+     bucket). "Total minus bots" therefore left 15,275 sessions and printed ATC at 101%. Real
+     sessions now come ENTIRELY from the country query: the countries that actually bought.
+     Event counts stay from the totals query, which is sound because the excluded countries
+     generate no add-to-carts, checkouts or purchases at all. */
+  let bots=0,botL=[],eg=null,keep=0,keepPu=0;
   (G.cty||[]).forEach(c=>{let cs=0,cp=0;for(let k=i0;k<=i1;k++){cs+=(c.s||[])[k]||0;cp+=(c.pu||[])[k]||0;}
    if(!cs)return;
    if(c.c==='Egypt')eg={s:cs,pu:cp};
-   if(cp===0&&cs>=200){bots+=cs;botL.push({c:c.c,s:cs});}else keep+=cs;});
+   if(cp===0&&cs>=200){bots+=cs;botL.push({c:c.c,s:cs});}else{keep+=cs;keepPu+=cp;}});
   botL.sort((a,b)=>b.s-a.s);
-  const real=(G.cty&&G.cty.length)?Math.max(1,s-bots):s;
+  const real=(keep>0)?keep:s;
   return s?{s:real,sAll:s,bots:bots,botL:botL,eg:eg,pu:pu,rev:r,atc:a2,cko:c2,
-            cvr:pu/real*100,clip:(i1-i0+1)<want,
-            pageCov:s?ps/s*100:null,pagePu:ppu,full:true,clean:!!(G.cty&&G.cty.length)}:null;}
+            cvr:real?pu/real*100:null,clip:(i1-i0+1)<want,
+            pageCov:s?ps/s*100:null,pagePu:ppu,full:true,clean:keep>0}:null;}
  if(!G.pages||!G.pages.length)return null;
  let s=0,pu=0,r=0;G.pages.forEach(p=>{for(let k=i0;k<=i1;k++){s+=(p.s||[])[k]||0;pu+=(p.pu||[])[k]||0;r+=(p.r||[])[k]||0;}});
  return s?{s:s,pu:pu,rev:r,cvr:pu/s*100,clip:(i1-i0+1)<want,full:false}:null;}catch(e){return null;}}
@@ -2378,7 +2385,7 @@ function glance(g,o){
     (_audSrc==='meta'?'Meta’s own Existing-customers split':'Meta buyers — purchaser audiences (inferred)')+shr(AC.existing),'web','audX']);}
  if(_g4&&_g4.c)tiles.push(
   ['Sessions · real', N(_g4.c.s), _g4.p?pc(_g4.c.s,_g4.p.s):null, true,
-   (_g4.c.clean?'GA4 all traffic minus '+N(_g4.c.bots)+' bot sessions ('+(_g4.c.botL||[]).slice(0,2).map(x=>x.c).join(', ')+(((_g4.c.botL||[]).length>2)?'…':'')+' \u2014 zero orders)':'GA4, Egypt only')+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
+   (_g4.c.clean?'GA4 \u2014 only countries that actually order; '+N(_g4.c.bots)+' sessions from '+(_g4.c.botL||[]).slice(0,2).map(x=>x.c).join(', ')+(((_g4.c.botL||[]).length>2)?' and others':'')+' excluded (zero orders)':'GA4 sessions, unfiltered')+(_g4.c.full?'':' \u00b7 SAMPLE: page-table pull, not the property total')+(_g4.c.clip?' \u00b7 clipped to GA4 history':''),'web','sessg']);
  /* v9.75: the funnel leads the scoreboard. Three rates, same denominator (Egypt sessions),
     so they read as one ladder: of everyone who arrived, how many put something in the basket,
     how many started checkout, how many paid. Rates only \u2014 the counts behind them are in
@@ -2987,7 +2994,7 @@ function glanceFold(g,keepFirst){
   });
  });
 }
-function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{merHeat(g);}catch(e){}try{glance(g,o);}catch(e){}try{orderLadder(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
+function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElementById('g1');g.innerHTML='';try{glance(g,o);}catch(e){}try{merHeat(g);}catch(e){}try{orderLadder(g,o);}catch(e){}try{dailyBE(g);}catch(e){}try{netSplitCard(g);}catch(e){}
  try{alertBand(g);}catch(e){}
  try{merDaily(g);}catch(e){}
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> → '+ST.e+' · vs '+o.cs+' → '+o.ce;
@@ -14949,7 +14956,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-184601';
+const BUILD='20260915-185136';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
