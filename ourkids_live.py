@@ -2380,7 +2380,7 @@ def anon_partner_ids():
 def pull_pos_customers():
     """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
-    bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}
+    bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}; bunv = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
     VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
@@ -2426,6 +2426,10 @@ def pull_pos_customers():
                         # printed "no prior". Counting the anonymous receipts per day removes the
                         # apportionment entirely.
                         bund.setdefault(br, {}).setdefault(r["date"][:10], set()).add(oid)
+                        # v9.88: and what those anonymous receipts were WORTH. Without it the
+                        # walk-in leg has a count and no money, so a fifth of till receipts sit
+                        # outside every revenue split on the page.
+                        bunv.setdefault(br, {})[r["date"][:10]] = bunv.setdefault(br, {}).get(r["date"][:10], 0.0) + rv
                         _bv = XTRA.setdefault("bunr", {}).setdefault(br, {})
                         _bv[_m7] = _bv.get(_m7, 0.0) + rv
                         continue
@@ -2806,11 +2810,15 @@ def pull_pos_customers():
                 except Exception: continue
                 if 0 <= _i < _n:
                     for k in _z: _z[k][_i] += _v.get(k, 0)
-            _z["un"] = [0] * _n
+            _z["un"] = [0] * _n; _z["unrev"] = [0] * _n
             for _ds, _oids in (bund.get(_br) or {}).items():
                 try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
                 except Exception: continue
                 if 0 <= _i < _n: _z["un"][_i] += len(_oids)
+            for _ds, _v in (bunv.get(_br) or {}).items():
+                try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
+                except Exception: continue
+                if 0 <= _i < _n: _z["unrev"][_i] += round(_v)
             bnrDaily[_br] = _z
         bnrDaily["_w"] = {"start": _d0.isoformat(), "n": _n}
         globals()["_BNRD"] = bnrDaily
