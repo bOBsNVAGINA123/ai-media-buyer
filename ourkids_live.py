@@ -526,13 +526,17 @@ def pull_meta_segments(win):
     set\u2019s targeting spec, which cannot see inside an Advantage+ set and therefore reported
     engaged spend as zero while Meta itself was reporting plenty. Daily, so any window sums."""
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    out = {k: {d: 0.0 for d in win} for k in ("segNew", "segEng", "segExist")}
-    val = {k: {d: 0.0 for d in win} for k in ("segNewV", "segEngV", "segExistV")}
+    out = {k: {d: 0.0 for d in win} for k in ("segNew", "segEng", "segExist", "segUnk")}
+    val = {k: {d: 0.0 for d in win} for k in ("segNewV", "segEngV", "segExistV", "segUnkV")}
     out.update(val)
     if not tok:
         return out
-    KEY = {"new": ("segNew", "segNewV"), "engaged": ("segEng", "segEngV"),
-           "existing": ("segExist", "segExistV")}
+    # v9.90: Meta's own labels are prospecting / engaged / existing / unknown -- NOT "new".
+    # Matching on "new" dropped the entire prospecting bucket (E£243,977 in 14 days) and the
+    # tile read E£0 while Ads Manager showed a New-audience row on the same ad sets.
+    KEY = {"prospecting": ("segNew", "segNewV"), "new": ("segNew", "segNewV"),
+           "engaged": ("segEng", "segEngV"), "existing": ("segExist", "segExistV"),
+           "unknown": ("segUnk", "segUnkV")}
     for acct in meta_accounts(tok):
         a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
         while a <= endd:
@@ -5967,6 +5971,7 @@ def build():
           "mspend": arr(meta, "mspend"), "gspend": arr(goog, "gspend"), "tspend": arr(tik, "tspend"),
           # v9.80 Meta's OWN audience split (Engaged / Existing / New), daily -- see pull_meta_segments
           "segNew": arr(mseg, "segNew"), "segEng": arr(mseg, "segEng"), "segExist": arr(mseg, "segExist"),
+          "segUnk": arr(mseg, "segUnk"),
           "segNewV": arr(mseg, "segNewV"), "segEngV": arr(mseg, "segEngV"), "segExistV": arr(mseg, "segExistV"),
           "sessions": arr(shop, "sessions"), "gecomrev": arr(goog, "gecomrev"), "gconv": arr(goog, "gconv"),
           "mecomrev": arr(meta, "mecomrev"), "ttValue": arr(tik, "ttValue"),
