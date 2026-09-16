@@ -1854,10 +1854,24 @@ def pull_clarity(days=3, prev=None):
         d = max(1, min(3, int(days)))
         bro = _clarity_call({"numOfDays": d, "dimension1": "Browser", "dimension2": "Device"})
         pages = _clarity_call({"numOfDays": d, "dimension1": "URL"})
+        # v9.92 MENU CLICKS. Clarity's dashboard knows exactly which navigation labels people
+        # click, but the public Data Export API has never accepted a clicked-text dimension.
+        # Try it anyway every run: the day it is added, the Menu map card fills itself and the
+        # baked snapshot stops being used. Until then this logs the refusal instead of pretending.
+        menu = None
+        for dim in ("ClickText", "ClickedText", "ClickElement"):
+            t = _clarity_call({"numOfDays": d, "dimension1": dim})
+            rows = _cl_rows(t) if t else []
+            if rows:
+                menu = {"dim": dim, "rows": rows[:40]}
+                log("clarity menu clicks :: live via", dim, "::", len(rows), "rows"); break
+        if not menu:
+            log("clarity menu clicks :: API still refuses a clicked-text dimension; card uses the dated snapshot")
         out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                "days": d,
                "byBrowser": _cl_rows(bro)[:40],
-               "byPage": _cl_rows(pages)[:40]}
+               "byPage": _cl_rows(pages)[:40],
+               "menu": menu}
         # keep a short history so a change in error rate is visible, not just today's level
         hist = ((prev or {}).get("clarity") or {}).get("hist") or {}
         today = datetime.date.today().isoformat()
@@ -2256,18 +2270,24 @@ def pull_product_urls(codes):
     B = 20                                    # the search grammar chokes on very long OR chains
     for i in range(0, len(uniq), B):
         chunk = uniq[i:i + B]
-        term = " OR ".join('sku:%s' % c for c in chunk)
+        # v9.91: search BOTH identifiers. The bracket code on an Odoo template is a barcode for
+        # most of the catalogue, but this only ever searched sku:, so every product whose code
+        # lives in Shopify's barcode field came back unresolved and its name stayed unclickable.
+        term = " OR ".join(('sku:%s OR barcode:%s' % (c, c)) for c in chunk)
         try:
             d = http_json(url, {"query": q, "variables": {"q": term}}, {"X-Shopify-Access-Token": tok})
             for e in ((((d or {}).get("data") or {}).get("productVariants") or {}).get("edges") or []):
                 n = e.get("node") or {}
                 pr = n.get("product") or {}
-                key = (n.get("sku") or n.get("barcode") or "").strip()
-                if key and pr.get("onlineStoreUrl"):
-                    out[key] = pr["onlineStoreUrl"]
+                # key the result under EVERY identifier the variant carries, so the caller finds
+                # it whether the Odoo code was the sku or the barcode
+                if pr.get("onlineStoreUrl"):
+                    for key in ((n.get("sku") or "").strip(), (n.get("barcode") or "").strip()):
+                        if key: out[key] = pr["onlineStoreUrl"]
         except Exception as e:
             log("product urls chunk fail", str(e)[:120])
-    log("product urls: %d of %d codes resolved to a live page" % (len(out), len(uniq)))
+    log("product urls: %d of %d codes resolved to a live page (sku + barcode)" % (
+        len([c for c in uniq if c in out]), len(uniq)))
     return out
 
 
