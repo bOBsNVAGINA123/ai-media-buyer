@@ -2364,11 +2364,21 @@ function glance(g,o){
             nrev:nr&&nr.v,nord:no&&no.v,rrev:rr&&rr.v,rord:ro&&ro.v,est:!!(nr&&nr.est)};};
    return {c:g(ST.s,ST.e),p:(w&&w[0])?g(w[0],w[1]):null};}catch(e){return null;}})();
  const tiles=[
+  ['Gross revenue', M(o.gross[0]), pc(o.gross[0],o.gross[1]), true,
+   'before returns · E£'+Math.round(o.ref[0]).toLocaleString()+' came back ('+(o.gross[0]?(o.ref[0]/o.gross[0]*100).toFixed(1):'0')+'%)','web','grossr'],
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web','net'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web','gp'],
   ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co','sp'],
-  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'webstore revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web','mer'],
-  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers only','web','amer'],
+  ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'NET revenue ÷ ALL spend · breakeven '+be.toFixed(2)+'×','web','mer'],
+  /* v9.90: the same two ratios on GROSS, because a platform is paid on what it sold, not on
+     what survived the returns desk — the gap between the pair is the returns tax on the media. */
+  ['MER · gross',   (o.sp[0]?o.gross[0]/o.sp[0]:0).toFixed(2)+'×',
+   pc(o.sp[0]?o.gross[0]/o.sp[0]:null,o.sp[1]?o.gross[1]/o.sp[1]:null), true,
+   'before returns · net MER is '+(o.mer[0]||0).toFixed(2)+'×','web','mergross'],
+  ['aMER',          (o.amer[0]||0).toFixed(2)+'×',pc(o.amer[0],o.amer[1]),true,'first-time buyers · NET','web','amer'],
+  ['aMER · gross',  (o.sp[0]&&o.ncrev?(o.ncrev[0]/o.sp[0]):0).toFixed(2)+'×',
+   pc(o.sp[0]?o.ncrev[0]/o.sp[0]:null,o.sp[1]?o.ncrev[1]/o.sp[1]:null), true,
+   'first-time buyers before returns · net is '+(o.amer[0]||0).toFixed(2)+'×','web','amergross'],
   ['Orders',        N(o.ord[0]),   pc(o.ord[0],o.ord[1]),   true,  M(o.aov[0])+' basket','web','ord'],
   ['New customers', N(o.nc[0]),    pc(o.nc[0],o.nc[1]),     true,  M(o.cac[0])+' to get one','web','nc'],
   ['Returning customers', N(o.rcn?o.rcn[0]:null), pc(o.rcn&&o.rcn[0],o.rcn&&o.rcn[1]), true, 'came back and bought again','web','rc'],
@@ -2713,6 +2723,16 @@ function glance(g,o){
    +row('MER on that whole budget',o.mer&&o.mer[0],o.mer&&o.mer[1],true,((o.mer&&o.mer[0])?o.mer[0].toFixed(2):'—')+'× · break-even '+be.toFixed(2)+'×')
    +txt('Share matters as much as the amount: a platform holding its pounds while the budget shrinks is taking a bigger slice of it. The ROAS tiles beside this are each platform scoring its own homework on its own spend; MER is the only line that divides REAL revenue by the WHOLE budget, which is why it is always the lower number.');
   TD.msp=_spD;TD.gsp=_spD;TD.tsp=_spD;TD.broas=_spD;
+  const _grD=hd('Gross vs net — what the returns desk costs the media')
+   +row('Gross revenue (what was sold)',o.gross[0],o.gross[1],true,M(o.gross[0]))
+   +row('Returns / credit notes',o.ref[0],o.ref[1],false,M(o.ref[0])+' · '+(o.gross[0]?(o.ref[0]/o.gross[0]*100).toFixed(1):'0')+'% of gross')
+   +row('Net revenue (what stayed)',o.net[0],o.net[1],true,M(o.net[0]))
+   +row('MER on gross',o.sp[0]?o.gross[0]/o.sp[0]:null,o.sp[1]?o.gross[1]/o.sp[1]:null,true,(o.sp[0]?(o.gross[0]/o.sp[0]).toFixed(2):'—')+'×')
+   +row('MER on net',o.mer&&o.mer[0],o.mer&&o.mer[1],true,((o.mer&&o.mer[0])||0).toFixed(2)+'× — break-even '+be.toFixed(2)+'×')
+   +row('aMER on gross',o.sp[0]?o.ncrev[0]/o.sp[0]:null,o.sp[1]?o.ncrev[1]/o.sp[1]:null,true,(o.sp[0]?(o.ncrev[0]/o.sp[0]).toFixed(2):'—')+'×')
+   +row('aMER on net',o.amer&&o.amer[0],o.amer&&o.amer[1],true,((o.amer&&o.amer[0])||0).toFixed(2)+'×')
+   +txt('Platforms are paid on gross — they count the sale the moment it is placed — while the bank only ever sees net. The distance between the two pairs above IS the returns tax on your media, and break-even is set against NET because that is the money that actually arrives. If gross MER clears break-even and net MER does not, the ads are working and the returns desk is eating the margin.');
+  TD.grossr=_grD;TD.mergross=_grD;TD.amergross=_grD;
   TD.mroas=hd('Meta ROAS '+((o.mroas&&o.mroas[0])?o.mroas[0].toFixed(2)+'×':''))
    +row('Meta spend',o.msp[0],o.msp[1],false,M(o.msp[0]))
    +row('Meta’s claimed webstore value',o.msp[0]*(o.mroas?o.mroas[0]:0),(o.msp[1]&&o.mroas&&o.mroas[1])?o.msp[1]*o.mroas[1]:null,true,M(o.msp[0]*((o.mroas&&o.mroas[0])||0)))
@@ -6995,9 +7015,11 @@ function rCV(){
  const SK={s:r=>r.c.s,cvr:r=>r.c.cvr,arpu:r=>r.c.arpu,gpu:r=>r.c.gpu,atc:r=>r.c.atc,dcvr:r=>(r.pr&&r.pr.cvr)?r.c.cvr/r.pr.cvr:9};
  rows.sort((a,b)=>(SK[CVS.sort]||SK.s)(b)-(SK[CVS.sort]||SK.s)(a));
  const tot=rows.reduce((acc,r)=>{['s','a','c','pu','r','u'].forEach(k=>acc[k]=(acc[k]||0)+r.c[k]);return acc;},{});
- bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. GA4 property '+G4.prop+', <b>Egypt sessions only</b>, daily since '+G4.start+'. Reading <b>'+ST.s+' &rarr; '+ST.e+'</b>'+(clip?' (clipped to the 60-day GA4 history)':'')+(hasPrev?', against the '+nD+' days before':'')+'. GP per user prices every visitor at your DELIVERED '+(q.gpOn*100).toFixed(1)+'% margin — goods, courier and fees already charged.'
+ bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. GA4 property '+G4.prop+', <b>Egypt sessions only</b>, daily since '+G4.start+'. Reading <b>'+ST.s+' &rarr; '+ST.e+'</b>'+(clip?' (clipped to the 60-day GA4 history)':'')+(hasPrev?', against the '+nD+' days before':'')+'. <b>Every ▲▼ on this table is this window against the '+nD+' days immediately before it</b> (not an average, not last year). GP per user prices every visitor at your DELIVERED '+(q.gpOn*100).toFixed(1)+'% margin — goods, courier and fees already charged.'
   +(function(){try{const w=ga4Win(ST.s,ST.e);if(!w||!w.full)return '';
     return ' <b style="color:#b8621b">The table below is the top landing pages only \u2014 '+Math.round(w.pageCov||0)+'% of the sessions and '+N2(w.pagePu)+' of the '+N2(w.pu)+' purchases GA4 recorded in this window.</b> Landing pages carry their query strings, so the long tail is thousands of one-off rows. Rank pages here; take totals from the totals line.';}catch(e){return '';}})();
+ /* v9.90: every arrow on this table is THIS window against the SAME NUMBER OF DAYS immediately
+    before it — not against an average, not against last year. Said on the card and on hover. */
  const dl2=(c2,p2,inv)=>{if(p2==null||!isFinite(p2)||p2===0)return '';const d2=(c2/p2-1)*100;if(!isFinite(d2))return '';
   const good=inv?d2<0:d2>=0;
   return '<div style="font-size:9.5px;font-weight:700;color:'+(Math.abs(d2)<1?'#8a93a6':(good?'#0f6e56':'#a3271a'))+'">'+(d2>=0?'▲':'▼')+Math.abs(d2).toFixed(0)+'%</div>';};
@@ -14041,7 +14063,13 @@ function rMETA(){
      becomes PULL when the economics have gone too. */
   const _roasNow=(r.now&&r.now.roas)||null;
   const _rich=_roasNow!=null&&_roasNow>=beFat*1.5;
-  const st=!r.enough?['too early','#8a93a6']
+  /* v9.90: never tell someone to pull an ad that is already off. The entity feed carries each
+     ad's live delivery status, so a paused ad gets an ALREADY OFF verdict — it is in the table
+     because it spent inside the window, not because there is anything left to switch off. */
+  const _off=(function(){const q=String(r.a&&r.a.st||'').toUpperCase();
+    return !!q&&!(q==='ACTIVE'||q==='ENABLE'||q==='ENABLED'||q.indexOf('DELIVERY_OK')>=0);})();
+  const st=_off?['ALREADY OFF \u2014 nothing to do','#8b93a7']
+    :!r.enough?['too early','#8a93a6']
     :r.sc.s>=RV.pull?(_rich?['REFRESH \u2014 do not cut','#a35a1a']:['PULL OR REFRESH','#a3271a'])
     :r.sc.s>=50?['brief the replacement','#a35a1a']:['healthy','#0f6e56'];
   body+='<tr>'
@@ -15140,7 +15168,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260915-211818';
+const BUILD='20260916-150654';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
