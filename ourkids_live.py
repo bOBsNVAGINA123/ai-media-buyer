@@ -2416,7 +2416,7 @@ def anon_partner_ids():
 def pull_pos_customers():
     """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
-    bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}; bunv = {}
+    bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}; bunv = {}; bcatd = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
     VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
@@ -2447,6 +2447,15 @@ def pull_pos_customers():
                     _tv = TV.get(_tid, ("", "", ""))
                     _vn = _tv[0]
                     _m7 = r["date"][:7]
+                    # v9.93: branch x CATEGORY x day. The pace table could say a branch fell and
+                    # never say what fell inside it. Counted before the walk-in skip below, so
+                    # it covers every receipt the branch rang, not just the identified ones.
+                    _cgd = _catname(_tv[1])
+                    if _cgd and rv:
+                        bcatd.setdefault(br, {}).setdefault(_cgd, {})
+                        _cd0 = bcatd[br][_cgd]
+                        _dk = r["date"][:10]
+                        _cd0[_dk] = _cd0.get(_dk, 0.0) + rv
                     if _vn:
                         _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
                         _vm[0] += rv; _vm[1] += float(r.get("margin") or 0)
@@ -2856,6 +2865,21 @@ def pull_pos_customers():
                 except Exception: continue
                 if 0 <= _i < _n: _z["unrev"][_i] += round(_v)
             bnrDaily[_br] = _z
+        bcatDaily = {}
+        for _br, _cats in bcatd.items():
+            tops = sorted(_cats.items(), key=lambda kv: -sum(kv[1].values()))[:10]
+            packed = {}
+            for _cg, _days in tops:
+                _z2 = [0] * _n
+                for _ds, _v in _days.items():
+                    try: _i = (datetime.date.fromisoformat(_ds) - _d0).days
+                    except Exception: continue
+                    if 0 <= _i < _n: _z2[_i] += round(_v)
+                packed[_cg] = _z2
+            bcatDaily[_br] = packed
+        globals()["_BCATD"] = bcatDaily
+        log("branch x category daily ::", len(bcatDaily), "branches",
+            "::", sum(len(v) for v in bcatDaily.values()), "category series")
         bnrDaily["_w"] = {"start": _d0.isoformat(), "n": _n}
         globals()["_BNRD"] = bnrDaily
         log("branch daily NR", len(bnrDaily) - 1, "branches x", _n, "days")
@@ -5852,6 +5876,8 @@ def build():
         try:
             bd = pv.get("bnrD") or {}
             br = [v for k, v in bd.items() if k != "_w" and isinstance(v, dict)]
+            if not (pv.get("bcatD") or {}):
+                return "branch x category series missing"
             if br and not all(("un" in b and "grev" in b and "nqty" in b) for b in br[:3]):
                 return "bnrD missing walk-ins / till-gross"
             iv = (pv.get("vinv") or {})
@@ -6096,7 +6122,8 @@ def build():
     except Exception as e: log("promos failed", str(e)[:160])
 
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
-              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}),
+              "bcatD": (globals().get("_BCATD") or prev.get("bcatD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
