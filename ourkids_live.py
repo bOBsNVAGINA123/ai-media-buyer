@@ -3403,6 +3403,11 @@ def pull_meta_ads(tok):
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
                                "spend,impressions,reach,outbound_clicks,actions,action_values",
+                     # v9.9.5: per-AD attribution windows. The dashboard could only ever show
+                     # the account default, so "is this ad only good on a 7-day click" was
+                     # unanswerable. `value` stays the default and is what the daily series
+                     # keeps using; these add a key per window on each action alongside it.
+                     "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"]),
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3446,7 +3451,12 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")},
+                                          # totals only: a daily series per window would
+                                          # quadruple the payload for a question nobody asks
+                                          # day by day
+                                          "atr": {w: {"pv": 0.0, "fv": 0.0, "pu": 0.0, "op": 0.0}
+                                                  for w in ("7dc", "1dc", "1dv")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3458,6 +3468,12 @@ def pull_meta_ads(tok):
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
+                        for _wk, _w in (("7d_click", "7dc"), ("1d_click", "1dc"), ("1d_view", "1dv")):
+                            _t = a["atr"][_w]
+                            _t["pv"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), _wk)
+                            _t["fv"] += _avw(av, ("offline_conversion.purchase",), _wk)
+                            _t["pu"] += _avw(ac, ("offsite_conversion.fb_pixel_purchase",), _wk)
+                            _t["op"] += _avw(ac, ("offline_conversion.purchase",), _wk)
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3472,6 +3488,7 @@ def pull_meta_ads(tok):
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
+            a["atr"] = {w: {k: round(v2) for k, v2 in t.items()} for w, t in (a.get("atr") or {}).items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
         # slot (its smallest still outspent everything on Basic), so the Basic account
