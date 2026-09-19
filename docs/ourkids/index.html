@@ -1754,7 +1754,7 @@ function cards(){CARDS=[
     if(sp0&&(o.nc[0]+bNow)>0)base.push(['Blended CAC — both businesses',sp0/(o.nc[0]+bNow),(sp1&&o.nc[1]!=null&&bPrev!=null&&(o.nc[1]+bPrev)>0)?sp1/(o.nc[1]+bPrev):null,'cur',0]);
    }catch(e){}
    return base;}},
- {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
+ {id:'ltg',t:'LTGP : nCAC — real cohorts (Odoo)',src:'cacgp',cs:'Computed from YOUR order history: each cohort\'s cumulative gross profit per new customer ÷ that month\'s acquisition cost. Improves as cohorts age. <b>The month named on each tile is the newest cohort that has actually LIVED that window</b> \u2014 a 30-day figure needs 30 days of history, so it always trails the calendar by a month, and a 365-day figure trails by a year. Nothing is unsynced: newer cohorts are in the data and appear the day they mature. Full table in Media Efficiency.',k:o=>{const R=cohRows().filter(r=>r.l30!=null);if(!R.length)return[['Cohorts','—',null,'x',1]];const L=R[R.length-1],pv=R.length>1?R[R.length-2]:null;const m9=R.filter(r=>r.l90!=null),m36=R.filter(r=>r.l365!=null);return[['Latest cohort 30d ('+L.m+')',L.l30,pv?pv.l30:null,'x',1],['90d ('+(m9.length?m9[m9.length-1].m:'—')+')',m9.length?m9[m9.length-1].l90:null,null,'x',1],['365d ('+(m36.length?m36[m36.length-1].m:'—')+')',m36.length?m36[m36.length-1].l365:null,null,'x',1],['GP / new customer 30d',L.gp30,pv?pv.gp30:null,'cur',1]];}},
 
  {id:'kv',a:'blend',t:'The essentials — Shopify online',src:'gross',cs:'SHOPIFY CHANNEL ONLY (Odoo confirmed orders, marketplaces &amp; branch POS excluded — branches live on the Branches tab). Revenue net of actual credit notes, GP, what a NEW vs RETURNING customer spends per order, and site conversion.',
   k:o=>{const A=O.ad||{};const out=[['Revenue (net of returns)',o.net[0],o.net[1],'cur',1],['Gross profit',o.gp[0],o.gp[1],'cur',1]];
@@ -4365,8 +4365,7 @@ function merHeat(g){
   b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
    +'<td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+(wk?' <span style="font-size:8.5px;color:#8a93a6">'+(r.wd===5?'FR':'SA')+'</span>':'')+'</td>'
    +'<td style="'+TD+'">'+M(r.sp)+'</td>'
-   +cell(r.merB,p&&p.merB)+cell(r.merA,p&&p.merA)
-   +cell(r.amerB,p&&p.amerB)+cell(r.amerA,p&&p.amerA)
+   +cell(r.merA,p&&p.merA)+cell(r.amerA,p&&p.amerA)
    +cell(r.roasOn,p&&p.roasOn)+cell(r.roasOff,p&&p.roasOff)+cell(r.roasAll,p&&p.roasAll)
    +'<td style="'+TD+';color:'+(r.cxr>=12?'#a3271a':'#5b6478')+'">'+r.cxr.toFixed(1)+'%</td></tr>';});
  const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
@@ -4378,14 +4377,16 @@ function merHeat(g){
  tot.roasOn=wavg('roasOn');tot.roasOff=wavg('roasOff');tot.roasAll=wavg('roasAll');
  b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
   +'<td style="'+TD+'">'+M(tSp)+'</td>'
-  +cell(tot.merB,null)+cell(tot.merA,null)+cell(tot.amerB,null)+cell(tot.amerA,null)
+  +cell(tot.merA,null)+cell(tot.amerA,null)
   +cell(tot.roasOn,null)+cell(tot.roasOff,null)+cell(tot.roasAll,null)
   +'<td style="'+TD+'">'+(tGross?(tCanc/tGross*100).toFixed(1):'0')+'%</td></tr>';
  const head='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
-  +'<th style="'+TH+'" colspan="2">MER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after cancellations</div></th>'
-  +'<th style="'+TH+'" colspan="2">aMER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">before | after</div></th>'
-  +'<th style="'+TH+'" colspan="3">Blended ROAS<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">online | in-store | both</div></th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">real revenue ÷ spend</div></th>'
+  +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">first-time buyers ÷ spend</div></th>'
+  +'<th style="'+TH+'">ROAS · online<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">what platforms claim on the web</div></th>'
+  +'<th style="'+TH+'">ROAS · in-store<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">what they claim in the shops</div></th>'
+  +'<th style="'+TH+'">ROAS · both<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">the two added</div></th>'
   +'<th style="'+TH+'">Cancel<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">% of demand</div></th></tr>'
   +b+'</table></div>';
  pnlCard(g,'blend','Every day, heat-mapped — MER, aMER and blended ROAS, before and after cancellations'
@@ -4395,6 +4396,7 @@ function merHeat(g){
   +' · break-even <b>'+be.toFixed(2)+'×</b> · '
   +'<a href="javascript:void(0)" onclick="window.MHCMP=(window.MHCMP===0?1:0);rTab()" style="color:#5a5bf0;font-weight:800">'+(CMP?'☑':'☐')+' compare vs '+((pw&&pw[0])?pw[0]+' → '+pw[1]:'previous')+'</a>'
   +' — the small arrow inside each cell is that day against the same day of the compare window. '
+  +'<b>Every ratio here is after cancellations</b> — the money that actually stayed — and the last column shows how much demand walked that day, so nothing is hidden by averaging. '
   +'<b>The three ROAS columns:</b> <b>online</b> = what Meta + Google + TikTok claim they drove on the webstore (discounted by that day\u2019s cancellations), <b>in-store</b> = what they claim they drove into the shops at your offline attribution setting, <b>both</b> = the two added. '
   +'Colour runs continuously against break-even '+be.toFixed(2)+'\u00d7: deep green is 40%+ clear of it, pale green just above, sand just below, red well under water. Fridays and Saturdays are shaded on the day column.',head);
 }
@@ -15528,7 +15530,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260919-201358';
+const BUILD='20260919-202401';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
