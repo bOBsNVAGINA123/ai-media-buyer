@@ -2304,10 +2304,26 @@ function glance(g,o){
      from a 7-day window, roughly E£4M a year of profit shown as a loss. The company tile now
      adds the non-Shopify online channels; the webstore tile stays Shopify-only on purpose. */
   const mktGP=(a,b)=>{try{return Math.max(0,fSumAll('gp',a,b)-fSum('gp',a,b));}catch(e){return 0;}};
+  /* v9.94 IMMATURE DAYS. The branch till feed backfills for days after the fact — measured on
+     this account, 2026-09-10 → 09-15 read E£3,993,054 of till revenue when it was fresh and
+     E£5,776,318 once it settled, 45% more. Charging a full day of payroll and rent against
+     revenue that has not finished posting produced a fake loss (−E£533,744 on a window that
+     actually covers its costs). Days inside the settling window are now excluded from the
+     estimate and the shortfall is named on the card instead of being silently absorbed. */
+  const LAG=3;
+  const _today=(O.today||'').slice(0,10);
+  const matureEnd=(function(){try{const cut=addD(_today,-LAG);return (ST.e>cut)?cut:ST.e;}catch(e){return ST.e;}})();
+  const _dropped=(function(){try{return Math.max(0,span(ST.s,ST.e)-span(ST.s,matureEnd));}catch(e){return 0;}})();
   const calcNP=(gp2,sp2,a,b)=>{const d2=Math.max(1,span(a,b));const st=blSum(a,b);
    if(st==null)return null;
    return gp2+mktGP(a,b)+st*stMg-sp2-opxD*d2;};
-  const cur=calcNP(o.gp[0],o.sp[0],ST.s,ST.e);
+  /* everything below reads the MATURE window; the tile subtitle says how many days were held back */
+  const _mS=ST.s,_mE=(matureEnd>=ST.s)?matureEnd:ST.s;
+  const _gpM=(function(){try{return fSum('gp',_mS,_mE);}catch(e){return o.gp[0];}})();
+  const _spM=(function(){try{const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z');let t=0;
+    for(let d=Date.parse(_mS+'T00:00:00Z');d<=Date.parse(_mE+'T00:00:00Z');d+=864e5){
+     const i=Math.round((d-t0)/864e5);if(i>=0&&i<A.n)t+=(A.spend||[])[i]||0;}return t;}catch(e){return o.sp[0];}})();
+  const cur=calcNP(_gpM,_spM,_mS,_mE);
   const _pw2=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
   const prev=(_pw2&&o.gp[1]!=null)?calcNP(o.gp[1],o.sp[1],_pw2[0],_pw2[1]):null;
   /* the webstore's own net: its GP, its share of ads (Google+TikTok whole, Meta by its own
@@ -2334,7 +2350,9 @@ function glance(g,o){
   const curW=webNP(o.gp[0],ST.s,ST.e);
   const prevW=(_pw2&&o.gp[1]!=null)?webNP(o.gp[1],_pw2[0],_pw2[1]):null;
   return cur==null?null:{cur,prev,bm,curW,prevW,opxD,dim2,stMg,
-   st:blSum(ST.s,ST.e),mkt:mktGP(ST.s,ST.e),days:Math.max(1,span(ST.s,ST.e))};
+   st:blSum(_mS,_mE),mkt:mktGP(_mS,_mE),days:Math.max(1,span(_mS,_mE)),
+   gp:_gpM,sp:_spM,s:_mS,e:_mE,dropped:_dropped,lag:LAG,
+   netRev:(function(){try{return fSum('rev',_mS,_mE)-fSum('refund',_mS,_mE);}catch(e){return null;}})()};
  }catch(e){return null;}})();
  /* v9.79 SPEND BY AUDIENCE INTENT, date-box true. The collector classifies every Meta ad SET
     from its included custom audiences (existing = a purchaser/customer-list audience; engaged =
@@ -2477,7 +2495,7 @@ function glance(g,o){
  if(NP)tiles.push(['Net profit, est',
    '<span style="color:'+(NP.cur>=0?'#0f6e56':'#a3271a')+'">'+(NP.cur>=0?'+':'\u2212')+M(NP.cur)+'</span>',
    (NP.prev!=null&&NP.prev!==0)?((NP.cur-NP.prev)/Math.abs(NP.prev)*100):null,true,
-   'after ads and every cost, OpEx charged per day from '+NP.bm,'co','npc']);
+   'after ads and every cost · OpEx per day from '+NP.bm+(NP.dropped?' · last '+NP.dropped+' day'+(NP.dropped>1?'s':'')+' held back, still posting':''),'co','npc']);
  /* The webstore is not the business. Blended puts the seven shops in the numerator against the
     same ad spend, which is the only version of these two ratios that answers "are we growing". */
  if(BA)tiles.push(
@@ -2676,16 +2694,28 @@ function glance(g,o){
    const EB=O.exp[bkM]||{};
    const line=(lab,v,note)=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;font-size:12px"><span style="color:#5b6478">'+lab+(note?' <span style="color:#9aa3b5">'+note+'</span>':'')+'</span><span style="font-weight:700;font-variant-numeric:tabular-nums">'+(v<0?'−':'')+M(Math.abs(v))+'</span></div>';
    const rule='<div style="border-top:1px solid #e6eaf2;margin:4px 0"></div>';
-   let s=hd('Company net profit, est '+((NP.cur>=0?'+':'−')+M(NP.cur))+' — every input, '+d+' day'+(d>1?'s':'')+' selected');
-   s+='<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">WHAT CAME IN</div>';
-   s+=line('Webstore gross profit (Shopify, Odoo margin)',o.gp[0]);
+   let s=hd('Company P&L, '+NP.s+' → '+NP.e+' ('+d+' day'+(d>1?'s':'')+')'
+     +(NP.dropped?' — last '+NP.dropped+' day'+(NP.dropped>1?'s':'')+' of your range held back':''));
+   if(NP.dropped)s+='<div style="font-size:11px;color:#b8621b;padding:3px 0 5px">The branch till feed keeps posting for about '+NP.lag+' days after the fact — measured on this account, one 6-day window read E£3,993,054 of till revenue while fresh and E£5,776,318 once it settled. Charging a full day of payroll and rent against half-posted revenue invents a loss, so those days sit out of this P&L and rejoin it once they settle.</div>';
+   s+='<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">REVENUE</div>';
+   s+=line('Webstore, net of returns',NP.netRev!=null?NP.netRev:0);
+   if(NP.st!=null)s+=line('Branch tills (net of VAT)',NP.st);
+   s+=line('Total revenue',(NP.netRev||0)+(NP.st||0));
+   s+='<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">GROSS PROFIT</div>';
+   s+=line('Webstore gross profit (Shopify, Odoo margin)',NP.gp!=null?NP.gp:o.gp[0]);
    if(NP.mkt)s+=line('Marketplace gross profit (Amazon / Noon / Homzmart)',NP.mkt,'— added in v9.73; it was missing while their costs were charged');
    if(NP.st!=null)s+=line('Branch gross profit',NP.st*NP.stMg,'= E£'+Math.round(NP.st).toLocaleString()+' of till revenue × '+(NP.stMg*100).toFixed(1)+'% ('+bkM+' POS margin)');
-   s+=rule+'<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">WHAT WENT OUT</div>';
-   s+=line('Ad spend (whole account, both businesses)',-o.sp[0]);
+   const _gpAll=(NP.gp!=null?NP.gp:o.gp[0])+(NP.mkt||0)+((NP.st!=null)?NP.st*NP.stMg:0);
+   s+=line('Total gross profit',_gpAll);
+   s+=rule+'<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">CONTRIBUTION</div>';
+   s+=line('Ad spend (whole account, both businesses)',-(NP.sp!=null?NP.sp:o.sp[0]));
+   const _contrib=_gpAll-(NP.sp!=null?NP.sp:o.sp[0]);
+   const _rev=(NP.netRev||0)+(NP.st||0);
+   s+='<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:12.5px;border-top:1px solid #e6eaf2;font-weight:800"><span>CONTRIBUTION MARGIN</span><span style="font-variant-numeric:tabular-nums;color:'+(_contrib>=0?'#0f6e56':'#a3271a')+'">'+(_contrib<0?'−':'+')+M(Math.abs(_contrib))+(_rev?' · '+(_contrib/_rev*100).toFixed(1)+'% of revenue':'')+'</span></div>';
+   s+='<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">OPERATING COSTS</div>';
    s+='<div style="font-size:10.5px;color:#8a93a6;margin:4px 0 2px">Operating costs — the '+bkM+' posted book, each line ÷ '+dimB+' days × '+d+':</div>';
    Object.keys(EB).filter(k=>k.indexOf('(memo)')<0&&EB[k]).sort((a,b)=>EB[b]-EB[a]).forEach(k=>{
-    s+=line(k,-(EB[k]/dimB*d),'· book '+M(EB[k])+'/mo');});
+    s+=line(k,-(EB[k]/dimB*d),'· book '+M(EB[k])+'/mo ÷ '+dimB+' × '+d);});
    const memo=Object.keys(EB).filter(k=>k.indexOf('(memo)')>=0&&EB[k]);
    if(memo.length)s+='<div style="font-size:10.5px;color:#8a93a6;padding:2px 0">Not charged: '+memo.map(k=>k+' '+M(EB[k])+'/mo').join(', ')+' — already in the ad-spend line above (charging both would double-count ads).</div>';
    s+=rule+line('NET PROFIT, EST',NP.cur);
@@ -15318,7 +15348,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260917-192200';
+const BUILD='20260919-193519';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
