@@ -3403,11 +3403,6 @@ def pull_meta_ads(tok):
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
                                "spend,impressions,reach,outbound_clicks,actions,action_values",
-                     # v9.9.5: per-AD attribution windows. The dashboard could only ever show
-                     # the account default, so "is this ad only good on a 7-day click" was
-                     # unanswerable. `value` stays the default and is what the daily series
-                     # keeps using; these add a key per window on each action alongside it.
-                     "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"]),
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3451,12 +3446,7 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")},
-                                          # totals only: a daily series per window would
-                                          # quadruple the payload for a question nobody asks
-                                          # day by day
-                                          "atr": {w: {"pv": 0.0, "fv": 0.0, "pu": 0.0, "op": 0.0}
-                                                  for w in ("7dc", "1dc", "1dv")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3468,12 +3458,6 @@ def pull_meta_ads(tok):
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
-                        for _wk, _w in (("7d_click", "7dc"), ("1d_click", "1dc"), ("1d_view", "1dv")):
-                            _t = a["atr"][_w]
-                            _t["pv"] += _avw(av, ("offsite_conversion.fb_pixel_purchase",), _wk)
-                            _t["fv"] += _avw(av, ("offline_conversion.purchase",), _wk)
-                            _t["pu"] += _avw(ac, ("offsite_conversion.fb_pixel_purchase",), _wk)
-                            _t["op"] += _avw(ac, ("offline_conversion.purchase",), _wk)
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3488,7 +3472,6 @@ def pull_meta_ads(tok):
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
-            a["atr"] = {w: {k: round(v2) for k, v2 in t.items()} for w, t in (a.get("atr") or {}).items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
         # slot (its smallest still outspent everything on Basic), so the Basic account
@@ -5102,6 +5085,26 @@ def pull_vendor_inventory():
     return inv
 
 
+def pull_purchases():
+    """v9.96 INVENTORY PURCHASES, monthly. Break-even that only covers ads and OpEx is a lie for a
+    retailer: the shelves have to be refilled out of the same gross profit, and that cash leaves
+    before any of it comes back as sales. Confirmed purchase orders only (state purchase/done),
+    so quotations and cancelled drafts never inflate it."""
+    out = {}
+    try:
+        for r in (ogroup("purchase.order",
+                         [["state", "in", ["purchase", "done"]], ["date_order", ">=", "2024-08-01"]],
+                         ["amount_total"], ["date_order:month"]) or []):
+            try: mon = datetime.datetime.strptime(str(r["date_order:month"]), "%B %Y").strftime("%Y-%m")
+            except Exception: continue
+            out[mon] = round(r.get("amount_total") or 0)
+        log("inventory purchases ::", len(out), "months ::",
+            "last:", ", ".join("%s %s" % (k, format(out[k], ",")) for k in sorted(out)[-3:]))
+    except Exception as e:
+        log("purchases pull failed", str(e)[:140])
+    return out
+
+
 def pull_vendors():
     """Vendor and product economics across every branch and every online channel.
 
@@ -5783,6 +5786,7 @@ def build():
     prod = safe(pull_products) or []
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
     mseg = safe(pull_meta_segments, win) or {}
+    purch = safe(pull_purchases) or (prev.get("purch") or {})
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
@@ -6140,7 +6144,8 @@ def build():
 
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}),
-              "bcatD": (globals().get("_BCATD") or prev.get("bcatD") or {}), "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "bcatD": (globals().get("_BCATD") or prev.get("bcatD") or {}),
+              "purch": purch, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
