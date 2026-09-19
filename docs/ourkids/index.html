@@ -4404,6 +4404,7 @@ function merHeat(g){
    spend, what profit looks like at other spend levels, and which level is best. The MER-at-spend
    curve is MEASURED from this account's own daily history — bins of real days, never an assumed
    elasticity — and the correlation and sample size travel with the recommendation. */
+window.beScope=function(){window.BESC=(window.BESC==='both')?'on':'both';rTab();};
 function beScen(g){
  const A=O.ad,F=O.fin,SH=O.shop;if(!A||!F||!SH)return;
  const q=(function(){try{return _gpPct();}catch(e){return null;}})();if(!q||!q.gpOn)return;
@@ -4413,17 +4414,26 @@ function beScen(g){
     whole, Meta split by its own reported web-versus-store value — the identical convention the
     net-profit tile uses. Charging the entire budget here made this card contradict that tile by
     more than E£1M a month. */
+ /* v9.99: the ladder runs on the budget you ACTUALLY set — total daily ad spend — not on an
+    "attributed share" nobody can type into Ads Manager. SCOPE toggles what that budget is judged
+    against: the webstore alone, or the webstore plus what the tills took on the same days. */
+ const SCOPE=(window.BESC==='both')?'both':'on';
+ const BL=O.bl,bl0=BL?Date.parse(BL.start+'T00:00:00Z'):null;
+ const stMg=(function(){try{const nowM=(O.today||'').slice(0,7);
+   const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(x=>x!==nowM).slice(-1)[0];
+   let r2=0,g2=0;if(pm)Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=v[1]||0;}});
+   return r2>0?g2/r2:0.236;}catch(e){return 0.236;}})();
+ const brRev=ds=>{if(!BL)return 0;const i=Math.round((Date.parse(ds+'T00:00:00Z')-bl0)/864e5);
+   if(i<0||i>=BL.n)return 0;let t=0;Object.keys(BL.b).forEach(b=>{t+=(BL.b[b]||[])[i]||0;});return t;};
  const rows=[];
  for(let i=Math.max(0,A.n-95);i<A.n-3;i++){
   const ds=new Date(a0+i*864e5).toISOString().slice(0,10);
   const j=Math.round((Date.parse(ds+'T00:00:00Z')-f0)/864e5);
-  const ms=(A.mspend||[])[i]||0,gs=(A.gspend||[])[i]||0,ts=(A.tspend||[])[i]||0;
-  const web=(A.mecomrev||[])[i]||0,sto=(A.instoreMeta||[])[i]||0;
-  const mShare=(web+sto)>0?web/(web+sto):1;
-  const sp=gs+ts+ms*mShare;
-  if(sp<3000)continue;
-  const rev=(((SH.rev||[])[j]||0)-((SH.ref||[])[j]||0))*1000;if(rev<=0)continue;
-  rows.push({sp:sp,rev:rev,mer:rev/sp});}
+  const sp=(A.spend||[])[i]||0;if(sp<5000)continue;
+  const web=(((SH.rev||[])[j]||0)-((SH.ref||[])[j]||0))*1000;if(web<=0)continue;
+  const st=(SCOPE==='both')?brRev(ds):0;
+  const rev=web+st;
+  rows.push({d:ds,sp:sp,rev:rev,web:web,st:st,mer:rev/sp,gp:web*m+st*stMg});}
  if(rows.length<25)return;
  rows.sort((x,y)=>x.sp-y.sp);
  const n=rows.length,B=5,bins=[];
@@ -4451,13 +4461,15 @@ function beScen(g){
    const wOn=(onRev+br)>0?onRev/(onRev+br):0.2;
    return {v:(onDirect+shared*wOn)/dim,bm:bm,excl:(E['Payment & collection fees']||0)+(E['Cargo & transport']||0)};}catch(e){return null;}})();
  if(!fixedDay)return;
- const FX=fixedDay.v;
+ const opxAllDay=(function(){try{const bm=fixedDay.bm,dim=new Date(Date.UTC(+bm.slice(0,4),+bm.slice(5,7),0)).getUTCDate();
+   return expTot(bm)/dim;}catch(e){return fixedDay.v;}})();
+ const FX=(SCOPE==='both')?opxAllDay:fixedDay.v;
+ const mBlend=(function(){if(SCOPE!=='both')return m;
+   let w=0,s=0;rows.forEach(r=>{w+=r.web;s+=r.st;});
+   return (w+s)>0?(w*m+s*stMg)/(w+s):m;})();
  const days=Math.max(1,span(ST.s,ST.e));
  let spNow=0;for(let d=Date.parse(ST.s+'T00:00:00Z');d<=Date.parse(ST.e+'T00:00:00Z');d+=864e5){
-  const i=Math.round((d-a0)/864e5);if(i<0||i>=A.n)continue;
-  const ms=(A.mspend||[])[i]||0,gs=(A.gspend||[])[i]||0,ts=(A.tspend||[])[i]||0;
-  const web=(A.mecomrev||[])[i]||0,sto=(A.instoreMeta||[])[i]||0;
-  spNow+=gs+ts+ms*((web+sto)>0?web/(web+sto):1);}
+  const i=Math.round((d-a0)/864e5);if(i>=0&&i<A.n)spNow+=(A.spend||[])[i]||0;}
  spNow=spNow/days||bins[Math.floor(bins.length/2)].sp;
  const merAt=s=>{if(s<=bins[0].sp)return bins[0].mer;
   if(s>=bins[bins.length-1].sp)return bins[bins.length-1].mer;
@@ -4466,12 +4478,12 @@ function beScen(g){
   return bins[bins.length-1].mer;};
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SM=v=>(v<0?'−':'+')+M(v);
- const beRev=(spNow+FX)/m, beMer=spNow?beRev/spNow:null;
+ const beRev=(spNow+FX)/mBlend, beMer=spNow?beRev/spNow:null;
  const lvls=[];const lo=Math.min(spNow*0.5,bins[0].sp),hi=Math.max(spNow*1.6,bins[bins.length-1].sp*1.1);
  for(let k=0;k<9;k++)lvls.push(lo+(hi-lo)*k/8);
  lvls.push(spNow);lvls.sort((a,b)=>a-b);
  for(let i=lvls.length-1;i>0;i--)if(Math.abs(lvls[i]-lvls[i-1])<spNow*0.04)lvls.splice(Math.abs(lvls[i]-spNow)<Math.abs(lvls[i-1]-spNow)?i-1:i,1);
- const sc=lvls.map(s=>{const mr=merAt(s),rev=s*mr,gp=rev*m,pf=gp-s-FX;
+ const sc=lvls.map(s=>{const mr=merAt(s),rev=s*mr,gp=rev*mBlend,pf=gp-s-FX;
   return {s:s,mer:mr,rev:rev,gp:gp,pf:pf,now:Math.abs(s-spNow)<spNow*0.03};});
  const best=sc.reduce((a,b)=>b.pf>a.pf?b:a,sc[0]);
  const nowRow=sc.find(x=>x.now)||{pf:0,s:spNow};
@@ -4493,13 +4505,42 @@ function beScen(g){
   +'<th style="'+TH+'">Sales/day</th><th style="'+TH+'">Delivered GP/day</th><th style="'+TH+'">Profit/day</th><th style="'+TH+'">Profit/month</th></tr>'
   +b2+'</table></div>';
  const binTxt=bins.map(b=>M(b.sp)+'→'+b.mer.toFixed(2)+'×').join(' · ');
- const verdict='<b>Break-even sales: '+M(beRev)+' a day.</b> That covers today’s '+M(spNow)+' of ads and '+M(FX)
-  +' of webstore-attributed ads and fixed costs at your delivered margin of '+(m*100).toFixed(1)+'% — a MER of '+(beMer?beMer.toFixed(2):'—')
+ /* v9.99 THE REAL DAYS. The ladder is a model; this is what actually happened, day by day, at
+    the spend you actually set — same margin and same fixed-cost charge, so the two are directly
+    comparable and nobody has to trust a projection to see whether the days paid. */
+ const actD=[];
+ for(let i=A.n-1;i>=0&&actD.length<10;i--){
+  const ds=new Date(a0+i*864e5).toISOString().slice(0,10);
+  if(ds>ST.e||ds<ST.s)continue;
+  const j=Math.round((Date.parse(ds+'T00:00:00Z')-f0)/864e5);
+  const sp=(A.spend||[])[i]||0;if(!sp)continue;
+  const web=(((SH.rev||[])[j]||0)-((SH.ref||[])[j]||0))*1000;
+  const st=(SCOPE==='both')?brRev(ds):0;
+  const rev=web+st,gp=web*m+st*stMg,pf=gp-sp-FX;
+  actD.push({d:ds,sp:sp,rev:rev,gp:gp,pf:pf,mer:sp?rev/sp:null,be:(sp+FX)/mBlend});}
+ actD.reverse();
+ let ab='';
+ actD.forEach(r=>{const hit=r.rev>=r.be;
+  ab+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+'</td>'
+   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +'<td style="'+TD+'">'+M(r.rev)+'</td>'
+   +'<td style="'+TD+'">'+M(r.be)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(hit?'#0f6e56':'#a3271a')+'">'+(hit?'cleared by '+M(r.rev-r.be):'short by '+M(r.be-r.rev))+'</td>'
+   +'<td style="'+TD+';color:'+(r.pf>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+SM(r.pf)+'</td></tr>';});
+ const actTbl=actD.length?('<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend you set</th><th style="'+TH+'">Sales</th>'
+  +'<th style="'+TH+'">Break-even sales</th><th style="'+TH+'">Against it</th><th style="'+TH+'">Profit</th></tr>'
+  +ab+'</table></div>'):'';
+ const tog='<a href="javascript:void(0)" onclick="beScope()" style="color:#5a5bf0;font-weight:800">'
+  +(SCOPE==='both'?'☑ branches included':'☐ include the branches')+'</a>';
+ const verdict='<b>Scope: '+(SCOPE==='both'?'webstore + the seven shops':'webstore only')+'</b> — '+tog+'. '
+  +'<b>Break-even sales: '+M(beRev)+' a day.</b> That covers today’s '+M(spNow)+' of ads and '+M(FX)
+  +' of fixed costs at a '+(mBlend*100).toFixed(1)+'% margin — a MER of '+(beMer?beMer.toFixed(2):'—')
   +'×, against '+be.toFixed(2)+'× for the ads alone. <b>Best level on the measured curve: '+M(best.s)+'/day</b> → '
   +SM(best.pf*30)+' a month, against '+SM(nowRow.pf*30)+' where you are now. ';
  pnlCard(g,'blend','Break-even sales, and what other spend levels would do'
   +INFO('MEASURED: every MER above is the average of REAL days in that spend band across the last '+n+' qualifying days of this account, not an assumed elasticity. Spend here is the WEBSTORE’S share of the budget — Google and TikTok whole, Meta split by its own reported web-versus-store value — the same convention the net-profit tile uses, so the two agree. Sales = spend × that MER. Delivered GP = sales × '+(m*100).toFixed(1)+'%, the margin left after goods, courier, COD and payment fees. Profit = GP − ad spend − the webstore’s own fixed costs (E£'+Math.round(FX).toLocaleString()+'/day: packing plus its revenue share of head office, from '+fixedDay.bm+'; courier, COD and payment fees are NOT here because the delivered margin already nets them — charging both would count the courier twice). INFERRED: that the same relationship holds when you deliberately move spend.'),
-  verdict,tbl
+  verdict,actTbl+tbl
   +'<div style="margin-top:9px;font-size:11.5px;color:#5b6478;line-height:1.55">'
   +'<b>The measured curve:</b> '+binTxt+' · <b>r = '+rho.toFixed(2)+'</b> over '+n+' days. MER '+(rho<0?'falls':'rises')+' as daily spend rises'
   +(Math.abs(rho)<0.45?', but loosely — the bands overlap heavily day to day, so one week at a new level proves nothing. Move in a single step, hold it a fortnight, then read this card again.':'.')
@@ -4818,7 +4859,13 @@ function netSplitCard(g){
 
  pnlCard(g,'odoo','Did we make money? — online vs branches, after everything'
    +INFO('Gross profit is exact per channel (Odoo margin on Shopify orders; report.pos.order margin per branch). Google and TikTok spend is charged wholly to online; Meta is split by its own attributed value, website against in-store CAPI. Posted OpEx is split by what each account is, with HQ rent, comms, other OpEx and untagged payroll shared pro-rata on revenue. The courier bill is NOT in the 31.* expense book, so it is charged separately to online: the full Bosta cost minus the shipping customers paid.'),
-  lead+(typeof EST!=='undefined'&&EST?'<span style="color:#b8621b"><b>'+nowM+' is the running month and its expense ledger is barely posted (E£'+Math.round(expTot(nowM)).toLocaleString()+' booked vs E£'+Math.round(expTot(lastFull)).toLocaleString()+' in '+lastFull+') — operating costs, payroll and courier below are charged at '+lastFull+'’s posted book × '+elapN+'/'+dimN+' elapsed days. Estimates, not postings.</b></span> ':'')+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
+  /* v9.99: this card reads whole accounting months, because rent, payroll and POS margin only
+     exist as monthly postings — but it sat under a date box showing 7 days and never said which
+     window produced its figures. Say it first, before any number. */
+  '<div style="display:inline-block;background:#eef1f7;border-radius:8px;padding:3px 9px;font-size:11.5px;font-weight:800;color:#26313f;margin-bottom:6px">Reading '
+   +(mons.length===1?('the whole month '+mons[0]):('months '+mons[0]+' → '+mons[mons.length-1]))
+   +' — NOT the '+Math.max(1,span(ST.s,ST.e))+' days in your date box</div><br>'
+  +lead+(typeof EST!=='undefined'&&EST?'<span style="color:#b8621b"><b>'+nowM+' is the running month and its expense ledger is barely posted (E£'+Math.round(expTot(nowM)).toLocaleString()+' booked vs E£'+Math.round(expTot(lastFull)).toLocaleString()+' in '+lastFull+') — operating costs, payroll and courier below are charged at '+lastFull+'’s posted book × '+elapN+'/'+dimN+' elapsed days. Estimates, not postings.</b></span> ':'')+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
   +'Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '
   +'The shared overhead pool of '+M(shared)+' goes '+Math.round(wOn*100)+'% online / '+Math.round((1-wOn)*100)+'% shops, on revenue.',
   body
@@ -15530,7 +15577,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260919-202401';
+const BUILD='20260919-204016';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
