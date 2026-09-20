@@ -988,6 +988,70 @@ def _google_at():
         log("google token", str(e)[:120]); return None
 
 
+def pull_ga4_touch(days=60):
+    """v9.91 FIRST-TOUCH vs LAST-TOUCH, Egypt only, rebuilt from SOURCE.
+
+    GA4's own channel grouping is unusable on this property: Meta stamps utm_medium with
+    the PLACEMENT name (Facebook_Mobile_Feed, Instagram_Stories), so GA4 files the bulk of
+    paid social as "Organic Social" -- 821k Egypt sessions of it in a 60-day window. Any
+    first-vs-last comparison built on defaultChannelGroup is therefore wrong before it
+    starts. This classifies on source instead: fb / ig are paid Meta whatever the medium,
+    facebook.com and its mobile variants are dark-social referral and stay separate."""
+    at = _google_at()
+    if not at:
+        return None
+    prop = os.environ.get("GA4_PROPERTY", "297783390")
+    end = END.isoformat(); start = (END - datetime.timedelta(days=days - 1)).isoformat()
+    METS = ["sessions", "transactions", "purchaseRevenue", "addToCarts"]
+
+    def rep(dim):
+        body = {"dateRanges": [{"startDate": start, "endDate": end}],
+                "dimensions": [{"name": dim}],
+                "metrics": [{"name": m} for m in METS],
+                "dimensionFilter": {"filter": {"fieldName": "country",
+                                               "stringFilter": {"value": "Egypt"}}},
+                "limit": 500}
+        req = urllib.request.Request(
+            "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
+            data=json.dumps(body).encode(),
+            headers={"Authorization": "Bearer " + at, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read()).get("rows") or []
+
+    def cls(sm):
+        s0, _, m = (sm or "").partition(" / ")
+        s0 = s0.strip().lower(); m = m.strip().lower()
+        if s0 in ("fb", "ig"): return "Meta"
+        if s0 == "facebook" and m in ("paid", "cpc", "paid_social"): return "Meta"
+        if s0.endswith("facebook.com") or s0.endswith("instagram.com"): return "Dark social"
+        if s0 == "google" and m in ("cpc", "ppc", "paid"): return "Google"
+        if s0 == "google" and m == "organic": return "Organic search"
+        if s0 == "tiktok" or s0.endswith("tiktok.com"): return "TikTok"
+        if s0 == "(direct)": return "Direct"
+        if "ourkids-eg.com" in s0: return "Self-referral"
+        return "Other"
+
+    out = {}
+    for tag, dim in (("last", "sessionSourceMedium"), ("first", "firstUserSourceMedium")):
+        try:
+            rows = rep(dim)
+        except Exception as e:
+            log("ga4 touch", tag, str(e)[:180]); return None
+        agg = {}
+        for r in rows:
+            c = cls((r["dimensionValues"][0].get("value") or ""))
+            v = [float(x.get("value") or 0) for x in r["metricValues"]]
+            a = agg.setdefault(c, [0.0, 0.0, 0.0, 0.0])
+            for i in range(4): a[i] += v[i]
+        out[tag] = {k: [round(x) for x in v] for k, v in agg.items()}
+    if not (out.get("last") and out.get("first")):
+        return None
+    log("ga4 touch :: last", {k: v[1] for k, v in out["last"].items()},
+        ":: first", {k: v[1] for k, v in out["first"].items()})
+    out["win"] = [start, end]
+    return out
+
+
 def pull_ga4_funnel(days=60):
     """v9.61 GA4 funnel by landing page, DAILY, Egypt only (the audit's standing rule:
     foreign sessions are 8% of traffic and ~0% of orders). Sessions / add-to-carts /
@@ -3402,7 +3466,8 @@ def pull_meta_ads(tok):
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
-                               "spend,impressions,reach,outbound_clicks,actions,action_values",
+                               "spend,impressions,reach,outbound_clicks,actions,action_values,"
+                               "video_play_actions",
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3446,7 +3511,7 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
-                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv")}}
+                                          "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv", "atc", "vp")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
                         D["sp"][i] += float(r.get("spend") or 0)
@@ -3458,6 +3523,8 @@ def pull_meta_ads(tok):
                         D["pu"][i] += _av(ac, ("offsite_conversion.fb_pixel_purchase",))
                         D["op"][i] += _av(ac, ("offline_conversion.purchase",))
                         D["vv"][i] += _av(ac, ("video_view",))
+                        D["atc"][i] += _av(ac, ("omni_add_to_cart",))
+                        D["vp"][i] += _av(r.get("video_play_actions"), ("video_view",))
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3470,7 +3537,8 @@ def pull_meta_ads(tok):
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
                       "imp": int(sum(D["im"])), "rch": int(sum(D["rch"])), "clk": int(sum(D["oc"])),
-                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"]))})
+                      "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"])),
+                      "atc": int(sum(D["atc"])), "vp": int(sum(D["vp"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
@@ -3515,6 +3583,21 @@ def pull_meta_ads(tok):
                 if cr.get("image_url"): a["im2"] = cr["image_url"]
                 if info.get("preview_shareable_link"): a["pl"] = info["preview_shareable_link"]
                 if info.get("effective_status"): a["st"] = str(info["effective_status"])[:32]
+        # v9.91: status for EVERY ad. The thumbnail read above covers only the top 80, so
+        # the rest arrived with no status at all and the CPA grid could not tell a live ad
+        # from a paused one -- which is the whole kill/reactivate split. This is a plain
+        # object read of one field, so it is cheap enough to do for all of them.
+        _all = [a["id"] for a in ads if a.get("id") and not a.get("st")]
+        for i in range(0, len(_all), 50):
+            try:
+                d = http_json("%s/?ids=%s&fields=effective_status&access_token=%s"
+                              % (GRAPH, ",".join(_all[i:i + 50]), tok))
+                for a in ads:
+                    inf = (d or {}).get(a["id"]) or {}
+                    if inf.get("effective_status"): a["st"] = str(inf["effective_status"])[:32]
+            except Exception as e:
+                log("meta ads :: status sweep ::", str(e)[:120]); break
+        log("meta ads :: status known for", sum(1 for a in ads if a.get("st")), "of", len(ads))
         # v9.7.2: where each ad actually SENDS people. Traffic Routing flags a landing page
         # as broken; without this you still have to hunt Ads Manager for who is pointing at
         # it. Plain object read (no insights), so it is cheap enough for every spending ad.
@@ -6157,6 +6240,7 @@ def build():
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
+              "touch": safe(pull_ga4_touch) or prev.get("touch") or {},
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
               "cvr": _cvr_with_stock_hist(XTRA.get("cvr") or prev.get("cvr") or {}, prev),
