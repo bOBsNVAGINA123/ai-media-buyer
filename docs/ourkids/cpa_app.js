@@ -507,6 +507,16 @@ function vTouch(D){
    lATC:sp&&l[3]?sp/l[3]:Infinity, fATC:sp&&f[3]?sp/f[3]:Infinity,
    dT:l[1]?f[1]/l[1]-1:0, dR:l[2]?f[2]/l[2]-1:0};}).sort((a,b)=>b.lR-a.lR);
  const m=rows.find(r=>r.ch==='Meta')||{}, g=rows.find(r=>r.ch==='Google')||{};
+ /* Before reading anything into the first-vs-last gap: a channel whose spend ramped inside
+    the window loses first-touch credit for arithmetic reasons, not behavioural ones. This
+    is that check, computed live off the daily spend series. */
+ const grow=k=>{const A=O.ad,w=TOUCH.win||SEED.touchWin; if(!A||!w)return 0;
+   const s0=new Date(A.start), i=Math.round((new Date(w[0])-s0)/864e5), j=Math.round((new Date(w[1])-s0)/864e5);
+   const nd=j-i+1; if(i-nd<0)return 0;
+   const v=A[k]||[]; let cur=0,prv=0;
+   for(let x=i;x<=j;x++)cur+=v[x]||0; for(let x=i-nd;x<i;x++)prv+=v[x]||0;
+   return prv>0?cur/prv-1:0;};
+ const gGrow=grow('gspend'), mGrow=grow('mspend');
  return '<div class="kpis">'
  +kpi('Meta — last touch',EGP(m.lCPA),N0(m.lT)+' tx · ROAS '+N2(m.lROAS))
  +kpi('Meta — first touch',EGP(m.fCPA),N0(m.fT)+' tx · ROAS '+N2(m.fROAS))
@@ -523,14 +533,25 @@ function vTouch(D){
  +'Every number on this tab is therefore rebuilt from <b>source</b>, not from GA4\'s channel: '
  +'<code>fb</code> and <code>ig</code> are paid Meta regardless of medium; <code>facebook.com</code> / <code>m.facebook.com</code> referrals are dark social and are kept separate. '
  +'Egypt-only, so the Singapore datacentre bot flood is excluded.</div>'
- +'<div class="banner b"><b>The answer to the question.</b> For Meta the two models agree to within '+PC(Math.abs(m.dT))+
+ +'<div class="banner b"><b>The answer to the question.</b> For Meta the two models agree to within '+(Math.round(Math.abs(m.dT)*1000)/10)+'%'+
  ' on transactions — E£'+N0(m.lCPA)+' last touch against E£'+N0(m.fCPA)+' first touch. '
  +'Switching attribution model does not change what Meta costs you, because most journeys here are one session long; there is no second touch to move. '
- +'Google is the one that moves: first touch credits it '+PC(g.dT)+' fewer transactions, which puts its CPA at E£'+N0(g.fCPA)+
- ' instead of E£'+N0(g.lCPA)+'. Read directionally that means Google is more often the <b>closer</b> than the <b>opener</b> — '
- +'it is harvesting demand something else created, which is consistent with the brand-leak already measured on PMax. '
- +'On cost per add-to-cart, the channel the method says to judge TOF on, Google wins under both models: E£'+N0(g.lATC)+' against Meta\'s E£'+N0(m.lATC)+'.</div>'
- +card('Every channel, both models','Paid CPA/ROAS only shown where there is spend to divide by. Revenue is GA4 purchase revenue, Egypt only, and will not tie to Odoo.',
+ +'Google is the one that moves: first touch credits it '+(Math.round(Math.abs(g.dT)*1000)/10)+'% fewer transactions, which puts its CPA at E£'+N0(g.fCPA)+
+ ' instead of E£'+N0(g.lCPA)+'. <b>That gap cannot be attributed.</b> The obvious reading is that Google closes demand something else '
+ +'created — but the falsifying test kills it: Google spend '+PC(gGrow)+' against the previous 60 days while Meta moved '+PC(mGrow)+'. '
+ +'A channel that is scaling hard always loses first-touch credit, because the users converting today were first acquired before it scaled. '
+ +'Until a geo holdout or an incrementality test separates those two, the honest answer is that the model gap is real and its cause is not established.<br/><br/>'
+ +'On cost per add-to-cart, the metric the method says to judge TOF on, Google wins under both models: E£'+N0(g.lATC)+' against Meta\'s E£'+N0(m.lATC)+'.</div>'
+ +card('The confound, measured','Spend in the window against the 60 days before it. Read the first-vs-last gap only against this.',
+   '<div class="kpis">'+kpi('Google spend growth',PC(gGrow),'vs prior 60 days',Math.abs(gGrow)>0.5?'#e23a63':'')
+   +kpi('Meta spend growth',PC(mGrow),'vs prior 60 days')
+   +kpi('Google first-touch gap',PC(g.dT),'transactions, first vs last')
+   +kpi('Meta first-touch gap',PC(m.dT),'transactions, first vs last')+'</div>'
+   +'<div class="mut" style="font-size:12px;line-height:1.7">If the growth number is large and the first-touch gap is negative for the same channel, '
+   +'the two are not separable here. A first-touch model assigns a converting user to whatever brought them in <i>originally</i>, which may predate the window entirely; '
+   +'a channel that doubled its spend last month has disproportionately many converters it did not originally acquire. '
+   +'The measurement that does separate them is a geo holdout, not another attribution model.</div>')
++card('Every channel, both models','Paid CPA/ROAS only shown where there is spend to divide by. Revenue is GA4 purchase revenue, Egypt only, and will not tie to Odoo.',
    table(rows,[
     ['ch','Channel',r=>'<b>'+r.ch+'</b>'],['sp','Spend',r=>r.sp?EGP(r.sp):'<span class="mut">—</span>'],
     ['lT','Tx last',r=>N0(r.lT)],['fT','Tx first',r=>N0(r.fT)],['dT','Δ tx',r=>(r.dT>0?'<span class="g">':'<span class="r">')+PC(r.dT)+'</span>'],
