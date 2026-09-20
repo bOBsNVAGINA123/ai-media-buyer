@@ -535,7 +535,7 @@ function vTouch(D){
  +'Egypt-only, so the Singapore datacentre bot flood is excluded.</div>'
  +'<div class="banner b"><b>The answer to the question.</b> For Meta the two models agree to within '+(Math.round(Math.abs(m.dT)*1000)/10)+'%'+
  ' on transactions — E£'+N0(m.lCPA)+' last touch against E£'+N0(m.fCPA)+' first touch. '
- +'Switching attribution model does not change what Meta costs you, because most journeys here are one session long; there is no second touch to move. '
+ +'Switching attribution model does not change what Meta costs you. Either the journeys are short, or Meta sits at both ends of them — this data cannot separate those two, and for the decision it does not need to. '
  +'Google is the one that moves: first touch credits it '+(Math.round(Math.abs(g.dT)*1000)/10)+'% fewer transactions, which puts its CPA at E£'+N0(g.fCPA)+
  ' instead of E£'+N0(g.lCPA)+'. <b>That gap cannot be attributed.</b> The obvious reading is that Google closes demand something else '
  +'created — but the falsifying test kills it: Google spend '+PC(gGrow)+' against the previous 60 days while Meta moved '+PC(mGrow)+'. '
