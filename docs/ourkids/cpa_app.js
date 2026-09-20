@@ -76,6 +76,28 @@ function status(a){const x=ADX[a.id]; const s=a.st||(x&&x[3])||'';
 function atcOf(a,i0,i1,full){
  if(a.d&&a.d.atc)return S(a,'atc',i0,i1);
  const x=ADX[a.id]; return (full&&x)?x[0]:0;}
+/* Roll the per-ad daily series up to ad set or campaign. Everything downstream -- the
+   shrinkage, the intervals, the verdicts, the scatter -- is level-agnostic, so this is the
+   only place that has to know. A group is "live" if any member is still delivering. */
+const DK=["sp","pv","fv","pu","op","oc","im","rch","nc","ncv","vv","atc","vp"];
+function units(level){
+ if(level==='ad')return MADS;
+ const key=a=>level==='set'?(a.asid||a.as):(a.cid||a.cmp);
+ const G={};
+ MADS.forEach(a=>{
+  const k=key(a); if(!k)return;
+  let g=G[k];
+  if(!g){g=G[k]={id:String(k),n:(level==='set'?a.as:a.cmp)||'(unnamed)',
+    cmp:level==='set'?a.cmp:'',as:'',acct:a.acct,pf:'meta',lvl:level,kids:0,
+    d:{},imp:0,atc:0,vp:0,_sp:-1,st:''};
+   DK.forEach(k2=>g.d[k2]=new Array(WN).fill(0));}
+  g.kids++;
+  DK.forEach(k2=>{const v=(a.d&&a.d[k2])||[];for(let i=0;i<WN;i++)g.d[k2][i]+=v[i]||0;});
+  g.imp+=a.imp||0; g.atc+=a.atc||0; g.vp+=a.vp||0;
+  if(status(a)==='act')g.st='ACTIVE'; else if(!g.st)g.st=a.st||'PAUSED';
+  const sp=a.sp||0; if(sp>g._sp){g._sp=sp; g.th=a.th||a.im2; g.pl=null; g.topAd=a.n;}
+ });
+ return Object.values(G);}
 function dayIdx(winSel){const end=WN-MATURE; // exclusive
  if(winSel==='60')return [0,WN];
  const nd=parseInt(winSel,10); return [Math.max(0,end-nd),end];}
@@ -89,7 +111,9 @@ function build(){
        mins=parseFloat(document.getElementById('mins').value)||0,
        fSt=document.getElementById('st').value,fFmt=document.getElementById('fmt').value,
        fFn=document.getElementById('fn').value;
- let rows=MADS.map(a=>{
+ const level=(document.getElementById('lvl')||{}).value||'ad';
+ const UNITS=units(level);
+ let rows=UNITS.map(a=>{
   const sp=S(a,'sp',i0,i1); if(sp<=0)return null;
   const pu=S(a,'pu',i0,i1),op=S(a,'op',i0,i1),pv=S(a,'pv',i0,i1),fv=S(a,'fv',i0,i1);
   const x=ADX[a.id]||[0,0,0,''];
@@ -101,7 +125,7 @@ function build(){
    roasOn:sp?pv/sp:0, roasOff:sp?fv/sp:0, roasOffInc:sp?fv*H/sp:0, roasAll:sp?(pv+fv*H)/sp:0,
    aovOn:pu?pv/pu:0, aovOff:op?fv/op:0,
    oc:S(a,'oc',i0,i1),im:S(a,'im',i0,i1),nc:S(a,'nc',i0,i1),
-   atc:atcOf(a,i0,i1,true),st:status(a),fmt:fmt(a),fn:funnel(a),
+   atc:atcOf(a,i0,i1,true),st:status(a),fmt:fmt(a),fn:funnel(a),lvl:level,kids:a.kids||1,topAd:a.topAd,
    sp7:S(a,'sp',Math.max(i0,i1-7),i1),k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)
      :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*hair
      :S(a,'pu',Math.max(i0,i1-7),i1)+S(a,'op',Math.max(i0,i1-7),i1)*hair),
@@ -153,7 +177,7 @@ function build(){
   else if(!live&&r.cpaHi<scale&&r.k>=3)r.act='REACTIVATE';
   else if(r.k<3)r.act='THIN';
   else r.act='HOLD';});
- return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,
+ return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,
          win:document.getElementById('win').value};
 }
 
@@ -161,9 +185,9 @@ function build(){
    The simulation assumes an ad keeps its CPA when you give it 20% more budget.
    That is an assumption, not a measurement, so measure it: every week-on-week
    budget rise of >=20% in the last 60 days, and what CPA did the next week. */
-function budgetHoldTest(basis,hair){
+function budgetHoldTest(basis,hair,level){
  const out=[];
- MADS.forEach(a=>{
+ units(level||'ad').forEach(a=>{
   const sp=a.d.sp||[];
   const kk=(b,e)=>{let t=0;for(let i=b;i<e;i++){const p=(a.d.pu||[])[i]||0,o=(a.d.op||[])[i]||0;
     t+=basis==='on'?p:basis==='off'?o*hair:p+o*hair;}return t;};
@@ -181,10 +205,13 @@ function budgetHoldTest(basis,hair){
 
 /* ---------- ad identity: thumbnail, link, modal ---------- */
 const ACCT_ID={'Ourkids EGP':'336343742536460','Basic':'652528128810469'};
+const NOUN={ad:'ad',set:'ad set',cmp:'campaign'};
 function adLink(r){
- if(r.pl)return r.pl;                                   // Meta's own shareable preview
  const a=ACCT_ID[r.acct]||ACCT_ID['Ourkids EGP'];
- return 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='+a+'&selected_ad_ids='+r.id;}
+ const b='https://adsmanager.facebook.com/adsmanager/manage/';
+ if(r.lvl==='set')return b+'campaigns/adsets?act='+a+'&selected_adset_ids='+r.id;
+ if(r.lvl==='cmp')return b+'campaigns?act='+a+'&selected_campaign_ids='+r.id;
+ return r.pl||(b+'ads?act='+a+'&selected_ad_ids='+r.id);}
 function thumb(r,sz){sz=sz||40;
  const st='width:'+sz+'px;height:'+sz+'px;border-radius:8px;object-fit:cover;flex:none;background:#eef0f5';
  return r.th?'<img src="'+r.th+'" style="'+st+'" loading="lazy" alt=""/>'
@@ -192,7 +219,7 @@ function thumb(r,sz){sz=sz||40;
 function adCell(r){
  return '<a href="#" onclick="openAd(\''+r.id+'\');return false" style="display:flex;gap:9px;align-items:center;text-decoration:none;color:inherit">'
   +thumb(r)+'<span style="min-width:0"><span class="nm" style="font-weight:700">'+r.n+'</span><br/>'
-  +'<span class="mut" style="font-size:10.5px">'+(r.cmp||'')+'</span></span></a>';}
+  +'<span class="mut" style="font-size:10.5px">'+(r.lvl==='ad'?(r.cmp||''):r.kids+' ads · top: '+(r.topAd||''))+'</span></span></a>';}
 let LASTD=null;
 function openAd(id){
  const r=(LASTD&&LASTD.universe||[]).find(x=>x.id===id); if(!r)return;
@@ -201,12 +228,12 @@ function openAd(id){
  '<div class="mbg" onclick="closeAd()"></div><div class="mbx">'
  +'<div style="display:flex;gap:14px;align-items:flex-start">'+thumb(r,110)
  +'<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;line-height:1.3">'+r.n+'</div>'
- +'<div class="mut" style="font-size:11.5px;margin-top:3px">'+r.cmp+' › '+r.as+'</div>'
+ +'<div class="mut" style="font-size:11.5px;margin-top:3px">'+(r.lvl==='ad'?r.cmp+' \u203a '+r.as:r.kids+' ads inside \u00b7 biggest spender: '+(r.topAd||'?'))+'</div>'
  +'<div style="margin-top:8px"><span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span> '
  +'<span class="tg '+(r.st==='act'?'scale':'hold')+'">'+(r.st==='act'?'LIVE':'PAUSED')+'</span> '
  +'<span class="tg hold">'+r.fmt+'</span> <span class="tg hold">'+r.fn+'</span></div>'
  +'<a class="btn" style="margin-top:10px;display:inline-block;text-decoration:none" target="_blank" href="'+adLink(r)+'">'
- +(r.pl?'See the ad':'Open in Ads Manager')+'</a></div></div>'
+ +(r.lvl==='ad'&&r.pl?'See the ad':'Open in Ads Manager')+'</a></div></div>'
  +'<div class="two" style="margin-top:14px;gap:10px"><table>'
  +row('Spend in window',EGP(r.sp))+row('Spend last 7d',EGP(r.sp7))
  +row('Online purchases',N0(r.pu))+row('In-store purchases',N0(r.op))
@@ -230,6 +257,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape')closeAd();});
 
 /* ---------- plain-language verdicts ---------- */
 const VERB={KILL:'TURN OFF',CUT:'CUT BUDGET',SCALE:'RAISE 20%',REACTIVATE:'TURN BACK ON',HOLD:'LEAVE ALONE',THIN:'TOO NEW'};
+function noun(D){return NOUN[D&&D.level||'ad'];}
 function why(r,D){
  const x=Math.round(r.cpa/D.target*100)/100;
  if(r.act==='KILL')return '<b>Turn it off.</b> Costs '+EGP(r.cpa)+' a purchase — '+x+'× your '+EGP(D.target)+' target, and even the best case for it ('
@@ -297,7 +325,7 @@ let TAB='act';
 function boot(){
  document.getElementById('tabs').innerHTML=TABS.map(t=>'<div class="tab'+(t[0]===TAB?' on':'')+'" data-t="'+t[0]+'">'+t[1]+'</div>').join('');
  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{TAB=t.dataset.t;boot();});
- ['basis','hair','win','tgt','mins','st','fmt','fn','dens'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
+ ['lvl','basis','hair','win','tgt','mins','st','fmt','fn','dens'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
  const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
@@ -313,6 +341,7 @@ function boot(){
  document.getElementById('body').innerHTML=
   TAB==='grid'?vGrid(D):TAB==='act'?vAct(D):TAB==='pred'?vPred(D):
   TAB==='store'?vStore(D):TAB==='touch'?vTouch(D):vMeth(D);
+ stopPlay(); if(SCT.chart&&TAB!=='grid'){SCT.chart.destroy();SCT.chart=null;}
  if(TAB==='grid')drawScatter(D);
  if(TAB==='pred')drawPred(D);
  if(TAB==='touch')drawTouch(D);
@@ -339,36 +368,138 @@ function vGrid(D){
  +'Left half is still testing — a cheap CPA there is mostly luck, so every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
  +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' · <b style="color:#5a5bf0">target</b> '+EGP(D.target)
  +' · <b style="color:#e23a63">kill</b> '+EGP(D.kill)+' · <b style="color:#12b886">scale</b> '+EGP(D.scale)+'.</div>'
- +card('Spend vs CPA — every Meta ad','Click any dot to open that ad. Hollow ring = its raw CPA, so you can see how far the thin ones move. '+sum,
-   '<div style="height:520px"><canvas id="sc"></canvas></div>')
+ +card('Spend vs cost per purchase — every '+NOUN[D.level],
+   'Bubble size = purchases. Click any bubble to open it. Hit play to walk the window forward a week at a time and watch things drift. '+sum,
+   '<div class="tp"><button class="btn" id="play">\u25b6 Play the 8 weeks</button>'
+   +'<input type="range" id="scrub" min="0" value="0" step="1"/>'
+   +'<span id="scrubL" class="mut"></span></div>'
+   +'<div style="height:540px"><canvas id="sc"></canvas></div>')
  +card('Every ad','Click any row to open the ad. Click a column head to sort. Best/worst case is the 90% interval on the shrunk rate.',
    table(sortRows(D.rows),COLS(D),'tg'));
 }
 function drawScatter(D){
  const c=document.getElementById('sc'); if(!c)return;
- const mk=act=>({label:act,data:D.rows.filter(r=>r.act===act&&isFinite(r.cpa)).map(r=>({x:r.sp,y:r.cpa,r:r})),
-   backgroundColor:COL[act],borderColor:COL[act],pointRadius:5,pointHoverRadius:8});
- const raw={label:'raw CPA',data:D.rows.filter(r=>isFinite(r.rawCpa)&&r.rawCpa>0).map(r=>({x:r.sp,y:r.rawCpa,r:r})),
-   backgroundColor:'transparent',borderColor:'#c8cee0',pointRadius:5,pointStyle:'circle',borderWidth:1};
- const lines=[['blended',D.cur,'#9aa3b5'],['target',D.target,'#5a5bf0'],['kill',D.kill,'#e23a63'],['scale',D.scale,'#12b886']];
- const maxY=Math.min(Math.max(...D.rows.map(r=>r.cpaHi).filter(isFinite))||D.kill*3, D.kill*4);
- new Chart(c,{type:'scatter',data:{datasets:[raw,...Object.keys(COL).map(mk).filter(d=>d.data.length)]},
-  options:{maintainAspectRatio:false,parsing:false,onClick:(e,els)=>{if(els.length){
-    const d=e.chart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(d&&d.r)openAd(d.r.id);}},
-   onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default'},
-   scales:{x:{type:'logarithmic',title:{display:true,text:'Lifetime spend in window (E£, log)'}},
-           y:{title:{display:true,text:'CPA (E£)'},min:0,max:maxY}},
-   plugins:{legend:{position:'bottom'},
-    tooltip:{callbacks:{label:c=>{const r=c.raw.r;return [r.n,'spend '+EGP(r.sp)+' · '+N1(r.k)+' purch',
-      'CPA raw '+EGP(r.rawCpa)+' → shrunk '+EGP(r.cpa),'90% CI '+EGP(r.cpaLo)+'–'+EGP(r.cpaHi),
-      r.fmt+' · '+r.fn+' · '+(r.st==='act'?'live':'paused'),'→ '+r.act];}}},
-    annotation:false},
-   },plugins:[{id:'ln',afterDraw(ch){const{ctx,chartArea:a,scales}=ch;ctx.save();ctx.setLineDash([5,4]);ctx.lineWidth=1.4;ctx.font='700 10px sans-serif';
-    lines.forEach(([t,v,col],i)=>{const y=scales.y.getPixelForValue(v);if(y<a.top||y>a.bottom)return;
-     ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(a.left,y);ctx.lineTo(a.right,y);ctx.stroke();
-     const lab=t+' '+EGP(v), x=a.left+8+i*(Math.min(150,(a.right-a.left-40)/4));
-     ctx.fillStyle='#fff';ctx.fillRect(x-3,y-13,ctx.measureText(lab).width+6,13);
-     ctx.fillStyle=col;ctx.fillText(lab,x,y-4);});ctx.restore();}}]});
+ if(SCT.chart){SCT.chart.destroy();SCT.chart=null;}
+ SCT.D=D; SCT.frame=SCT.frames-1;            // start on "all of it"
+ buildFrames(D);
+ SCT.chart=new Chart(c,{type:'bubble',data:{datasets:frameSets(D,SCT.frame)},
+  options:{maintainAspectRatio:false,
+   animation:{duration:650,easing:'easeOutQuart'},
+   transitions:{active:{animation:{duration:220}}},
+   onClick:(e,els)=>{if(els.length){const d=e.chart.data.datasets[els[0].datasetIndex].data[els[0].index];
+     if(d&&d.r)openAd(d.r.id);}},
+   onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
+   scales:{x:{type:'logarithmic',title:{display:true,text:'Spend in window (E£, log)'},
+              grid:{color:'#eef0f5'}},
+           y:{title:{display:true,text:'Cost per purchase (E\u00a3)'},
+              min:-SCT.maxY*0.06,max:SCT.maxY*1.04,grid:{color:'#eef0f5'},
+              ticks:{callback:v=>v<0?'':v.toLocaleString()}}},
+   layout:{padding:{right:14,top:6}},
+   plugins:{legend:{position:'bottom',labels:{filter:it=>it.text!=='trail'}},
+    tooltip:{enabled:false,external:htmlTip}}},
+  plugins:[quadrants(D),refLines(D)]});
+ wireScrub(D);
+}
+const SCT={chart:null,frames:1,frame:0,byFrame:[],maxY:0,D:null,timer:null};
+/* Frames are cumulative-to-date weekly cuts of the same window, so pressing play walks the
+   grid forward and you watch an ad drift up as its CPA decays. Same estimator each frame. */
+function buildFrames(D){
+ const span=D.i1-D.i0, step=7, n=Math.max(1,Math.ceil(span/step));
+ SCT.frames=n; SCT.byFrame=[];
+ const basis=D.basis,hair=D.hair;
+ for(let f=0;f<n;f++){
+  const end=Math.min(D.i1,D.i0+(f+1)*step);
+  const m={};
+  D.rows.forEach(r=>{
+   const sp=S(r.a,'sp',D.i0,end);
+   if(sp<=0)return;
+   const pu=S(r.a,'pu',D.i0,end),op=S(r.a,'op',D.i0,end);
+   const k=basis==='on'?pu:basis==='off'?op*hair:pu+op*hair;
+   const q=post(D.pr,k,sp);
+   m[r.id]={x:sp,y:q.cpa,k,r};});
+  SCT.byFrame.push(m);}
+ const ys=[];D.rows.forEach(r=>{if(isFinite(r.cpaHi))ys.push(Math.min(r.cpaHi,D.kill*4));});
+ ys.sort((a,b)=>a-b);
+ SCT.maxY=Math.max(D.kill*1.25, ys.length?ys[Math.floor(ys.length*0.97)]:D.kill*2);
+}
+function frameSets(D,f){
+ const m=SCT.byFrame[f]||{};
+ const pts=Object.values(m);
+ const rad=k=>Math.max(4,Math.min(26,4+Math.sqrt(Math.max(k,0))*1.6));
+ const mk=act=>({label:act,
+   data:pts.filter(p=>p.r.act===act).map(p=>({x:p.x,y:Math.min(p.y,SCT.maxY*1.02),r:rad(p.k),ad:p.r,k:p.k,cpa:p.y})),
+   backgroundColor:COL[act]+'cc',borderColor:'#fff',borderWidth:1.5,
+   hoverBackgroundColor:COL[act],hoverBorderWidth:3,hoverBorderColor:COL[act]});
+ return Object.keys(COL).map(mk).filter(d=>d.data.length);
+}
+function quadrants(D){return {id:'q',beforeDatasetsDraw(ch){const{ctx,chartArea:a,scales}=ch;
+ const ySc=scales.y.getPixelForValue(D.scale), yK=scales.y.getPixelForValue(D.kill);
+ const xm=scales.x.getPixelForValue(Math.max(D.tot.sp/Math.max(D.rows.length,1),1));
+ ctx.save();
+ ctx.fillStyle='rgba(18,184,134,.07)';ctx.fillRect(xm,Math.max(ySc,a.top),a.right-xm,a.bottom-Math.max(ySc,a.top));
+ ctx.fillStyle='rgba(226,58,99,.07)';ctx.fillRect(xm,a.top,a.right-xm,Math.min(yK,a.bottom)-a.top);
+ ctx.fillStyle='rgba(120,130,160,.045)';ctx.fillRect(a.left,a.top,xm-a.left,a.bottom-a.top);
+ ctx.font='800 10px sans-serif';ctx.fillStyle='rgba(90,100,125,.5)';
+ ctx.fillText('TESTING',a.left+8,a.top+16);
+ ctx.textAlign='right';
+ ctx.fillStyle='rgba(226,58,99,.55)';ctx.fillText('EXPENSIVE AT REAL MONEY — TURN OFF',a.right-8,a.top+16);
+ ctx.fillStyle='rgba(13,138,98,.55)';ctx.fillText('PROVEN CHEAP — RAISE IT',a.right-8,a.bottom-8);
+ ctx.restore();}};}
+function refLines(D){
+ const L=[['blended',D.cur,'#9aa3b5'],['target',D.target,'#5a5bf0'],['kill',D.kill,'#e23a63'],['scale',D.scale,'#12b886']];
+ return {id:'ln',afterDatasetsDraw(ch){const{ctx,chartArea:a,scales}=ch;ctx.save();
+  ctx.setLineDash([5,4]);ctx.lineWidth=1.4;ctx.font='700 10px sans-serif';ctx.textAlign='left';
+  L.forEach(([t,v,col],i)=>{const y=scales.y.getPixelForValue(v);if(y<a.top||y>a.bottom)return;
+   ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(a.left,y);ctx.lineTo(a.right,y);ctx.stroke();
+   const lab=t+' '+EGP(v), x=a.left+8+i*(Math.min(150,(a.right-a.left-40)/4));
+   ctx.fillStyle='#fff';ctx.fillRect(x-3,y-13,ctx.measureText(lab).width+6,13);
+   ctx.fillStyle=col;ctx.fillText(lab,x,y-4);});
+  ctx.restore();}};}
+/* HTML tooltip so the creative itself is in it -- this is a tool for looking at ads. */
+function htmlTip(ctx){
+ let el=document.getElementById('sctip');
+ if(!el){el=document.createElement('div');el.id='sctip';document.body.appendChild(el);}
+ const tt=ctx.tooltip;
+ if(!tt.opacity){el.style.opacity=0;return;}
+ const p=tt.dataPoints&&tt.dataPoints[0]; if(!p)return;
+ const d=p.dataset.data[p.dataIndex], r=d.ad;
+ el.innerHTML='<div class="tw">'+thumb(r,64)+'<div style="min-width:0">'
+  +'<div class="tn">'+r.n+'</div>'
+  +'<div class="tg2 '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</div>'
+  +'<div class="tl">'+EGP(d.x)+' spent · '+N1(d.k)+' purchases</div>'
+  +'<div class="tl"><b>'+EGP(d.cpa)+'</b> each · '+EGP(r.cpaLo)+'–'+EGP(r.cpaHi)+'</div>'
+  +'<div class="tl">online '+N2(r.roasOn)+'× · store '+N2(r.roasOff)+'×</div>'
+  +'<div class="tl mut">'+(r.lvl==='ad'?r.cmp:r.kids+' ads')+'</div></div></div>';
+ const b=ctx.chart.canvas.getBoundingClientRect();
+ el.style.opacity=1;
+ el.style.left=(b.left+scrollX+tt.caretX+16)+'px';
+ el.style.top=(b.top+scrollY+tt.caretY-24)+'px';
+}
+function wireScrub(D){
+ const sl=document.getElementById('scrub'); if(!sl)return;
+ sl.max=SCT.frames-1; sl.value=SCT.frames-1;
+ sl.oninput=()=>{stopPlay();setFrame(+sl.value);};
+ document.getElementById('play').onclick=()=>{
+  if(SCT.timer){stopPlay();return;}
+  document.getElementById('play').textContent='⏸ Pause';
+  let f=(SCT.frame>=SCT.frames-1)?0:SCT.frame;
+  setFrame(f);
+  SCT.timer=setInterval(()=>{f++;if(f>=SCT.frames){stopPlay();return;}
+   setFrame(f);document.getElementById('scrub').value=f;},900);};
+ setFrame(SCT.frames-1);
+}
+function stopPlay(){if(SCT.timer){clearInterval(SCT.timer);SCT.timer=null;}
+ const b=document.getElementById('play'); if(b)b.textContent='▶ Play the 8 weeks';}
+function setFrame(f){
+ const D=SCT.D; if(!D||!SCT.chart)return;
+ SCT.frame=f;
+ SCT.chart.data.datasets=frameSets(D,f);
+ SCT.chart.update();
+ const end=new Date(WSTART); end.setDate(end.getDate()+Math.min(D.i1,D.i0+(f+1)*7)-1);
+ const st=new Date(WSTART); st.setDate(st.getDate()+D.i0);
+ const lab=document.getElementById('scrubL');
+ if(lab)lab.textContent=st.toISOString().slice(0,10)+' → '+end.toISOString().slice(0,10)
+  +'  ('+(f+1)+' of '+SCT.frames+' weeks)';
 }
 
 /* ---------- 2. ACTIONS ---------- */
@@ -410,7 +541,7 @@ function doCard(r,D){
  +'<div class="m">'+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'×)'
  +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'×)</div></div></div>';}
 function whyShort(r,D){
- if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target. Even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn it off</b> and take back '+EGP(r.sp7)+'/wk.';
+ if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target. Even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn '+(r.lvl==='ad'?'it':'the whole '+noun(D))+' off</b> and take back '+EGP(r.sp7)+'/wk.';
  if(r.act==='CUT')return 'Reads <b>'+EGP(r.cpa)+'</b>, over the '+EGP(D.kill)+' kill line — but the data still allows '+EGP(r.cpaLo)+'. <b>Halve the budget</b>, re-read in a week.';
  if(r.act==='SCALE')return 'Buys at <b>'+EGP(r.cpa)+'</b> and even its worst case ('+EGP(r.cpaHi)+') beats '+EGP(D.scale)+'. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, stop at '+EGP(D.target)+'.';
  if(r.act==='REACTIVATE')return 'Paused, but bought at <b>'+EGP(r.cpa)+'</b> on '+N1(r.k)+' purchases. <b>Switch it back on</b> unless it was a one-off promo.';
@@ -421,7 +552,7 @@ function sec(title,n,note,body){
   +(note?'<div class="mut" style="font-size:11.8px;margin:-4px 0 9px;line-height:1.55">'+note+'</div>':'')+body;}
 
 function vAct(D){
- const S=simulate(D), bh=budgetHoldTest(D.basis,D.hair);
+ const S=simulate(D), bh=budgetHoldTest(D.basis,D.hair,D.level);
  const dl=S.cpaNow>0?(S.cpaNew/S.cpaNow-1):0;
  const pick=a=>D.rows.filter(r=>r.act===a).sort((x,y)=>y.sp7-x.sp7||y.sp-x.sp);
  const kill=pick('KILL'), cut=pick('CUT'), scale=pick('SCALE'),
@@ -677,7 +808,7 @@ function drawTouch(D){
 
 /* ---------- 6. METHOD ---------- */
 function vMeth(D){
- const bh=budgetHoldTest(D.basis,D.hair);
+ const bh=budgetHoldTest(D.basis,D.hair,D.level);
  return card('What this page does','A rebuild of the Meta CPA-quadrant method on OurKids numbers, with the estimates the original method leaves out.',
  '<div class="meth">'
  +'<h4>The method, step by step</h4><ol>'
