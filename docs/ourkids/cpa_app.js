@@ -254,7 +254,10 @@ function card(h,cs,body){return '<div class="card"><h3>'+h+'</h3><div class="cs"
 let SORT={k:'sp',d:-1};
 /* One column set everywhere. Online and in-store are shown side by side because they do
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
-function COLS(D){const H=Math.round(D.hair*100);return [
+function COLS(D){const H=Math.round(D.hair*100);
+ const simple=(document.getElementById('dens')||{}).value!=='f';
+ const KEEP=['n','act','st','sp','cppOn','roasOn','cppOff','roasOff','cpa'];
+ const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
  ['st','',r=>r.st==='act'?'<span class="g">live</span>':'<span class="mut">paused</span>'],
@@ -272,7 +275,8 @@ function COLS(D){const H=Math.round(D.hair*100);return [
  ['cpatc','Cost/ATC',r=>EGP(r.cpatc)],
  ['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn],
  ['trend','Trend',r=>r.trend===null?'<span class="mut">too few</span>'
-   :(r.trend>0?'<span class="r">CPA +'+Math.round(r.trend*100)+'%</span>':'<span class="g">CPA '+Math.round(r.trend*100)+'%</span>')+(r.trendSig?' *':'')]];}
+   :(r.trend>0?'<span class="r">CPA +'+Math.round(r.trend*100)+'%</span>':'<span class="g">CPA '+Math.round(r.trend*100)+'%</span>')+(r.trendSig?' *':'')]];
+ return simple?all.filter(c=>KEEP.indexOf(c[0])>-1):all;}
 function table(rows,cols,id){
  const th=cols.map(c=>'<th data-k="'+c[0]+'">'+c[1]+'</th>').join('');
  const rs=rows.map(r=>'<tr'+(r.id?' class="cl" onclick="if(!event.target.closest(\'a\'))openAd(\''+r.id+'\')"':'')+'>'
@@ -293,7 +297,7 @@ let TAB='act';
 function boot(){
  document.getElementById('tabs').innerHTML=TABS.map(t=>'<div class="tab'+(t[0]===TAB?' on':'')+'" data-t="'+t[0]+'">'+t[1]+'</div>').join('');
  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{TAB=t.dataset.t;boot();});
- ['basis','hair','win','tgt','mins','st','fmt','fn'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
+ ['basis','hair','win','tgt','mins','st','fmt','fn','dens'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
  const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
@@ -330,9 +334,9 @@ function vGrid(D){
  const buckets={};D.rows.forEach(r=>{buckets[r.act]=(buckets[r.act]||0)+1;});
  const sum=Object.keys(COL).filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+x+' '+buckets[x]+'</span>').join(' ');
  return '<div class="kpis">'+k+'</div>'
- +'<div class="banner b"><b>How to read it.</b> X is log spend, Y is CPA on the basis you picked. '
- +'<b>Bottom-right = proven cheap, raise it. Top-right = expensive at real money, turn it off.</b> '
- +'Left half is testing — a cheap CPA there is mostly luck, which is why every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
+ +'<div class="banner b"><b>How to read it.</b> Right = big spender. Up = expensive. '
+ +'<b>Bottom-right: proven cheap, raise it. Top-right: expensive at real money, turn it off.</b> '
+ +'Left half is still testing — a cheap CPA there is mostly luck, so every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
  +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' · <b style="color:#5a5bf0">target</b> '+EGP(D.target)
  +' · <b style="color:#e23a63">kill</b> '+EGP(D.kill)+' · <b style="color:#12b886">scale</b> '+EGP(D.scale)+'.</div>'
  +card('Spend vs CPA — every Meta ad','Click any dot to open that ad. Hollow ring = its raw CPA, so you can see how far the thin ones move. '+sum,
@@ -495,11 +499,9 @@ function vPred(D){
  +kpi('CPA rising (sig.)',rising.length+' ads','spend E£'+N0(rising.reduce((s,r)=>s+r.sp7,0))+'/wk','#e23a63')
  +kpi('CPA falling (sig.)',falling.length+' ads','spend E£'+N0(falling.reduce((s,r)=>s+r.sp7,0))+'/wk','#12b886')
  +'</div>'
- +'<div class="banner"><b>What is being predicted, and what is not.</b> Each ad\'s purchase rate is a Gamma-Poisson posterior '
- +'— its own counts pulled toward the account mean by however thin its evidence is. The forecast is that posterior times next week\'s budget, '
- +'nothing more. It does not model stock, promo calendar, or creative fatigue beyond the trend column. '
- +'It is fitted on the <b>last 14 mature days only</b>, not the whole window: back-to-school sits inside this window and August rates '
- +'do not forecast September. The Decay tile above is that gap — a positive number means the window CPA on the grid is flattering the ads relative to how they are running now.</div>'
+ +'<div class="banner"><b>What this is.</b> Each ad\'s purchase rate, times next week\'s budget at today\'s spend. Nothing else — no stock, no promo calendar, no seasonality. '
+ +'It uses the <b>last 14 mature days only</b>, because back-to-school sits inside this window and August rates do not forecast September. '
+ +'<b>Decay</b> is that gap: positive means the grid\'s window CPA is flattering these ads against how they run now.</div>'
  +card('Next 7 days, per ad','Forecast at each ad\'s own last-7d budget. GP column uses the 16.1% delivered margin from the vault economics; negative means the ad loses money at this CPA.',
    table(sortRows(f).slice(0,80),[
     ['n','Ad',adCell],['sp7','Budget 7d',r=>EGP(r.sp7)],
