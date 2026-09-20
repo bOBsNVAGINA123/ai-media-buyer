@@ -441,6 +441,15 @@ function vStore(D){
  const sp=T('sp'),pu=T('pu'),op=T('op'),pv=T('pv'),fv=T('fv');
  const H=D.hair;
  const beOn=6.21, beOff=1/0.243;
+ /* What share of ACTUAL branch revenue Meta is claiming. Straight off the live Odoo
+    branch daily series in data.js, over exactly the window on screen. */
+ const brRev=(()=>{const B=O.bnrD,w=B&&B._w; if(!w)return 0;
+   const s0=new Date(w.start), a=new Date(WSTART); a.setDate(a.getDate()+i0);
+   const b=new Date(WSTART); b.setDate(b.getDate()+i1-1);
+   const x=Math.round((a-s0)/864e5), y=Math.round((b-s0)/864e5);
+   if(x<0||y>=w.n||y<x)return 0;
+   let t=0; for(const k in B){if(k==='_w')continue; const g=B[k].grev||[];
+     for(let i=x;i<=y;i++)t+=g[i]||0;} return t;})();
  return '<div class="kpis">'
  +kpi('Online CPP',EGP(pu?sp/pu:0),N0(pu)+' pixel purchases')
  +kpi('In-store CPP (claimed)',EGP(op?sp/op:0),N0(op)+' offline CAPI purchases')
@@ -453,6 +462,8 @@ function vStore(D){
  +'</div>'
  +'<div class="banner r"><b>The in-store number is a matching claim, not a measurement of lift.</b> '
  +'Meta credits itself E£'+N0(fv)+' of store revenue in this window on E£'+N0(sp)+' of spend. '
+ +'Actual branch revenue over the same days, from Odoo, was E£'+N0(brRev)+' — so Meta is claiming <b>'
+ +(brRev?Math.round(100*fv/brRev):0)+'% of everything the seven shops sold</b>, for 3% of company revenue in ad spend. '
  +'That is '+N2(fv/sp)+'× and it would be the best media on earth. It is not: the store CAPI feed matches a purchase to anyone '
  +'who saw an ad, and in the regression already run in this account Meta spend stops predicting branch revenue once trend and the Fri/Sat '
  +'pattern are controlled — the coefficient turns negative. The 21.4% figure is this account\'s own measured incremental share for '
