@@ -135,6 +135,13 @@ function build(){
  const prA=fitPrior(universe.filter(r=>r.atc>0),r=>r.atc);
  universe.forEach(r=>{Object.assign(r,post(pr,r.k,r.sp));
    r.rawCpa=r.k>0?r.sp/r.k:Infinity; r.roas=r.sp>0?r.val/r.sp:0;
+   /* Money, not cost per purchase. CPA punishes an ad for selling fewer, bigger baskets --
+      and this account's in-store AOV runs from E£866 to E£4,964 across ads, so CPA and
+      profit rank them differently. Contribution is what actually pays the rent. */
+   r.gp=r.pv*0.161 + r.fv*hair*0.243 - r.sp;
+   r.gpPerK=r.sp>0?1000*r.gp/r.sp:0;
+   r.aovK=r.k>0?r.val/r.k:0;
+   r.margK=(r.pv+r.fv*hair)>0?(r.pv*0.161+r.fv*hair*0.243)/(r.pv+r.fv*hair):0.161;
    r.cpatc=r.atc>0?r.sp/r.atc:Infinity;
    r.cpatcS=r.atc>0?post(prA,r.atc,r.sp).cpa:Infinity;
    // trend: last third vs the two before it, on the shrunk rate. Gated on counts.
@@ -160,7 +167,16 @@ function build(){
    r.sp14=x.sp; r.k14=x.k;
    const q=x.sp>0?post(prR,x.k,x.sp):{lam:prR.a/prR.b,cpa:prR.b/prR.a*1000,cpaLo:NaN,cpaHi:NaN};
    r.lamR=q.lam; r.cpaR=q.cpa; r.cpaRLo=q.cpaLo; r.cpaRHi=q.cpaHi;
-   r.decay=(isFinite(r.cpa)&&isFinite(r.cpaR)&&r.cpa>0)?r.cpaR/r.cpa-1:null;});
+   r.decay=(isFinite(r.cpa)&&isFinite(r.cpaR)&&r.cpa>0)?r.cpaR/r.cpa-1:null;
+   /* forward contribution per week at today's budget, and its 90% interval */
+   const e7=r.sp7/1000, unit=r.aovK*r.margK;
+   r.gpw   = e7*r.lamR*unit - r.sp7;
+   r.gpwLo = (isFinite(r.cpaRHi)?e7*1000/r.cpaRHi:0)*unit - r.sp7;
+   r.gpwHi = (isFinite(r.cpaRLo)?e7*1000/r.cpaRLo:0)*unit - r.sp7;
+   r.gpwPer= r.sp7>0?r.gpw/r.sp7:0;
+   const eW=r.sp/1000, unitW=r.aovK*r.margK;
+   r.gpHi=(isFinite(r.cpaLo)?eW*1000/r.cpaLo:0)*unitW - r.sp;   // best case over the window
+   r.gpLo=(isFinite(r.cpaHi)?eW*1000/r.cpaHi:0)*unitW - r.sp;});
  let f=universe.filter(r=>r.sp>=mins);
  if(fSt!=='all')f=f.filter(r=>r.st===fSt);
  if(fFmt!=='all')f=f.filter(r=>r.fmt===fFmt);
@@ -169,15 +185,32 @@ function build(){
  const tot={sp:T('sp'),k:T('k'),val:T('val'),pu:T('pu'),op:T('op'),pv:T('pv'),fv:T('fv'),
             oc:T('oc'),im:T('im'),atc:T('atc'),n:f.length};
  const cur=tot.k>0?tot.sp/tot.k:0, target=cur*(1-tgtPct), kill=target*1.5, scale=target*0.7;
+ /* An ad is only killed for LOSING MONEY, never for a high CPA alone. The version of
+    this tool that ranked on CPA put four profitable ads on the kill list, because their
+    in-store AOV was double the account's -- fewer purchases per pound, worth more each.
+    CPA still decides scaling headroom; it no longer decides life and death. */
+ const judge=(document.getElementById('judge')||{}).value||'gp';
+ // a paused ad is only worth switching on if it beat the account's own return on spend
+ const accGpPerK=tot.sp>0?1000*f.reduce((a,r)=>a+r.gp,0)/tot.sp:0;
  f.forEach(r=>{
   const live=r.st==='act';
-  if(live&&r.cpaLo>kill)r.act='KILL';
-  else if(live&&r.cpa>kill)r.act='CUT';
-  else if(live&&r.cpaHi<scale)r.act='SCALE';
-  else if(!live&&r.cpaHi<scale&&r.k>=3)r.act='REACTIVATE';
+  if(judge==='cpa'){                                   // the original method, for comparison
+   if(live&&r.cpaLo>kill)r.act='KILL';
+   else if(live&&r.cpa>kill)r.act='CUT';
+   else if(live&&r.cpaHi<scale)r.act='SCALE';
+   else if(!live&&r.cpaHi<scale&&r.k>=3)r.act='REACTIVATE';
+   else if(r.k<3)r.act='THIN';
+   else r.act='HOLD';
+   return;}
+  const loses=r.gp<0;
+  // kill only when even the OPTIMISTIC end of the interval still loses money
+  if(live&&loses&&r.gpHi<0)r.act='KILL';
+  else if(live&&loses)r.act='CUT';
+  else if(live&&!loses&&r.cpaHi<scale)r.act='SCALE';
+  else if(!live&&!loses&&r.k>=3&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else if(r.k<3)r.act='THIN';
   else r.act='HOLD';});
- return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,
+ return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,
          win:document.getElementById('win').value};
 }
 
@@ -235,6 +268,9 @@ function openAd(id){
  +'<a class="btn" style="margin-top:10px;display:inline-block;text-decoration:none" target="_blank" href="'+adLink(r)+'">'
  +(r.lvl==='ad'&&r.pl?'See the ad':'Open in Ads Manager')+'</a></div></div>'
  +'<div class="two" style="margin-top:14px;gap:10px"><table>'
+ +row('<b>Profit in window</b>','<span style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+'</span>')
+ +row('<b>Profit per week now</b>','<span style="color:'+(r.gpw>=0?'#0d8a62':'#b81f45')+'">'+(r.gpw>=0?'+':'')+EGP(r.gpw)+'</span>  ('+EGP(r.gpwLo)+' to '+EGP(r.gpwHi)+')')
+ +row('Basket size',EGP(r.aovK)+' at '+(Math.round(r.margK*1000)/10)+'% margin')
  +row('Spend in window',EGP(r.sp))+row('Spend last 7d',EGP(r.sp7))
  +row('Online purchases',N0(r.pu))+row('In-store purchases',N0(r.op))
  +row('CPP online',EGP(r.cppOn))+row('CPP in-store',EGP(r.cppOff))
@@ -272,7 +308,7 @@ function why(r,D){
  return '<b>Leave it alone.</b> At '+EGP(r.cpa)+' it sits between the '+EGP(D.scale)+' scale line and the '+EGP(D.kill)+' kill line, so there is no move the data supports.';}
 
 /* ---------- render helpers ---------- */
-const EGP=x=>!isFinite(x)?'—':'E£'+Math.round(x).toLocaleString();
+const EGP=x=>!isFinite(x)?'\u2014':(x<0?'-':'')+'E\u00a3'+Math.abs(Math.round(x)).toLocaleString();
 const N0=x=>!isFinite(x)?'—':Math.round(x).toLocaleString();
 const N1=x=>!isFinite(x)?'—':(Math.round(x*10)/10).toLocaleString();
 const N2=x=>!isFinite(x)?'—':(Math.round(x*100)/100).toFixed(2);
@@ -284,12 +320,14 @@ let SORT={k:'sp',d:-1};
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
 function COLS(D){const H=Math.round(D.hair*100);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','sp','cppOn','roasOn','cppOff','roasOff','cpa'];
+ const KEEP=['n','act','st','sp','gp','cppOn','roasOn','cppOff','roasOff','cpa'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
  ['st','',r=>r.st==='act'?'<span class="g">live</span>':'<span class="mut">paused</span>'],
  ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],
+ ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
+ ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
  ['roasOn','ROAS online',r=>(r.roasOn>=6.21?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
@@ -363,7 +401,7 @@ function vGrid(D){
  const buckets={};D.rows.forEach(r=>{buckets[r.act]=(buckets[r.act]||0)+1;});
  const sum=Object.keys(COL).filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+x+' '+buckets[x]+'</span>').join(' ');
  return '<div class="kpis">'+k+'</div>'
- +'<div class="banner b"><b>How to read it.</b> Right = big spender. Up = expensive. '
+ +'<div class="banner b"><b>Colour is the verdict (profit), height is cost per purchase.</b> Right = big spender. Up = expensive. '
  +'<b>Bottom-right: proven cheap, raise it. Top-right: expensive at real money, turn it off.</b> '
  +'Left half is still testing — a cheap CPA there is mostly luck, so every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
  +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' · <b style="color:#5a5bf0">target</b> '+EGP(D.target)
@@ -538,15 +576,37 @@ function doCard(r,D){
  return '<div class="doc" onclick="openAd(\''+r.id+'\')">'+thumb(r,52)
  +'<div style="min-width:0"><div class="t">'+r.n+'</div>'
  +'<div class="s">'+whyShort(r,D)+'</div>'
- +'<div class="m">'+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'×)'
- +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'×)</div></div></div>';}
+ +'<div class="m"><b style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+' profit</b>'
+ +' &nbsp;·&nbsp; '+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'\u00d7)'
+ +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'\u00d7)</div></div></div>';}
+/* When CPA and profit disagree it is almost always AOV. Say so on the card rather than
+   letting the reader find a 25x ROAS sitting under the word "kill". */
+function aovNote(r,D){
+ const a=D.tot.val/Math.max(D.tot.k,1);
+ if(!(r.aovK>a*1.25)&&!(r.aovK<a*0.8))return '';
+ return ' <span class="mut">Basket '+EGP(r.aovK)+' vs '+EGP(a)+' account \u2014 '
+  +(r.aovK>a?'fewer, bigger orders, so its CPA reads worse than its profit does.'
+           :'more, smaller orders, so its CPA flatters it.')+'</span>';}
 function whyShort(r,D){
- if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target. Even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn '+(r.lvl==='ad'?'it':'the whole '+noun(D))+' off</b> and take back '+EGP(r.sp7)+'/wk.';
- if(r.act==='CUT')return 'Reads <b>'+EGP(r.cpa)+'</b>, over the '+EGP(D.kill)+' kill line — but the data still allows '+EGP(r.cpaLo)+'. <b>Halve the budget</b>, re-read in a week.';
- if(r.act==='SCALE')return 'Buys at <b>'+EGP(r.cpa)+'</b> and even its worst case ('+EGP(r.cpaHi)+') beats '+EGP(D.scale)+'. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, stop at '+EGP(D.target)+'.';
- if(r.act==='REACTIVATE')return 'Paused, but bought at <b>'+EGP(r.cpa)+'</b> on '+N1(r.k)+' purchases. <b>Switch it back on</b> unless it was a one-off promo.';
- if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases — the data cannot tell a good ad from a lucky one yet. <b>Let it run.</b>';
- return 'At '+EGP(r.cpa)+' it sits between the scale and kill lines. <b>No move the data supports.</b>';}
+ const it=r.lvl==='ad'?'it':'the whole '+noun(D);
+ if(D.judge==='cpa'){
+  if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target; even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn '+it+' off.</b>'+aovNote(r,D);
+  if(r.act==='CUT')return 'Reads <b>'+EGP(r.cpa)+'</b>, over the '+EGP(D.kill)+' kill line, but the data still allows '+EGP(r.cpaLo)+'. <b>Halve the budget.</b>'+aovNote(r,D);
+  if(r.act==='SCALE')return 'Buys at <b>'+EGP(r.cpa)+'</b>, worst case '+EGP(r.cpaHi)+', under the '+EGP(D.scale)+' scale line. <b>Raise to '+EGP(r.sp7*1.2)+'/wk.</b>';
+  if(r.act==='REACTIVATE')return 'Paused, bought at <b>'+EGP(r.cpa)+'</b> on '+N1(r.k)+' purchases. <b>Switch '+it+' back on.</b>';
+  if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases. <b>Let it run.</b>';
+  return 'At '+EGP(r.cpa)+' it sits between the lines. <b>No move the data supports.</b>';}
+ const per=r.sp7>0?' ('+EGP(1000*r.gpw/r.sp7)+' back per E\u00a31,000 spent)':'';
+ if(r.act==='KILL')return '<b>Loses '+EGP(-r.gp)+'</b> across the window, '+EGP(-r.gpw)+' a week at today\u2019s budget \u2014 and its best case ('
+  +EGP(r.gpwHi)+'/wk) still does not reach zero. <b>Turn '+it+' off</b> and keep the '+EGP(r.sp7)+'/wk.'+aovNote(r,D);
+ if(r.act==='CUT')return 'Down <b>'+EGP(-r.gp)+'</b> across the window, but the interval still allows '+EGP(r.gpwHi)+'/wk. '
+  +'<b>Halve the budget</b> instead of killing it, and re-read in a week.'+aovNote(r,D);
+ if(r.act==='SCALE')return 'Makes <b>'+EGP(r.gp)+'</b>'+per+' and buys at '+EGP(r.cpa)+', under the '+EGP(D.scale)
+  +' scale line even at its worst. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, then re-read.'+aovNote(r,D);
+ if(r.act==='REACTIVATE')return 'Paused, but it made <b>'+EGP(r.gp)+'</b> on '+N1(r.k)+' purchases at '+EGP(r.cpa)
+  +' each. <b>Switch '+it+' back on</b> unless it was a one-off promo.'+aovNote(r,D);
+ if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases \u2014 the data cannot tell a good one from a lucky one yet. <b>Let it run.</b>';
+ return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it alone.</b>'+aovNote(r,D);}
 function sec(title,n,note,body){
  return '<div class="hd"><h2>'+title+'</h2><span class="n">'+n+'</span></div>'
   +(note?'<div class="mut" style="font-size:11.8px;margin:-4px 0 9px;line-height:1.55">'+note+'</div>':'')+body;}
@@ -556,12 +616,17 @@ function vAct(D){
  const dl=S.cpaNow>0?(S.cpaNew/S.cpaNow-1):0;
  const pick=a=>D.rows.filter(r=>r.act===a).sort((x,y)=>y.sp7-x.sp7||y.sp-x.sp);
  const kill=pick('KILL'), cut=pick('CUT'), scale=pick('SCALE'),
-       react=D.rows.filter(r=>r.act==='REACTIVATE').sort((a,b)=>a.cpa-b.cpa);
+       react=D.rows.filter(r=>r.act==='REACTIVATE').sort((a,b)=>b.gpPerK-a.gpPerK);
  const dead=D.rows.filter(r=>r.st==='act'&&r.k<1&&r.sp>=(D.tot.val/Math.max(D.tot.k,1))*0.5);
  const grid=list=>list.length?'<div class="do">'+list.map(r=>doCard(r,D)).join('')+'</div>'
    :'<div class="mut" style="font-size:12.5px">Nothing qualifies.</div>';
  const drag=bh.med||1;
+ const losers=D.rows.filter(r=>r.st==='act'&&r.gp<0).sort((a,b)=>a.gp-b.gp);
+ const lost=losers.reduce((s2,r)=>s2+r.gp,0);
+ const winners=D.rows.filter(r=>r.gp>0);
  return '<div class="kpis">'
+ +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone in this window','#e23a63')
+ +kpi('Making money',winners.length,'+'+EGP(winners.reduce((s2,r)=>s2+r.gp,0)),'#12b886')
  +kpi('Turn off',kill.length,'frees '+EGP(S.freed)+'/wk','#e23a63')
  +kpi('Cut budget',cut.length,'probably bad, not proven','#ff8b42')
  +kpi('Raise 20%',scale.length,'can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+'/wk','#12b886')
@@ -571,16 +636,27 @@ function vAct(D){
  +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
  +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
  +'</div>'
- +'<div class="banner b">Click any card or row to see the ad, its full online / in-store split, and a link straight to it in Ads Manager. '
- +'Every ad is judged on its <b>shrunk</b> cost per purchase with a 90% interval, so a lucky three-purchase ad cannot buy its way onto the scale list.</div>'
- +sec('Turn these off',kill.length+' ads · '+EGP(S.freed)+' a week',
-   'Only ads whose <i>best</i> case is still above the '+EGP(D.kill)+' kill line. Anything merely suspicious is in the cut list instead.',grid(kill))
- +sec('Cut these back',cut.length+' ads · '+EGP(cut.reduce((s,r)=>s+r.sp7,0))+' a week',
-   'Over the kill line on the point estimate, but the interval still allows a decent CPA. Halve, do not kill.',grid(cut))
- +sec('Raise these 20%',scale.length+' ads · +'+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+' a week',
-   'Worst case still beats the '+EGP(D.scale)+' scale line. One step at a time, then re-read.',grid(scale))
- +sec('Turn these back on',react.length+' ads',
-   'Paused, at least 3 purchases, proven under the scale line. Check each was not a one-off promo creative.',grid(react))
+ +'<div class="banner b"><b>What this is judging.</b> Gross profit minus spend, per '+NOUN[D.level]+', at '
+ +Math.round(D.hair*100)+'% in-store credit. Nothing that makes money can be told to turn off. '
+ +'Cost per purchase still decides which of the profitable ones have room to scale, and every CPA is <b>shrunk</b> with a 90% interval '
+ +'so a lucky three-purchase '+NOUN[D.level]+' cannot buy its way onto the raise list. Click anything to open it.</div>'
+ +(D.judge==='cpa'?'<div class="banner r"><b>You are on CPA-only mode — the method exactly as written.</b> '
+ +'It will tell you to turn off ads that make money, because cost per purchase punishes an ad for selling fewer, bigger baskets. '
+ +'On this account in-store basket size runs from '+EGP(Math.min.apply(null,D.rows.filter(r=>r.aovK>0).map(r=>r.aovK)))
+ +' to '+EGP(Math.max.apply(null,D.rows.map(r=>r.aovK)))+' across '+NOUN[D.level]+'s. Switch <b>Judge on</b> back to Profit unless you are deliberately comparing.</div>':'')
++sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
+   'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit and the vault margins (16.1% delivered online, 24.3% in store). '
+   +'This is the list that answers "what do I do" — everything here is taking money out. Sorted by how much.',grid(losers.slice(0,24)))
++sec('Turn these off',kill.length+' '+NOUN[D.level]+'s · '+EGP(S.freed)+' a week',
+   D.judge==='cpa'?'Best case still above the '+EGP(D.kill)+' kill line.'
+   :'Losing money, and even the optimistic end of the interval does not get them back to zero. Nothing profitable can appear here.',grid(kill))
+ +sec('Cut these back',cut.length+' '+NOUN[D.level]+'s · '+EGP(cut.reduce((s2,r)=>s2+r.sp7,0))+' a week',
+   'Losing money on the point estimate, but the interval still allows break-even. Halve, do not kill.',grid(cut))
+ +sec('Raise these 20%',scale.length+' '+NOUN[D.level]+'s · +'+EGP(S.scale.reduce((s2,r)=>s2+r.sp7*0.2,0))+' a week',
+   'Profitable AND cheap enough to have headroom — worst-case CPA still beats the '+EGP(D.scale)+' scale line. One step, then re-read.',grid(scale))
+ +sec('Turn these back on',react.length+' '+NOUN[D.level]+'s',
+   'Paused, at least 3 purchases, and they returned more per pound of spend than the account average while they ran. '
+   +'Best '+Math.min(12,react.length)+' of '+react.length+' shown, ranked by return on spend. Check each was not a one-off promo creative.',grid(react.slice(0,12)))
  +(dead.length?sec('Zero purchases on real money',dead.length+' ads',
    'Spent more than half an AOV and bought nothing. No estimate needed.',grid(dead)):'')
  +sec('The whole list, with both ROAS','','Sort any column. Online and in-store shown separately — in this window their per-ad costs correlate '+N2(corrOnOff(D.rows))+', so a winner on one is not a winner on the other.',
