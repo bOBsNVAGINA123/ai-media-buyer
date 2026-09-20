@@ -3573,7 +3573,12 @@ def pull_meta_ads(tok):
                 if sp2[k] > 0: return k
             return -1
         lset = [a for a in ads if _f0(a) >= max(1, 60 - 21)]
-        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]] + [a["id"] for a in lset if a["id"]]))[:80]
+        # v9.91: thumbnails for EVERY ad, not the top 40 plus late starters. The CPA grid
+        # is a tool you look at creatives in -- half its cards were rendering as a grey
+        # placeholder. This is a batched object read, 25 ids a call, so ~5 extra calls.
+        ids = list(dict.fromkeys([a["id"] for a in ads[:40] if a["id"]]
+                                 + [a["id"] for a in lset if a["id"]]
+                                 + [a["id"] for a in ads if a["id"]]))
         for i in range(0, len(ids), 25):
             d = http_json("%s/?ids=%s&fields=creative.thumbnail_width(600).thumbnail_height(600){thumbnail_url,image_url,object_type},preview_shareable_link,effective_status&access_token=%s" % (GRAPH, ",".join(ids[i:i + 25]), tok))
             for a in ads:
