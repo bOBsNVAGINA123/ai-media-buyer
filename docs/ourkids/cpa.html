@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OurKids — CPA Grid</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="./data.js"></script>
+<script src="./cpa_seed.js"></script>
+<style>
+:root{--ink:#161d2e;--mut:#7c869c;--red:#e23a63;--grn:#12b886;--teal:#1fc3b6;--blue:#3a9bff;--indigo:#5a5bf0;--violet:#9d6bff;--orange:#ff8b42;--pink:#ff5da2;--grey:#9aa3b5}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1520px;margin:0 auto;padding:20px 22px 70px}
+.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
+h1{font-size:21px;margin:0;font-weight:800;letter-spacing:-.3px}.sub{color:var(--mut);font-size:12px;margin-top:3px}
+.pill{background:#fff;border:1px solid #e2e6ef;border-radius:11px;padding:8px 12px;font-size:12px;font-weight:600;color:#41495c}.pill b{color:var(--indigo)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:42;background:#eef1f7;padding:8px 0 6px}
+.tab{padding:7px 15px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;background:#fff;border:1px solid #e2e6ef;color:#57607a}
+.tab.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid #e6e9f1;border-radius:14px;padding:11px 14px;margin-bottom:12px;box-shadow:0 3px 10px rgba(20,30,60,.07)}
+.bar label{font-size:10.5px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe3ec;border-radius:9px;padding:7px 9px;background:#f7f8fb;color:#2b3346}
+.btn{background:var(--indigo);color:#fff;border:1px solid var(--indigo);border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12.5px}.btn.g{background:#eef0fb;color:var(--indigo)}
+.sp{flex:1}
+.banner{background:#fff7ed;border:1px solid #ffe1bf;color:#8a5a1e;border-radius:11px;padding:10px 13px;font-size:11.8px;margin-bottom:12px;line-height:1.6}
+.banner.b{background:#eef4ff;border-color:#cfe0ff;color:#2b4f8a}
+.banner.r{background:#fff1f4;border-color:#ffd3dd;color:#96203f}
+.card{background:#fff;border:1px solid #e6e9f1;border-radius:16px;padding:16px 18px;box-shadow:0 3px 12px rgba(20,30,60,.06);margin-bottom:16px}
+.card h3{margin:0 0 3px;font-size:14.5px;font-weight:800}.card .cs{color:var(--mut);font-size:11.5px;margin-bottom:12px;line-height:1.55}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #e6e9f1;border-radius:13px;padding:11px 13px}
+.kpi .k{font-size:10px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.kpi .v{font-size:22px;font-weight:800;letter-spacing:-.6px;margin-top:3px}
+.kpi .d{font-size:10.5px;color:var(--mut);margin-top:2px;line-height:1.4}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);padding:7px 8px;border-bottom:1px solid #e9ecf3;font-weight:800;white-space:nowrap;cursor:pointer}
+th:first-child,td:first-child{text-align:left}
+td{padding:7px 8px;border-bottom:1px solid #f2f4f9;text-align:right;white-space:nowrap}
+tr:hover td{background:#fafbfe}
+.tg{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:.2px}
+.tg.kill{background:#ffe6ec;color:#b81f45}.tg.cut{background:#fff0e0;color:#a35a12}.tg.scale{background:#e2f7ee;color:#0d8a62}
+.tg.hold{background:#eef0f5;color:#66708a}.tg.react{background:#e8ecff;color:#3d41c9}.tg.thin{background:#f4f0ff;color:#7a4fd0}
+.nm{max-width:270px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+.mut{color:var(--mut)}.g{color:var(--grn);font-weight:700}.r{color:var(--red);font-weight:700}
+.hide{display:none!important}
+.gate{position:fixed;inset:0;background:linear-gradient(135deg,#20264a,#3a2f6e);display:flex;align-items:center;justify-content:center;z-index:99}
+.gate .bx{background:#fff;border-radius:20px;padding:34px 30px;width:340px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.gate .l2{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--indigo),var(--blue));margin:0 auto 14px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:22px}
+.gate h2{margin:0 0 4px;font-size:19px}.gate p{margin:0 0 18px;color:var(--mut);font-size:13px}
+.gate input{width:100%;padding:12px;font-size:15px;text-align:center;margin-bottom:12px}.gate .btn{width:100%;padding:12px;font-size:15px}
+.err{color:var(--red);font-size:12.5px;height:16px;margin-top:8px;font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1000px){.two{grid-template-columns:1fr}}
+.scr{overflow-x:auto}
+.meth{font-size:12.3px;line-height:1.75}.meth h4{margin:16px 0 5px;font-size:13px}.meth code{background:#f1f3f9;padding:1px 5px;border-radius:5px;font-size:11.5px}
+.meth li{margin-bottom:5px}
+</style></head><body>
+<div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids — CPA Grid</h2><p>Enter password to continue</p>
+<input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
+<div id="app" class="hide"><div class="wrap">
+<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>CPA Grid — kill, scale, reactivate</h1><div class="sub" id="sub"></div></div></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="p1"></div><div class="pill" id="p2"></div><div class="pill" id="p3"></div></div></div>
+<div class="tabs" id="tabs"></div>
+<div class="bar">
+ <div><label>Conversion basis</label><br/><select id="basis">
+  <option value="on">Online only (pixel)</option><option value="off">In-store only (offline CAPI)</option>
+  <option value="bl" selected>Blended (online + in-store)</option></select></div>
+ <div><label>In-store credit</label><br/><select id="hair">
+  <option value="1">100% — Meta's claim</option><option value="0.214" selected>21.4% — measured incremental</option><option value="0">0% — ignore in-store</option></select></div>
+ <div><label>Window</label><br/><select id="win">
+  <option value="56">56d mature (drops last 4d)</option><option value="28">28d mature</option><option value="14">14d mature</option><option value="60">60d full (immature tail)</option></select></div>
+ <div><label>Target CPA cut</label><br/><select id="tgt">
+  <option value="0.10">10%</option><option value="0.15" selected>15%</option><option value="0.20">20%</option><option value="0.25">25%</option></select></div>
+ <div><label>Min spend E£</label><br/><input id="mins" type="number" value="5000" step="1000" style="width:100px"/></div>
+ <div><label>Status</label><br/><select id="st"><option value="all">All (incl. paused)</option><option value="act">Active only</option><option value="pau">Paused only</option></select></div>
+ <div><label>Format</label><br/><select id="fmt"><option value="all">All</option><option value="video">Video</option><option value="mixed">Mixed / carousel</option><option value="static">Static</option></select></div>
+ <div><label>Funnel</label><br/><select id="fn"><option value="all">All</option><option value="TOF">TOF</option><option value="MOF">MOF</option><option value="BOF">BOF</option></select></div>
+ <div class="sp"></div><button class="btn g" onclick="location.reload()">Refresh data</button>
+</div>
+<div id="body"></div>
+<div style="color:#9aa3b5;font-size:11px;margin-top:22px" id="ft"></div>
+</div></div>
+<script src="./cpa_app.js"></script>
+</body></html>
