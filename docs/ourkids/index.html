@@ -1425,10 +1425,19 @@ function cmpBadge(){
  if(!why){el.innerHTML='<span style="color:#12a06e;font-weight:700">applies to this tab</span>';return;}
  el.innerHTML='<span style="color:#b8860b;font-weight:700">not used here</span> <span style="color:#8a93a6">\u2014 '+why+'</span>';
 }
+/* v10.1: a dead tab should not just apologise — it should send you to the page that answers the
+   same question today. These four were nav-only entries whose renderers never existed; they used
+   to LOOK alive only because the previous tab's panel stayed on screen behind them. */
+const MISSMAP={av:['Vendor capital','Products → Vendors &amp; products LTV carries the same suppliers with lifetime value and cash'],
+ ag:['Listing gap','Products → Where to focus lists what sells in the shops; the online listing join is not built yet'],
+ aq:['Demand gap','Traffic &amp; creative → Search demand shows what people search for and where you rank'],
+ au:['Commercial','P&amp;L → Break-even &amp; buying and Online P&amp;L answer where the profit comes from']};
 function pnlMissing(cid){try{const c=document.getElementById(cid);if(!c)return;
+ const key=(cid||'').replace(/C$/,''),m=MISSMAP[key];
  const g=c.querySelector('.grid')||c;g.innerHTML='<div class="card full" style="padding:14px;font-size:12.5px;color:#5a637a">'
- +'<b>This tab is still being built.</b> It is registered in the navigation but its code has not landed in this build yet, '
- +'so there is nothing to show. It is not an error in your data.</div>';}catch(e){}}
+ +'<b>'+(m?m[0]:'This tab')+' is not built.</b> It is registered in the navigation but has no code in this build — nothing is wrong with your data. '
+ +(m?'<br><span style="color:#26313f">Where that question is answered today: <b>'+m[1]+'</b>.</span>':'')
+ +'</div>';}catch(e){}}
 function grainNote(t){try{
  const gid=(document.getElementById(t+'C')||{}).querySelector?document.getElementById(t+'C').querySelector('.grid'):null;
  if(!gid)return;const old=gid.querySelector('.grainN');if(old)old.remove();
@@ -13175,6 +13184,55 @@ function vVal(r,k){let tot=r.r+r.orev,gp=r.g+r.ogp;
  if(k==='cust')return r.cust;if(k==='ltgp')return r.ltgp;if(k==='rep')return r.rep;
  if(k==='acq')return r.acq;if(k==='onp')return tot?r.orev/tot*100:0;
  if(k==='trend'){const t=vTrend(r);return t?t.pct:-999;}if(k==='stk'){const iv=vInv(r);return iv?iv.u:0;}if(k==='stkc'){const iv=vInv(r);return iv?iv.c:0;}if(k==='cov'){const c=vCover(r);return c==null?-1:c;}if(k==='n')return r.n.toLowerCase();return 0;}
+/* v10.1 VENDOR CAPITAL — a real page for a tab that had none. Every figure is already in the
+   payload: what each supplier SOLD (till + online), the stock sitting in the warehouse at cost
+   (now correct, after the product.product fix), and what that cash returns. GMROI = gross profit
+   ÷ average stock at cost: the number that says whether a supplier's shelf space pays rent. */
+function rAV(){if(TAB!=='av')return;dCh();
+ const g=document.getElementById('avC').querySelector('.grid');g.innerHTML='';
+ const rows=((O.vend||{}).rows)||[],V=O.vinv||{};
+ if(!rows.length){pnlMissing('avC');return;}
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const L=rows.map(r=>{const iv=V[r.v]||null;
+   const cost=iv?iv.c:0,units=iv?iv.u:0,skus=iv?iv.sk:0;
+   const gp=r.g||0,rev=r.r||0;
+   return {n:r.n,v:r.v,rev:rev,gp:gp,cost:cost,units:units,skus:skus,
+     gmroi:cost>0?gp/cost:null, turns:cost>0?(rev-gp)/cost:null,
+     mgn:rev?gp/rev*100:null};})
+  .filter(r=>r.rev>0||r.cost>0);
+ const tiedTot=L.reduce((a,r)=>a+r.cost,0), gpTot=L.reduce((a,r)=>a+r.gp,0);
+ const dead=L.filter(r=>r.cost>0&&r.rev<=0);
+ const deadCash=dead.reduce((a,r)=>a+r.cost,0);
+ L.sort((a,b)=>b.cost-a.cost);
+ const TD='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+ const TH='padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:9px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+ const gm=v=>v==null?'background:#f7f8fc;color:#c9ccd6':(v>=3?'background:#0f6e56;color:#fff':v>=1.5?'background:#dcf3e8;color:#0f6e56':v>=1?'background:#fdeed9;color:#8a5a1a':'background:#fbdde5;color:#a3271a');
+ let b='';
+ L.slice(0,40).forEach(r=>{b+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+esc(r.n||'')+'</td>'
+  +'<td style="'+TD+'">'+M(r.cost)+'</td>'
+  +'<td style="'+TD+'">'+N(r.units)+'</td>'
+  +'<td style="'+TD+'">'+N(r.skus)+'</td>'
+  +'<td style="'+TD+'">'+M(r.rev)+'</td>'
+  +'<td style="'+TD+'">'+M(r.gp)+(r.mgn!=null?' <span style="color:#8a93a6">'+r.mgn.toFixed(0)+'%</span>':'')+'</td>'
+  +'<td style="'+TD+';text-align:center"><span style="display:inline-block;min-width:44px;border-radius:6px;padding:2px 6px;font-weight:800;'+gm(r.gmroi)+'">'
+    +(r.gmroi==null?'—':r.gmroi.toFixed(2)+'×')+'</span></td>'
+  +'<td style="'+TD+'">'+(r.turns==null?'—':r.turns.toFixed(1)+'×')+'</td></tr>';});
+ const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">Supplier</th><th style="'+TH+'">Cash tied up<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">stock at cost</div></th>'
+  +'<th style="'+TH+'">Units</th><th style="'+TH+'">SKUs</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Gross profit</th>'
+  +'<th style="'+TH+'">GMROI<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">GP ÷ stock at cost</div></th>'
+  +'<th style="'+TH+'">Stock turns<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">COGS ÷ stock</div></th></tr>'
+  +b+'</table></div>';
+ const worst=L.filter(r=>r.gmroi!=null&&r.cost>50000).sort((a,b2)=>a.gmroi-b2.gmroi).slice(0,3);
+ const best=L.filter(r=>r.gmroi!=null&&r.cost>50000).sort((a,b2)=>b2.gmroi-a.gmroi).slice(0,3);
+ pnlCard(g,'odoo','Vendor capital — what each supplier ties up, and what it returns'
+  +INFO('Cash tied up is stock on hand valued at cost, read from the product variants (the template-level field returns zero for this account, which is why this column used to be empty for two dozen suppliers). GMROI = gross profit ÷ stock at cost: E£1 of shelf capital returning E£3 of gross profit reads 3.00×. Stock turns = cost of goods sold ÷ stock at cost. Revenue and gross profit follow the date box at month grain, like the rest of the vendor pages; stock is a snapshot of right now.'),
+  '<b>'+M(tiedTot)+' of cash is sitting in stock</b> against '+M(gpTot)+' of gross profit in this window'
+  +(deadCash>0?' — and <b style="color:#a3271a">'+M(deadCash)+' of it is with '+dead.length+' supplier'+(dead.length>1?'s':'')+' that sold nothing at all</b>':'')
+  +'. '+(worst.length?'Weakest capital: '+worst.map(r=>esc(r.n)+' '+r.gmroi.toFixed(2)+'×').join(' · ')+'. ':'')
+  +(best.length?'Strongest: '+best.map(r=>esc(r.n)+' '+r.gmroi.toFixed(2)+'×').join(' · ')+'.':''),tbl);
+}
 function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12');g.innerHTML='';
  const money=v=>Math.round(Math.abs(v)).toLocaleString(),E='E&pound; ';
  /* v9.91: this tab shipped as a FIXED lifetime window, so changing the date box did nothing and
@@ -15608,7 +15666,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260919-222853';
+const BUILD='20260920-180829';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
