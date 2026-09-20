@@ -95,7 +95,11 @@ function build(){
   const x=ADX[a.id]||[0,0,0,''];
   const k=basis==='on'?pu:basis==='off'?op*hair:pu+op*hair;
   const val=basis==='on'?pv:basis==='off'?fv*hair:pv+fv*hair;
-  return {id:a.id,n:a.n,cmp:a.cmp,as:a.as,acct:a.acct,th:a.th,pl:a.pl,sp,pu,op,pv,fv,k,val,
+  const H=hair;
+  return {id:a.id,n:a.n,cmp:a.cmp,as:a.as,acct:a.acct,th:a.th||a.im2,pl:a.pl,sp,pu,op,pv,fv,k,val,
+   cppOn:pu?sp/pu:Infinity, cppOff:op?sp/op:Infinity, cppAll:(pu+op)?sp/(pu+op):Infinity,
+   roasOn:sp?pv/sp:0, roasOff:sp?fv/sp:0, roasOffInc:sp?fv*H/sp:0, roasAll:sp?(pv+fv*H)/sp:0,
+   aovOn:pu?pv/pu:0, aovOff:op?fv/op:0,
    oc:S(a,'oc',i0,i1),im:S(a,'im',i0,i1),nc:S(a,'nc',i0,i1),
    atc:atcOf(a,i0,i1,true),st:status(a),fmt:fmt(a),fn:funnel(a),
    sp7:S(a,'sp',Math.max(i0,i1-7),i1),k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)
@@ -175,6 +179,70 @@ function budgetHoldTest(basis,hair){
  const worse=out.filter(x=>x.r>1).length;
  return {n:out.length,med,worse,rows:out};}
 
+/* ---------- ad identity: thumbnail, link, modal ---------- */
+const ACCT_ID={'Ourkids EGP':'336343742536460','Basic':'652528128810469'};
+function adLink(r){
+ if(r.pl)return r.pl;                                   // Meta's own shareable preview
+ const a=ACCT_ID[r.acct]||ACCT_ID['Ourkids EGP'];
+ return 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='+a+'&selected_ad_ids='+r.id;}
+function thumb(r,sz){sz=sz||40;
+ const st='width:'+sz+'px;height:'+sz+'px;border-radius:8px;object-fit:cover;flex:none;background:#eef0f5';
+ return r.th?'<img src="'+r.th+'" style="'+st+'" loading="lazy" alt=""/>'
+            :'<div style="'+st+';display:flex;align-items:center;justify-content:center;color:#b6bdcc;font-size:15px">▦</div>';}
+function adCell(r){
+ return '<a href="#" onclick="openAd(\''+r.id+'\');return false" style="display:flex;gap:9px;align-items:center;text-decoration:none;color:inherit">'
+  +thumb(r)+'<span style="min-width:0"><span class="nm" style="font-weight:700">'+r.n+'</span><br/>'
+  +'<span class="mut" style="font-size:10.5px">'+(r.cmp||'')+'</span></span></a>';}
+let LASTD=null;
+function openAd(id){
+ const r=(LASTD&&LASTD.universe||[]).find(x=>x.id===id); if(!r)return;
+ const row=(k,v)=>'<tr><td style="text-align:left;color:#7c869c">'+k+'</td><td style="font-weight:700">'+v+'</td></tr>';
+ document.getElementById('modal').innerHTML=
+ '<div class="mbg" onclick="closeAd()"></div><div class="mbx">'
+ +'<div style="display:flex;gap:14px;align-items:flex-start">'+thumb(r,110)
+ +'<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;line-height:1.3">'+r.n+'</div>'
+ +'<div class="mut" style="font-size:11.5px;margin-top:3px">'+r.cmp+' › '+r.as+'</div>'
+ +'<div style="margin-top:8px"><span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span> '
+ +'<span class="tg '+(r.st==='act'?'scale':'hold')+'">'+(r.st==='act'?'LIVE':'PAUSED')+'</span> '
+ +'<span class="tg hold">'+r.fmt+'</span> <span class="tg hold">'+r.fn+'</span></div>'
+ +'<a class="btn" style="margin-top:10px;display:inline-block;text-decoration:none" target="_blank" href="'+adLink(r)+'">'
+ +(r.pl?'See the ad':'Open in Ads Manager')+'</a></div></div>'
+ +'<div class="two" style="margin-top:14px;gap:10px"><table>'
+ +row('Spend in window',EGP(r.sp))+row('Spend last 7d',EGP(r.sp7))
+ +row('Online purchases',N0(r.pu))+row('In-store purchases',N0(r.op))
+ +row('CPP online',EGP(r.cppOn))+row('CPP in-store',EGP(r.cppOff))
+ +row('CPP blended (raw)',EGP(r.cppAll))+row('CPP blended (shrunk)',EGP(r.cpa))
+ +row('90% interval',EGP(r.cpaLo)+' – '+EGP(r.cpaHi))+'</table><table>'
+ +row('ROAS online',N2(r.roasOn)+'  (breakeven 6.21)')
+ +row('ROAS in-store, claimed',N2(r.roasOff))
+ +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven 4.11)')
+ +row('ROAS total, this basis',N2(r.roasAll))
+ +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
+ +row('Add-to-carts',N0(r.atc)+(r.atc?'  at '+EGP(r.cpatc)+' each':''))
+ +row('Outbound clicks',N0(r.oc)+'  at E\u00a3'+N2(r.oc?r.sp/r.oc:0)+' each')
+ +row('Trend',r.trend===null?'not enough purchases to test':(r.trend>0?'CPA rising '+Math.round(r.trend*100)+'%':'CPA falling '+Math.round(-r.trend*100)+'%')+(r.trendSig?' (significant)':' (not significant)'))
+ +'</table></div>'
+ +'<div style="margin-top:12px;font-size:12.5px;line-height:1.6;background:#f7f8fb;border-radius:10px;padding:11px 13px">'+why(r,LASTD)+'</div>'
+ +'<button class="btn g" style="margin-top:12px" onclick="closeAd()">Close</button></div>';
+ document.getElementById('modal').style.display='block';}
+function closeAd(){document.getElementById('modal').style.display='none';}
+addEventListener('keydown',e=>{if(e.key==='Escape')closeAd();});
+
+/* ---------- plain-language verdicts ---------- */
+const VERB={KILL:'TURN OFF',CUT:'CUT BUDGET',SCALE:'RAISE 20%',REACTIVATE:'TURN BACK ON',HOLD:'LEAVE ALONE',THIN:'TOO NEW'};
+function why(r,D){
+ const x=Math.round(r.cpa/D.target*100)/100;
+ if(r.act==='KILL')return '<b>Turn it off.</b> Costs '+EGP(r.cpa)+' a purchase — '+x+'× your '+EGP(D.target)+' target, and even the best case for it ('
+  +EGP(r.cpaLo)+') is still over the '+EGP(D.kill)+' kill line. It is burning '+EGP(r.sp7)+' a week.';
+ if(r.act==='CUT')return '<b>Cut its budget, do not kill it yet.</b> It reads '+EGP(r.cpa)+' against a '+EGP(D.kill)+' kill line, but the data still allows '
+  +EGP(r.cpaLo)+'. Halve it and look again in a week.';
+ if(r.act==='SCALE')return '<b>Raise budget 20%, to '+EGP(r.sp7*1.2)+' a week.</b> Costs '+EGP(r.cpa)+' a purchase and even the worst case ('
+  +EGP(r.cpaHi)+') beats the '+EGP(D.scale)+' scale line. Re-read it in a week and stop at '+EGP(D.target)+'.';
+ if(r.act==='REACTIVATE')return '<b>Switch it back on.</b> It is paused but it bought at '+EGP(r.cpa)+' on '+N1(r.k)+' purchases, under the '
+  +EGP(D.scale)+' scale line. Check it was not a one-off promo creative first.';
+ if(r.act==='THIN')return '<b>Leave it running, do not judge it yet.</b> Only '+N1(r.k)+' purchases — at that count the data cannot tell a good ad from a lucky one.';
+ return '<b>Leave it alone.</b> At '+EGP(r.cpa)+' it sits between the '+EGP(D.scale)+' scale line and the '+EGP(D.kill)+' kill line, so there is no move the data supports.';}
+
 /* ---------- render helpers ---------- */
 const EGP=x=>!isFinite(x)?'—':'E£'+Math.round(x).toLocaleString();
 const N0=x=>!isFinite(x)?'—':Math.round(x).toLocaleString();
@@ -184,9 +252,31 @@ const PC=x=>!isFinite(x)?'—':(x>=0?'+':'')+Math.round(x*100)+'%';
 function kpi(k,v,d,col){return '<div class="kpi"><div class="k">'+k+'</div><div class="v"'+(col?' style="color:'+col+'"':'')+'>'+v+'</div><div class="d">'+(d||'')+'</div></div>';}
 function card(h,cs,body){return '<div class="card"><h3>'+h+'</h3><div class="cs">'+cs+'</div>'+body+'</div>';}
 let SORT={k:'sp',d:-1};
+/* One column set everywhere. Online and in-store are shown side by side because they do
+   not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
+function COLS(D){const H=Math.round(D.hair*100);return [
+ ['n','Ad',adCell],
+ ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
+ ['st','',r=>r.st==='act'?'<span class="g">live</span>':'<span class="mut">paused</span>'],
+ ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],
+ ['pu','Online purch',r=>N0(r.pu)],
+ ['cppOn','CPP online',r=>EGP(r.cppOn)],
+ ['roasOn','ROAS online',r=>(r.roasOn>=6.21?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
+ ['op','Store purch',r=>N0(r.op)],
+ ['cppOff','CPP store',r=>EGP(r.cppOff)],
+ ['roasOff','ROAS store',r=>N2(r.roasOff)],
+ ['roasOffInc','ROAS store @'+H+'%',r=>(r.roasOffInc>=4.11?'<span class="g">':'<span class="r">')+N2(r.roasOffInc)+'</span>'],
+ ['roasAll','ROAS total',r=>'<b>'+N2(r.roasAll)+'</b>'],
+ ['cpa','CPA used',r=>'<b>'+EGP(r.cpa)+'</b>'],
+ ['cpaLo','best case',r=>EGP(r.cpaLo)],['cpaHi','worst case',r=>EGP(r.cpaHi)],
+ ['cpatc','Cost/ATC',r=>EGP(r.cpatc)],
+ ['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn],
+ ['trend','Trend',r=>r.trend===null?'<span class="mut">too few</span>'
+   :(r.trend>0?'<span class="r">CPA +'+Math.round(r.trend*100)+'%</span>':'<span class="g">CPA '+Math.round(r.trend*100)+'%</span>')+(r.trendSig?' *':'')]];}
 function table(rows,cols,id){
  const th=cols.map(c=>'<th data-k="'+c[0]+'">'+c[1]+'</th>').join('');
- const rs=rows.map(r=>'<tr>'+cols.map(c=>'<td>'+c[2](r)+'</td>').join('')+'</tr>').join('');
+ const rs=rows.map(r=>'<tr'+(r.id?' class="cl" onclick="if(!event.target.closest(\'a\'))openAd(\''+r.id+'\')"':'')+'>'
+   +cols.map(c=>'<td>'+c[2](r)+'</td>').join('')+'</tr>').join('');
  return '<div class="scr"><table id="'+(id||'')+'"><thead><tr>'+th+'</tr></thead><tbody>'+rs+'</tbody></table></div>';}
 function sortRows(rows){const k=SORT.k;return rows.slice().sort((a,b)=>{
  const x=a[k],y=b[k];
@@ -197,14 +287,14 @@ function wireSort(render){document.querySelectorAll('th[data-k]').forEach(t=>t.o
  const k=t.dataset.k; SORT.d=(SORT.k===k)?-SORT.d:-1; SORT.k=k; render();});}
 
 /* ---------- tabs ---------- */
-const TABS=[['grid','The grid'],['act','Actions'],['pred','Predict'],['store','In-store vs online'],
+const TABS=[['act','What to do'],['grid','The grid'],['pred','Next 7 days'],['store','In-store vs online'],
             ['touch','First vs last touch'],['meth','Method & caveats']];
-let TAB='grid';
+let TAB='act';
 function boot(){
  document.getElementById('tabs').innerHTML=TABS.map(t=>'<div class="tab'+(t[0]===TAB?' on':'')+'" data-t="'+t[0]+'">'+t[1]+'</div>').join('');
  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{TAB=t.dataset.t;boot();});
  ['basis','hair','win','tgt','mins','st','fmt','fn'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
- const D=build();
+ const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
  document.getElementById('sub').textContent=
@@ -241,26 +331,14 @@ function vGrid(D){
  const sum=Object.keys(COL).filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+x+' '+buckets[x]+'</span>').join(' ');
  return '<div class="kpis">'+k+'</div>'
  +'<div class="banner b"><b>How to read it.</b> X is log spend, Y is CPA on the basis you picked. '
- +'Bottom-right = proven cheap, scale it. Top-right = expensive at real money, the only quadrant where killing moves the number. '
+ +'<b>Bottom-right = proven cheap, raise it. Top-right = expensive at real money, turn it off.</b> '
  +'Left half is testing — a cheap CPA there is mostly luck, which is why every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
  +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' · <b style="color:#5a5bf0">target</b> '+EGP(D.target)
  +' · <b style="color:#e23a63">kill</b> '+EGP(D.kill)+' · <b style="color:#12b886">scale</b> '+EGP(D.scale)+'.</div>'
- +card('Spend vs CPA — every Meta ad','Shrunk CPA (hollow ring = raw CPA, so you can see how far the small ads move). '+sum,
+ +card('Spend vs CPA — every Meta ad','Click any dot to open that ad. Hollow ring = its raw CPA, so you can see how far the thin ones move. '+sum,
    '<div style="height:520px"><canvas id="sc"></canvas></div>')
- +card('Every ad','Click a column head to sort. CPA lo/hi is the 90% interval on the shrunk rate.',
-   table(sortRows(D.rows),[
-    ['n','Ad',r=>'<span class="nm" title="'+(r.cmp||'').replace(/"/g,'')+' › '+(r.as||'').replace(/"/g,'')+'">'+r.n+'</span>'],
-    ['act','Call',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+r.act+'</span>'],
-    ['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
-    ['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn],
-    ['sp','Spend',r=>EGP(r.sp)],['k','Purch',r=>N1(r.k)],
-    ['rawCpa','CPA raw',r=>EGP(r.rawCpa)],
-    ['cpa','CPA shrunk',r=>'<b>'+EGP(r.cpa)+'</b>'],
-    ['cpaLo','lo',r=>EGP(r.cpaLo)],['cpaHi','hi',r=>EGP(r.cpaHi)],
-    ['roas','ROAS',r=>N2(r.roas)],
-    ['cpatc','Cost/ATC',r=>EGP(r.cpatc)],
-    ['trend','Trend',r=>r.trend===null?'<span class="mut">n/a</span>':(r.trend>0?'<span class="r">CPA +'+Math.round(r.trend*100)+'%</span>':'<span class="g">CPA '+Math.round(r.trend*100)+'%</span>')+(r.trendSig?' *':'')]
-   ],'tg'));
+ +card('Every ad','Click any row to open the ad. Click a column head to sort. Best/worst case is the 90% interval on the shrunk rate.',
+   table(sortRows(D.rows),COLS(D),'tg'));
 }
 function drawScatter(D){
  const c=document.getElementById('sc'); if(!c)return;
@@ -271,7 +349,9 @@ function drawScatter(D){
  const lines=[['blended',D.cur,'#9aa3b5'],['target',D.target,'#5a5bf0'],['kill',D.kill,'#e23a63'],['scale',D.scale,'#12b886']];
  const maxY=Math.min(Math.max(...D.rows.map(r=>r.cpaHi).filter(isFinite))||D.kill*3, D.kill*4);
  new Chart(c,{type:'scatter',data:{datasets:[raw,...Object.keys(COL).map(mk).filter(d=>d.data.length)]},
-  options:{maintainAspectRatio:false,parsing:false,
+  options:{maintainAspectRatio:false,parsing:false,onClick:(e,els)=>{if(els.length){
+    const d=e.chart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(d&&d.r)openAd(d.r.id);}},
+   onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default'},
    scales:{x:{type:'logarithmic',title:{display:true,text:'Lifetime spend in window (E£, log)'}},
            y:{title:{display:true,text:'CPA (E£)'},min:0,max:maxY}},
    plugins:{legend:{position:'bottom'},
@@ -319,52 +399,70 @@ function simulate(D){
  return {kill,scale,keep,freed,used,parked,base7,spNew,aovK,gpDelta,marg,
    cpaNow:expNow>0?base7/expNow:0, kNow, expNow, cpaRaw7:kNow>0?base7/kNow:0,
    cpaNew:expK>0?spNew/expK:0, cpaNewLo:expHi>0?spNew/expHi:0, cpaNewHi:expLo>0?spNew/expLo:0, expK};}
+function doCard(r,D){
+ return '<div class="doc" onclick="openAd(\''+r.id+'\')">'+thumb(r,52)
+ +'<div style="min-width:0"><div class="t">'+r.n+'</div>'
+ +'<div class="s">'+whyShort(r,D)+'</div>'
+ +'<div class="m">'+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'×)'
+ +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'×)</div></div></div>';}
+function whyShort(r,D){
+ if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target. Even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn it off</b> and take back '+EGP(r.sp7)+'/wk.';
+ if(r.act==='CUT')return 'Reads <b>'+EGP(r.cpa)+'</b>, over the '+EGP(D.kill)+' kill line — but the data still allows '+EGP(r.cpaLo)+'. <b>Halve the budget</b>, re-read in a week.';
+ if(r.act==='SCALE')return 'Buys at <b>'+EGP(r.cpa)+'</b> and even its worst case ('+EGP(r.cpaHi)+') beats '+EGP(D.scale)+'. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, stop at '+EGP(D.target)+'.';
+ if(r.act==='REACTIVATE')return 'Paused, but bought at <b>'+EGP(r.cpa)+'</b> on '+N1(r.k)+' purchases. <b>Switch it back on</b> unless it was a one-off promo.';
+ if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases — the data cannot tell a good ad from a lucky one yet. <b>Let it run.</b>';
+ return 'At '+EGP(r.cpa)+' it sits between the scale and kill lines. <b>No move the data supports.</b>';}
+function sec(title,n,note,body){
+ return '<div class="hd"><h2>'+title+'</h2><span class="n">'+n+'</span></div>'
+  +(note?'<div class="mut" style="font-size:11.8px;margin:-4px 0 9px;line-height:1.55">'+note+'</div>':'')+body;}
+
 function vAct(D){
  const S=simulate(D), bh=budgetHoldTest(D.basis,D.hair);
  const dl=S.cpaNow>0?(S.cpaNew/S.cpaNow-1):0;
- const react=D.rows.filter(r=>r.act==='REACTIVATE').sort((a,b)=>a.cpa-b.cpa);
+ const pick=a=>D.rows.filter(r=>r.act===a).sort((x,y)=>y.sp7-x.sp7||y.sp-x.sp);
+ const kill=pick('KILL'), cut=pick('CUT'), scale=pick('SCALE'),
+       react=D.rows.filter(r=>r.act==='REACTIVATE').sort((a,b)=>a.cpa-b.cpa);
  const dead=D.rows.filter(r=>r.st==='act'&&r.k<1&&r.sp>=(D.tot.val/Math.max(D.tot.k,1))*0.5);
- const col=r=>['n','Ad',x=>'<span class="nm">'+x.n+'</span>'];
- const C=[col(),['sp','Spend',r=>EGP(r.sp)],['sp7','Last 7d',r=>EGP(r.sp7)],['k','Purch',r=>N1(r.k)],
-  ['cpa','CPA shrunk',r=>'<b>'+EGP(r.cpa)+'</b>'],['cpaLo','lo',r=>EGP(r.cpaLo)],['cpaHi','hi',r=>EGP(r.cpaHi)],
-  ['roas','ROAS',r=>N2(r.roas)],['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn]];
+ const grid=list=>list.length?'<div class="do">'+list.map(r=>doCard(r,D)).join('')+'</div>'
+   :'<div class="mut" style="font-size:12.5px">Nothing qualifies.</div>';
+ const drag=bh.med||1;
  return '<div class="kpis">'
- +kpi('Kill',S.kill.length+' ads',EGP(S.freed)+' of last-7d budget','#e23a63')
- +kpi('Scale +20%',S.scale.length+' ads','can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0)),'#12b886')
- +kpi('Reactivate',react.length+' ads','paused, proven under the scale line','#5a5bf0')
- +kpi('Budget released',EGP(S.parked),S.parked>0?'nowhere proven to put it — take it out':'fully reallocated')
- +kpi('CPA now, same estimator',EGP(S.cpaNow),'current allocation, last-14d shrunk rate')
- +kpi('CPA now, raw 7d',EGP(S.cpaRaw7),N1(S.kNow)+' counted purchases on '+EGP(S.base7)+' — still filling in')
- +kpi('CPA projected',EGP(S.cpaNew),'90% CI '+EGP(S.cpaNewLo)+'–'+EGP(S.cpaNewHi),dl<0?'#12b886':'#e23a63')
- +kpi('Projected move',PC(dl),'PROJECTED, not measured','#5a5bf0')
- +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume change — CPA falling while this falls is not a win',
-      S.expK>=S.expNow?'#12b886':'#e23a63')
- +kpi('GP change / week',EGP(S.gpDelta),'at '+Math.round(S.marg*1000)/10+'% blended margin, spend netted off',S.gpDelta>=0?'#12b886':'#e23a63')
-
+ +kpi('Turn off',kill.length,'frees '+EGP(S.freed)+'/wk','#e23a63')
+ +kpi('Cut budget',cut.length,'probably bad, not proven','#ff8b42')
+ +kpi('Raise 20%',scale.length,'can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+'/wk','#12b886')
+ +kpi('Turn back on',react.length,'paused and proven','#5a5bf0')
+ +kpi('CPA now',EGP(S.cpaNow),'current split, same estimator')
+ +kpi('CPA after',EGP(S.cpaNew),PC(dl)+' · with the scaling drag '+EGP(S.cpaNew*drag),dl<0?'#12b886':'#e23a63')
+ +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
+ +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
  +'</div>'
- +'<div class="banner r"><b>Read the projection as an arithmetic consequence, not a forecast.</b> '
- +'It is what the blended CPA becomes <i>if</i> every kept ad holds its shrunk CPA at its new budget. '
- +'That assumption is tested below and it does not fully hold: in the last 60 days, when an ad\'s weekly budget rose 20% or more, '
- +'its CPA in the following week moved by a median of <b>'+(bh.med===null?'n/a':PC(bh.med-1))+'</b> over '+bh.n+' such weeks, '
- +'and it got <b>worse</b> in '+bh.n+'→'+bh.worse+' of them ('+(bh.n?Math.round(100*bh.worse/bh.n):0)+'%). '
- +'Apply that drag and the honest projection is closer to <b>'+EGP(S.cpaNew*(bh.med||1))+'</b> ('+PC(S.cpaNew*(bh.med||1)/S.cpaNow-1)+').</div>'
- +card('KILL — even the optimistic end of the interval is above the kill line','The conservative rule: an ad is only killed when its 5th-percentile CPA still exceeds '+EGP(D.kill)+'. Ads that merely look bad are in CUT, not here.',
-   S.kill.length?table(sortRows(S.kill),C):'<div class="mut">Nothing qualifies.</div>')
- +card('SCALE +20% — the 95th-percentile CPA is still under the scale line','Raise budget one step, then re-read. Stop at '+EGP(D.target)+'.',
-   S.scale.length?table(sortRows(S.scale),C):'<div class="mut">Nothing qualifies — which is the finding.</div>')
- +card('REACTIVATE — paused, ≥3 purchases, proven under the scale line','Step 4 of the method. Check for one-off promo creatives before switching any of these back on.',
-   react.length?table(react,C):'<div class="mut">Nothing qualifies.</div>')
- +card('Zero purchases on more than half an AOV of spend','The other kill rule from the method. No interval needed — there is nothing to estimate.',
-   dead.length?table(dead,C):'<div class="mut">None.</div>')
- +card('The budget-hold test','Every week-on-week budget rise of ≥20% on any ad in the window, and what happened to CPA the week after. This is the test that decides whether step 5 is worth doing at all.',
-   '<div class="kpis">'+kpi('Cases',bh.n,'weeks with ≥20% budget rise')
-   +kpi('Median CPA move',bh.med===null?'—':PC(bh.med-1),'after the rise')
-   +kpi('Got worse',bh.n?Math.round(100*bh.worse/bh.n)+'%':'—',bh.worse+' of '+bh.n)
-   +'</div>'+(bh.n?table(bh.rows.slice(0,25).concat(bh.rows.slice(-25)),
+ +'<div class="banner b">Click any card or row to see the ad, its full online / in-store split, and a link straight to it in Ads Manager. '
+ +'Every ad is judged on its <b>shrunk</b> cost per purchase with a 90% interval, so a lucky three-purchase ad cannot buy its way onto the scale list.</div>'
+ +sec('Turn these off',kill.length+' ads · '+EGP(S.freed)+' a week',
+   'Only ads whose <i>best</i> case is still above the '+EGP(D.kill)+' kill line. Anything merely suspicious is in the cut list instead.',grid(kill))
+ +sec('Cut these back',cut.length+' ads · '+EGP(cut.reduce((s,r)=>s+r.sp7,0))+' a week',
+   'Over the kill line on the point estimate, but the interval still allows a decent CPA. Halve, do not kill.',grid(cut))
+ +sec('Raise these 20%',scale.length+' ads · +'+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+' a week',
+   'Worst case still beats the '+EGP(D.scale)+' scale line. One step at a time, then re-read.',grid(scale))
+ +sec('Turn these back on',react.length+' ads',
+   'Paused, at least 3 purchases, proven under the scale line. Check each was not a one-off promo creative.',grid(react))
+ +(dead.length?sec('Zero purchases on real money',dead.length+' ads',
+   'Spent more than half an AOV and bought nothing. No estimate needed.',grid(dead)):'')
+ +sec('The whole list, with both ROAS','','Sort any column. Online and in-store shown separately — in this window their per-ad costs correlate '+N2(corrOnOff(D.rows))+', so a winner on one is not a winner on the other.',
+   table(sortRows(D.rows),COLS(D),'tg'))
+ +sec('Does scaling actually hold?',bh.n+' cases measured',
+   'The one assumption behind "raise it 20%". Every week-on-week budget rise of 20%+ in the window, and what CPA did the week after.',
+   '<div class="kpis">'+kpi('Median CPA move',bh.med===null?'—':PC(bh.med-1),'after a 20%+ rise',(drag>1?'#e23a63':'#12b886'))
+   +kpi('Got worse',bh.n?Math.round(100*bh.worse/bh.n)+'%':'—',bh.worse+' of '+bh.n+' cases')
+   +kpi('Applied to the projection',EGP(S.cpaNew*drag),'instead of '+EGP(S.cpaNew))+'</div>'
+   +(bh.n?table(bh.rows.slice(0,20).concat(bh.rows.slice(-20)),
      [['n','Ad',r=>'<span class="nm">'+r.n+'</span>'],['g','Budget rise',r=>PC(r.g)],
-      ['c1','CPA before',r=>EGP(r.c1)],['c2','CPA after',r=>EGP(r.c2)],['r','Change',r=>(r.r>1?'<span class="r">':'<span class="g">')+PC(r.r-1)+'</span>'],
+      ['c1','CPA before',r=>EGP(r.c1)],['c2','CPA after',r=>EGP(r.c2)],
+      ['r','Change',r=>(r.r>1?'<span class="r">':'<span class="g">')+PC(r.r-1)+'</span>'],
       ['k1','Purch before',r=>N1(r.k1)],['k2','after',r=>N1(r.k2)]]):''));
 }
+function corrOnOff(rows){const a=rows.filter(r=>isFinite(r.cppOn)&&isFinite(r.cppOff));
+ return corr(a.map(r=>r.cppOn),a.map(r=>r.cppOff));}
 
 /* ---------- 3. PREDICT ---------- */
 function vPred(D){
@@ -404,7 +502,7 @@ function vPred(D){
  +'do not forecast September. The Decay tile above is that gap — a positive number means the window CPA on the grid is flattering the ads relative to how they are running now.</div>'
  +card('Next 7 days, per ad','Forecast at each ad\'s own last-7d budget. GP column uses the 16.1% delivered margin from the vault economics; negative means the ad loses money at this CPA.',
    table(sortRows(f).slice(0,80),[
-    ['n','Ad',r=>'<span class="nm">'+r.n+'</span>'],['sp7','Budget 7d',r=>EGP(r.sp7)],
+    ['n','Ad',adCell],['sp7','Budget 7d',r=>EGP(r.sp7)],
     ['k7','Purch last 7d',r=>N1(r.k7)],['fc','Forecast next 7d',r=>'<b>'+N1(r.fc)+'</b>'],
     ['fcLo','lo',r=>N1(r.fcLo)],['fcHi','hi',r=>N1(r.fcHi)],
     ['cpa','CPA window',r=>EGP(r.cpa)],['cpaR','CPA last 14d',r=>'<b>'+EGP(r.cpaR)+'</b>'],
@@ -432,7 +530,8 @@ function drawPred(D){
 /* ---------- 4. IN-STORE vs ONLINE ---------- */
 function vStore(D){
  const [i0,i1]=[D.i0,D.i1];
- const rows=D.rows.map(r=>({n:r.n,sp:r.sp,pu:r.pu,op:r.op,pv:r.pv,fv:r.fv,nc:r.nc,st:r.st,fn:r.fn,fmt:r.fmt,
+ const rows=D.rows.map(r=>({id:r.id,n:r.n,cmp:r.cmp,th:r.th,acct:r.acct,pl:r.pl,act:r.act,
+   sp:r.sp,pu:r.pu,op:r.op,pv:r.pv,fv:r.fv,nc:r.nc,st:r.st,fn:r.fn,fmt:r.fmt,
    cppOn:r.pu?r.sp/r.pu:Infinity, cppOff:r.op?r.sp/r.op:Infinity,
    roasOn:r.sp?r.pv/r.sp:0, roasOff:r.sp?r.fv/r.sp:0,
    aovOn:r.pu?r.pv/r.pu:0, aovOff:r.op?r.fv/r.op:0,
@@ -475,7 +574,8 @@ function vStore(D){
  +'If that is near zero, picking winners on one basis tells you nothing about the other, and the blended grid is averaging two different games.</div>'
  +card('Online vs in-store, per ad','Sorted by spend. "Store share" is the in-store portion of the value Meta claims for that ad.',
    table(sortRows(rows),[
-    ['n','Ad',r=>'<span class="nm">'+r.n+'</span>'],['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
+    ['n','Ad',adCell],['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
+    ['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
     ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
     ['op','Store purch',r=>N0(r.op)],['cppOff','Store CPP',r=>EGP(r.cppOff)],['roasOff','Store ROAS',r=>N2(r.roasOff)],['aovOff','Store AOV',r=>EGP(r.aovOff)],
