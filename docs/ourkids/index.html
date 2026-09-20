@@ -4632,6 +4632,20 @@ function dailyBE(g){
  let d1=Date.parse(ST.e),d0=Date.parse(ST.s);
  const MAXR=31;let clipped=false;
  if((d1-d0)/864e5+1>MAXR){d0=d1-(MAXR-1)*864e5;clipped=true;}
+ /* v10.0: per-day overhead charge from the last complete month — webstore share for the webstore
+    column, the whole posted book for the incl-branches column. The two "after ads AND overhead"
+    columns referenced this before it existed, so the card threw and vanished entirely. */
+ const _ovh=(function(){try{const AM=_allM(),nowM2=(O.today||'').slice(0,7);
+   const dn=AM.filter(x=>x!==nowM2&&O.exp&&O.exp[x]);if(!dn.length)return null;
+   const bm2=dn[dn.length-1],E2=O.exp[bm2]||{};
+   const dimB=new Date(Date.UTC(+bm2.slice(0,4),+bm2.slice(5,7),0)).getUTCDate();
+   const brSal=Object.keys(O.bcost||{}).reduce((a,b)=>a+(((O.bcost[b]||{})[bm2]||{}).sal||0),0);
+   const shared=(E2['Rent — HQ / warehouses / flats']||0)+(E2['Comms & internet']||0)+(E2['Other OpEx']||0)
+     +Math.max(0,(E2['Payroll & benefits']||0)-brSal);
+   const PA2=pnlAgg().M[bm2]||{};const onRev2=(PA2.g||0)-(PA2.r||0);
+   let br2=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[bm2];if(v)br2+=v[0]||0;});
+   const wOn2=(onRev2+br2)>0?onRev2/(onRev2+br2):0.2;
+   return {on:((E2['Packing & bags']||0)+shared*wOn2)/dimB, all:expTot(bm2)/dimB, bm:bm2};}catch(e){return null;}})();
  const rows=[];
  for(let d=d0;d<=d1;d+=864e5){
   const ai=aix(d),fi=fix(d);
@@ -4646,7 +4660,9 @@ function dailyBE(g){
   rows.push({d:dt.toISOString().slice(0,10),wd:dt.getUTCDay(),sp,rev,gp:gp2,nc,br,
    mer:sp>0?rev/sp:null, amer:sp>0?nc/sp:null,
    merAll:(sp>0&&br!=null)?(rev+br)/sp:null,
-   pas:gp2-sp, pasAll:br!=null?gp2+br*stMg-sp:null});}
+   pas:gp2-sp, pasAll:br!=null?gp2+br*stMg-sp:null,
+   pasN:_ovh?gp2-sp-_ovh.on:null,
+   pasAllN:(_ovh&&br!=null)?gp2+br*stMg-sp-_ovh.all:null});}
  if(rows.length<2)return;
  const grade=(v,b2)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
   const r2=v/b2;
@@ -4663,11 +4679,16 @@ function dailyBE(g){
   b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
    +'<td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+(wk?' <span style="font-size:9px;color:#8a93a6">'+(r.wd===5?'FRI':'SAT')+'</span>':'')+'</td>'
    +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +'<td style="'+TD+'">'+M(r.rev)+'</td>'
+   +'<td style="'+TD+'">'+M(r.gp)+'</td>'
    +cell(r.mer,grade(r.mer,be),r.mer==null?'—':r.mer.toFixed(2)+'×')
    +cell(r.amer,grade(r.amer,be),r.amer==null?'—':r.amer.toFixed(2)+'×')
    +cell(r.pas,gMoney(r.pas),(r.pas>=0?'+':'−')+M(r.pas))
+   +cell(r.pasN,gMoney(r.pasN),r.pasN==null?'—':(r.pasN>=0?'+':'−')+M(r.pasN))
+   +'<td style="'+TD+'">'+(r.br==null?'—':M(r.br))+'</td>'
    +cell(r.merAll,r.merAll==null?grade(null,be):grade(r.merAll,be),r.merAll==null?'—':r.merAll.toFixed(1)+'×')
    +cell(r.pasAll,gMoney(r.pasAll),r.pasAll==null?'—':(r.pasAll>=0?'+':'−')+M(r.pasAll))
+   +cell(r.pasAllN,gMoney(r.pasAllN),r.pasAllN==null?'—':(r.pasAllN>=0?'+':'−')+M(r.pasAllN))
    +'</tr>';});
  const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
  const tSp=T('sp'),tRev=T('rev'),tGp=T('gp'),tNc=T('nc');
@@ -4675,11 +4696,16 @@ function dailyBE(g){
  const tBr=brOk?T('br'):null;
  b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
   +'<td style="'+TD+'">'+M(tSp)+'</td>'
+  +'<td style="'+TD+'">'+M(tRev)+'</td>'
+  +'<td style="'+TD+'">'+M(tGp)+'</td>'
   +cell(1,grade(tSp?tRev/tSp:null,be),tSp?(tRev/tSp).toFixed(2)+'×':'—')
   +cell(1,grade(tSp?tNc/tSp:null,be),tSp?(tNc/tSp).toFixed(2)+'×':'—')
   +cell(1,gMoney(tGp-tSp),(tGp-tSp>=0?'+':'−')+M(tGp-tSp))
+  +cell(1,gMoney(_ovh?tGp-tSp-_ovh.on*rows.length:null),_ovh?((tGp-tSp-_ovh.on*rows.length>=0?'+':'−')+M(tGp-tSp-_ovh.on*rows.length)):'—')
+  +'<td style="'+TD+'">'+(tBr!=null?M(tBr):'—')+'</td>'
   +cell(1,tBr!=null?grade((tRev+tBr)/tSp,be):grade(null,be),tBr!=null&&tSp?((tRev+tBr)/tSp).toFixed(1)+'×':'—')
   +cell(1,tBr!=null?gMoney(tGp+tBr*stMg-tSp):gMoney(null),tBr!=null?((tGp+tBr*stMg-tSp>=0?'+':'−')+M(tGp+tBr*stMg-tSp)):'—')
+  +cell(1,(tBr!=null&&_ovh)?gMoney(tGp+tBr*stMg-tSp-_ovh.all*rows.length):gMoney(null),(tBr!=null&&_ovh)?((tGp+tBr*stMg-tSp-_ovh.all*rows.length>=0?'+':'−')+M(tGp+tBr*stMg-tSp-_ovh.all*rows.length)):'—')
   +'</tr>';
  pnlCard(g,'blend','Every day against break-even'
   +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit, LESS the delivery drag (courier both ways, COD &amp; payment fees, net of shipping collected — measured at '+((_gpPct().drag||0)*100).toFixed(1)+'% of revenue over the last three ledger months), minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
@@ -4692,11 +4718,16 @@ function dailyBE(g){
   +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
-  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore &middot; refunds out &middot; graded vs delivered BE</div></th>'
+  +'<th style="'+TH+'">Webstore revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">net of returns &mdash; the MER numerator</div></th>'
+  +'<th style="'+TH+'">Webstore GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">delivered &mdash; courier &amp; fees already out</div></th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">revenue &divide; spend &middot; graded vs delivered BE</div></th>'
   +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">first-time buyers &middot; refunds out</div></th>'
-  +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore only</div></th>'
-  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th>'
-  +'<th style="'+TH+'">GP after spend<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches</div></th></tr>'
+  +'<th style="'+TH+'">After ADS only<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore · no overhead</div></th>'
+  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">webstore · its share of rent &amp; payroll</div></th>'
+  +'<th style="'+TH+'">Branch revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills, net of VAT</div></th>'
+  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">(webstore + branches) &divide; spend</div></th>'
+  +'<th style="'+TH+'">After ADS only<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · no overhead</div></th>'
+  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · whole company book</div></th></tr>'
   +b+'</table></div>');
 }
 /* v9.57 ONE ORDER, TOP TO BOTTOM. Platform ROAS, then the break-even it has to clear, then
@@ -15577,7 +15608,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260919-204016';
+const BUILD='20260919-222853';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
