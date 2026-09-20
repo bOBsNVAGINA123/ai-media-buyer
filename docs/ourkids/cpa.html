@@ -49,6 +49,19 @@ tr:hover td{background:#fafbfe}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:1000px){.two{grid-template-columns:1fr}}
 .scr{overflow-x:auto}
+#modal{display:none;position:fixed;inset:0;z-index:80}
+#modal .mbg{position:absolute;inset:0;background:rgba(14,20,38,.5)}
+#modal .mbx{position:relative;max-width:880px;margin:5vh auto;background:#fff;border-radius:18px;padding:20px 22px;box-shadow:0 30px 80px rgba(0,0,0,.35);max-height:88vh;overflow:auto}
+#modal table{font-size:12.5px}#modal td{padding:5px 8px}
+.do{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.doc{border:1px solid #e6e9f1;border-radius:13px;padding:12px;background:#fff;cursor:pointer;display:flex;gap:11px;align-items:flex-start;transition:.12s}
+.doc:hover{border-color:#5a5bf0;box-shadow:0 4px 14px rgba(90,91,240,.16)}
+.doc .t{font-weight:800;font-size:12.8px;line-height:1.35;margin-bottom:3px}
+.doc .s{font-size:11.5px;color:#57607a;line-height:1.55}
+.doc .m{font-size:11px;color:#7c869c;margin-top:5px}
+.hd{display:flex;align-items:center;gap:9px;margin:20px 0 9px}
+.hd h2{margin:0;font-size:16px;font-weight:800}.hd .n{font-size:12px;color:#7c869c;font-weight:700}
+tr.cl{cursor:pointer}
 .meth{font-size:12.3px;line-height:1.75}.meth h4{margin:16px 0 5px;font-size:13px}.meth code{background:#f1f3f9;padding:1px 5px;border-radius:5px;font-size:11.5px}
 .meth li{margin-bottom:5px}
 </style></head><body>
@@ -77,5 +90,6 @@ tr:hover td{background:#fafbfe}
 <div id="body"></div>
 <div style="color:#9aa3b5;font-size:11px;margin-top:22px" id="ft"></div>
 </div></div>
+<div id="modal"></div>
 <script src="./cpa_app.js"></script>
 </body></html>
