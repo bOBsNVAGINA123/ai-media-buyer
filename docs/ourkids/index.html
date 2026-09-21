@@ -4407,7 +4407,18 @@ function merHeat(g){
   +' — the small arrow inside each cell is that day against the same day of the compare window. '
   +'<b>Every ratio here is after cancellations</b> — the money that actually stayed — and the last column shows how much demand walked that day, so nothing is hidden by averaging. '
   +'<b>The three ROAS columns:</b> <b>online</b> = what Meta + Google + TikTok claim they drove on the webstore (discounted by that day\u2019s cancellations), <b>in-store</b> = what they claim they drove into the shops at your offline attribution setting, <b>both</b> = the two added. '
-  +'Colour runs continuously against break-even '+be.toFixed(2)+'\u00d7: deep green is 40%+ clear of it, pale green just above, sand just below, red well under water. Fridays and Saturdays are shaded on the day column.',head);
+  +'Colour runs continuously against break-even '+be.toFixed(2)+'×: deep green is 40%+ clear of it, pale green just above, sand just below, red well under water. Fridays and Saturdays are shaded on the day column.',head+CALCX([
+   ['Grain','One calendar day per row, Cairo. Every column in a row is that day and only that day &mdash; nothing is smoothed, averaged into it, or carried from the day before.'],
+   ['Spend','Meta + Google + TikTok billed spend for that day, each from its own API. TikTok is E&pound;0 after 2026-08-31 because that feed is dead, so recent spend is understated by roughly its last share and every ratio in this table is correspondingly flattered.'],
+   ['MER','Webstore net revenue (booked sales &minus; that day&rsquo;s refunds, cancellations already out) &divide; total spend.'],
+   ['aMER','First-time-customer revenue for that day &divide; the same total spend. It answers what the spend bought in NEW customers rather than in total sales.'],
+   ['ROAS &middot; online','What Meta + Google + TikTok each <b>claim</b> they drove on the webstore, at your chosen attribution setting, added together &mdash; then discounted by that day&rsquo;s cancellation rate. The three platforms each count the same order, so this sums overlapping claims and always reads high. It is a claim, not a measurement.'],
+   ['ROAS &middot; in-store','The same platforms&rsquo; offline/in-store conversion value for the day. Matched from your POS customer file by the platform, not measured. On this account regression shows Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled.'],
+   ['ROAS &middot; both','The two columns added. Inherits the overlap of the first and the matching assumption of the second, so treat it as the loosest number on the row.'],
+   ['Cancel %','Value of orders placed that day and later cancelled, as a share of demand placed. It is why the revenue columns are lower than any platform&rsquo;s claim.'],
+   ['Break-even '+be.toFixed(2)+'&times;','1 &divide; the delivered online margin of '+(q.gpOn*100).toFixed(1)+'% &mdash; gross margin after courier both ways, COD and payment fees, net of the shipping customers paid. Arithmetic from your own ledger, not a target anyone chose.'],
+   ['The small arrow in a cell','That day against the SAME day of the compare window (same weekday position), not against the day before and not against the window average.']
+  ],'<b>A single day is not a decision.</b> Daily MER on this account swings with weekday, promo and stock; the colour tells you which days pulled their weight, not which ad to cut. Read a run of days, and read the break-even table below for what it left after fixed costs.'));
 }
 /* v9.95 BREAK-EVEN AND SCENARIOS. How much the webstore must SELL to cover its costs at today's
    spend, what profit looks like at other spend levels, and which level is best. The MER-at-spend
@@ -4644,17 +4655,37 @@ function dailyBE(g){
  /* v10.0: per-day overhead charge from the last complete month — webstore share for the webstore
     column, the whole posted book for the incl-branches column. The two "after ads AND overhead"
     columns referenced this before it existed, so the card threw and vanished entirely. */
- const _ovh=(function(){try{const AM=_allM(),nowM2=(O.today||'').slice(0,7);
-   const dn=AM.filter(x=>x!==nowM2&&O.exp&&O.exp[x]);if(!dn.length)return null;
-   const bm2=dn[dn.length-1],E2=O.exp[bm2]||{};
-   const dimB=new Date(Date.UTC(+bm2.slice(0,4),+bm2.slice(5,7),0)).getUTCDate();
-   const brSal=Object.keys(O.bcost||{}).reduce((a,b)=>a+(((O.bcost[b]||{})[bm2]||{}).sal||0),0);
-   const shared=(E2['Rent — HQ / warehouses / flats']||0)+(E2['Comms & internet']||0)+(E2['Other OpEx']||0)
-     +Math.max(0,(E2['Payroll & benefits']||0)-brSal);
-   const PA2=pnlAgg().M[bm2]||{};const onRev2=(PA2.g||0)-(PA2.r||0);
-   let br2=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[bm2];if(v)br2+=v[0]||0;});
-   const wOn2=(onRev2+br2)>0?onRev2/(onRev2+br2):0.2;
-   return {on:((E2['Packing & bags']||0)+shared*wOn2)/dimB, all:expTot(bm2)/dimB, bm:bm2};}catch(e){return null;}})();
+ /* v10.2 EACH MONTH CARRIES ITS OWN EXPENSES. This used to charge ONE month's book — the
+    last complete one, which on this account is August, the back-to-school peak at E£8.20M —
+    to every day of every month. A quiet mid-September day was therefore handed August's
+    E£264,460 of rent and payroll and read as a six-figure daily loss it never made. Each day
+    is now charged its OWN month, and a month whose ledger is still filling is estimated from
+    the trailing median rather than left at the E£0 its postings currently show. */
+ const _EXPM=(function(){try{const AM=_allM(),nowM2=(O.today||'').slice(0,7),out={};
+   if(!O.exp)return out;
+   const done=AM.filter(x=>x!==nowM2&&O.exp[x]&&expTot(x)>0);
+   const tail=done.slice(-4).map(expTot).sort((a,b)=>a-b);
+   const med=tail.length?tail[Math.floor(tail.length/2)]:0;
+   const PAM=pnlAgg().M;
+   AM.forEach(m=>{const E2=O.exp[m];if(!E2)return;
+    const posted=expTot(m);
+    const dim=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+    /* thin = the ledger has not caught up with the month, not that the month was cheap */
+    const thin=(m===nowM2)||(med>0&&posted<med*0.60);
+    const full=thin?Math.max(posted,med):posted;
+    if(!full)return;
+    const brSal=Object.keys(O.bcost||{}).reduce((a,b)=>a+(((O.bcost[b]||{})[m]||{}).sal||0),0);
+    const shared=(E2['Rent — HQ / warehouses / flats']||0)+(E2['Comms & internet']||0)+(E2['Other OpEx']||0)
+      +Math.max(0,(E2['Payroll & benefits']||0)-brSal);
+    const PA2=PAM[m]||{};const onRev2=(PA2.g||0)-(PA2.r||0);
+    let br2=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[m];if(v)br2+=v[0]||0;});
+    const wOn2=(onRev2+br2)>0?onRev2/(onRev2+br2):0.2;
+    const scale=posted>0?full/posted:1;
+    out[m]={on:((E2['Packing & bags']||0)+shared*wOn2)*scale/dim, all:full/dim,
+            est:thin, dim:dim, tot:full, posted:posted, wOn:wOn2, med:med};});
+   return out;}catch(e){return {};}})();
+ const _ovhD=m=>_EXPM[m]||null;
+ const _ovhAny=Object.keys(_EXPM).length?_EXPM[Object.keys(_EXPM).sort().slice(-1)[0]]:null;
  const rows=[];
  for(let d=d0;d<=d1;d+=864e5){
   const ai=aix(d),fi=fix(d);
@@ -4666,12 +4697,14 @@ function dailyBE(g){
   let br=null;const bi=bix(d);
   if(O.bl&&bi>=0&&bi<O.bl.n){br=0;Object.keys(O.bl.b).forEach(b=>{br+=O.bl.b[b][bi]||0;});}
   const dt=new Date(d);
-  rows.push({d:dt.toISOString().slice(0,10),wd:dt.getUTCDay(),sp,rev,gp:gp2,nc,br,
+  const _ds=dt.toISOString().slice(0,10), _ov=_ovhD(_ds.slice(0,7));
+  rows.push({d:_ds,wd:dt.getUTCDay(),sp,rev,gp:gp2,nc,br,
+   ovOn:_ov?_ov.on:null, ovAll:_ov?_ov.all:null, ovEst:!!(_ov&&_ov.est),
    mer:sp>0?rev/sp:null, amer:sp>0?nc/sp:null,
    merAll:(sp>0&&br!=null)?(rev+br)/sp:null,
    pas:gp2-sp, pasAll:br!=null?gp2+br*stMg-sp:null,
-   pasN:_ovh?gp2-sp-_ovh.on:null,
-   pasAllN:(_ovh&&br!=null)?gp2+br*stMg-sp-_ovh.all:null});}
+   pasN:_ov?gp2-sp-_ov.on:null,
+   pasAllN:(_ov&&br!=null)?gp2+br*stMg-sp-_ov.all:null});}
  if(rows.length<2)return;
  const grade=(v,b2)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
   const r2=v/b2;
@@ -4701,6 +4734,8 @@ function dailyBE(g){
    +'</tr>';});
  const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
  const tSp=T('sp'),tRev=T('rev'),tGp=T('gp'),tNc=T('nc');
+ const tOvOn=rows.every(r=>r.ovOn!=null)?T('ovOn'):null;
+ const tOvAll=rows.every(r=>r.ovAll!=null)?T('ovAll'):null;
  const brOk=rows.every(r=>r.br!=null);
  const tBr=brOk?T('br'):null;
  b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
@@ -4710,12 +4745,68 @@ function dailyBE(g){
   +cell(1,grade(tSp?tRev/tSp:null,be),tSp?(tRev/tSp).toFixed(2)+'×':'—')
   +cell(1,grade(tSp?tNc/tSp:null,be),tSp?(tNc/tSp).toFixed(2)+'×':'—')
   +cell(1,gMoney(tGp-tSp),(tGp-tSp>=0?'+':'−')+M(tGp-tSp))
-  +cell(1,gMoney(_ovh?tGp-tSp-_ovh.on*rows.length:null),_ovh?((tGp-tSp-_ovh.on*rows.length>=0?'+':'−')+M(tGp-tSp-_ovh.on*rows.length)):'—')
+  +cell(1,gMoney(tOvOn!=null?tGp-tSp-tOvOn:null),tOvOn!=null?((tGp-tSp-tOvOn>=0?'+':'−')+M(tGp-tSp-tOvOn)):'—')
   +'<td style="'+TD+'">'+(tBr!=null?M(tBr):'—')+'</td>'
   +cell(1,tBr!=null?grade((tRev+tBr)/tSp,be):grade(null,be),tBr!=null&&tSp?((tRev+tBr)/tSp).toFixed(1)+'×':'—')
   +cell(1,tBr!=null?gMoney(tGp+tBr*stMg-tSp):gMoney(null),tBr!=null?((tGp+tBr*stMg-tSp>=0?'+':'−')+M(tGp+tBr*stMg-tSp)):'—')
-  +cell(1,(tBr!=null&&_ovh)?gMoney(tGp+tBr*stMg-tSp-_ovh.all*rows.length):gMoney(null),(tBr!=null&&_ovh)?((tGp+tBr*stMg-tSp-_ovh.all*rows.length>=0?'+':'−')+M(tGp+tBr*stMg-tSp-_ovh.all*rows.length)):'—')
+  +cell(1,(tBr!=null&&tOvAll!=null)?gMoney(tGp+tBr*stMg-tSp-tOvAll):gMoney(null),(tBr!=null&&tOvAll!=null)?((tGp+tBr*stMg-tSp-tOvAll>=0?'+':'−')+M(tGp+tBr*stMg-tSp-tOvAll)):'—')
   +'</tr>';
+ /* v10.2 THE MONTH IS THE P&L PERIOD, NOT THE DAY. Rent and payroll are charged monthly and
+    arrive whether or not a Tuesday sells. Spreading them flat across 30 days and colouring the
+    quiet days red reads as "losing E100k every day", which is not what the book says: the
+    month can be comfortably positive while one slow week fails to cover its own slice of the
+    fixed cost. So the month each day belongs to is stated in full, from its own ledger, above
+    the daily grid. */
+ const _moStrip=(function(){try{
+  const ms=[];rows.forEach(r=>{const m=r.d.slice(0,7);if(ms.indexOf(m)<0)ms.push(m);});
+  if(!ms.length)return '';
+  const today=O.today||rows[rows.length-1].d;
+  const out=ms.map(m=>{
+   const ov=_ovhD(m);if(!ov)return null;
+   let rev=0,gp=0,spd=0,brv=0,dys=0;
+   for(let i=0;i<F.n;i++){const dd=new Date(f0+i*864e5).toISOString().slice(0,10);
+    if(dd.slice(0,7)!==m||dd>today)continue;dys++;
+    const rv=((F.rev[i]||0)-(F.refund[i]||0))*1000;rev+=rv;gp+=(F.gp[i]||0)*1000-rv*_drag;}
+   for(let i=0;i<A.n;i++){const dd=new Date(t0+i*864e5).toISOString().slice(0,10);
+    if(dd.slice(0,7)===m&&dd<=today)spd+=(A.spend||[])[i]||0;}
+   if(O.bl)for(let i=0;i<O.bl.n;i++){const dd=new Date(b0+i*864e5).toISOString().slice(0,10);
+    if(dd.slice(0,7)===m&&dd<=today)Object.keys(O.bl.b).forEach(b2=>{brv+=O.bl.b[b2][i]||0;});}
+   if(!dys)return null;
+   const ovh=ov.all*dys, tot=gp+brv*stMg-spd-ovh;
+   const part=dys<ov.dim;
+   return '<tr><td style="padding:5px 9px;text-align:left;font-weight:800;white-space:nowrap">'+m
+    +'<div style="font-size:9px;font-weight:600;color:#8a93a6">'+dys+' of '+ov.dim+' days'+(part?' so far':'')+'</div></td>'
+    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">'+M(gp)+'</td>'
+    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">'+M(brv*stMg)+'</td>'
+    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">&minus;'+M(spd)+'</td>'
+    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">&minus;'+M(ovh)
+    +(ov.est?'<div style="font-size:9px;color:#b8621b;font-weight:700">estimated &mdash; ledger still filling</div>':'')+'</td>'
+    +'<td style="padding:5px 9px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:'+(tot>=0?'#0f6e56':'#a3271a')+'">'
+    +(tot>=0?'+':'&minus;')+M(tot)+'</td></tr>';}).filter(x=>x);
+  if(!out.length)return '';
+  return '<div style="border:1px solid #cfe3f5;background:#f5fafe;border-radius:10px;padding:11px 12px;margin-bottom:12px">'
+   +'<div style="font-size:12px;font-weight:800;color:#1d3f63;margin-bottom:3px">Where each month actually stands &mdash; whole company, on its own ledger</div>'
+   +'<div style="font-size:11px;color:#4a5a70;line-height:1.5;margin-bottom:7px">A red day below is a day that did not cover its <b>1/'+(_ovhAny?_ovhAny.dim:30)+'th slice of that month&rsquo;s fixed costs</b>. Rent and payroll do not arrive daily, so a quiet Tuesday always prints red. <b>This block is the number that decides whether money was made</b> &mdash; the grid underneath only says which days pulled their weight.</div>'
+   +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+   +'<tr style="font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase">'
+   +'<th style="padding:4px 9px;text-align:left">Month</th><th style="padding:4px 9px;text-align:right">Webstore GP</th>'
+   +'<th style="padding:4px 9px;text-align:right">Branch GP</th><th style="padding:4px 9px;text-align:right">Ads</th>'
+   +'<th style="padding:4px 9px;text-align:right">Overhead (own month)</th><th style="padding:4px 9px;text-align:right">Result</th></tr>'
+   +out.join('')+'</table></div>';}catch(e){return '';}})();
+ const _beCalc=CALCX([
+  ['Day','Calendar day, Cairo. Fridays and Saturdays are tagged &mdash; they are the Egypt weekend and carry a different revenue shape, so a weekday row and a Friday row are not comparable.'],
+  ['Spend','ALL platform ad spend that day: Meta + Google + TikTok, each from its own daily API series. Not modelled, not allocated &mdash; the sum of three billed numbers. TikTok reads E&pound;0 after 2026-08-31 because that feed is dead, so spend is understated by roughly its last share.'],
+  ['Webstore revenue','Odoo Shopify-team daily sales <b>minus that day&rsquo;s posted refunds</b>. The MER numerator. Cancelled orders were never in it.'],
+  ['Webstore GP','Odoo&rsquo;s own daily gross profit on the same orders, then <b>minus '+(_drag*100).toFixed(1)+'% of revenue</b> for the delivery drag &mdash; courier both ways, COD and payment fees, net of the shipping customers paid. Measured on the last three ledger months, not assumed.'],
+  ['MER','Webstore revenue &divide; total ad spend, that day. Graded against break-even '+be.toFixed(2)+'&times;, which is 1 &divide; your delivered online margin of '+(gpOn*100).toFixed(1)+'% &mdash; arithmetic, not a target anyone picked.'],
+  ['aMER','First-time-customer revenue &divide; the same total ad spend, refunds out. It answers what the spend bought in NEW customers rather than in total sales, which is why it sits far below MER on a book with this much repeat.'],
+  ['After ADS only (webstore)','Webstore GP &minus; that day&rsquo;s whole ad spend. No rent, no payroll, no salaries. This is contribution, not profit.'],
+  ['After ads AND overhead (webstore)','The line above, minus the webstore&rsquo;s slice of that day&rsquo;s overhead: packing and bags in full, plus HQ rent, comms, other OpEx and non-branch payroll apportioned by the webstore&rsquo;s share of company revenue in <b>that same month</b> ('+(_ovhAny?(_ovhAny.wOn*100).toFixed(0):'~20')+'% most recently), divided by the days in that month.'],
+  ['Branch revenue','The seven tills&rsquo; own daily takings from the POS crawl, <b>net of VAT</b> (Odoo holds them VAT-inclusive; this is that figure &divide; 1.14). Nothing here is attributed to advertising.'],
+  ['MER (webstore + branches)','(Webstore revenue + branch revenue) &divide; ad spend. A scale ratio only: regression on this account shows Meta spend does <b>not</b> predict branch revenue once trend and the Friday/Saturday pattern are controlled, so a big number here is store footfall, not ad performance.'],
+  ['After ADS only (incl. branches)','Webstore GP + branch GP &minus; ad spend, where branch GP is branch revenue &times; '+(stMg*100).toFixed(1)+'% &mdash; the real POS margin of the last complete month ('+(pm||'&mdash;')+'), rent-free and before any store cost.'],
+  ['After ads AND overhead (incl. branches)','The same, minus <b>the whole company&rsquo;s posted expense book for that day&rsquo;s own month</b> &divide; its days: branch rent, branch and HQ payroll, utilities, packing, card and collection fees, cargo, maintenance, comms. Platform ad invoices are excluded from it &mdash; they are already charged from the APIs in the Spend column, and counting the ledger copy too would double-charge about E&pound;3M a month.']
+ ],'<b>What this table cannot tell you.</b> Overhead is a monthly commitment divided by the days in its month, so every day carries the same slice whatever it sold. A slow day will always print red and a peak day green, and neither on its own is a decision &mdash; read the month block at the top for that. <b>Which month&rsquo;s book each day uses:</b> its own. Before v10.2 every day of every month was charged the last COMPLETE month&rsquo;s book, which on this account is August at E&pound;8.20M &mdash; the back-to-school peak &mdash; so ordinary September days were handed peak-month rent and payroll. A month whose ledger is still filling is now charged the median of the last four settled months instead of its partial postings, and says so in the row.');
  pnlCard(g,'blend','Every day against break-even'
   +INFO('MER = webstore net revenue ÷ ALL ad spend that day; break-even '+be.toFixed(2)+'× at your real '+(gpOn*100).toFixed(1)+'% online margin. aMER = first-time-customer revenue over the same spend. GP after spend = webstore gross profit, LESS the delivery drag (courier both ways, COD &amp; payment fees, net of shipping collected — measured at '+((_gpPct().drag||0)*100).toFixed(1)+'% of revenue over the last three ledger months), minus the whole day&rsquo;s ad spend. The +branches pair adds the tills&rsquo; daily net revenue (from '+(O.bl?O.bl.start:'—')+'), branch GP at last month&rsquo;s real POS margin — remembering that regression on this account shows Meta spend does not predict branch revenue, so the branch columns are scale, not ad performance.'),
   srcGapNote()+(clipped?'<b>Last '+MAXR+' days of your range</b> (longer ranges are clipped so the table stays a table). ':ST.s+' → '+ST.e+'. ')
@@ -4725,7 +4816,7 @@ function dailyBE(g){
      +(q.dragPay*100).toFixed(1)+'% from the posted &ldquo;Payment &amp; collection fees&rdquo; GL account, measured on the last three ledger months. Break-even '+(1/q.gpOn).toFixed(2)+'&times; follows from it. '
      +'<span style="color:#b8621b">One caveat under review: that fees account is company-wide — if part of it is branch card acquiring rather than online COD collection, the online drag is overstated by that share.</span> ';}catch(e){return '';}})()
   +'Dark green = 25%+ clear of break-even · light green = above it · amber = within 15% below · red = under water. Fridays and Saturdays are the Egypt weekend.',
-  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  _moStrip+'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
   +'<th style="'+TH+'">Webstore revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">net of returns &mdash; the MER numerator</div></th>'
   +'<th style="'+TH+'">Webstore GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">delivered &mdash; courier &amp; fees already out</div></th>'
@@ -4736,8 +4827,8 @@ function dailyBE(g){
   +'<th style="'+TH+'">Branch revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills, net of VAT</div></th>'
   +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">(webstore + branches) &divide; spend</div></th>'
   +'<th style="'+TH+'">After ADS only<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · no overhead</div></th>'
-  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · whole company book</div></th></tr>'
-  +b+'</table></div>');
+  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · own month&rsquo;s book ÷ its days</div></th></tr>'
+  +b+'</table></div>'+_beCalc);
 }
 /* v9.57 ONE ORDER, TOP TO BOTTOM. Platform ROAS, then the break-even it has to clear, then
    every cost one average order carries — goods, courier, fees, its share of OpEx, its share
@@ -10151,6 +10242,23 @@ function VLBLf(F){return {id:'vlbl',afterDatasetsDraw(c){const ctx=c.ctx,ar=c.ch
    if(!mm||mm.hidden||!mm.data||!mm.data[j])return;if(mm.data[j].y<top)top=mm.data[j].y;});
   ctx.fillText(F(tot[j]),el.x,Math.max(ar.top+10,top-5));});
  ctx.restore();}};}
+/* v10.2 SHOW THE ARITHMETIC. Every table that prints a derived number now carries an
+   expandable block naming, for each column: the formula, the grain it is computed at, and
+   the feed it came from. Asked for directly -- "u shall have a ? icon that i expand and know
+   how each number is calculated" -- and it is the right default anyway: a number whose
+   derivation is hidden gets trusted or distrusted for the wrong reasons. */
+function CALCX(rows,note,label){
+ const TDl='padding:6px 9px;border-bottom:1px solid #edeff5;font-size:11.5px;font-weight:800;color:#26313f;vertical-align:top;white-space:nowrap';
+ const TDr='padding:6px 9px;border-bottom:1px solid #edeff5;font-size:11.5px;color:#3f4b5e;line-height:1.5';
+ return '<details style="margin-top:11px;border:1px solid #dfe4ee;border-radius:9px;background:#fbfcfe">'
+ +'<summary style="cursor:pointer;padding:9px 12px;font-size:11.5px;font-weight:800;color:#3a4a63">'
+ +(label||'How every number in this table is calculated')+' &mdash; click to open</summary>'
+ +'<div style="padding:0 12px 12px"><table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+ +'<colgroup><col style="width:210px"><col></colgroup>'
+ +rows.filter(function(r){return r;}).map(function(r){
+   return '<tr><td style="'+TDl+'">'+r[0]+'</td><td style="'+TDr+'">'+r[1]+'</td></tr>';}).join('')
+ +'</table>'+(note?'<div style="margin-top:9px;font-size:11px;color:#6b7687;line-height:1.55">'+note+'</div>':'')
+ +'</div></details>';}
 function INFO(t){return '<span style="display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:#e6e9f2;color:#334155;font-size:10px;font-weight:800;cursor:help;margin-left:6px;vertical-align:middle" title="'+String(t).replace(/"/g,'&quot;').replace(/&mdash;/g,'--').replace(/&minus;/g,'-').replace(/&pound;/g,'')+'">i</span>';}
 function MINUS(what){return '<div class="cs" style="margin-top:6px;padding:7px 9px;background:#fff5f7;border-left:3px solid #e23a63;border-radius:0 6px 6px 0"><b>Reading the minus signs:</b> '+what+'</div>';}
 /* v9.7 monthly line-chart card (Chart.js, pushed to ch so dCh destroys it like every other chart) */
@@ -12474,8 +12582,11 @@ function vWin(r){if(!ST.pm0&&!ST.pm1)return null;if(!r.mon)return {r:0,g:0,has:0
 /* v6.4 -- the month-column table renderer, hoisted out of rPnl so the Costs tab can use it too. */
 function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+(m===CURM?' <span style="color:#5a5bf0">(MTD)</span>':'')+'</th>').join('')+'</tr>';
   lines.forEach(L=>{if(L===null){h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:2px;border:0"></td></tr>';return;}
+   /* v10.2 section bands: a P&L that runs 30 undifferentiated rows makes the reader rebuild
+      its structure from the row names. Bands name the block each row belongs to. */
+   if(L.hdr){h+='<tr><td colspan="'+(cols.length+1)+'" style="text-align:left;background:#eef1f8;font-size:9.5px;font-weight:800;letter-spacing:.08em;color:#44506a;padding:6px 8px;border-top:1.5px solid #cfd6e6">'+L.hdr+'</td></tr>';return;}
    const vals=cols.map(L.f);const nums=vals.filter(v=>v!=null&&isFinite(v));const mn=nums.length?Math.min(...nums):0,mx=nums.length?Math.max(...nums):0;
-   h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left">'+L.n+(L.q?Q(L.q):'')+'</td>'+vals.map(v=>'<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+(v==null||!isFinite(v)?'&mdash;':L.fmt(v))+'</td>').join('')+'</tr>';});
+   h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left'+(L.ind?';padding-left:22px;color:#5a6577':'')+'">'+L.n+(L.q?Q(L.q):'')+'</td>'+vals.map((v,ci)=>'<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+(v==null||!isFinite(v)?'&mdash;':L.fmt(v))+(L.mk?(L.mk(cols[ci])||''):'')+'</td>').join('')+'</tr>';});
   return h+'</table></div>';};}
 /* v6.4 ---------------------------------------------------------------- COSTS & PAYROLL TAB
    Shipping economics and the salary ledger used to render on the Shopify P&L tab, where they
@@ -12814,13 +12925,19 @@ function trueROAS(g){
   const ret=s2ret(m), free=s2free(m);
   const conf=s2('conf',m)||0;
   const perDel=conf?cost/conf:null;
+  const parc=bostaN(m), perParc=parc?cost/parc:null;
+  const ppo=(parc&&conf)?parc/conf:null, _bd=ppoBand();
+  const ppoOdd=!!(ppo!=null&&_bd&&(ppo<_bd.lo||ppo>_bd.hi));
   const mer=sp?net/sp:null;
   const trueMer=sp?(net+shipNet)/sp:null;
   const trueGp=gp2+shipNet-sp;
   const BX=BOSTA_X[m];
   b+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+m+(BX?'<div style="font-size:9px;color:#0f6e56;font-weight:600">Bosta per-delivery mix</div>':'<div style="font-size:9px;color:#8a93a6;font-weight:600">ledger only</div>')+'</td>'
    +'<td style="'+TD+'">'+M(net)+'</td>'
-   +'<td style="'+TD+'">'+(perDel!=null?'E£'+perDel.toFixed(0):'—')+'</td>'
+   +'<td style="'+TD+(ppoOdd?';color:#b8621b':'')+'" title="Ledger courier bill divided by CONFIRMED ORDERS. This moves when the share of orders that actually ship moves, so it is not a price.">'+(perDel!=null?'E£'+perDel.toFixed(0):'—')+'</td>'
+   +'<td style="'+TD+'" title="Parcels Bosta actually moved in this month, from the courier\u2019s own shipment records: sends, RTO, customer returns and exchanges.">'+(parc?parc.toLocaleString():'<span style="color:#c9ccd6">—</span>')+'</td>'
+   +'<td style="'+TD+';font-weight:800" title="Ledger courier bill divided by the parcels Bosta moved. THIS is the rate you are charged.">'+(perParc!=null?'E£'+perParc.toFixed(0):'<span style="color:#c9ccd6">—</span>')+'</td>'
+   +'<td style="'+TD+(ppoOdd?';background:#fdeed9;color:#8a5a1a;font-weight:800':'')+'" title="Parcels divided by confirmed orders. Settled months sit in a narrow band; a month outside it means orders were confirmed that never shipped, and the per-ORDER column for that month is not comparable.">'+(ppo!=null?ppo.toFixed(2)+(ppoOdd?' !':''):'—')+'</td>'
    +'<td style="'+TD+';color:'+(shipNet>=0?'#0f6e56':'#a3271a')+';font-weight:700">'+(shipNet>=0?'+':'−')+M(shipNet)+'</td>'
    +'<td style="'+TD+'">'+(ret!=null?'−'+M(ret):'<span style="color:#c9ccd6" title="No Bosta per-delivery pull for this month — the return-leg share needs the API mix">—</span>')+'</td>'
    +'<td style="'+TD+'" title="Confirmed orders that collected no shipping fee, whatever the reason — no free-shipping promotion ran; this is largely exchanges, replacement sends and waived fees. Their courier legs cost this much.">'+(free?'−'+M(free):'—')+'</td>'
@@ -12838,15 +12955,48 @@ function trueROAS(g){
   'Headline MER pretends delivery is free and every order stays sold. These columns stop pretending. The month tagged &ldquo;Bosta per-delivery mix&rdquo; splits the courier bill with Bosta&rsquo;s own API data; &ldquo;ledger only&rdquo; months know the total but not the return share.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Month</th><th style="'+TH+'">Net revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">refunds out</div></th>'
-  +'<th style="'+TH+'">Courier fee<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">per delivery</div></th>'
+  +'<th style="'+TH+'">Courier &divide; ORDER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">bill &divide; confirmed orders &mdash; not a rate</div></th>'
+  +'<th style="'+TH+'">Parcels Bosta moved<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">courier&rsquo;s own count</div></th>'
+  +'<th style="'+TH+'">Courier &divide; PARCEL<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">the rate you are actually charged</div></th>'
+  +'<th style="'+TH+'">Parcels per order<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">amber = outside the settled band</div></th>'
   +'<th style="'+TH+'">Net shipping<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">collected − bill</div></th>'
   +'<th style="'+TH+'">of which return legs<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">RTO + returns + exchanges</div></th>'
   +'<th style="'+TH+'">Courier on unpaid-shipping orders<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">NOT a promo &mdash; exchanges, replacements, waived fees</div></th>'
   +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">headline</div></th>'
   +'<th style="'+TH+'">TRUE MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">after courier reality</div></th>'
   +'<th style="'+TH+'">Banked<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">GP + shipping − ads</div></th></tr>'
-  +b+'</table></div>'+bnote);
+  +b+'</table></div>'+bnote+CALCX([
+   ['Month','Complete months only, and only months where BOTH a courier ledger and a full ad month exist. The running month is dropped rather than drawn as a cliff &mdash; Bosta settles COD on a lag.'],
+   ['Net revenue','Odoo Shopify-team gross sales for the month &minus; posted credit notes. Cancelled orders were never in it.'],
+   ['Courier &divide; ORDER','The month&rsquo;s posted courier bill &divide; confirmed orders. <b>This is a ratio, not a price</b>, and it moves whenever the share of orders that actually ship moves. It read E&pound;91 in July and E&pound;53 in August purely because August confirmed 10,200 orders against July&rsquo;s 4,870 while only 7,184 parcels moved.'],
+   ['Parcels Bosta moved','Bosta&rsquo;s own shipment records for the month: sends, Return-to-Origin, customer return pickups and exchanges, counted individually. Independent of Odoo.'],
+   ['Courier &divide; PARCEL','Posted courier bill &divide; those parcels. <b>This is the rate.</b> On this account it has run E&pound;58&ndash;E&pound;85 across settled months; August is E&pound;75, i.e. slightly BELOW July&rsquo;s E&pound;85, not 42% below it.'],
+   ['Parcels per order','Parcels &divide; confirmed orders. Settled months cluster near 1.0. August is 0.70, which means roughly 3,000 confirmed August orders never became a Bosta parcel &mdash; so its per-ORDER column is not comparable with any other month&rsquo;s, and is flagged amber for exactly that reason.'],
+   ['Net shipping','What customers paid for delivery (the three shipping SKUs, price above zero, in the month the order was placed) &minus; the whole courier bill. Negative means delivery is a subsidy funded out of product margin.'],
+   ['of which return legs','The courier bill &times; the return share measured in Bosta&rsquo;s per-delivery pull (16.5% for 2026-08). A measured share of a measured total &mdash; not an allocation. Months without a pull print a dash rather than a zero.'],
+   ['Courier on unpaid-shipping orders','The courier bill &times; the share of confirmed orders carrying no paid shipping line. Bosta bills near-flat per shipment, so an order-share split is the honest allocation. <b>Not</b> a free-delivery promotion &mdash; none ran; it is largely exchanges, replacement sends and waived fees.'],
+   ['MER','Net revenue &divide; ad spend. The headline number, which pretends delivery is free.'],
+   ['TRUE MER','(Net revenue + net shipping) &divide; ad spend. The same spend against what delivery actually left behind.'],
+   ['Banked','Gross profit after shipping &minus; ad spend: what the webstore actually kept that month, before any rent or payroll.']
+  ],'<b>Where the courier bill comes from.</b> Account 31.01.08.34.00 &ldquo;Bosta collection fees&rdquo; in full, plus the identical postings mis-coded to 31.01.08.17.00 &ldquo;Credit Card Expenses&rdquo; before Jan 2026 &mdash; E&pound;3.5M of courier cost sitting in an account named after card fees. A month with no postings at all is priced from the trailing settled rate and labelled, never left at zero.'));
 }
+/* v10.2 "COURIER FEE E53 LAST MONTH, E91 THE MONTH BEFORE -- NO WAY IT DROPPED THAT MUCH."
+   It did not. The column was the ledger's courier bill divided by CONFIRMED ORDERS, and the
+   thing that moved was the denominator, not the price:
+     Jul 2026  E441,603 / 4,870 orders = E90.7   but / 5,199 Bosta parcels = E84.9
+     Aug 2026  E539,393 / 10,200 orders = E52.9  but / 7,184 Bosta parcels = E75.1
+   Parcels per confirmed order runs 0.93-1.07 in every settled month and 0.70 in August, so
+   roughly 3,000 August orders never became a Bosta parcel. Per PARCEL -- which is what Bosta
+   actually bills -- August is E75, ordinary, and slightly below July. Both denominators are
+   now printed side by side so the ratio cannot be misread as a rate again.
+   (Checked at source: August's E539,393 is ONE posting dated 08-31 whose memo reads "Bosta
+   commission for delivery during month 8/2026", against 12-13 per-settlement postings in
+   every other month. It is a complete month booked in one entry, not a part-month.) */
+function bostaN(m){const B=window.O&&O.bosta;const mm=B&&B.months&&B.months[m];return (mm&&mm.n)||0;}
+function ppoBand(){const S=S2f();if(!S)return null;const v=[];
+ S.m.forEach((m,i)=>{const n=bostaN(m),c=S.conf[i]||0;if(n&&c&&(S.cost[i]||0)>0)v.push(n/c);});
+ if(v.length<4)return null;v.sort((a,b)=>a-b);
+ return {lo:v[Math.floor(v.length*0.15)],hi:v[Math.floor(v.length*0.85)],n:v.length};}
 const BOSTA_X={'2026-08':{retShare:0.1652,n:6164,ofN:6236,priced:432033,
   rto:39868,cust:15074,exch:16448,src:'Bosta API per-delivery mix, pulled 2026-09-01'}};
 function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])||0;
@@ -13087,7 +13237,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  document.getElementById('bn4').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Colour: green = best month, red = worst, per row. All refunds, COGS, payroll, rent and OpEx below are ACTUAL accounting figures from Odoo (team-tagged credit notes + the 31.* expense tree). Ads cover 2025-07-25 onward.';
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
- ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><label>Customer type</label><select onchange="pnlCtl(&quot;pcust&quot;,this.value)"><option value="nc"'+(ST.pcust==='nc'?' selected':'')+'>First-time</option><option value="rc"'+(ST.pcust==='rc'?' selected':'')+'>Returning</option></select><div class="sp"></div><span class="cs">Filter applies to every table on this tab.</span></div>';
+ ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><label>Customer type</label><select onchange="pnlCtl(&quot;pcust&quot;,this.value)"><option value="nc"'+(ST.pcust==='nc'?' selected':'')+'>First-time</option><option value="rc"'+(ST.pcust==='rc'?' selected':'')+'>Returning</option></select><label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer" title="Adds Meta&#39;s in-store (offline) conversion value to the Shopify P&L as a MEMO block. It is never folded into gross sales, gross profit or EBITDA."><input type="checkbox" style="width:auto" '+(ST.pOff?'checked':'')+' onchange="pnlCtl(&quot;pOff&quot;,this.checked)"> Add attributed in-store revenue</label><label>Attribution model</label><select onchange="pnlCtl(&quot;pOffM&quot;,this.value)"'+(ST.pOff?'':' disabled')+'><option value="meta"'+((ST.pOffM||'meta')==='meta'?' selected':'')+'>Meta in-store conversions (Meta&#39;s claim)</option><option value="inc"'+(ST.pOffM==='inc'?' selected':'')+'>&times; 0.217 measured incremental share</option><option value="omni"'+(ST.pOffM==='omni'?' selected':'')+'>Meta omni value &minus; online net revenue</option></select><div class="sp"></div><span class="cs">Filter applies to every table on this tab.</span></div>';
  g.appendChild(ctl);
  rFind(g,M,SH,A,names);
  const CURM=O.aw[1].slice(0,7);const T=MKT(CURM);
@@ -13099,48 +13249,105 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  const GPF=m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null;
  // ---- 1 · SHOPIFY P&L — ACTUALS ----
  if(O.shop){
+  /* v10.2 P&L REORDERED INTO BLOCKS. The old order told the demand story twice -- "Demand
+     placed / Less cancelled" at the top and then "Cancelled count / Cancelled value / Cancel
+     rate / Demand lost" as memo rows 20 lines below, with volume and ratio rows scattered
+     between. Every line now sits in the block it belongs to, each block reads top to bottom,
+     and the only rows below the bottom line are the two that are charged nowhere. */
+  const OFFON=!!ST.pOff, OFFM=ST.pOffM||'meta';
+  /* Meta's in-store (offline) conversion value for the month. This is Meta's claim, matched
+     from the POS customer file -- NOT a measured lift. Regression on this account shows Meta
+     spend does not predict branch revenue once trend and the Friday/Saturday pattern are
+     controlled, so the incremental model applies the measured 0.217 share. */
+  const OFFV=m=>{if(!adFull(m)||!A[m])return null;
+   if(OFFM==='inc')return (A[m].io||0)*0.217;
+   if(OFFM==='omni'){const on=(SH[m]&&SH[m].g)?SH[m].g-SH[m].r:0;return Math.max(0,(A[m].ov||0)-on);}
+   return A[m].io||0;};
+  const OFFL={meta:'Meta in-store conversions (Meta’s own claim)',
+              inc:'Meta in-store × 0.217 (measured incremental share)',
+              omni:'Meta omni value − online net revenue (Meta’s implied offline)'}[OFFM];
+  const STMG=(function(){try{const nm=(O.today||'').slice(0,7);
+    const pm2=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(x=>x!==nm).slice(-1)[0];
+    if(!pm2)return 0.24;let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm2];if(v){r2+=v[0]||0;g2+=v[1]||0;}});
+    return r2>0?g2/r2:0.24;}catch(e){return 0.24;}})();
+  /* A month with no courier postings at all is priced from the trailing settled rate by
+     s2(). That is the right call, but it must be visible on the cell, not only in a note. */
+  const COSTEST=m=>{const S=S2f();if(!S||!s2h(m))return '';
+   return (S.cost[S2If()[m]]||0)>0?'':' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="No courier postings for this month yet — priced from the rate actually paid across the trailing settled months.">EST</span>';};
+  const MTDMK=m=>m===CURM?' <span style="font-size:8.5px;color:#5a5bf0;font-weight:800" title="Month to date — this column stops at '+(O.today||'today')+', so every line in it is a part-month. Do not compare it with a full month.">MTD</span>':'';
   const SL2=[
-   {n:'Demand placed (confirmed + cancelled)',f:m=>SH[m]&&SH[m].g?SH[m].g+((CX[m]&&CX[m].v)||0):null,fmt:POS,sh:1,q:'cxdeduct',tt:'Everything that was ordered in the month before anyone cancelled anything: confirmed gross sales plus the value of the orders that were later cancelled. This is the demand your ads and your store actually generated.'},
-   {n:'Less: cancelled before billing',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,q:'cxdeduct',tt:'The cancelled order value, now DEDUCTED rather than shown off to the side. Demand placed &minus; this line = the gross sales row underneath, exactly.'},
-   {n:'Gross sales',f:m=>SH[m]&&SH[m].g?SH[m].g:null,fmt:POS,sh:1,b:1,tt:'Odoo Shopify sales team, confirmed orders only. Equals the two rows above, subtracted.'},
-   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,tt:'Posted credit notes tagged to the Shopify team'},
+   {hdr:'1 &middot; DEMAND &mdash; what customers tried to buy'},
+   {n:'Demand placed (confirmed + cancelled)',f:m=>SH[m]&&SH[m].g?SH[m].g+((CX[m]&&CX[m].v)||0):null,fmt:POS,sh:1,q:'cxdeduct',mk:MTDMK,tt:'Everything ordered in the month before anyone cancelled anything: confirmed gross sales plus the value of the orders later cancelled. This is the demand your ads and your store actually generated.'},
+   {n:'Less: cancelled before billing',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,gd:-1,q:'cxdeduct',tt:'The cancelled order value, DEDUCTED here rather than shown off to the side. Demand placed &minus; this line = the gross sales row underneath, exactly.'},
+   {n:'Cancel rate, % of orders placed',f:m=>{const o=(SH[m]&&SH[m].o)||0,c=(CX[m]&&CX[m].n)||0;return o+c?c/(o+c)*100:null;},fmt:PCT,sh:1,gd:-1,ind:1,tt:'Cancelled &divide; (confirmed + cancelled). The share of everyone who tried to buy and did not end up buying.'},
+   {n:'Demand lost to cancellation, %',f:m=>{const g2=(SH[m]&&SH[m].g)||0,v=(CX[m]&&CX[m].v)||0;return g2+v?v/(g2+v)*100:null;},fmt:PCT,sh:1,gd:-1,ind:1,tt:'Cancelled value &divide; (gross sales + cancelled value). By money rather than by count &mdash; if this runs above the cancel rate, it is the big baskets that are cancelling.'},
+   null,
+   {hdr:'2 &middot; REVENUE &mdash; what was actually billed and kept'},
+   {n:'Gross sales',f:m=>SH[m]&&SH[m].g?SH[m].g:null,fmt:POS,sh:1,b:1,tt:'Odoo Shopify sales team, confirmed orders only. Equals the two demand rows above, subtracted.'},
+   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,tt:'Posted credit notes tagged to the Shopify team. Real postings, not a rate.'},
    {n:'Net revenue',f:m=>SH[m]&&SH[m].g?SH[m].g-SH[m].r:null,fmt:POS,sh:1,b:1},
+   {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1,ind:1},
+   {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,ind:1},
+   {n:'AOV (real)',f:m=>SH[m]&&SH[m].o?SH[m].g/SH[m].o:null,fmt:POS,sh:1,ind:1,tt:'Gross sales &divide; confirmed orders.'},
+   null,
+   {hdr:'3 &middot; PRODUCT MARGIN'},
    {n:'COGS (actual)',f:m=>SH[m]&&SH[m].g?-((SH[m].g-SH[m].r)-SH[m].gp*(1-SH[m].r/SH[m].g)):null,fmt:NEG,sh:0,q:'sh_cogs',tt:'Net revenue &minus; net gross profit. Cost of the goods that were KEPT: refunded orders take their COGS out with them, so COGS is struck off NET sales, not gross.'},
    {n:'Gross profit',f:m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null,fmt:POS,sh:1,b:1,q:'sh_gp',tt:'Odoo margin on the Shopify channel, less the margin that went back out with refunds. Net revenue &minus; COGS = this line, exactly.'},
-   {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed. On a free-delivery promotion this line falls while the courier bill underneath does not move at all -- that gap is what makes the net negative.'},
-   {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that -- 3.5m EGP of courier cost sitting in an account named after card fees. Until this was found the dashboard reported ZERO courier cost for the first 17 months.'},
-   {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin. The old version of this line also added account 32.00.00.18.00 as a rebate; that account is the ledger mirror of the shipping revenue already counted above, so adding it double-counted every pound. It is gone.'},
-   /* Where the Bosta pull covers the month we can stop allocating and just state it: the
-     return legs are their own delivery types with their own fees. This is the cost of free
-     RETURNS, measured, not inferred from which orders collected a shipping fee. */
-  {n:'&nbsp;&nbsp;of which: RETURN LEGS (Bosta mix &times; ledger total)',f:m=>s2ret(m)?-s2ret(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',
-   tt:'Return to Origin + Customer Return Pickup + Exchange. Bosta\u2019s per-delivery pull prices these at 16.5% of the courier bill; that share is applied to the month\u2019s posted ledger total, because the pull covers fewer shipments than the month contains. This is the cost of free RETURNS \u2014 measured share of a measured total, not an allocation.'},
-  {n:'&nbsp;&nbsp;of which: OUTBOUND SENDS (Bosta mix &times; ledger total)',f:m=>s2send(m)?-s2send(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',
-   tt:'The other 83.5% of the courier bill: Send legs. Mean fee per send in the Bosta pull was E\u00a370.69.'},
-  {n:'&nbsp;&nbsp;of which: COURIER COST ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month\u2019s courier bill multiplied by the share of confirmed orders with no paid shipping line. Bosta bills a near-flat rate per shipment, so an order-share split is the honest allocation. NOT the cost of a free-delivery offer \u2014 none was running in Aug 2026. Free RETURNS and shipping absorbed into the product price both land here, and the number cannot tell them apart.'},
-   {n:'Shipping recovery, % of the courier bill covered by customers',f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself. Anything below that is the share of every delivery you are funding yourself.'},
-   {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below this line now subtracts from THIS number, not from the gross profit row above it.'},
-   /* months where the ads feed does not cover the FULL month (feed starts O.ad.start, rolling
-      365d) must not print a partial sum as if it were the month's spend — show a dash. */
+   {n:'GP margin, %',f:m=>SH[m]&&SH[m].g?SH[m].gp/SH[m].g*100:null,fmt:PCT,sh:1,ind:1},
+   null,
+   {hdr:'4 &middot; DELIVERY &mdash; what it costs to hand the order over'},
+   {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed.'},
+   {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',mk:COSTEST,tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that. A month marked EST has no postings yet and is priced at the trailing settled rate per confirmed order.'},
+   {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin.'},
+   {n:'of which: RETURN LEGS (Bosta mix &times; ledger total)',ind:1,f:m=>s2ret(m)?-s2ret(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'Return to Origin + Customer Return Pickup + Exchange. Bosta’s per-delivery pull prices these at 16.5% of the courier bill; that share is applied to the month’s posted ledger total. The cost of free RETURNS — a measured share of a measured total, not an allocation.'},
+   {n:'of which: OUTBOUND SENDS (Bosta mix &times; ledger total)',ind:1,f:m=>s2send(m)?-s2send(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The other 83.5% of the courier bill: Send legs.'},
+   {n:'of which: COURIER ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',ind:1,f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month’s courier bill × the share of confirmed orders with no paid shipping line. NOT a free-delivery offer — none was running; largely exchanges, replacement sends and waived fees.'},
+   {n:'Shipping recovery, % of the courier bill covered by customers',ind:1,f:m=>s2h(m)&&s2('cost',m)?s2('col',m)/s2('cost',m)*100:null,fmt:PCT,sh:1,q:'ship2',tt:'Collected divided by the courier bill. 100% would mean delivery pays for itself.'},
+   {n:'Gross profit AFTER shipping',f:m=>{const gp=GPF(m);return gp==null?null:gp+shipNet(m);},fmt:POS,sh:1,b:1,q:'ship',tt:'The real margin left once delivery has been paid for. Everything below subtracts from THIS number.'},
+   null,
+   {hdr:'5 &middot; MARKETING'},
    {n:'Ads &mdash; Meta',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].ms:null,fmt:NEG,sh:0,tt:'Months before the ads feed window (or only partially inside it) show a dash, not a misleading partial sum'},
    {n:'Ads &mdash; Google',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].gs:null,fmt:NEG,sh:0},
-   {n:'Ads &mdash; TikTok',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'TikTok API history baked in for the full year'},
-   {n:'Ads &mdash; total',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Dash = the ads feed only covers part of this month (window starts '+((O.ad&&O.ad.start)||'?')+')'},
-   {n:'Profit contribution (after shipping &amp; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?GPF(m)+shipNet(m)-A[m].s:null,fmt:POS,sh:1,b:1,q:'sh_pc',tt:'Gross profit AFTER shipping &minus; all platform ad spend. Nothing hidden: the lines you can see subtract to this one. This used to be struck off gross profit before shipping &mdash; it is now the harder, truer number.'},
-   {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026'},
-   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?GPF(m)+shipNet(m)-A[m].s-EP:null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Now carries the shipping subsidy too.'},
+   {n:'Ads &mdash; TikTok',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].ts:null,fmt:NEG,sh:0,tt:'Reads zero after 2026-08-31 — that feed is dead, not the spend'},
+   {n:'Ads &mdash; total',f:m=>adFull(m)&&A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,b:1,tt:'Dash = the ads feed only covers part of this month (window starts '+((O.ad&&O.ad.start)||'?')+')'},
+   {n:'MER, &times; (net revenue &divide; ads)',ind:1,f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?(SH[m].g-SH[m].r)/A[m].s:null,fmt:X,sh:1},
+   ].concat(OFFON?[
    null,
-   {n:'Cancelled orders, count',f:m=>CX[m]&&CX[m].n?CX[m].n:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,tt:'Shopify-team sale orders sitting in state = cancel, counted in the month they were placed. These never appear in any revenue line above &mdash; the P&L only ever counted confirmed orders. This row exists so the demand you lost is visible instead of silently absent.'},
-   {n:'Cancelled order value (memo &mdash; in NO line above)',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,tt:'What those cancelled orders would have been worth. They never entered any revenue line on this table &mdash; this row is information only, charged nowhere, so nothing is deducted twice. It is the demand that walked, which is a different and often larger problem than a cost.'},
-   {n:'Cancel rate, % of orders placed',f:m=>{const o=(SH[m]&&SH[m].o)||0,c=(CX[m]&&CX[m].n)||0;return o+c?c/(o+c)*100:null;},fmt:PCT,sh:1,gd:-1,tt:'Cancelled &divide; (confirmed + cancelled). The share of everyone who tried to buy and did not end up buying.'},
-   {n:'Demand lost to cancellation, %',f:m=>{const g=(SH[m]&&SH[m].g)||0,v=(CX[m]&&CX[m].v)||0;return g+v?v/(g+v)*100:null;},fmt:PCT,sh:1,gd:-1,tt:'Cancelled value &divide; (gross sales + cancelled value). By money rather than by count &mdash; if this runs above the cancel rate, it is the big baskets that are cancelling.'},
+   {hdr:'5b &middot; ATTRIBUTED IN-STORE REVENUE &mdash; memo, charged nowhere above'},
+   {n:'Attributed in-store revenue',f:OFFV,fmt:POS,sh:1,tt:'Model: '+OFFL.replace(/&/g,'and')+'. This is an attribution claim, not a measurement. It is NOT added to any revenue, profit or margin line in blocks 1-6.'},
+   {n:'Share of the branches’ own till revenue',ind:1,f:m=>{const v=OFFV(m);if(v==null)return null;let br=0;Object.keys(O.pos||{}).forEach(b=>{const q=(O.pos[b]||{})[m];if(q)br+=q[0]||0;});return br?v/br*100:null;},fmt:PCT,sh:1,gd:-1,tt:'What this model claims, as a percentage of what the seven tills actually rang up. Above roughly 50% means the model is claiming most of the shop floor.'},
+   {n:'Blended revenue (online net + attributed in-store)',f:m=>{const v=OFFV(m);return (v==null||!SH[m]||!SH[m].g)?null:(SH[m].g-SH[m].r)+v;},fmt:POS,sh:1,b:1},
+   {n:'Blended MER, &times;',ind:1,f:m=>{const v=OFFV(m);return (v==null||!SH[m]||!SH[m].g||!A[m]||!A[m].s||!adFull(m))?null:((SH[m].g-SH[m].r)+v)/A[m].s;},fmt:X,sh:1},
+   {n:'Attributed in-store GP at the real POS margin ('+(STMG*100).toFixed(1)+'%)',ind:1,f:m=>{const v=OFFV(m);return v==null?null:v*STMG;},fmt:POS,sh:1,tt:'The attributed revenue at the last complete month’s actual POS gross margin. Rent-free and before any store cost.'},
+   {n:'Blended contribution (GP after shipping + in-store GP &minus; ads)',f:m=>{const v=OFFV(m),gp=GPF(m);return (v==null||gp==null||!A[m]||!A[m].s||!adFull(m))?null:gp+shipNet(m)+v*STMG-A[m].s;},fmt:SIG,sh:1,b:1}
+   ]:[]).concat([
    null,
-   {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1},
-   {n:'AOV (real)',f:m=>SH[m]&&SH[m].o?SH[m].g/SH[m].o:null,fmt:POS,sh:1},
-   {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1},
-   {n:'GP margin, %',f:m=>SH[m]&&SH[m].g?SH[m].gp/SH[m].g*100:null,fmt:PCT,sh:1},
-   {n:'MER, x (net &divide; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s?(SH[m].g-SH[m].r)/A[m].s:null,fmt:X,sh:1}];
-  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Cancelled orders never enter the revenue lines (the memo rows near the bottom show what walked), and the four shipping flows &mdash; what you collect, the courier rebate, what the couriers take and what packing costs &mdash; are folded into the arithmetic instead of sitting in a side card. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons));}
+   {hdr:'6 &middot; BOTTOM LINE'},
+   {n:'Profit contribution (after shipping &amp; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s:null,fmt:SIG,sh:1,b:1,q:'sh_pc',tt:'Gross profit AFTER shipping &minus; all platform ad spend. Nothing hidden: the lines you can see subtract to this one.'},
+   {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026. A FIXED figure, the same in every column — it is not read per month from the ledger.'},
+   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s-EP:null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Carries the shipping subsidy too. It does NOT carry rent, HQ payroll or utilities — those are company lines, and the webstore’s share of them is on the Blended tab.'},
+   null,
+   {hdr:'MEMO &mdash; information only, charged in no line above'},
+   {n:'Cancelled orders, count',f:m=>CX[m]&&CX[m].n?CX[m].n:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,tt:'Shopify-team sale orders sitting in state = cancel, counted in the month they were placed. They never appear in any revenue line — the P&L only ever counted confirmed orders.'},
+   {n:'Cancelled order value',f:m=>CX[m]&&CX[m].v?-CX[m].v:null,fmt:NEG,sh:1,gd:-1,tt:'What those cancelled orders would have been worth. Already deducted once in block 1 to get from demand to gross sales; repeated here so the lost demand is visible next to the count. Nothing is deducted twice — no line between block 2 and block 6 contains it.'}
+  ]);
+  const SHCALC=CALCX([
+   ['Grain','<b>One calendar month per column, and every line in a column is read for THAT month only.</b> Nothing is spread, apportioned across months or carried forward. The right-hand column marked MTD stops at '+((O.today)||'today')+', so it is a part-month on every single line &mdash; revenue AND costs &mdash; and must not be compared with a full month.'],
+   ['Demand placed','Confirmed gross sales + the value of orders later cancelled, both from Odoo sale orders tagged to the Shopify team, counted in the month the order was PLACED.'],
+   ['Less: cancelled before billing','The cancelled order value. Subtracting it from the row above gives gross sales exactly. It appears once more at the very bottom next to the cancelled count &mdash; as information, charged in no line between.'],
+   ['Gross sales','Odoo Shopify-team confirmed sale orders. Noon, Amazon and Homzmart are excluded; this is the webstore only.'],
+   ['Less: refunds','Posted credit notes tagged to the Shopify team, in the month the credit note was posted. Real postings, not a refund rate.'],
+   ['COGS','Net revenue &minus; net gross profit. Refunded orders take their cost out with them, so COGS is struck off NET sales rather than gross &mdash; which is why it does not equal units &times; cost.'],
+   ['Gross profit','Odoo&rsquo;s own margin on those orders, less the margin that left with refunds. Product only: no delivery, no ads, no overhead.'],
+   ['Shipping collected','The three shipping SKUs on the sale orders, price above zero, in the month the order was placed.'],
+   ['Courier paid to Bosta','Posted debits to 31.01.08.34.00 &ldquo;Bosta collection fees&rdquo;, plus the identical postings mis-coded to 31.01.08.17.00 before Jan 2026. <b>A cell marked EST has no postings for that month yet</b> and is priced at the rate actually paid per confirmed order across the trailing settled months &mdash; never left at zero, which would book the whole shipping collection as profit.'],
+   ['The three &ldquo;of which&rdquo; rows','Splits of that same courier bill, not extra charges. Return legs and outbound sends use Bosta&rsquo;s own measured per-delivery mix (16.5% / 83.5%); the unpaid-shipping row uses the share of confirmed orders carrying no paid shipping line. They are indented for that reason.'],
+   ['Ads','Each platform&rsquo;s own billed monthly spend from its API. A month only partly inside the ad feed window shows a dash rather than a partial sum that would read as a cheap month. TikTok is zero after 2026-08-31 because that feed is dead.'],
+   ['OpEx: e-com payroll','<b>A fixed E&pound;'+Math.round(EP).toLocaleString()+', identical in every column.</b> It comes from a June-2026 spreadsheet, not from the monthly ledger, so it does not move with the month and does not shrink for the MTD column.'],
+   ['What EBITDA here does NOT include','Rent, HQ payroll, utilities, maintenance, comms and the branch book. Those are company-level and are charged on the Blended tab, where the webstore takes its revenue-weighted share of them. This tab stops at the webstore&rsquo;s own costs.'],
+   ST.pOff?['Attributed in-store revenue','Meta&rsquo;s offline conversion value for the month, taken from the ads API. <b>It is a claim matched from your POS customer file, not a measured lift</b>, and it is deliberately fenced into its own memo block: no revenue, margin, contribution or EBITDA line in blocks 1&ndash;6 contains a pound of it. Regression on this account shows Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled, which is what the 0.217 incremental model prices in.']:null
+  ],'<b>Reading order.</b> Block 1 is demand and what walked; block 2 is what was billed and kept; block 3 is product margin; block 4 is what delivery costs; block 5 is media; block 6 is the bottom line. Each block subtracts to its own bold row, and the bold row feeds the next block.');
+  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons)+SHCALC);}
  // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
  if(O.exp&&Object.keys(O.exp).length){
   const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Platform ads via bills (memo)','Maintenance','Comms & internet','Other OpEx'];
@@ -13522,18 +13729,47 @@ function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16')
   let h2='<div style="overflow-x:auto"><table class="bt" style="min-width:'+(extraTH?'880':'760')+'px"><tr><th style="text-align:left">'+label+'</th><th>Customers</th><th>Repeat %</th><th>Median days &rarr; 2nd</th><th>Orders / yr</th><th>Avg LTGP</th>'+(extraTH||'')+'</tr>';
   keys.forEach(c=>{const v=MAP[c];h2+='<tr><td style="text-align:left;font-weight:700">'+c+'</td><td>'+money(v.n)+'</td><td'+cR(v.rep)+'>'+v.rep+'%</td><td'+cM(v.med2)+'>'+(v.med2==null?'&mdash;':v.med2)+'</td><td'+cO(v.oyr)+'>'+v.oyr+'</td><td'+cL(v.ltgp)+'>'+money(v.ltgp)+'</td>'+(extraTD?extraTD(v):'')+'</tr>';});
   return h2+'</table></div>';};
+ /* v10.2 "DID THEY STRICTLY BUY TWK?" No -- and the two tables on this tab do not even use the
+    same rule, which is exactly the kind of thing that has to be printed rather than assumed.
+    SUPPLIER rows count a customer under EVERY supplier on their first-purchase-day receipt, so
+    one customer with a three-supplier basket appears in three rows. CATEGORY rows assign each
+    customer to exactly ONE bucket -- the category that took the largest share of that first
+    day's spend. The supplier column therefore sums to about twice the customer base and the
+    category column to slightly under it. */
+ const jMeth=(MAP0,kind)=>{if(!MAP0||!Object.keys(MAP0).length)return '';
+  let tot=0;Object.keys(MAP0).forEach(k=>{tot+=(MAP0[k]||{}).n||0;});
+  const base=(SC[sc]||{}).n||0;
+  const ov=(base&&kind==='ven')?(tot/base):null;
+  return CALCX([
+   ['Who is in this table',kind==='ven'
+     ?'Every registered store customer whose <b>first purchase day</b> included at least one product from that supplier. <b>Not exclusive.</b> A customer whose first receipt carried three suppliers is counted once under each of the three, with their full repeat rate and full lifetime value attached to all three rows. '+(ov?('Across this board the Customers column sums to <b>'+Math.round(tot).toLocaleString()+'</b> against <b>'+Math.round(base).toLocaleString()+'</b> real customers &mdash; an average first basket of about '+ov.toFixed(1)+' suppliers.'):'')
+     :'Every registered store customer, assigned to <b>exactly one</b> category: the one that took the largest share of their first-day spend. A customer appears in one row only, so these rows do not overlap. They sum to '+Math.round(tot).toLocaleString()+' of '+Math.round(base).toLocaleString()+' customers &mdash; the rest sit in categories too small to show.'],
+   ['So it is NOT','&ldquo;Customers who only ever bought from this supplier.&rdquo; It is &ldquo;customers this supplier&rsquo;s product was present at the acquisition of.&rdquo; A high repeat rate on a row means the people whose first basket contained it came back &mdash; not that they came back FOR it.'],
+   ['First purchase DAY, not first order','Two receipts on the same day are one visit. The first day is the earliest dated POS order in the customer&rsquo;s whole Odoo history, so someone who started years ago is dated then, not at the start of any window you have selected.'],
+   ['Which rows are shown',kind==='ven'
+     ?'Suppliers with at least <b>25</b> acquired customers, taken as the union of the top 120 by customer count and the top 60 by revenue. The revenue half exists because a pure headcount ranking buried high-ticket, low-headcount suppliers entirely &mdash; Multicom is 5th in the business by money and did not appear at all.'
+     :'Categories with at least <b>40</b> acquired customers. Smaller ones are dropped rather than shown on a sample too thin to read.'],
+   ['Repeat %','Share of that row&rsquo;s customers with <b>two or more distinct purchase days</b>, over their entire history &mdash; not within any window and not within a year. It has no end date, so older cohorts have had longer to qualify and read higher for that reason alone.'],
+   ['Median days &rarr; 2nd','Days between the first and second purchase day, median, <b>over the repeaters only</b>. Customers who never came back are not in this statistic at all.'],
+   ['Orders / yr','Total orders in the row &divide; the sum of every customer&rsquo;s tenure in years, where tenure runs from their first purchase to today and is <b>floored at 30 days</b>. A recently acquired customer therefore contributes at most a twelfth of a year, which pushes this figure up on rows full of new customers.'],
+   ['Avg LTGP','Lifetime gross profit &divide; customers in the row, at Odoo&rsquo;s own POS margin. Lifetime means the whole history, so it is not comparable with any windowed figure elsewhere in this tool, and it is rent-free &mdash; no branch cost is charged against it.'],
+   ['What they buy NEXT','Categories bought on days <b>after</b> the first purchase day, ranked by revenue. Same-day add-ons belong to the first basket, not to the next one.'],
+   ['Exclude returns / exchanges','The tick at the top of this tab swaps every row for a twin computed only on orders with net margin above zero, so a customer whose one &ldquo;repeat&rdquo; was a refund stops counting as someone who came back. It moves repeat %, median days, orders/yr and both lifetime figures at once.'],
+   ['Population','Registered POS customers only. Walk-ins and branch house accounts are excluded, so this is not the whole shop floor &mdash; it is the part of it that can be followed over time.']
+  ],kind==='ven'?'<b>The one thing not to do with this table:</b> add the Customers column up, or read two supplier rows as two separate groups of people. They overlap heavily. Compare rows against each other on repeat %, days-to-2nd and LTGP instead &mdash; those are per-customer rates and survive the overlap.':'',
+  kind==='ven'?'How the supplier rows are counted &mdash; and why they overlap':'How the category rows are counted');};
  const NXTD='<th style="text-align:left">What they buy NEXT</th>';const NXTF=v=>'<td style="text-align:left;font-size:11px">'+(v.next||[]).map(x=>x[0]).slice(0,4).join(' · ')+'</td>';
  if(sc==='SHOPIFY'){
   const tCo=mkT(J.catON||{},'FIRST purchase category (ONLINE)',NXTD,NXTF);
-  if(tCo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase category','Real Shopify order lines: what the first online purchase was, and what those customers repeat into.',tCo);
+  if(tCo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase category','Real Shopify order lines: what the first online purchase was, and what those customers repeat into.',tCo+jMeth(J.catON||{},'cat'));
   else pnlCard(g,'odoo','ONLINE journey by FIRST-purchase category','Arrives with the next heavy crawl (it is queued automatically).','');
   const tVo=mkT(J.venON||{},'FIRST purchase supplier (ONLINE)','',null);
-  if(tVo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase supplier','Which supplier&rsquo;s product acquires the online customers that come back.',tVo);
+  if(tVo)pnlCard(g,'odoo','ONLINE journey by FIRST-purchase supplier','Which supplier&rsquo;s product was in the first basket of the online customers that come back &mdash; overlapping rows, see the calculation note.',tVo+jMeth(J.venON||{},'ven'));
  }else{
   const tC=mkT(J.cat||{},'FIRST purchase category (stores)',NXTD,NXTF);
-  if(tC)pnlCard(g,'odoo','Journey by FIRST-purchase category (stores)','Green rows = the first sales worth engineering toward: those customers repeat more, sooner, and are worth more. &ldquo;NEXT&rdquo; = what they buy on visits after the first day.',tC);
+  if(tC)pnlCard(g,'odoo','Journey by FIRST-purchase category (stores)','Green rows = the first sales worth engineering toward: those customers repeat more, sooner, and are worth more. &ldquo;NEXT&rdquo; = what they buy on visits after the first day. Each customer sits in exactly one row here.',tC+jMeth(J.cat||{},'cat'));
   const tV=mkT(J.ven||{},'FIRST purchase supplier (stores)','',null);
-  if(tV)pnlCard(g,'odoo','Journey by FIRST-purchase supplier (stores)','Which supplier&rsquo;s product acquires customers who come back.',tV);
+  if(tV)pnlCard(g,'odoo','Journey by FIRST-purchase supplier (stores)','Which supplier&rsquo;s product was in the first basket of customers who come back. A customer is counted under EVERY supplier on that first receipt, so the rows overlap &mdash; open the calculation note before reading the Customers column.',tV+jMeth(J.ven||{},'ven'));
  }}
 /* v9.47 DELIVERED margin, not shelf margin. Every "profit after spend" in the tool multiplied
    ad value by the GROSS margin -- as if the courier worked free, COD collected itself and no
@@ -15666,7 +15902,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260920-180829';
+const BUILD='20260921-200204';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
