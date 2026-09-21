@@ -419,7 +419,8 @@ function boot(){
  document.getElementById('ft').innerHTML=
   'Source: the same live <code>data.js</code> the OurKids dashboard reads (Meta per-ad daily, 60d, rebuilt hourly). '
   +'Per-ad add-to-cart / status / format '+(ADXLIVE?'<b>live</b> from the pipeline, re-cuts with the window.':'from a 2026-07-23→09-16 snapshot — goes live on the next pipeline run, after which it re-cuts with the window.')
-  +' GA4 first/last touch '+(TOUCHLIVE?'<b>live</b>.':'snapshot 2026-09-20.');
+  +' GA4 first/last touch '+(TOUCHLIVE?'<b>live</b>.':'snapshot 2026-09-20.')
+  +' Per-ad GA4 cross-check '+(G4LIVE?'<b>live</b> ('+Object.keys(G4).length+' ad names).':'snapshot.');
  document.getElementById('body').innerHTML=
   TAB==='grid'?vGrid(D):TAB==='act'?vAct(D):TAB==='pred'?vPred(D):
   TAB==='store'?vStore(D):TAB==='touch'?vTouch(D):vMeth(D);
@@ -673,6 +674,11 @@ const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['Meta claims 3×+','cut
  contradicts:['GA4 sees none','kill'],thin:['too few','hold'],nodata:['no GA4 row','hold']};
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">—</span>';
  const t=G4LAB[r.ga4]||['?','hold'];return '<span class="tg '+t[1]+'" title="Meta '+N0(r.pu)+' online purchases vs GA4 '+(r.gTx===null?'no data':N0(r.gTx)+' transactions')+'">'+t[0]+'</span>';}
+/* the Simple / Everything toggle applies here too -- this table was 30 columns wide */
+function PCOLS(all){
+ if((document.getElementById('dens')||{}).value==='f')return all;
+ const K=['n','sp7','k7','fc','cpaR','gpw','ga4','trend'];
+ return all.filter(c=>K.indexOf(c[0])>-1);}
 function sec(title,n,note,body){
  return '<div class="hd"><h2>'+title+'</h2><span class="n">'+n+'</span></div>'
   +(note?'<div class="mut" style="font-size:11.8px;margin:-4px 0 9px;line-height:1.55">'+note+'</div>':'')+body;}
@@ -783,8 +789,7 @@ function corrOnOff(rows){const a=rows.filter(r=>isFinite(r.cppOn)&&isFinite(r.cp
 function vPred(D){
  const live=D.rows.filter(r=>r.st==='act'&&r.sp7>0);
  const f=live.map(r=>{const e=r.sp7/1000;
-   return Object.assign({},r,{fc:e*r.lamR,fcLo:e*1000/r.cpaRHi,fcHi:e*1000/r.cpaRLo,
-     gp:e*r.lamR*(r.k>0?r.val/r.k:0)*0.161 - r.sp7});});
+   return Object.assign({},r,{fc:e*r.lamR,fcLo:e*1000/r.cpaRHi,fcHi:e*1000/r.cpaRLo});});
  const T=k=>f.reduce((s,r)=>s+r[k],0);
  const shrunkTot=T('sp7')/Math.max(T('fc'),1e-9);
  const winCPA=live.reduce((s,r)=>s+r.sp,0)/Math.max(live.reduce((s,r)=>s+r.k,0),1e-9);
@@ -813,16 +818,17 @@ function vPred(D){
  +'<div class="banner"><b>What this is.</b> Each ad\'s purchase rate, times next week\'s budget at today\'s spend. Nothing else — no stock, no promo calendar, no seasonality. '
  +'It uses the <b>last 14 mature days only</b>, because back-to-school sits inside this window and August rates do not forecast September. '
  +'<b>Decay</b> is that gap: positive means the grid\'s window CPA is flattering these ads against how they run now.</div>'
- +card('Next 7 days, per ad','Forecast at each ad\'s own last-7d budget. GP column uses the 16.1% delivered margin from the vault economics; negative means the ad loses money at this CPA.',
-   table(sortRows(f).slice(0,80),[
+ +card('Next 7 days, per ad','Forecast at each '+NOUN[D.level]+'\'s own last-7d budget, on its last-14-day rate. Profit uses 16.1% delivered margin online and 24.3% in store, so it matches the verdicts.',
+   table(sortRows(f).slice(0,80),PCOLS([
     ['n','Ad',adCell],['sp7','Budget 7d',r=>EGP(r.sp7)],
     ['k7','Purch last 7d',r=>N1(r.k7)],['fc','Forecast next 7d',r=>'<b>'+N1(r.fc)+'</b>'],
     ['fcLo','lo',r=>N1(r.fcLo)],['fcHi','hi',r=>N1(r.fcHi)],
     ['cpa','CPA window',r=>EGP(r.cpa)],['cpaR','CPA last 14d',r=>'<b>'+EGP(r.cpaR)+'</b>'],
     ['decay','Decay',r=>r.decay===null?'—':(r.decay>0?'<span class="r">':'<span class="g">')+PC(r.decay)+'</span>'],
     ['roas','ROAS',r=>N2(r.roas)],
-    ['gp','GP next 7d',r=>(r.gp<0?'<span class="r">':'<span class="g">')+EGP(r.gp)+'</span>'],
-    ['trend','Trend',r=>r.trend===null?'<span class="mut">n/a</span>':(r.trend>0?'<span class="r">+':'<span class="g">')+Math.round(r.trend*100)+'%</span>'+(r.trendSig?' *':'')]]))
+    ['gpw','Profit next 7d',r=>(r.gpw<0?'<span class="r">':'<span class="g">')+EGP(r.gpw)+'</span>'],
+    ['ga4','GA4 check',r=>G4TAG(r)],
+    ['trend','Trend',r=>r.trend===null?'<span class="mut">n/a</span>':(r.trend>0?'<span class="r">+':'<span class="g">')+Math.round(r.trend*100)+'%</span>'+(r.trendSig?' *':'')]])))
  +'<div class="two">'
  +card('By format (step 6)','Formats are inferred from video-play rate per impression, not from Meta\'s creative type field — <5% static, 5–45% mixed/carousel, >45% video.',grp(byFmt))
  +card('By funnel stage (step 7)','Stage is a regex on campaign/ad-set/ad name, so it is a label, not a fact. Judge TOF on cost per add-to-cart and BOF on CPA.',grp(byFn))
