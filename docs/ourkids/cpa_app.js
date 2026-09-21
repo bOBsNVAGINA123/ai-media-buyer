@@ -517,7 +517,12 @@ let TAB='act';
 function boot(){
  document.getElementById('tabs').innerHTML=TABS.map(t=>'<div class="tab'+(t[0]===TAB?' on':'')+'" data-t="'+t[0]+'">'+t[1]+'</div>').join('');
  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{TAB=t.dataset.t;boot();});
- ['lvl','basis','hair','win','tgt','mins','st','fmt','fn','dens'].forEach(i=>{const e=document.getElementById(i);e.onchange=()=>boot();});
+ /* Wire EVERY control in the bar, found from the DOM. This used to be a hardcoded list of
+    ids and it silently fell out of date three times -- Judge on, Attribution and Chart were
+    all rendered, all read by build(), and none of them re-rendered anything when changed.
+    A list that has to be maintained by hand is a list that will be wrong. */
+ document.querySelectorAll('.bar select, .bar input').forEach(e=>{
+   e.onchange=()=>boot(); e.oninput=()=>{clearTimeout(e._t); e._t=setTimeout(boot,250);};});
  const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
