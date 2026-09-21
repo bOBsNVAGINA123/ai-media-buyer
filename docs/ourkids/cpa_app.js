@@ -357,10 +357,21 @@ function build(){
      Sixteen of this account's live ads change sign between those, so a confident list built
      on the middle number alone would be a list of guesses wearing a verdict. */
   if(live&&r.rob==='depends'){r.act='DEPENDS';return;}
-  if(live&&loses&&r.gpHi<0)r.act='KILL';
-  else if(live&&loses)r.act='CUT';
-  else if(live&&!loses&&r.cpaHi<scale&&r.ga4!=='contradicts')r.act='SCALE';
-  else if(live&&!loses&&r.cpaHi<scale)r.act='DEPENDS';   // cheap on Meta, invisible to GA4
+  /* Recency cuts both ways, and judging a LIVE ad on its 56-day total alone got both
+     wrong: an ad that made money in August and is bleeding now was left running, and an
+     ad that lost money in August but has turned was told to cut. `tail` is the last 14
+     days it actually ran -- trusted only when there is enough of it to mean anything. */
+  const tOk=r.tail&&r.tail.days>=5&&r.tail.sp>=1000;
+  const dying=tOk?(r.tail.gp<0):loses;
+  const rising=!!(r.trendSig&&r.trend>0);
+  r.tOk=tOk; r.dying=dying; r.rising=rising;
+  if(live){
+   if(dying&&loses&&r.gpHi<0)r.act='KILL';        // losing then, losing now, best case still loses
+   else if(dying)r.act='CUT';                     // losing NOW, whatever the window total says
+   else if(!loses&&!rising&&r.cpaHi<scale&&r.ga4!=='contradicts')r.act='SCALE';
+   else if(!loses&&!rising&&r.cpaHi<scale)r.act='DEPENDS';  // cheap on Meta, invisible to GA4
+   else r.act='HOLD';
+   return;}
   /* lifetime profit is not enough to bring an ad back: it must have STILL been making
      money over its last 14 running days, and not have a significantly rising CPA. The
      old rule recommended reactivating ads whose own sparkline shows them dying. */
@@ -989,12 +1000,20 @@ function whyShort(r,D){
   if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases. <b>Let it run.</b>';
   return 'At '+EGP(r.cpa)+' it sits between the lines. <b>No move the data supports.</b>';}
  const per=r.sp7>0?' ('+EGP(1000*r.gpw/r.sp7)+' back per E\u00a31,000 spent)':'';
- if(r.act==='KILL')return '<b>Loses '+EGP(-r.gp)+'</b> across the window, '+EGP(-r.gpw)+' a week at today\u2019s budget \u2014 and its best case ('
-  +EGP(r.gpwHi)+'/wk) still does not reach zero. <b>Turn '+it+' off</b> and keep the '+EGP(r.sp7)+'/wk.'+aovNote(r,D);
- if(r.act==='CUT')return 'Down <b>'+EGP(-r.gp)+'</b> across the window, but the interval still allows '+EGP(r.gpwHi)+'/wk. '
-  +'<b>Halve the budget</b> instead of killing it, and re-read in a week.'+aovNote(r,D);
- if(r.act==='SCALE')return 'Makes <b>'+EGP(r.gp)+'</b>'+per+' and buys at '+EGP(r.cpa)+', under the '+EGP(D.scale)
-  +' scale line even at its worst. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, then re-read.'+aovNote(r,D);
+ const tail=r.tOk?('over its last '+r.tail.days+' running days it '+(r.tail.gp>=0?'made ':'lost ')+EGP(Math.abs(r.tail.gp))):null;
+ const trendTxt=r.trend===null?'too few purchases to test the trend'
+   :(r.trend>0?'CPA '+(r.trendSig?'rising':'drifting up')+' '+Math.round(r.trend*100)+'%'
+             :'CPA '+(r.trendSig?'falling':'drifting down')+' '+Math.round(-r.trend*100)+'%');
+ if(r.act==='KILL')return '<b>Losing money and still losing it.</b> Down '+EGP(-r.gp)+' across the window'
+  +(tail?' and '+tail:'')+'; '+trendTxt+'. Even its best case ('+EGP(r.gpwHi)+'/wk) does not reach zero. '
+  +'<b>Turn '+it+' off</b> and keep the '+EGP(r.sp7)+'/wk.'+aovNote(r,D);
+ if(r.act==='CUT')return (r.gp>=0
+   ? '<b>It was profitable, and it has turned.</b> Lifetime '+EGP(r.gp)+', but '+(tail||'it is losing money now')+'. '
+   : '<b>Losing money now.</b> Down '+EGP(-r.gp)+' across the window'+(tail?', and '+tail:'')+'. ')
+  +trendTxt.charAt(0).toUpperCase()+trendTxt.slice(1)
+  +'. The interval still allows '+EGP(r.gpwHi)+'/wk, so <b>halve the budget</b> rather than kill it, and re-read in a week.'+aovNote(r,D);
+ if(r.act==='SCALE')return 'Makes <b>'+EGP(r.gp)+'</b>'+per+(tail?', and '+tail:'')+'. Buys at '+EGP(r.cpa)
+  +', under the '+EGP(D.scale)+' scale line even at its worst, and '+trendTxt+'. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, then re-read.'+aovNote(r,D);
  if(r.act==='REACTIVATE')return 'Paused, but it was <b>still working when it stopped</b>: '
   +EGP(r.tail.gp)+' profit over its final '+r.tail.days+' running days ('+EGP(r.tail.sp)+' spent), '
   +(r.trend===null?'too few purchases to test the trend':(r.trend>0?'CPA drifting up '+Math.round(r.trend*100)+'% (not significant)':'CPA falling '+Math.round(-r.trend*100)+'%'))
@@ -1008,7 +1027,11 @@ function whyShort(r,D){
     :(r.trendSig&&r.trend>0)?'its CPA was <b>rising '+Math.round(r.trend*100)+'% and significantly</b> when it stopped'
     :'it returned '+EGP(1000*r.gpPerK)+' per E\u00a31,000, below the account\u2019s own average')
   +'. No case for bringing it back ahead of the others.';
- return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
+ if(r.st==='act'&&r.gp<0)return '<b>It has turned the corner.</b> Down '+EGP(-r.gp)+' across the window, but '
+  +(tail||'it is making money now')+' and '+trendTxt+'. <b>Leave it running</b> and re-read in a week \u2014 cutting it now would cut it on old news.'+aovNote(r,D);
+ if(r.st==='act'&&r.rising)return 'Makes <b>'+EGP(r.gp)+'</b>'+per+(tail?' and '+tail:'')+', but <b>'+trendTxt
+  +'</b>, so there is no case for more budget. <b>Leave it running and watch it.</b>'+aovNote(r,D);
+ return 'Makes <b>'+EGP(r.gp)+'</b>'+per+(tail?', and '+tail:'')+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
 /* GA4 verdicts in words a person can act on. GA4 only sees ~64% of orders, so
    "GA4 saw 20 of 29" IS agreement -- the tooltip does that arithmetic for the reader. */
 const G4CLS={confirms:'scale',overclaims:'cut',contradicts:'kill',thin:'hold',nodata:'hold'};
