@@ -503,7 +503,7 @@ const N0=x=>!isFinite(x)?'—':Math.round(x).toLocaleString();
 const N1=x=>!isFinite(x)?'—':(Math.round(x*10)/10).toLocaleString();
 const N2=x=>!isFinite(x)?'—':(Math.round(x*100)/100).toFixed(2);
 const PC=x=>!isFinite(x)?'—':(x>=0?'+':'')+Math.round(x*100)+'%';
-function kpi(k,v,d,col){return '<div class="kpi"><div class="k">'+k+'</div><div class="v"'+(col?' style="color:'+col+'"':'')+'>'+v+'</div><div class="d">'+(d||'')+'</div></div>';}
+function kpi(k,v,d,col,click){return '<div class="kpi'+(click?' go':'')+'"'+(click?' onclick="pickLabel(\''+click+'\')" title="Click to see exactly which ones"':'')+'><div class="k">'+k+'</div><div class="v"'+(col?' style="color:'+col+'"':'')+'>'+v+'</div><div class="d">'+(d||'')+(click?' \u2014 <u>show them</u>':'')+'</div></div>';}
 function card(h,cs,body){return '<div class="card"><h3>'+h+'</h3><div class="cs">'+cs+'</div>'+body+'</div>';}
 let SORT={k:'sp',d:-1};
 /* One column set everywhere. Online and in-store are shown side by side because they do
@@ -586,7 +586,9 @@ function labelBar(D){
  const url=lvl==='set'?base+'campaigns/adsets?act='+acct+'&selected_adset_ids='+ids.slice(0,60).join(',')
       :lvl==='cmp'?base+'campaigns?act='+acct+'&selected_campaign_ids='+ids.slice(0,60).join(',')
       :base+'ads?act='+acct+'&selected_ad_ids='+ids.slice(0,60).join(',');
- const NAMES={cheap:'below the account\u2019s average CPP',live:'live ads only',flag:'flagged as odd'};
+ const NAMES={cheap:'below the account\u2019s average CPP',live:'live ads only',flag:'flagged as odd',
+  decidable:'decidable now \u2014 same call at any store credit',undecid:'undecidable \u2014 the store question decides them',
+  losing:'live and losing money',making:'making money'};
  const fname=LBLSEL?(NAMES[LBLSEL]||((VERB[LBLSEL]||LBLSEL).toLowerCase())):null;
  const fb=LBLSEL?'<div class="fbanner"><b>Filtered:</b> showing '+D.rows.length+' of '+PREF+' '+NOUN[D.level]
   +'s \u2014 '+fname+'. Every list, chart and total below reflects only these.'
@@ -595,13 +597,17 @@ function labelBar(D){
   +(LBLSEL?'<span class="lb clr" onclick="pickLabel(null)">clear filter</span>':'')
   +'<span class="lbspace"></span>'
   +'<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="'+url+'">'
-  +'Open these '+Math.min(ids.length,60)+' in Ads Manager'+(ids.length>60?' (first 60)':'')+'</a></div>';}
+  +(ids.length===1?'Open this ad in Ads Manager':'Open these '+Math.min(ids.length,60)+' in Ads Manager'+(ids.length>60?' (first 60)':''))+'</a></div>';}
 function pickLabel(k){LBLSEL=(LBLSEL===k)?null:k;boot();}
 function applyLabel(rows){
  if(!LBLSEL)return rows;
  const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
  if(LBLSEL==='live')return rows.filter(r=>r.st==='act');
  if(LBLSEL==='cheap')return rows.filter(r=>isFinite(r.cpa)&&r.cpa<CURG);
+ if(LBLSEL==='decidable')return rows.filter(r=>r.st==='act'&&r.rob!=='depends');
+ if(LBLSEL==='undecid')return rows.filter(r=>r.act==='DEPENDS');
+ if(LBLSEL==='losing')return rows.filter(r=>r.st==='act'&&r.gp<0);
+ if(LBLSEL==='making')return rows.filter(r=>r.gp>0);
  if(LBLSEL==='flag')return rows.filter(r=>r.anom&&r.anom.length);
  if(LBLSEL.indexOf('fmt:')===0)return rows.filter(r=>r.fmt===LBLSEL.slice(4));
  if(LBLSEL.indexOf('fn:')===0)return rows.filter(r=>r.fn===LBLSEL.slice(3));
@@ -659,8 +665,9 @@ function hairLbl(D){
  if(D.hairSel!=='ad')return Math.round(D.hair*100)+'%';
  const v=D.rows.map(function(r){return r.hairUsed;}).filter(function(x){return isFinite(x);}).sort(function(a,b){return a-b;});
  if(!v.length)return 'per ad';
- return 'per ad ('+Math.round(v[0]*100)+'\u2013'+Math.round(v[v.length-1]*100)+'%, median '
-   +Math.round(v[Math.floor(v.length/2)]*100)+'%)';}
+ const lo=Math.round(v[0]*100), hi=Math.round(v[v.length-1]*100);
+ if(lo===hi)return 'per ad ('+lo+'%)';
+ return 'per ad ('+lo+'\u2013'+hi+'%, median '+Math.round(v[Math.floor(v.length/2)]*100)+'%)';}
 function hairAvg(D){
  if(D.hairSel!=='ad')return D.hair;
  var a=0,b=0;D.rows.forEach(function(r){a+=r.fv*r.hairUsed;b+=r.fv;});return b>0?a/b:0.214;}
@@ -902,7 +909,7 @@ function simulate(D){
    cpaNew:expK>0?spNew/expK:0, cpaNewLo:expHi>0?spNew/expHi:0, cpaNewHi:expLo>0?spNew/expLo:0, expK};}
 function swing(r){
  const c=x=>x>=0?'#0d8a62':'#b81f45';
- const mid=Math.round((r.hairUsed||0)*100)+'% \u2014 its click share';
+ const mid='this ad: '+Math.round((r.hairUsed||0)*100)+'% click';
  return '<div class="swing">'
  +'<div><span class="h">store 0%</span><span style="color:'+c(r.gp0)+'">'+EGP(r.gp0)+'</span></div>'
  +'<div><span class="h">'+mid+'</span><span style="color:'+c(r.gp)+'">'+EGP(r.gp)+'</span></div>'
@@ -1015,24 +1022,24 @@ function vAct(D){
  const losers=D.rows.filter(r=>r.st==='act'&&r.gp<0).sort((a,b)=>a.gp-b.gp);
  const lost=losers.reduce((s2,r)=>s2+r.gp,0);
  const winners=D.rows.filter(r=>r.gp>0);
+ const hasLive=S.base7>0&&S.expNow>=0.5;
  return '<div class="kpis">'
- +kpi('Decidable now',decidable.length+' of '+liveAll.length,'same call whatever the store credit','#12b886')
- +kpi(D.anomSel==='drop'?'Excluded':'Flagged odd',D.dropped.length,
-      D.anomSel==='drop'?EGP(D.dropped.reduce(function(a,r){return a+r.sp;},0))+' taken out'
-      :EGP(D.dropped.reduce(function(a,r){return a+r.sp;},0))+' still counted','#ff8b42')
- +kpi('Undecidable',depends.length+' live','verdict flips with the store number','#f0b429')
- +kpi('The swing',EGP(swing1-swing0),'profit gap between 0% and 100% store credit','#f0b429')
- +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone at 21.4% credit','#e23a63')
- +kpi('Making money',winners.length,'+'+EGP(winners.reduce((s2,r)=>s2+r.gp,0)),'#12b886')
- +kpi('Turn off',kill.length,'frees '+EGP(S.freed)+'/wk','#e23a63')
- +kpi('Cut budget',cut.length,'probably bad, not proven','#ff8b42')
- +kpi('Raise 20%',scale.length,'can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+'/wk','#12b886')
- +kpi('Turn back on',react.length,'paused and proven','#5a5bf0')
- +kpi('CPA now',EGP(S.cpaNow),'current split, same estimator')
- +kpi('CPA after',EGP(S.cpaNew),PC(dl)+' if the kept ones hold their rate',dl<0?'#12b886':'#e23a63')
- +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
- +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
+ +kpi('Turn off',kill.length,'frees '+EGP(S.freed)+'/wk','#e23a63',kill.length?'KILL':null)
+ +kpi('Cut budget',cut.length,'probably bad, not proven','#ff8b42',cut.length?'CUT':null)
+ +kpi('Raise 20%',scale.length,'can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+'/wk','#12b886',scale.length?'SCALE':null)
+ +kpi('Turn back on',react.length,'paused and proven','#5a5bf0',react.length?'REACTIVATE':null)
+ +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone','#e23a63',losers.length?'losing':null)
+ +kpi('Making money',winners.length,'+'+EGP(winners.reduce((s2,r)=>s2+r.gp,0)),'#12b886',winners.length?'making':null)
+ +kpi('Decidable now',decidable.length+' of '+liveAll.length,'same call at any store credit','#12b886',decidable.length?'decidable':null)
+ +kpi('Cannot say yet',depends.length+' live','the store question decides them','#f0b429',depends.length?'undecid':null)
  +'</div>'
+ +'<div class="card"><h3>If you do all of it</h3><div class="cs">Kill the losers, raise the winners 20%, at each one\u2019s last-14-day rate. Projection, not a promise \u2014 the test for whether raises hold is at the bottom of this page.</div>'
+ +'<div class="kpis" style="margin-bottom:0">'
+ +kpi('CPA now',hasLive?EGP(S.cpaNow):'\u2014',hasLive?'current split, same estimator':'nothing live in this selection')
+ +kpi('CPA after',hasLive?EGP(S.cpaNew):'\u2014',hasLive?PC(dl)+' if the kept ones hold their rate':'\u2014',(hasLive&&dl<0)?'#12b886':'#e23a63')
+ +kpi('Purchases',hasLive?PC(S.expK/Math.max(S.expNow,1e-9)-1):'\u2014',hasLive?'volume \u2014 if this falls, the CPA win is fake':'\u2014',S.expK>=S.expNow?'#12b886':'#e23a63')
+ +kpi('Gross profit',hasLive?EGP(S.gpDelta)+'/wk':'\u2014',hasLive?'at '+(Math.round(S.marg*1000)/10)+'% blended margin':'\u2014',S.gpDelta>=0?'#12b886':'#e23a63')
+ +'</div></div>'
  +(D.attrSel!=='default'&&(D.rows[0]||{}).af&&(D.rows[0].af.src!=='none')?'<div class="banner">'
  +'<b>Attribution: '+({'7d':'7-day click (view-through stripped out)','1d':'1-day click','incr':"Meta's own incremental"}[D.attrSel])+'.</b> '
  +(D.rows.filter(r=>r.af&&r.af.src==='ad').length
@@ -1045,17 +1052,17 @@ function vAct(D){
       : 'Per-ad windows have not landed from the pipeline yet, so this is the account-wide coefficient applied to every '
         +NOUN[D.level]+'. It moves the level, not the ranking \u2014 per-ad arrives on the next sync.'))
  +'</div>':'')
-+(D.hairSel==='ad'?'<div class="banner"><b>In-store credit is now each ad\u2019s own, not one number for all of them.</b> '
++(D.hairSel==='ad'?'<details class="banner"><summary style="cursor:pointer;font-weight:800">In-store credit is each ad\u2019s own \u2014 how it works</summary><div style="margin-top:8px">'
  +'It is the share of that ad\u2019s in-store conversions Meta attributes to a <b>click</b> rather than a view \u2014 '
  +hairLbl(D)+' across this account, measured from Meta\u2019s own 7d-click offline count. '
  +'<b>Read it as a discriminator, not as incrementality.</b> A click-attributed store visit is still not proven to be caused by the ad; '
  +'what this separates is ads whose store credit rests on someone clicking from ads whose store credit rests on someone merely seeing it. '
  +'The account-wide 21.4% incremental figure is the conservative level and is still one click away in the dropdown \u2014 '
- +'the three-cell strip on every card shows 0%, this ad\u2019s share, and 100% so the whole range stays visible.</div>':'')
-+'<div class="banner b"><b>What this is judging.</b> Gross profit minus spend, per '+NOUN[D.level]+', at '
+ +'the three-cell strip on every card shows 0%, this ad\u2019s share, and 100% so the whole range stays visible.</div></details>':'')
++'<details class="banner b"><summary style="cursor:pointer;font-weight:800">What this page judges, in one paragraph</summary><div style="margin-top:8px"> Gross profit minus spend, per '+NOUN[D.level]+', at '
  +hairLbl(D)+' in-store credit. Nothing that makes money can be told to turn off. '
  +'Cost per purchase still decides which of the profitable ones have room to scale, and every CPA is <b>shrunk</b> with a 90% interval '
- +'so a lucky three-purchase '+NOUN[D.level]+' cannot buy its way onto the raise list. Click anything to open it.</div>'
+ +'so a lucky three-purchase '+NOUN[D.level]+' cannot buy its way onto the raise list. Click anything to open it.</div></details>'
  +(D.judge==='cpa'?'<div class="banner r"><b>You are on CPA-only mode — the method exactly as written.</b> '
  +'It will tell you to turn off ads that make money, because cost per purchase punishes an ad for selling fewer, bigger baskets. '
  +'On this account in-store basket size runs from '+EGP(Math.min.apply(null,D.rows.filter(r=>r.aovK>0).map(r=>r.aovK)))
