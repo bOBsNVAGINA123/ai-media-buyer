@@ -318,7 +318,7 @@ function gpStale(){return GPADJ()>0;}
    accessor; GPFB is the only fallback, and it is the measured basis, not a memory of one. */
 var GPFB={gpOn:0.2468,gpSt:0.367,gpOnGross:0.3513,drag:0.1045,dragShip:0.0259,dragPay:0.0786,dragCost:0.061,dragCol:0.0351};
 function GPQ(){try{const q=_gpPct();return (q&&q.gpOn>0)?q:GPFB;}catch(e){return GPFB;}}
-function GPBE(){const q=GPQ();return q.gpOn>0?1/q.gpOn:1/GPFB.gpOn;}
+function GPBE(){const q=GPQ();return q.gpOn>0?1/q.gpOn:4.05/GPFB.gpOn;}
 /* v10.3 ONE BRANCH MARGIN, ONE BRIDGE. Four cards each rebuilt the POS margin inline and each
    multiplied it straight into O.bl -- and O.bl is the daily POS journal NET of tax while the
    margin is struck on report.pos.order price_total, which is not. Every branch gross profit in
@@ -4372,7 +4372,7 @@ function ovRange(a,b){
 function merHeat(g){
  const A=O.ad,F=O.fin;if(!A||!F||!F.rev)return;
  const q=GPQ();
- const be=q.gpOn>0?1/q.gpOn:5.4;
+ const be=q.gpOn>0?1/q.gpOn:4.05;
  const mf=af('meta'),gf=af('google'),tf=af('tt');
  const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
  const ai=d=>Math.round((d-a0)/864e5), fi=d=>Math.round((d-f0)/864e5);
@@ -4694,7 +4694,7 @@ function dailyBE(g){
  const A=O.ad,F=O.fin;if(!A||!F)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const {gpOn,gpSt}=GPQ();
- const be=gpOn>0?1/gpOn:3.76;
+ const be=gpOn>0?1/gpOn:4.05;
  /* branch margin for the daily leg: last complete POS month (rent-free gross margin) */
  const nowM=(O.today||'').slice(0,7);
  const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
@@ -5553,7 +5553,7 @@ function platformTree(g){
  const PC=(c,p)=>(p==null||!p||!isFinite(c/p))?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
  const CO=(c,p,good)=>{if(p==null||!p||!isFinite(c/p))return '#9aa3b5';const up=c>=p;return (good===false?!up:up)?'#12a06e':'#e23a63';};
  const {gpOn}=_gpPct();
- const be=gpOn>0?1/gpOn:3.5;   // breakeven ROAS on the real online gross margin
+ const be=gpOn>0?1/gpOn:4.05;   // breakeven ROAS on the real online gross margin
  const days=Math.max(1,span(s,e));
  const rows=[],cards=[];
  PFDEF.forEach(P=>{
@@ -6082,7 +6082,7 @@ function mdScore(r,gpOn,be){
 function moneyDesk(g){
  const {rows,gpOn,W,noWin,noWinSp,ttHeld,ttSp,partial}=mdRows();
  if(!rows.length){pnlCard(g,'ins','Money desk','No ad entities in this sync.','');return;}
- const be=gpOn>0?1/gpOn:3.5;
+ const be=gpOn>0?1/gpOn:4.05;
  const R=mdRoll(rows,MDLVL).map(r=>Object.assign(r,mdScore(r,gpOn,be)));
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SG=v=>(v>=0?'+':'−')+M(v);
@@ -6605,7 +6605,7 @@ function creMatrix(g){
     weeks ago next to what is live now, and the quadrant you act on has to be the current one.
     Falls back to lifetime only if the selected range has no overlap with the ad feed at all. */
  const AT=O.attr||{}, iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1;
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const CW=mdWin(), MW=O.madsW;
  let winMode=true;
  let R=(O.mads||[]).map(a=>{
@@ -8744,7 +8744,7 @@ function alertBand(g){
  });
  /* ---- 3. money losing money right now, from the desk's own scoring ---- */
  try{
-  const {rows,gpOn}=mdRows(); const be=gpOn>0?1/gpOn:3.5;
+  const {rows,gpOn}=mdRows(); const be=gpOn>0?1/gpOn:4.05;
   const R=mdRoll(rows,'ad').map(r=>Object.assign(r,mdScore(r,gpOn,be)));
   const cuts=R.filter(r=>!r.thin&&r.v==='CUT');
   const bleed=cuts.reduce((a,r)=>a+r.gp,0);
@@ -8828,7 +8828,7 @@ function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30')
 }
 function changeLog(g){
  const W=O.madsW||{n:60,start:'—'}, GW=O.gadsW||null;
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const AT=O.attr||{};
  const iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1, iG=(AT.google&&AT.google.incr)||1;
  let ev=[];
@@ -13916,7 +13916,7 @@ function cmpLaunches(g){
  const PWL=pfWin(W);
  const N=W.n, today=PWL.b, from0=PWL.a, LOOK=Math.min(45,today);
  const fON=af('meta'), fOFF=afo(), fG=af('google');
- const {gpOn,gpSt}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn,gpSt}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SM=v=>(v>=0?'+':'−')+M(v);
  const iso=k=>{const d=new Date(W.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+k);return d.toISOString().slice(0,10);};
@@ -15368,7 +15368,7 @@ function rGOOG(){
 
  /* ---- 3. campaigns on their own money ---- */
  const {gpOn}=GPQ();
- const be=gpOn>0?1/gpOn:3.76;
+ const be=gpOn>0?1/gpOn:4.05;
  const cr=ads.map(a=>{const c=agg(PW.a,PW.b,[a]),p=PW.ok?agg(PW.pa,PW.pb,[a]):agg(0,-1,[a]);
    return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
  let cb='';
@@ -15841,7 +15841,7 @@ function offlineDowCard(g){const A=O.ad;if(!A||!A.instoreMeta){return;}const mon
 function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  const camps=abCamps().camps.filter(c=>c.sp>0);
  if(!camps.length){pnlCard(g,'meta','Budget Advisor','No per-campaign ad data in the feed yet.','');return;}
- const {gpOn}=_gpPct();const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct();const be=gpOn>0?1/gpOn:4.05;
  const barFor=c=>c.intent==='prospecting'?be:(c.intent==='retargeting'?be*1.4:be*1.15);
  const seen=abGet(AB_SEEN,{}),today=abToday(),log=abGet(AB_CHG,[]);let dirty=false;
  const act=camps.filter(c=>c.active&&c.daily>=100).sort((a,b)=>b.daily-a.daily);
@@ -16853,7 +16853,7 @@ function vIC(g){try{
  const A=O.attr||{}; const AD=O.ad||{}; if(!AD.n)return;
  const W=Math.max(1,span(ST.s,ST.e)); const a0=Math.max(0,AD.n-W);
  const sum=arr=>{if(!arr)return 0;let t=0;for(let i=a0;i<AD.n;i++)t+=arr[i]||0;return t;};
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const PF=[['meta','Meta',sum(AD.mspend),sum(AD.mecomrev)],
            ['google','Google',sum(AD.gspend),sum(AD.gecomrev)],
            ['tt','TikTok',sum(AD.tspend),sum(AD.ttValue)]];
@@ -16879,7 +16879,7 @@ function vTK(g){try{
  if(!T.length){conclCard(g,'What TikTok says',[[VC.mute,'<b>No TikTok ad spend in this payload.</b> The Marketing API app is unapproved on this account, so what is here comes from Shopify referrer tagging and a bridge file — treat any absence as missing data, not as zero spend.']]);return;}
  const sp=T.reduce((a,x)=>a+(x.sp||0),0), val=T.reduce((a,x)=>a+(x.pv||x.ov||0),0);
  const pur=T.reduce((a,x)=>a+(x.pur||0),0);
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const roas=sp?val/sp:0, m=((O.attr||{}).tt||{}).incr;
  const L=[[roas>=be?VC.good:VC.bad,
   '<b>'+_vM(sp)+' spent across '+T.length+' ads returned '+_vM(val)+' — '+roas.toFixed(2)+'&times; reported</b>, against a '+be.toFixed(2)+'&times; breakeven'+(pur?' on '+Math.round(pur)+' purchases':'')+'.']];
@@ -16893,7 +16893,7 @@ function vTK(g){try{
 
 /* ---- Campaigns: where the money sits and whether it is earning ---- */
 function vCE(g){try{
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:4.05;
  const fON=af('meta'),fOFF=afo(),fG=af('google');
  const C=[];
  const mc={};
