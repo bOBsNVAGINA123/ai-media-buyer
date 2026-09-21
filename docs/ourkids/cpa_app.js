@@ -935,8 +935,8 @@ function doCard(r,D){
  + stat('CPP in-store',EGP(r.cppOff),N0(r.op)+' purchases')
  + stat('ROAS in-store',N2(r.roasOff)+'×',Math.round((r.hairUsed||0)*100)+'% click-driven')
  + stat('ROAS credited',N2(r.roasAll)+'×','online + store credited',r.roasAll>=ECON.beOn?'#0d8a62':'#b81f45')
- + stat('GA4 saw',r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu),
-        r.ga4? (G4LAB[r.ga4]||[''])[0] : 'no GA4 data',
+ + stat('GA4 check',r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu),
+        g4Text(r),
         r.ga4==='contradicts'||r.ga4==='overclaims'?'#b81f45':(r.ga4==='confirms'?'#0c9e6e':undefined))
  +'</div>'+swing(r)+'</div>';}
 /* When CPA and profit disagree it is almost always AOV. Say so on the card rather than
@@ -984,18 +984,23 @@ function whyShort(r,D){
  return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
 /* GA4 verdicts in words a person can act on. GA4 only sees ~64% of orders, so
    "GA4 saw 20 of 29" IS agreement -- the tooltip does that arithmetic for the reader. */
-const G4LAB={confirms:['GA4 backs it up','scale'],overclaims:['claims too much','cut'],
- contradicts:['invisible to GA4','kill'],thin:['too small to check','hold'],nodata:['no GA4 data','hold']};
+const G4CLS={confirms:'scale',overclaims:'cut',contradicts:'kill',thin:'hold',nodata:'hold'};
+/* The number, not an adjective. gNorm=1 means Meta's claim is exactly what you'd expect
+   given GA4 only captures ~64% of orders; the tag says how far off that it is. */
+function g4Text(r){
+ if(!r.ga4||r.ga4==='nodata')return 'no GA4 data';
+ if(r.ga4==='contradicts')return 'GA4 saw 0 of '+N0(r.pu);
+ if(r.ga4==='thin')return 'too few to check';
+ const n=r.gNorm;
+ if(n===null||n===undefined)return 'no GA4 data';
+ if(n>=0.8&&n<=1.25)return 'GA4 '+Math.round(100/n)+'% agrees';
+ if(n>1.25)return 'Meta claims '+N2(n)+'\u00d7 too much';
+ return 'GA4 sees '+N2(1/n)+'\u00d7 MORE';}
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">\u2014</span>';
- const t=G4LAB[r.ga4]||['?','hold'];
  const tip=r.gTx===null?'This ad name never appears in GA4, so there is no independent check.'
   :'Meta claims '+N0(r.pu)+' online purchases. GA4 independently recorded '+N0(r.gTx)
-  +'. GA4 normally sees only ~64% of orders, so about '+N0(Math.round(r.pu*0.64))+' would be normal here. '
-  +(r.ga4==='confirms'?'That is roughly what it saw: the claim checks out.'
-   :r.ga4==='contradicts'?'Seeing ZERO is not normal: do not trust this claim.'
-   :r.ga4==='overclaims'?'It saw far less than that: treat the claim with suspicion.'
-   :'Too few purchases to judge either way.');
- return '<span class="tg '+t[1]+'" title="'+tip.replace(/"/g,'')+'">'+t[0]+'</span>';}
+  +'. GA4 normally sees only ~64% of orders, so about '+N0(Math.round(r.pu*0.64))+' would be normal here.';
+ return '<span class="tg '+(G4CLS[r.ga4]||'hold')+'" title="'+tip.replace(/"/g,'')+'">'+g4Text(r)+'</span>';}
 /* the Simple / Everything toggle applies here too -- this table was 30 columns wide */
 function PCOLS(all){
  if((document.getElementById('dens')||{}).value==='f')return all;
