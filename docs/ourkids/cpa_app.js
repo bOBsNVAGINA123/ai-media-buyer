@@ -139,6 +139,11 @@ function build(){
       and this account's in-store AOV runs from E£866 to E£4,964 across ads, so CPA and
       profit rank them differently. Contribution is what actually pays the rent. */
    r.gp=r.pv*0.161 + r.fv*hair*0.243 - r.sp;
+   /* The same ad at the three defensible in-store credits. If the SIGN moves between them,
+      the verdict is an artifact of a constant nobody has verified, not a finding. */
+   r.gp0=r.pv*0.161 - r.sp;                       // store credit 0 -- online only
+   r.gp1=r.pv*0.161 + r.fv*0.243 - r.sp;          // store credit 100% -- Meta's own claim
+   r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
    r.gpPerK=r.sp>0?1000*r.gp/r.sp:0;
    r.aovK=r.k>0?r.val/r.k:0;
    r.margK=(r.pv+r.fv*hair)>0?(r.pv*0.161+r.fv*hair*0.243)/(r.pv+r.fv*hair):0.161;
@@ -203,12 +208,15 @@ function build(){
    else r.act='HOLD';
    return;}
   const loses=r.gp<0;
-  // kill only when even the OPTIMISTIC end of the interval still loses money
+  if(r.k<3){r.act='THIN';return;}
+  /* An instruction is only issued where it holds at EVERY in-store credit from 0 to 100%.
+     Sixteen of this account's live ads change sign between those, so a confident list built
+     on the middle number alone would be a list of guesses wearing a verdict. */
+  if(live&&r.rob==='depends'){r.act='DEPENDS';return;}
   if(live&&loses&&r.gpHi<0)r.act='KILL';
   else if(live&&loses)r.act='CUT';
   else if(live&&!loses&&r.cpaHi<scale)r.act='SCALE';
-  else if(!live&&!loses&&r.k>=3&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
-  else if(r.k<3)r.act='THIN';
+  else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else r.act='HOLD';});
  return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,
          win:document.getElementById('win').value};
@@ -292,7 +300,8 @@ function closeAd(){document.getElementById('modal').style.display='none';}
 addEventListener('keydown',e=>{if(e.key==='Escape')closeAd();});
 
 /* ---------- plain-language verdicts ---------- */
-const VERB={KILL:'TURN OFF',CUT:'CUT BUDGET',SCALE:'RAISE 20%',REACTIVATE:'TURN BACK ON',HOLD:'LEAVE ALONE',THIN:'TOO NEW'};
+const VERB={KILL:'TURN OFF',CUT:'CUT BUDGET',SCALE:'RAISE 20%',REACTIVATE:'TURN BACK ON',
+ HOLD:'LEAVE ALONE',THIN:'TOO NEW',DEPENDS:'CANNOT SAY YET'};
 function noun(D){return NOUN[D&&D.level||'ad'];}
 function why(r,D){
  const x=Math.round(r.cpa/D.target*100)/100;
@@ -387,7 +396,7 @@ function boot(){
 }
 
 /* ---------- 1. THE GRID ---------- */
-const COL={KILL:'#e23a63',CUT:'#ff8b42',SCALE:'#12b886',REACTIVATE:'#5a5bf0',HOLD:'#9aa3b5',THIN:'#9d6bff'};
+const COL={KILL:'#e23a63',CUT:'#ff8b42',SCALE:'#12b886',REACTIVATE:'#5a5bf0',HOLD:'#9aa3b5',THIN:'#9d6bff',DEPENDS:'#f0b429'};
 function vGrid(D){
  const t=D.tot, aov=t.k>0?t.val/t.k:0;
  const k=kpi('Spend',EGP(t.sp),t.n+' ads, min E£'+N0(parseFloat(document.getElementById('mins').value)))
@@ -572,10 +581,16 @@ function simulate(D){
  return {kill,scale,keep,freed,used,parked,base7,spNew,aovK,gpDelta,marg,
    cpaNow:expNow>0?base7/expNow:0, kNow, expNow, cpaRaw7:kNow>0?base7/kNow:0,
    cpaNew:expK>0?spNew/expK:0, cpaNewLo:expHi>0?spNew/expHi:0, cpaNewHi:expLo>0?spNew/expLo:0, expK};}
+function swing(r){
+ const c=x=>x>=0?'#0d8a62':'#b81f45';
+ return '<div class="swing">'
+ +'<div><span class="h">store 0%</span><span style="color:'+c(r.gp0)+'">'+EGP(r.gp0)+'</span></div>'
+ +'<div><span class="h">store 21.4%</span><span style="color:'+c(r.gp)+'">'+EGP(r.gp)+'</span></div>'
+ +'<div><span class="h">store 100%</span><span style="color:'+c(r.gp1)+'">'+EGP(r.gp1)+'</span></div></div>';}
 function doCard(r,D){
  return '<div class="doc" onclick="openAd(\''+r.id+'\')">'+thumb(r,52)
  +'<div style="min-width:0"><div class="t">'+r.n+'</div>'
- +'<div class="s">'+whyShort(r,D)+'</div>'
+ +'<div class="s">'+whyShort(r,D)+'</div>'+swing(r)
  +'<div class="m"><b style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+' profit</b>'
  +' &nbsp;·&nbsp; '+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'\u00d7)'
  +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'\u00d7)</div></div></div>';}
@@ -589,6 +604,12 @@ function aovNote(r,D){
            :'more, smaller orders, so its CPA flatters it.')+'</span>';}
 function whyShort(r,D){
  const it=r.lvl==='ad'?'it':'the whole '+noun(D);
+ if(r.act==='DEPENDS'){
+  const sh=(r.pv+r.fv)>0?r.fv/(r.pv+r.fv):0;
+  return '<b>The answer depends entirely on whether Meta\u2019s store attribution is real.</b> '
+   +Math.round(sh*100)+'% of the value claimed here is in-store. Believe Meta and it makes '+EGP(r.gp1)
+   +'; count only what the pixel saw and it loses '+EGP(-r.gp0)+'. <b>No instruction until that is settled</b> \u2014 '
+   +'it is currently running at '+EGP(r.sp7)+'/wk.';}
  if(D.judge==='cpa'){
   if(r.act==='KILL')return 'Costs <b>'+EGP(r.cpa)+'</b> a purchase against a '+EGP(D.target)+' target; even its best case ('+EGP(r.cpaLo)+') misses. <b>Turn '+it+' off.</b>'+aovNote(r,D);
   if(r.act==='CUT')return 'Reads <b>'+EGP(r.cpa)+'</b>, over the '+EGP(D.kill)+' kill line, but the data still allows '+EGP(r.cpaLo)+'. <b>Halve the budget.</b>'+aovNote(r,D);
@@ -621,11 +642,18 @@ function vAct(D){
  const grid=list=>list.length?'<div class="do">'+list.map(r=>doCard(r,D)).join('')+'</div>'
    :'<div class="mut" style="font-size:12.5px">Nothing qualifies.</div>';
  const drag=bh.med||1;
+ const depends=D.rows.filter(r=>r.act==='DEPENDS').sort((a,b)=>b.sp7-a.sp7);
+ const liveAll=D.rows.filter(r=>r.st==='act');
+ const decidable=liveAll.filter(r=>r.rob!=='depends');
+ const swing0=liveAll.reduce((s2,r)=>s2+r.gp0,0), swing1=liveAll.reduce((s2,r)=>s2+r.gp1,0);
  const losers=D.rows.filter(r=>r.st==='act'&&r.gp<0).sort((a,b)=>a.gp-b.gp);
  const lost=losers.reduce((s2,r)=>s2+r.gp,0);
  const winners=D.rows.filter(r=>r.gp>0);
  return '<div class="kpis">'
- +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone in this window','#e23a63')
+ +kpi('Decidable now',decidable.length+' of '+liveAll.length,'same call whatever the store credit','#12b886')
+ +kpi('Undecidable',depends.length+' live','verdict flips with the store number','#f0b429')
+ +kpi('The swing',EGP(swing1-swing0),'profit gap between 0% and 100% store credit','#f0b429')
+ +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone at 21.4% credit','#e23a63')
  +kpi('Making money',winners.length,'+'+EGP(winners.reduce((s2,r)=>s2+r.gp,0)),'#12b886')
  +kpi('Turn off',kill.length,'frees '+EGP(S.freed)+'/wk','#e23a63')
  +kpi('Cut budget',cut.length,'probably bad, not proven','#ff8b42')
@@ -644,16 +672,30 @@ function vAct(D){
  +'It will tell you to turn off ads that make money, because cost per purchase punishes an ad for selling fewer, bigger baskets. '
  +'On this account in-store basket size runs from '+EGP(Math.min.apply(null,D.rows.filter(r=>r.aovK>0).map(r=>r.aovK)))
  +' to '+EGP(Math.max.apply(null,D.rows.map(r=>r.aovK)))+' across '+NOUN[D.level]+'s. Switch <b>Judge on</b> back to Profit unless you are deliberately comparing.</div>':'')
++'<div class="banner r"><b>Read this before acting on any list below.</b> '
+ +'Whether a Meta ad here makes money is decided almost entirely by one number nobody has verified: how much of the in-store revenue '
+ +'Meta claims is actually caused by the ad. Across the '+liveAll.length+' live '+NOUN[D.level]+'s, total profit is '
+ +EGP(swing0)+' if you credit none of it and '+EGP(swing1)+' if you credit all of it — a '+EGP(swing1-swing0)+' swing on the same spend. '
+ +'<b>'+depends.length+' of '+liveAll.length+' change sign inside that range</b> and get no instruction at all; they are in their own section. '
+ +'The '+decidable.length+' that do not are the ones you can act on today. '
+ +'The measurement that would settle the rest is a geo holdout on store revenue, not another attribution setting.</div>'
++(depends.length?sec('Cannot say yet — the store question decides these',
+   depends.length+' live · '+EGP(depends.reduce((s2,r)=>s2+r.sp7,0))+' a week riding on it',
+   'Each of these is profitable at Meta\u2019s own in-store numbers and loss-making at the pixel-only numbers. '
+   +'No instruction is issued for them because the data does not contain one. Leave them running and go settle the attribution question — '
+   +'that is the single highest-value thing on this page.',grid(depends.slice(0,12))):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
    'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit and the vault margins (16.1% delivered online, 24.3% in store). '
-   +'This is the list that answers "what do I do" — everything here is taking money out. Sorted by how much.',grid(losers.slice(0,24)))
+   +'Everything here is taking money out at the 21.4% credit. The ones that also lose at 100% credit are in the turn-off list below; '
+   +'the rest are in the undecidable section. Sorted by how much.',grid(losers.slice(0,24)))
 +sec('Turn these off',kill.length+' '+NOUN[D.level]+'s · '+EGP(S.freed)+' a week',
    D.judge==='cpa'?'Best case still above the '+EGP(D.kill)+' kill line.'
-   :'Losing money, and even the optimistic end of the interval does not get them back to zero. Nothing profitable can appear here.',grid(kill))
+   :'<b>Safe to act on.</b> These lose money whether you credit Meta with none of the in-store revenue, the measured 21.4%, or all of it, '
+   +'and the optimistic end of the interval still does not reach zero.',grid(kill))
  +sec('Cut these back',cut.length+' '+NOUN[D.level]+'s · '+EGP(cut.reduce((s2,r)=>s2+r.sp7,0))+' a week',
    'Losing money on the point estimate, but the interval still allows break-even. Halve, do not kill.',grid(cut))
  +sec('Raise these 20%',scale.length+' '+NOUN[D.level]+'s · +'+EGP(S.scale.reduce((s2,r)=>s2+r.sp7*0.2,0))+' a week',
-   'Profitable AND cheap enough to have headroom — worst-case CPA still beats the '+EGP(D.scale)+' scale line. One step, then re-read.',grid(scale))
+   '<b>Safe to act on.</b> Profitable at every in-store credit from 0 to 100%, and worst-case CPA still beats the '+EGP(D.scale)+' scale line. One step, then re-read.',grid(scale))
  +sec('Turn these back on',react.length+' '+NOUN[D.level]+'s',
    'Paused, at least 3 purchases, and they returned more per pound of spend than the account average while they ran. '
    +'Best '+Math.min(12,react.length)+' of '+react.length+' shown, ranked by return on spend. Check each was not a one-off promo creative.',grid(react.slice(0,12)))
