@@ -2,7 +2,7 @@
 <title>OurKids — CPA Grid</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="./data.js"></script>
-<script src="./cpa_seed.js?v=1790015063"></script>
+<script src="./cpa_seed.js?v=1790016346"></script>
 <style>
 :root{--ink:#161d2e;--mut:#7c869c;--red:#e23a63;--grn:#12b886;--teal:#1fc3b6;--blue:#3a9bff;--indigo:#5a5bf0;--violet:#9d6bff;--orange:#ff8b42;--pink:#ff5da2;--grey:#9aa3b5}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
@@ -36,7 +36,7 @@ td{padding:7px 8px;border-bottom:1px solid #f2f4f9;text-align:right;white-space:
 tr:hover td{background:#fafbfe}
 .tg{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:.2px}
 .tg.kill{background:#ffe6ec;color:#b81f45}.tg.cut{background:#fff0e0;color:#a35a12}.tg.scale{background:#e2f7ee;color:#0d8a62}
-.tg.hold{background:#eef0f5;color:#66708a}.tg.depen{background:#fff4d6;color:#8a6306}
+.tg.hold{background:#eef0f5;color:#66708a}.tg.depen{background:#fff4d6;color:#8a6306}.tg.pause{background:#eef0f5;color:#8b94a8}
 #sctip .tg2.depen{background:#f0b429}
 .swing{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid #e6e9f1;border-radius:10px;overflow:hidden;margin-top:7px}
 .swing div{padding:6px 8px;text-align:center;font-size:11px;font-weight:700;background:#fafbfe;border-right:1px solid #eef0f5}
@@ -66,6 +66,10 @@ tr:hover td{background:#fafbfe}
 .hd{display:flex;align-items:center;gap:9px;margin:20px 0 9px}
 .hd h2{margin:0;font-size:16px;font-weight:800}.hd .n{font-size:12px;color:#7c869c;font-weight:700}
 tr.cl{cursor:pointer}
+.ext{flex:none;width:22px;height:22px;border-radius:6px;background:#eef0fb;color:#4b4fd0;display:flex;
+ align-items:center;justify-content:center;text-decoration:none;font-size:12px;font-weight:800;opacity:.55}
+.ext:hover{opacity:1;background:#5a5bf0;color:#fff}
+.spark{display:block}
 .tp{display:flex;align-items:center;gap:12px;margin-bottom:10px}
 .tp input[type=range]{flex:1;max-width:420px;accent-color:#5a5bf0;height:4px}
 .tp .mut{font-size:11.5px;font-weight:700;color:#7c869c}
@@ -108,6 +112,8 @@ tr.cl{cursor:pointer}
  <div><label>Min spend E£</label><br/><input id="mins" type="number" value="5000" step="1000" style="width:100px"/></div>
  <div><label>Status</label><br/><select id="st"><option value="all">All (incl. paused)</option><option value="act">Active only</option><option value="pau">Paused only</option></select></div>
  <div><label>Format</label><br/><select id="fmt"><option value="all">All</option><option value="video">Video</option><option value="mixed">Mixed / carousel</option><option value="static">Static</option></select></div>
+ <div><label>Chart</label><br/><select id="cmode">
+  <option value="gp" selected>Profit per E£1,000</option><option value="cpa">Cost per purchase</option></select></div>
  <div><label>Columns</label><br/><select id="dens">
   <option value="s" selected>Simple</option><option value="f">Everything</option></select></div>
  <div><label>Funnel</label><br/><select id="fn"><option value="all">All</option><option value="TOF">TOF</option><option value="MOF">MOF</option><option value="BOF">BOF</option></select></div>
@@ -117,5 +123,5 @@ tr.cl{cursor:pointer}
 <div style="color:#9aa3b5;font-size:11px;margin-top:22px" id="ft"></div>
 </div></div>
 <div id="modal"></div>
-<script src="./cpa_app.js?v=1790015063"></script>
+<script src="./cpa_app.js?v=1790016346"></script>
 </body></html>
