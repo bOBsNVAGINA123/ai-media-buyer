@@ -158,7 +158,8 @@ const S=(a,k,i0,i1)=>{const v=(a.d&&a.d[k])||[];let t=0;for(let i=i0;i<i1;i++)t+
 
 function build(){
  const basis=document.getElementById('basis').value,
-       hair=parseFloat(document.getElementById('hair').value),
+       hairSel=document.getElementById('hair').value,
+       hair=(hairSel==='ad')?null:parseFloat(hairSel),
        [i0,i1]=dayIdx(document.getElementById('win').value),
        tgtPct=parseFloat(document.getElementById('tgt').value),
        mins=parseFloat(document.getElementById('mins').value)||0,
@@ -170,13 +171,18 @@ function build(){
  let rows=UNITS.map(a=>{
   const sp=S(a,'sp',i0,i1); if(sp<=0)return null;
   const AF=attrFactor(a,attrSel);
+  /* One coefficient for every ad was never right: the share of an ad's in-store conversions
+     that came from an actual CLICK runs from 5% to 100% across this account. Meta reports it
+     per ad (7d_click offline over the default offline count), so use the ad's own. */
+  const clickShare=(a.aw&&a.opur>0)?Math.min(1,a.aw.op7/a.opur):null;
+  const H=(hair===null)?(clickShare===null?0.214:clickShare):hair;
   const pu=S(a,'pu',i0,i1)*AF.pu, op=S(a,'op',i0,i1)*AF.op,
         pv=S(a,'pv',i0,i1)*AF.pv, fv=S(a,'fv',i0,i1)*AF.ov;
   const x=ADX[a.id]||[0,0,0,''];
-  const k=basis==='on'?pu:basis==='off'?op*hair:pu+op*hair;
-  const val=basis==='on'?pv:basis==='off'?fv*hair:pv+fv*hair;
-  const H=hair;
+  const k=basis==='on'?pu:basis==='off'?op*H:pu+op*H;
+  const val=basis==='on'?pv:basis==='off'?fv*H:pv+fv*H;
   return {id:a.id,n:a.n,cmp:a.cmp,as:a.as,acct:a.acct,th:a.th||a.im2,pl:a.pl,sp,pu,op,pv,fv,k,val,
+   hairUsed:H, clickShare:clickShare,
    cppOn:pu?sp/pu:Infinity, cppOff:op?sp/op:Infinity, cppAll:(pu+op)?sp/(pu+op):Infinity,
    roasOn:sp?pv/sp:0, roasOff:sp?fv/sp:0, roasOffInc:sp?fv*H/sp:0, roasAll:sp?(pv+fv*H)/sp:0,
    aovOn:pu?pv/pu:0, aovOff:op?fv/op:0,
@@ -185,19 +191,19 @@ function build(){
    g4:level==='ad'?ga4Of(a.n):null,
    sp7:S(a,'sp',Math.max(i0,i1-7),i1),
    k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu
-     :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair
-     :S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu+S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair),
+     :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*AF.op*H
+     :S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu+S(a,'op',Math.max(i0,i1-7),i1)*AF.op*H),
    af:AF,
    /* short windows. The grid already drops the newest 4 days, so "last 3" here is 4-7 days
       old and about 90% matured -- still the freshest number worth printing. */
    sp3:S(a,'sp',Math.max(i0,i1-3),i1),
    sp3p:S(a,'sp',Math.max(i0,i1-6),Math.max(i0,i1-3)),
    k3:(basis==='on'?S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu
-     :basis==='off'?S(a,'op',Math.max(i0,i1-3),i1)*AF.op*hair
-     :S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu+S(a,'op',Math.max(i0,i1-3),i1)*AF.op*hair),
+     :basis==='off'?S(a,'op',Math.max(i0,i1-3),i1)*AF.op*H
+     :S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu+S(a,'op',Math.max(i0,i1-3),i1)*AF.op*H),
    k3p:(basis==='on'?S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu
-     :basis==='off'?S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*hair
-     :S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu+S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*hair),
+     :basis==='off'?S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*H
+     :S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu+S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*H),
    spark:(a.d&&a.d.sp)?a.d.sp.slice(Math.max(i0,i1-28),i1):[],
    a:a};}).filter(Boolean);
  const universe=rows.slice();                       // prior is fit on everything, always
@@ -208,7 +214,7 @@ function build(){
    /* Money, not cost per purchase. CPA punishes an ad for selling fewer, bigger baskets --
       and this account's in-store AOV runs from E£866 to E£4,964 across ads, so CPA and
       profit rank them differently. Contribution is what actually pays the rent. */
-   r.gp=r.pv*ECON.onDel + r.fv*hair*ECON.off - r.sp;
+   r.gp=r.pv*ECON.onDel + r.fv*r.hairUsed*ECON.off - r.sp;
    /* The same ad at the three defensible in-store credits. If the SIGN moves between them,
       the verdict is an artifact of a constant nobody has verified, not a finding. */
    /* Second opinion. GA4 counts the same ad from the site's own side, and the two disagree
@@ -249,7 +255,7 @@ function build(){
    r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
    r.gpPerK=r.sp>0?1000*r.gp/r.sp:0;
    r.aovK=r.k>0?r.val/r.k:0;
-   r.margK=(r.pv+r.fv*hair)>0?(r.pv*ECON.onDel+r.fv*hair*ECON.off)/(r.pv+r.fv*hair):ECON.onDel;
+   r.margK=(r.pv+r.fv*r.hairUsed)>0?(r.pv*ECON.onDel+r.fv*r.hairUsed*ECON.off)/(r.pv+r.fv*r.hairUsed):ECON.onDel;
    r.cpatc=r.atc>0?r.sp/r.atc:Infinity;
    r.cpatcS=r.atc>0?post(prA,r.atc,r.sp).cpa:Infinity;
    // trend: last third vs the two before it, on the shrunk rate. Gated on counts.
@@ -257,7 +263,7 @@ function build(){
    const s1=S(r.a,'sp',i0,i0+h),s2=S(r.a,'sp',i0+h,i1);
    const A2=r.af||{pu:1,op:1};
    const kk=(f,b,e)=>basis==='on'?S(r.a,'pu',b,e)*A2.pu:basis==='off'?S(r.a,'op',b,e)*A2.op*hair
-                    :S(r.a,'pu',b,e)*A2.pu+S(r.a,'op',b,e)*A2.op*hair;
+                    :S(r.a,'pu',b,e)*A2.pu+S(r.a,'op',b,e)*A2.op*r.hairUsed;
    const k1=kk(0,i0,i0+h),k2=kk(0,i0+h,i1);
    if(k1>=10&&k2>=10&&s1>0&&s2>0){
      const l1=k1/s1,l2=k2/s2, lr=Math.log(l2/l1), se=Math.sqrt(1/k1+1/k2);
@@ -271,7 +277,7 @@ function build(){
  const j0=Math.max(i0,i1-14);
  const rec=universe.map(r=>{const sp=S(r.a,'sp',j0,i1),A=r.af||{pu:1,op:1};
    const pu=S(r.a,'pu',j0,i1)*A.pu, op=S(r.a,'op',j0,i1)*A.op;
-   return {sp,k:basis==='on'?pu:basis==='off'?op*hair:pu+op*hair};});
+   return {sp,k:basis==='on'?pu:basis==='off'?op*r.hairUsed:pu+op*r.hairUsed};});
  const prR=fitPrior(rec.filter(x=>x.sp>0),x=>x.k);
  universe.forEach((r,i)=>{const x=rec[i];
    r.sp14=x.sp; r.k14=x.k;
@@ -338,7 +344,8 @@ function build(){
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else if(!live)r.act=(r.rob==='depends')?'OFFDEP':(loses?'OFFBAD':'OFFOK');
   else r.act='HOLD';});
- return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,anomSel,dropped,
+ f=applyLabel(f);
+ return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,hairSel,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,anomSel,dropped,
          win:document.getElementById('win').value};
 }
 
@@ -427,11 +434,14 @@ function openAd(id){
  +row('90% interval',EGP(r.cpaLo)+' – '+EGP(r.cpaHi))+'</table><table>'
  +row('ROAS online',N2(r.roasOn)+'  (breakeven '+N2(ECON.beOn)+')')
  +row('ROAS in-store, claimed',N2(r.roasOff))
- +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven '+N2(ECON.beOff)+')')
+ +row('ROAS in-store, at this ad\u2019s '+Math.round((r.hairUsed||0)*100)+'% click share',N2(r.roasOffInc)+'  (breakeven '+N2(ECON.beOff)+')')
  +row('ROAS total, this basis',N2(r.roasAll))
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
  +row('Would vanish without view-through',r.vShare===null||r.vShare===undefined?'\u2014'
    :Math.round(r.vShare*100)+'% of its credited purchases  (7d-click keeps '+N0(r.a.aw.pu7)+' of '+N0(r.a.pur)+', 1d-click '+N0(r.a.aw.pu1)+')')
+ +row('In-store credit used',r.clickShare===null||r.clickShare===undefined?'account fallback 21.4% (no per-ad data)'
+   :Math.round(r.hairUsed*100)+'% \u2014 the share of its in-store conversions Meta attributes to a CLICK ('
+   +N0(r.a.aw?r.a.aw.op7:0)+' of '+N0(r.a.opur||0)+'), the rest being view-through')
  +row('Flags',(!r.anom||!r.anom.length)?'nothing odd'
    :'<span style="color:#a35a12">'+r.anom.join('<br/>')+'</span>')
  +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
@@ -493,9 +503,10 @@ function card(h,cs,body){return '<div class="card"><h3>'+h+'</h3><div class="cs"
 let SORT={k:'sp',d:-1};
 /* One column set everywhere. Online and in-store are shown side by side because they do
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
-function COLS(D){const H=Math.round(D.hair*100);
+function COLS(D){const H=hairLbl(D);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','spark','sp','gp','ga4','anom','cpa','cpa3','d3','roasOn','roasOff'];
+ const KEEP=['n','act','st','spark','sp','gp','cppOn','roasOn','cppOff','roasOff','clickShare',
+   'roasAll','cpa','cpa3','d3','ga4','anom'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
@@ -508,6 +519,8 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
  ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
  ['ga4','GA4 check',r=>G4TAG(r)],
+ ['clickShare','Store click share',r=>r.clickShare===null||r.clickShare===undefined?'<span class="mut">\u2014</span>'
+   :(r.clickShare<0.4?'<span class="r">':'')+Math.round(r.clickShare*100)+'%'+(r.clickShare<0.4?'</span>':'')],
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
@@ -519,7 +532,7 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['op','Store purch',r=>N0(r.op)],
  ['cppOff','CPP store',r=>EGP(r.cppOff)],
  ['roasOff','ROAS store',r=>N2(r.roasOff)],
- ['roasOffInc','ROAS store @'+H+'%',r=>(r.roasOffInc>=ECON.beOff?'<span class="g">':'<span class="r">')+N2(r.roasOffInc)+'</span>'],
+ ['roasOffInc','ROAS store, credited',r=>(r.roasOffInc>=ECON.beOff?'<span class="g">':'<span class="r">')+N2(r.roasOffInc)+'</span>'],
  ['roasAll','ROAS total',r=>'<b>'+N2(r.roasAll)+'</b>'],
  ['cpa','CPA used',r=>'<b>'+EGP(r.cpa)+'</b>'],
  ['cpaLo','best case',r=>EGP(r.cpaLo)],['cpaHi','worst case',r=>EGP(r.cpaHi)],
@@ -542,6 +555,45 @@ function sortRows(rows){const k=SORT.k;return rows.slice().sort((a,b)=>{
  return SORT.d*(xx-yy);});}
 function wireSort(render){document.querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{
  const k=t.dataset.k; SORT.d=(SORT.k===k)?-SORT.d:-1; SORT.k=k; render();});}
+
+/* ---------- label filter + bulk open ----------------------------------------------
+   Click a label to narrow the page to it, then open exactly that set in Ads Manager.
+   Meta accepts a comma-separated id list, so the selection travels. */
+let LABELS={}, LBLSEL=null;
+function labelBar(D){
+ const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
+ const b={}; D.universe.filter(r=>r.sp>=(parseFloat(document.getElementById('mins').value)||0))
+   .forEach(r=>{const k=GRP2[r.act]||r.act;b[k]=(b[k]||0)+1;});
+ const order=['KILL','CUT','DEPENDS','SCALE','REACTIVATE','HOLD','THIN','PAUSED'];
+ const chips=order.filter(k=>b[k]).map(k=>
+   '<span class="lb '+k.toLowerCase().slice(0,5)+(LBLSEL===k?' on':'')+'" onclick="pickLabel(\''+k+'\')">'
+   +(VERB[k]||k)+' <b>'+b[k]+'</b></span>').join('');
+ const fmts=[...new Set(D.universe.map(r=>r.fmt))].filter(x=>x&&x!=='unknown');
+ const fns=[...new Set(D.universe.map(r=>r.fn))];
+ const extra=fmts.map(x=>'<span class="lb sub'+(LBLSEL==='fmt:'+x?' on':'')+'" onclick="pickLabel(\'fmt:'+x+'\')">'+x+'</span>').join('')
+  +fns.map(x=>'<span class="lb sub'+(LBLSEL==='fn:'+x?' on':'')+'" onclick="pickLabel(\'fn:'+x+'\')">'+x+'</span>').join('')
+  +'<span class="lb sub'+(LBLSEL==='live'?' on':'')+'" onclick="pickLabel(\'live\')">live only</span>'
+  +'<span class="lb sub'+(LBLSEL==='flag'?' on':'')+'" onclick="pickLabel(\'flag\')">flagged odd</span>';
+ const ids=D.rows.map(r=>r.id).filter(Boolean);
+ const acct=ACCT_ID[(D.rows[0]||{}).acct]||ACCT_ID['Ourkids EGP'];
+ const lvl=D.level, base='https://adsmanager.facebook.com/adsmanager/manage/';
+ const url=lvl==='set'?base+'campaigns/adsets?act='+acct+'&selected_adset_ids='+ids.slice(0,60).join(',')
+      :lvl==='cmp'?base+'campaigns?act='+acct+'&selected_campaign_ids='+ids.slice(0,60).join(',')
+      :base+'ads?act='+acct+'&selected_ad_ids='+ids.slice(0,60).join(',');
+ return '<div class="lbar">'+chips+'<span class="lbsep"></span>'+extra
+  +(LBLSEL?'<span class="lb clr" onclick="pickLabel(null)">clear filter</span>':'')
+  +'<span class="lbspace"></span>'
+  +'<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="'+url+'">'
+  +'Open these '+Math.min(ids.length,60)+' in Ads Manager'+(ids.length>60?' (first 60)':'')+'</a></div>';}
+function pickLabel(k){LBLSEL=(LBLSEL===k)?null:k;boot();}
+function applyLabel(rows){
+ if(!LBLSEL)return rows;
+ const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
+ if(LBLSEL==='live')return rows.filter(r=>r.st==='act');
+ if(LBLSEL==='flag')return rows.filter(r=>r.anom&&r.anom.length);
+ if(LBLSEL.indexOf('fmt:')===0)return rows.filter(r=>r.fmt===LBLSEL.slice(4));
+ if(LBLSEL.indexOf('fn:')===0)return rows.filter(r=>r.fn===LBLSEL.slice(3));
+ return rows.filter(r=>(GRP2[r.act]||r.act)===LBLSEL);}
 
 /* ---------- tabs ---------- */
 const TABS=[['act','What to do'],['grid','The grid'],['pred','Next 7 days'],['store','In-store vs online'],
@@ -574,9 +626,10 @@ function boot(){
   +N2(ECON.beOn)+'\u00d7), <b>'+(Math.round(ECON.off*1000)/10)+'%</b> in store'
   +(ECON.posMeasured?' (measured live off Odoo POS)':' (fallback constant)')
   +(ECON.onGross?', online gross measuring '+(Math.round(ECON.onGross*1000)/10)+'% over the last 90 days':'')+'.';
- document.getElementById('body').innerHTML=
+ // NB the ternary chain must be parenthesised -- `a + b === 'x' ? ...` binds the + first
+ document.getElementById('body').innerHTML=labelBar(D)+(
   TAB==='grid'?vGrid(D):TAB==='act'?vAct(D):TAB==='pred'?vPred(D):
-  TAB==='store'?vStore(D):TAB==='touch'?vTouch(D):vMeth(D);
+  TAB==='store'?vStore(D):TAB==='touch'?vTouch(D):vMeth(D));
  stopPlay(); if(SCT.chart&&TAB!=='grid'){SCT.chart.destroy();SCT.chart=null;}
  if(TAB==='grid')drawScatter(D);
  if(TAB==='pred')drawPred(D);
@@ -587,11 +640,20 @@ function boot(){
 /* ---------- 1. THE GRID ---------- */
 const COL={KILL:'#e23a63',CUT:'#ff8b42',SCALE:'#12b886',REACTIVATE:'#5a5bf0',HOLD:'#9aa3b5',
  THIN:'#9d6bff',DEPENDS:'#f0b429',OFFOK:'#c2c8d6',OFFBAD:'#c2c8d6',OFFDEP:'#c2c8d6',PAUSED:'#c2c8d6'};
+function hairLbl(D){
+ if(D.hairSel!=='ad')return Math.round(D.hair*100)+'%';
+ const v=D.rows.map(function(r){return r.hairUsed;}).filter(function(x){return isFinite(x);}).sort(function(a,b){return a-b;});
+ if(!v.length)return 'per ad';
+ return 'per ad ('+Math.round(v[0]*100)+'\u2013'+Math.round(v[v.length-1]*100)+'%, median '
+   +Math.round(v[Math.floor(v.length/2)]*100)+'%)';}
+function hairAvg(D){
+ if(D.hairSel!=='ad')return D.hair;
+ var a=0,b=0;D.rows.forEach(function(r){a+=r.fv*r.hairUsed;b+=r.fv;});return b>0?a/b:0.214;}
 function CM(D){return (document.getElementById('cmode')||{}).value||'gp';}
 function vGrid(D){
  const t=D.tot, aov=t.k>0?t.val/t.k:0;
  const k=kpi('Spend',EGP(t.sp),t.n+' ads, min E£'+N0(parseFloat(document.getElementById('mins').value)))
- +kpi('Purchases',N0(t.k),D.basis==='bl'?N0(t.pu)+' online + '+N0(t.op*D.hair)+' in-store credited':'')
+ +kpi('Purchases',N0(t.k),D.basis==='bl'?N0(t.pu)+' online + '+N0(t.k-t.pu)+' in-store credited':'')
  +kpi('CPA (measured)',EGP(D.cur),'spend ÷ purchases, this basis')
  +kpi('AOV',EGP(aov),D.basis==='bl'?'online E£'+N0(t.pu?t.pv/t.pu:0)+' · in-store E£'+N0(t.op?t.fv/t.op:0):'')
  +kpi('ROAS',N2(t.sp?t.val/t.sp:0),'breakeven '+N2(ECON.beOn)+'\u00d7 online / '+N2(ECON.beOff)+'\u00d7 in-store')
@@ -600,6 +662,7 @@ function vGrid(D){
  +kpi('Click→purchase',N2(t.oc?100*t.pu/t.oc:0)+'%','online pixel only');
  const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
  const buckets={};D.rows.forEach(r=>{const k=GRP2[r.act]||r.act;buckets[k]=(buckets[k]||0)+1;});
+ LABELS=buckets;
  const sum=['KILL','CUT','DEPENDS','SCALE','REACTIVATE','HOLD','THIN','PAUSED']
    .filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+(VERB[x]||x)+' '+buckets[x]+'</span>').join(' ');
  return '<div class="kpis">'+k+'</div>'
@@ -816,7 +879,7 @@ function simulate(D){
     which carries neither. Both come from ECON. */
  const kAll=live.reduce((s,r)=>s+r.k,0);
  const aovK=kAll>0?live.reduce((s,r)=>s+r.val,0)/kAll:0;
- const vOn=live.reduce((s,r)=>s+r.pv,0), vOff=live.reduce((s,r)=>s+r.fv,0)*D.hair;
+ const vOn=live.reduce((s,r)=>s+r.pv,0), vOff=live.reduce((s,r)=>s+r.fv*r.hairUsed,0);
  const marg=(vOn+vOff)>0?(vOn*ECON.onDel+vOff*ECON.off)/(vOn+vOff):ECON.onDel;
  const gpDelta=(expK-expNow)*aovK*marg-(spNew-base7);
  return {kill,scale,keep,freed,used,parked,base7,spNew,aovK,gpDelta,marg,
@@ -824,9 +887,10 @@ function simulate(D){
    cpaNew:expK>0?spNew/expK:0, cpaNewLo:expHi>0?spNew/expHi:0, cpaNewHi:expLo>0?spNew/expLo:0, expK};}
 function swing(r){
  const c=x=>x>=0?'#0d8a62':'#b81f45';
+ const mid=Math.round((r.hairUsed||0)*100)+'% \u2014 its click share';
  return '<div class="swing">'
  +'<div><span class="h">store 0%</span><span style="color:'+c(r.gp0)+'">'+EGP(r.gp0)+'</span></div>'
- +'<div><span class="h">store 21.4%</span><span style="color:'+c(r.gp)+'">'+EGP(r.gp)+'</span></div>'
+ +'<div><span class="h">'+mid+'</span><span style="color:'+c(r.gp)+'">'+EGP(r.gp)+'</span></div>'
  +'<div><span class="h">store 100%</span><span style="color:'+c(r.gp1)+'">'+EGP(r.gp1)+'</span></div></div>';}
 function doCard(r,D){
  return '<div class="doc" onclick="openAd(\''+r.id+'\')">'+thumb(r,52)
@@ -940,8 +1004,15 @@ function vAct(D){
       : 'Per-ad windows have not landed from the pipeline yet, so this is the account-wide coefficient applied to every '
         +NOUN[D.level]+'. It moves the level, not the ranking \u2014 per-ad arrives on the next sync.'))
  +'</div>':'')
++(D.hairSel==='ad'?'<div class="banner"><b>In-store credit is now each ad\u2019s own, not one number for all of them.</b> '
+ +'It is the share of that ad\u2019s in-store conversions Meta attributes to a <b>click</b> rather than a view \u2014 '
+ +hairLbl(D)+' across this account, measured from Meta\u2019s own 7d-click offline count. '
+ +'<b>Read it as a discriminator, not as incrementality.</b> A click-attributed store visit is still not proven to be caused by the ad; '
+ +'what this separates is ads whose store credit rests on someone clicking from ads whose store credit rests on someone merely seeing it. '
+ +'The account-wide 21.4% incremental figure is the conservative level and is still one click away in the dropdown \u2014 '
+ +'the three-cell strip on every card shows 0%, this ad\u2019s share, and 100% so the whole range stays visible.</div>':'')
 +'<div class="banner b"><b>What this is judging.</b> Gross profit minus spend, per '+NOUN[D.level]+', at '
- +Math.round(D.hair*100)+'% in-store credit. Nothing that makes money can be told to turn off. '
+ +hairLbl(D)+' in-store credit. Nothing that makes money can be told to turn off. '
  +'Cost per purchase still decides which of the profitable ones have room to scale, and every CPA is <b>shrunk</b> with a 90% interval '
  +'so a lucky three-purchase '+NOUN[D.level]+' cannot buy its way onto the raise list. Click anything to open it.</div>'
  +(D.judge==='cpa'?'<div class="banner r"><b>You are on CPA-only mode — the method exactly as written.</b> '
@@ -973,7 +1044,7 @@ function vAct(D){
      ['gTx','GA4 tx',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx);}],
      ['anom','Why it is flagged',function(r){return '<span style="white-space:normal;display:inline-block;max-width:520px;text-align:left">'+r.anom.join('<br/>')+'</span>';}]])):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
-   'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
+   'Gross profit minus spend, at '+hairLbl(D)+' in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
    +'Everything here is taking money out at the 21.4% credit. The ones that also lose at 100% credit are in the turn-off list below; '
    +'the rest are in the undecidable section. Sorted by how much.',grid(losers.slice(0,24)))
 +sec('Turn these off',kill.length+' '+NOUN[D.level]+'s · '+EGP(S.freed)+' a week',
@@ -1065,6 +1136,8 @@ function vPred(D){
     ['roas','ROAS',r=>N2(r.roas)],
     ['gpw','Profit next 7d',r=>(r.gpw<0?'<span class="r">':'<span class="g">')+EGP(r.gpw)+'</span>'],
     ['ga4','GA4 check',r=>G4TAG(r)],
+ ['clickShare','Store click share',r=>r.clickShare===null||r.clickShare===undefined?'<span class="mut">\u2014</span>'
+   :(r.clickShare<0.4?'<span class="r">':'')+Math.round(r.clickShare*100)+'%'+(r.clickShare<0.4?'</span>':'')],
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
     ['trend','Trend',r=>r.trend===null?'<span class="mut">n/a</span>':(r.trend>0?'<span class="r">+':'<span class="g">')+Math.round(r.trend*100)+'%</span>'+(r.trendSig?' *':'')]])))
@@ -1095,7 +1168,7 @@ function vStore(D){
    mix:(r.pv+r.fv)>0?r.fv/(r.pv+r.fv):0}));
  const T=k=>rows.reduce((s,r)=>s+r[k],0);
  const sp=T('sp'),pu=T('pu'),op=T('op'),pv=T('pv'),fv=T('fv');
- const H=D.hair;
+ const H=hairAvg(D);
  const beOn=ECON.beOn, beOff=ECON.beOff;
  /* What share of ACTUAL branch revenue Meta is claiming. Straight off the live Odoo
     branch daily series in data.js, over exactly the window on screen. */
@@ -1136,6 +1209,8 @@ function vStore(D){
     ['spark','Last 28d',r=>spark(r.spark)],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
     ['ga4','GA4 check',r=>G4TAG(r)],
+ ['clickShare','Store click share',r=>r.clickShare===null||r.clickShare===undefined?'<span class="mut">\u2014</span>'
+   :(r.clickShare<0.4?'<span class="r">':'')+Math.round(r.clickShare*100)+'%'+(r.clickShare<0.4?'</span>':'')],
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
