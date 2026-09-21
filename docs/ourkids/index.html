@@ -2157,7 +2157,7 @@ function okCauses(o){
      (out.cvr||[]).slice(0,1).forEach(x=>out.mer.push(x));
     }
    }catch(e){}
-   const beL=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+   const beL=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
    out.mer.push(['note','<b>The '+beL.toFixed(2)+'\u00d7 break-even here covers COGS only</b> \u2014 it is the point where the media pays for the goods. The Daily Profit Engine uses a higher one because it also carries delivery and order opex; both are correct for what they cover, and the higher one is the one that decides whether the month made money.']);
   }
  }catch(e){}
@@ -2281,7 +2281,7 @@ function glance(g,o){
      +arrow(v)+' '+Math.abs(v).toFixed(1)+'%</span>';};
 
  const days=Math.max(1,span(ST.s,ST.e));
- const be=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+ const be=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
 
  /* ---- 1. WHERE ARE WE ---------------------------------------------------- */
  const BA=okBlendedAmer(o);
@@ -4316,7 +4316,7 @@ function ovRange(a,b){
    month (or quarter) of days renders. */
 function merHeat(g){
  const A=O.ad,F=O.fin;if(!A||!F||!F.rev)return;
- const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185};}})();
+ const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357};}})();
  const be=q.gpOn>0?1/q.gpOn:5.4;
  const mf=af('meta'),gf=af('google'),tf=af('tt');
  const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
@@ -6236,7 +6236,7 @@ function creativeFatigue(g){
  const costly=scored.filter(x=>x.f.cls==='COSTS UP').sort((a,b)=>(b.f.sig.cpp||0)-(a.f.sig.cpp||0));
  const fresh=scored.filter(x=>x.f.cls==='HEALTHY'||x.f.cls==='WATCH').sort((a,b)=>b.a.sp-a.a.sp);
  const tiredSp=tired.reduce((a,x)=>a+x.a.sp,0);
- const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+ const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
  const sigChips=f=>f.parts.map(p=>{
@@ -7025,7 +7025,7 @@ function merDaily(g){
  splitPanel('merpan',lab,
    {sets:money,h:170,fmt:v=>'E£'+Math.round(v).toLocaleString()},
    {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7',
-    ref:(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})()});
+    ref:(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})()});
 }
 /* v9.46 NEW-AUDIENCE SPEND AND REACH (Meta).
    "How much am I spending to reach people who have never bought from me, and how many of them am I
@@ -7382,7 +7382,7 @@ function rCV(){
  if(!G4||!G4.pages||!G4.pages.length){bn.innerHTML='&#8635; The GA4 funnel pull ships with the NEXT collector run — the route is wired (Egypt-only, 60 days daily, by landing page) and this tab fills itself when it lands.';return;}
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const N2=v=>Math.round(v).toLocaleString();
- const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185};}})();
+ const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357};}})();
  const t0=Date.parse(G4.start);
  const ix=d=>Math.round((Date.parse(d)-t0)/864e5);
  let i1=Math.min(G4.n-1,ix(ST.e)), i0=Math.max(0,ix(ST.s));
@@ -13544,9 +13544,9 @@ function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16')
    with it -- honestly. The gross figure stays available as gpOnGross for pure product maths. */
 function _gpPct(){
  let so=0,go=0;((O.shop&&O.shop.rev)||[]).forEach((v,i)=>{so+=v||0;go+=((O.shop.gp||[])[i])||0;});
- const gpOnGross=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.28);
+ const gpOnGross=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.3628);
  let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=v[1]||0;}));
- const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.28);
+ const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.3628);
  let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
   const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
@@ -14515,7 +14515,7 @@ function rMETA(){
  rows.sort((x,y)=>y.sc.s-x.sc.s);
  /* break-even for this tab's own verdict guard -- creativeFatigue() on the Money desk has
     its own copy and the two functions do not share scope */
- const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:3.76;}catch(e){return 3.76;}})();
+ const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
  const pull=rows.filter(r=>r.enough&&r.sc.s>=RV.pull);
  const watch=rows.filter(r=>r.enough&&r.sc.s>=50&&r.sc.s<RV.pull);
 
@@ -14811,7 +14811,7 @@ function rMETA(){
   let sp=0,pv=0,fv=0;
   ads.forEach(a=>{const d=a.d;for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}});
   if(!(sp>1000&&pv>0))return;
-  const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.185,gpOnGross:0.266,gpSt:0.285,dragShip:0.034,dragPay:0.047,drag:0.081};}})();
+  const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357,gpOnGross:0.266,gpSt:0.285,dragShip:0.034,dragPay:0.047,drag:0.081};}})();
   const incr=((O.attr&&O.attr.meta&&O.attr.meta.incr)||0.61);
   /* the attribution step FOLLOWS the tab's selector: pick 7d-click or Incremental up top and
      this bar becomes your chosen ladder; on the default (live) setting it shows Meta's own

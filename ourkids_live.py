@@ -99,16 +99,48 @@ def oexec(model, method, args, kw=None):
 def dkey(s):
     return datetime.datetime.strptime(s, "%d %b %Y").date().isoformat()
 
+GOVT_RATE = 0.04
+def okgp(r):
+    """Gross profit on the basis this business actually pays.
+
+    Odoo's `margin` is built on price_subtotal, which is ex-VAT, while the revenue
+    reported here is amount_total, which is not. Pairing the two put an ex-VAT
+    profit over a VAT-inclusive revenue and understated every margin in the
+    dashboard by 8.28% of revenue (0.96 - 1/1.14).
+
+    The 14% never applied in the first place: the charge actually remitted is 4%
+    of revenue. So cost is recovered from the ex-VAT side, where margin lives, and
+    the 4% is taken off the till revenue.
+
+    Measured over the 90 days to 20 Sep 2026 this moves online gross margin from
+    25.79% to 34.07%, and breakeven ROAS from 6.54x to 4.24x.
+    """
+    tot = r.get("amount_total") or 0
+    unt = r.get("amount_untaxed") or 0
+    mar = r.get("margin") or 0
+    cogs = unt - mar
+    return tot * (1.0 - GOVT_RATE) - cogs
+
+# The same correction where only one revenue figure is to hand. Odoo's margin is
+# always ex-VAT, so what is added back is the difference between the basis the
+# margin was struck on and the basis we actually pay tax on.
+ADJ_INC = 0.96 - 1 / 1.14          # revenue INCLUDES VAT (price_total, amount_total)
+ADJ_EX = 1.14 * 0.96 - 1.0         # revenue EXCLUDES VAT (price_subtotal, amount_untaxed)
+def gp_inc(rev, margin):
+    return (margin or 0) + (rev or 0) * ADJ_INC
+def gp_ex(rev, margin):
+    return (margin or 0) + (rev or 0) * ADJ_EX
+
 def pull_odoo():
     st = ["sale", "done"]
     rows = ogroup("sale.order",
         [["state", "in", st], ["date_order", ">=", FIN_START + " 00:00:00"]],
-        ["amount_total", "margin"], ["date_order:day"])
+        ["amount_total", "amount_untaxed", "margin"], ["date_order:day"])
     daily = {}
     for r in rows:
         try: d = dkey(r["date_order:day"])
         except Exception: continue
-        daily[d] = {"rev": r.get("amount_total") or 0, "gp": r.get("margin") or 0,
+        daily[d] = {"rev": r.get("amount_total") or 0, "gp": okgp(r),
                     "orders": r.get("__count", 0) or 0}
     # v9.86 UNITS ONLINE, so AOV can be read as items-per-basket x price-per-item rather than as
     # one number with no explanation. Line level, because the order header carries no quantity.
@@ -2565,10 +2597,10 @@ def pull_pos_customers():
                         _cd0[_dk] = _cd0.get(_dk, 0.0) + rv
                     if _vn:
                         _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
-                        _vm[0] += rv; _vm[1] += float(r.get("margin") or 0)
+                        _vm[0] += rv; _vm[1] += gp_inc(rv, r.get("margin"))
                     if _tid:
                         _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
-                        _pm[0] += rv; _pm[1] += float(r.get("margin") or 0)
+                        _pm[0] += rv; _pm[1] += gp_inc(rv, r.get("margin"))
                     if pid in ANON:
                         bun.setdefault(br, {}).setdefault(_m7, set()).add(oid)
                         # v9.70: the DAILY walk-in count. Without it the dashboard had to spread
@@ -2586,7 +2618,7 @@ def pull_pos_customers():
                         _bv[_m7] = _bv.get(_m7, 0.0) + rv
                         continue
                     d10 = r["date"][:10]
-                    rows.append((pid, d10, br, float(r.get("margin") or 0), oid, rv, qy))
+                    rows.append((pid, d10, br, gp_inc(rv, r.get("margin")), oid, rv, qy))
                     if rv > 0:
                         _at = PATTR.setdefault(pid, {"cat": {}, "ven": {}})
                         _cg = _catname(_tv[1])
@@ -3015,7 +3047,7 @@ def pull_shop_lines():
         if not page: break
         for r in page:
             pid = r["partner_id"][0]; d = str(r["date"])[:10]
-            rv = float(r.get("price_subtotal") or 0); mg = float(r.get("margin") or 0)
+            rv = float(r.get("price_subtotal") or 0); mg = gp_ex(rv, r.get("margin"))
             qy = float(r.get("product_uom_qty") or 0); dc = float(r.get("discount") or 0)
             gr = rv / (1 - dc / 100.0) if 0 < dc < 100 else rv
             _tid = (r.get("product_tmpl_id") or [0])[0]
@@ -4412,8 +4444,8 @@ def pull_why_offline():
             q = float(r.get("product_qty") or 0); v = float(r.get("price_total") or 0)
             tot["units"] += q; tot["rev"] += v
             tot["disc"] += float(r.get("total_discount") or 0)
-            tot["gp"] += float(r.get("margin") or 0)
-            P[pid] = {"n": nm[:60], "q": q, "r": v, "gp": float(r.get("margin") or 0)}
+            tot["gp"] += gp_inc(v, r.get("margin"))
+            P[pid] = {"n": nm[:60], "q": q, "r": v, "gp": gp_inc(v, r.get("margin"))}
         # distinct receipts, and the same split per branch, on one more read_group
         for r in ogroup("report.pos.order", dom,
                         ["price_total", "margin", "product_qty", "order_id:count_distinct"], ["config_id"]):
@@ -4422,7 +4454,8 @@ def pull_why_offline():
             tot["ord"] += n
             if not br: continue
             e = BR.setdefault(br, {"n": br, "r": 0.0, "gp": 0.0, "q": 0.0, "ord": 0})
-            e["r"] += float(r.get("price_total") or 0); e["gp"] += float(r.get("margin") or 0)
+            _rv = float(r.get("price_total") or 0)
+            e["r"] += _rv; e["gp"] += gp_inc(_rv, r.get("margin"))
             e["q"] += float(r.get("product_qty") or 0); e["ord"] += n
         return P, BR, tot
 
@@ -5284,7 +5317,7 @@ def pull_vendors():
         for r in g:
             t = r.get("product_tmpl_id")
             if not t: continue
-            rv = float(r.get("price_total") or 0); gp = float(r.get("margin") or 0); qt = float(r.get("product_qty") or 0)
+            rv = float(r.get("price_total") or 0); gp = gp_inc(rv, r.get("margin")); qt = float(r.get("product_qty") or 0)
             row = T(t[0]); row["n"] = row["n"] or str(t[1]).strip()[:52]
             row["r"] += rv; row["g"] += gp; row["q"] += qt
             code = TV.get(t[0], ("", "", ""))[0]
@@ -5330,7 +5363,7 @@ def pull_vendors():
         if not p: continue
         tid = PP.get(p[0])
         if not tid: continue
-        rv = float(r.get("price_subtotal") or 0); gp = float(r.get("margin") or 0); qt = float(r.get("product_uom_qty") or 0)
+        rv = float(r.get("price_subtotal") or 0); gp = gp_ex(rv, r.get("margin")); qt = float(r.get("product_uom_qty") or 0)
         nm = str(p[1]).strip()[:52]
         if "discount" in nm.lower() or "shipping" in nm.lower(): continue
         row = T(tid); row["n"] = row["n"] or nm
@@ -6376,7 +6409,7 @@ def build():
         safe(sync_gmb_branch_sales)
         log("audience syncs done :: total run %.1f min" % ((time.time() - RUN_T0) / 60))
 
-OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.266,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
+OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.3488,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
 def _dataface():
     """What is actually sitting in data.js right now, so status.json can report it
