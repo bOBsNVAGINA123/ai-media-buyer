@@ -2,7 +2,7 @@
 <title>OurKids — CPA Grid</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="./data.js"></script>
-<script src="./cpa_seed.js?v=1790018928"></script>
+<script src="./cpa_seed.js?v=1790019971"></script>
 <style>
 :root{--ink:#161d2e;--mut:#7c869c;--red:#e23a63;--grn:#12b886;--teal:#1fc3b6;--blue:#3a9bff;--indigo:#5a5bf0;--violet:#9d6bff;--orange:#ff8b42;--pink:#ff5da2;--grey:#9aa3b5}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
@@ -66,6 +66,18 @@ tr:hover td{background:#fafbfe}
 .hd{display:flex;align-items:center;gap:9px;margin:20px 0 9px}
 .hd h2{margin:0;font-size:16px;font-weight:800}.hd .n{font-size:12px;color:#7c869c;font-weight:700}
 tr.cl{cursor:pointer}
+.lbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:13px}
+.lb{cursor:pointer;padding:5px 11px;border-radius:9px;font-size:11.5px;font-weight:800;border:1px solid transparent;
+ background:#fff;color:#57607a;box-shadow:0 1px 3px rgba(20,30,60,.06);user-select:none}
+.lb:hover{border-color:#5a5bf0}
+.lb.on{background:#5a5bf0;color:#fff;border-color:#5a5bf0}
+.lb.kill{color:#b81f45}.lb.cut{color:#a35a12}.lb.scale{color:#0d8a62}.lb.react{color:#3d41c9}
+.lb.depen{color:#8a6306}.lb.thin{color:#7a4fd0}.lb.pause,.lb.hold{color:#7c869c}
+.lb.on.kill,.lb.on.cut,.lb.on.scale,.lb.on.react,.lb.on.depen,.lb.on.thin,.lb.on.pause,.lb.on.hold{color:#fff}
+.lb.sub{font-weight:700;font-size:11px;color:#8b94a8;background:#f3f5fa;box-shadow:none}
+.lb.clr{background:#ffe6ec;color:#b81f45}
+.lbsep{width:1px;height:20px;background:#e2e6ef;margin:0 4px}
+.lbspace{flex:1}
 .ext{flex:none;width:22px;height:22px;border-radius:6px;background:#eef0fb;color:#4b4fd0;display:flex;
  align-items:center;justify-content:center;text-decoration:none;font-size:12px;font-weight:800;opacity:.55}
 .ext:hover{opacity:1;background:#5a5bf0;color:#fff}
@@ -104,7 +116,10 @@ tr.cl{cursor:pointer}
   <option value="7d">7-day click</option><option value="1d">1-day click</option>
   <option value="incr">Incremental (Meta's own)</option></select></div>
  <div><label>In-store credit</label><br/><select id="hair">
-  <option value="1">100% — Meta's claim</option><option value="0.214" selected>21.4% — measured incremental</option><option value="0">0% — ignore in-store</option></select></div>
+  <option value="ad" selected>Per ad — its own click share</option>
+  <option value="1">100% — Meta's claim</option>
+  <option value="0.214">21.4% — account incremental</option>
+  <option value="0">0% — ignore in-store</option></select></div>
  <div><label>Window</label><br/><select id="win">
   <option value="56">56d mature (drops last 4d)</option><option value="28">28d mature</option><option value="14">14d mature</option><option value="60">60d full (immature tail)</option></select></div>
  <div><label>Target CPA cut</label><br/><select id="tgt">
@@ -127,5 +142,5 @@ tr.cl{cursor:pointer}
 <div style="color:#9aa3b5;font-size:11px;margin-top:22px" id="ft"></div>
 </div></div>
 <div id="modal"></div>
-<script src="./cpa_app.js?v=1790018928"></script>
+<script src="./cpa_app.js?v=1790019971"></script>
 </body></html>
