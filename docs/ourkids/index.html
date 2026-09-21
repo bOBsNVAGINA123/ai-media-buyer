@@ -433,7 +433,8 @@ function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
 function rtBase(m){
  const nr=O.nr[m]||{};
- const on={rev:(nr.nrev||0)+(nr.rrev||0),gp:(nr.ngp||0)+(nr.rgp||0),ord:(nr.nord||0)+(nr.rord||0),nc:nr.nord||0};
+ /* v11.2: O.nr (cohorts pack) still ships raw Odoo margin on VAT-inclusive revenue. */
+ const on={rev:(nr.nrev||0)+(nr.rrev||0),gp:gpAdj((nr.nrev||0)+(nr.rrev||0),(nr.ngp||0)+(nr.rgp||0)),ord:(nr.nord||0)+(nr.rord||0),nc:nr.nord||0};
  const bd={};const st={rev:0,gp:0,ord:0,nc:0,rent:0,sal:0};
  Object.keys(O.pos||{}).forEach(b=>{const p=(O.pos[b]||{})[m],c=(O.bcost[b]||{})[m]||{},n=(O.bnr[b]||{})[m]||{};
   const d={rev:p?p[0]:0,gp:p?gpAdj(p[0],p[1]):0,ord:p?p[2]:0,nc:n.nc||0,rent:c.rent||0,sal:c.sal||0};bd[b]=d;
@@ -3845,7 +3846,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
  (function(){const A=O.ad;if(!A||!A.ncrev||!A.newcust)return;
   window.GPCAC=window.GPCAC||{del:false};const GD=window.GPCAC.del;
   const S2=O.ship2||{};const kr={};(S2.m||[]).forEach((m,i)=>{const kv=(S2.keptV||[])[i]||0,rv=(S2.retV||[])[i]||0;kr[m]=(kv+rv)?kv/(kv+rv):1;});
-  const gpm={};Object.keys(O.nr||{}).forEach(m=>{const r=O.nr[m];if(r&&r.nrev)gpm[m]=r.ngp/r.nrev;});
+  const gpm={};Object.keys(O.nr||{}).forEach(m=>{const r=O.nr[m];if(r&&r.nrev)gpm[m]=gpAdj(r.nrev,r.ngp)/r.nrev;});
   const gpOf=m=>gpm[m]!=null?gpm[m]:0.45;
   const t0=new Date(A.start+'T00:00:00Z').getTime();const day=i=>new Date(t0+i*864e5).toISOString().slice(0,10);
   const n=A.n;
@@ -8459,7 +8460,9 @@ function rDC(){
     look 300-400% richer than a normal one. Revenue and margin from that model are fine
     (sums do not care about grain), so keep those and take the ORDER count from the monthly
     ledger, O.pos[branch][month][2], which counts receipts. */
- const offBgp=offB[1]?offB[2]/offB[1]*100:null;
+ /* v11.2: offBase ships raw Odoo margin on VAT-inclusive POS revenue, so the un-coded
+    baseline basket was being compared against coded baskets on a different basis. */
+ const offBgp=offB[1]?gpAdj(offB[1],offB[2])/offB[1]*100:null;
  const _mrange=(k)=>{const POS=O.pos||{},m0=win[0].slice(0,7),m1=win[1].slice(0,7);let t=0;
    Object.keys(POS).forEach(b=>Object.keys(POS[b]||{}).forEach(m=>{
      if(m<m0||m>m1)return; const _v=POS[b][m]||[];
@@ -10029,7 +10032,7 @@ function yoyChannels(g){
    return seen?{n:Math.round(nn),r:Math.round(rr),t:Math.round(nn+rr)}:null;};
  const sc1=shCust(m), sc0=shCust(ly);
  rows.push({n:'Shopify',k:'on',r0:(q.nrev||0)+(q.rrev||0),r1:(w.nrev||0)+(w.rrev||0),
-            u0:null,u1:null,gp:(w.ngp||0)+(w.rgp||0),nrev:w.nrev||0,rrev:w.rrev||0,
+            u0:null,u1:null,gp:gpAdj((w.nrev||0)+(w.rrev||0),(w.ngp||0)+(w.rgp||0)),nrev:w.nrev||0,rrev:w.rrev||0,
             nc:sc1?sc1.n:(w.nord||0),
             o0:(q.nord||0)+(q.rord||0),o1:(w.nord||0)+(w.rord||0),
             no1:w.nord||0,no0:q.nord||0,ro1:w.rord||0,ro0:q.rord||0,
@@ -11829,7 +11832,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    [{label:'Retail returning',data:mns.map(stRR),borderColor:C.orange,f:1},
     {label:'Online returning',data:mns.map(onN('rrev')),borderColor:C.violet,f:1}],'cur');
   const totRev=m=>stRev(m)+(NR[m]?(NR[m].nrev||0)+(NR[m].rrev||0):0);
-  const totGp=m=>stGp(m)+(NR[m]?(NR[m].ngp||0)+(NR[m].rgp||0):0);
+  const totGp=m=>stGp(m)+(NR[m]?gpAdj((NR[m].nrev||0)+(NR[m].rrev||0),(NR[m].ngp||0)+(NR[m].rgp||0)):0);
   const totExp=m=>{const E=O.exp[m];if(!E)return null;let t2=0;for(const k in E)t2+=E[k];return t2+((AMm[m]||{}).s||0);};
   vzLineCard(g,'odoo','Revenue vs Expenses'+INFO('Revenue = POS branches + Shopify, net of returns. Gross profit = the same revenue minus cost of goods (Odoo margins). Expenses = every posted GL OpEx category (payroll, rent, utilities, offline advertising, ...) plus online ad spend. Read GP against expenses: revenue also has to pay for the goods, so revenue-above-expenses alone is not profit.'),
    'The company P&amp;L in one picture &mdash; when the GREEN gross-profit line sits above the RED expense line, the month made money before tax. * = month still running.',lbl,
@@ -16358,7 +16361,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-230649';
+const BUILD='20260921-231606';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
