@@ -892,15 +892,30 @@ function swing(r){
  +'<div><span class="h">store 0%</span><span style="color:'+c(r.gp0)+'">'+EGP(r.gp0)+'</span></div>'
  +'<div><span class="h">'+mid+'</span><span style="color:'+c(r.gp)+'">'+EGP(r.gp)+'</span></div>'
  +'<div><span class="h">store 100%</span><span style="color:'+c(r.gp1)+'">'+EGP(r.gp1)+'</span></div></div>';}
+function stat(lab,val,sub,col){
+ return '<div class="cs1"><div class="csl">'+lab+'</div>'
+  +'<div class="csv"'+(col?' style="color:'+col+'"':'')+'>'+val+'</div>'
+  +(sub?'<div class="css">'+sub+'</div>':'')+'</div>';}
 function doCard(r,D){
- return '<div class="doc" onclick="openAd(\''+r.id+'\')">'+thumb(r,52)
- +'<div style="min-width:0"><div class="t">'+r.n+'</div>'
- +'<div class="s">'+whyShort(r,D)+'</div>'+swing(r)
- +'<div class="m"><b style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+' profit</b>'
- +' &nbsp;·&nbsp; '+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'\u00d7)'
- +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'\u00d7)'
- +(r.lvl==='ad'&&r.ga4&&r.ga4!=='nodata'?' &nbsp;·&nbsp; GA4 saw '+N0(r.gTx)+' ('+(r.gRatio===null?'\u2014':N2(r.gRatio)+'\u00d7 Meta')+')':'')
- +'</div></div></div>';}
+ const g=r.gp>=0?'#0d8a62':'#b81f45';
+ return '<div class="doc">'
+ +'<div class="dch" onclick="openAd(\''+r.id+'\')">'+thumb(r,46)
+ +'<div style="min-width:0;flex:1"><div class="t">'+r.n+'</div>'
+ +'<div class="mut" style="font-size:10.5px">'+(r.cmp||'')+'</div></div>'
+ +'<a class="ext big" href="'+adLink(r)+'" target="_blank" rel="noopener" '
+ +'title="Open this one in Meta Ads Manager" onclick="event.stopPropagation()">↗</a></div>'
+ +'<div class="s" onclick="openAd(\''+r.id+'\')">'+whyShort(r,D)+'</div>'
+ +'<div class="cstats">'
+ + stat('Profit',(r.gp>=0?'+':'')+EGP(r.gp),'over the window',g)
+ + stat('Spend','E£'+N0(r.sp7),'a week now')
+ + stat('CPP online',EGP(r.cppOn),N0(r.pu)+' purchases')
+ + stat('ROAS online',N2(r.roasOn)+'×','breakeven '+N2(ECON.beOn)+'×',r.roasOn>=ECON.beOn?'#0d8a62':'#b81f45')
+ + stat('CPP in-store',EGP(r.cppOff),N0(r.op)+' purchases')
+ + stat('ROAS in-store',N2(r.roasOff)+'×',Math.round((r.hairUsed||0)*100)+'% click-driven')
+ + stat('ROAS credited',N2(r.roasAll)+'×','online + store credited',r.roasAll>=ECON.beOn?'#0d8a62':'#b81f45')
+ + stat('GA4 saw',r.gTx===null||r.gTx===undefined?'—':N0(r.gTx),
+        r.gNorm===null||r.gNorm===undefined?'no GA4 row':N2(r.gNorm)+'× vs normal gap')
+ +'</div>'+swing(r)+'</div>';}
 /* When CPA and profit disagree it is almost always AOV. Say so on the card rather than
    letting the reader find a 25x ROAS sitting under the word "kill". */
 function aovNote(r,D){
