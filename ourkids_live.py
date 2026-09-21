@@ -106,7 +106,7 @@ GOVT_RATE = 0.04
 # reason to rerun. The payload then held two incompatible margins at once with nothing saying
 # so. Stamping the basis and treating a stale stamp as schema drift forces exactly one crawl
 # and then switches itself off, the same self-disabling pattern the other _thin() checks use.
-GP_BASIS = "govt4"
+GP_BASIS = "govt4b"   # bumped: pull_shop_channel, pull_pos_monthly, cohorts and promo were still raw
 def okgp(r):
     """Gross profit on the basis this business actually pays.
 
@@ -1556,10 +1556,13 @@ def pull_shop_channel(fin_win):
     try:
         g = oexec("sale.order", "read_group",
                   [[["state", "in", ["sale", "done"]], ["team_id.name", "=", "Shopify"], ["date_order", ">=", fin_win[0]]],
-                   ["amount_total", "margin"], ["date_order:day"]], {"lazy": False})
+                   ["amount_total", "amount_untaxed", "margin"], ["date_order:day"]], {"lazy": False})
         for r in g:
             d = _gday(r.get("date_order:day"))
-            if d: out["srev"][d] = round(r["amount_total"]); out["sgp"][d] = round(r["margin"]); out["sord"][d] = r["__count"]
+            # v10.3: okgp, not raw margin. This feed is O.shop.gp -- the gross-profit line of the
+            # Shopify P&L and the numerator of _gpPct().gpOnGross. It was missed by the 4% pass,
+            # so the P&L showed 26.85% while the daily online feed next to it showed 34.08%.
+            if d: out["srev"][d] = round(r["amount_total"]); out["sgp"][d] = round(okgp(r)); out["sord"][d] = r["__count"]
         g = oexec("account.move", "read_group",
                   [[["move_type", "=", "out_refund"], ["state", "=", "posted"], ["team_id.name", "=", "Shopify"], ["invoice_date", ">=", fin_win[0]]],
                    ["amount_total"], ["invoice_date:day"]], {"lazy": False})
@@ -1586,11 +1589,11 @@ def pull_cohorts():
         while True:
             page = oexec("sale.order", "search_read",
                          [[["state", "in", ["sale", "done"]], ["team_id.name", "=", "Shopify"], ["date_order", ">=", "2023-06-01"]]],
-                         {"fields": ["partner_id", "date_order", "amount_total", "margin"], "limit": 10000, "offset": off, "order": "id"})
+                         {"fields": ["partner_id", "date_order", "amount_total", "amount_untaxed", "margin"], "limit": 10000, "offset": off, "order": "id"})
             if not page: break
             for o in page:
                 orders.append((o["partner_id"][0] if o.get("partner_id") else 0, o["date_order"][:10],
-                               float(o.get("amount_total") or 0), float(o.get("margin") or 0)))
+                               float(o.get("amount_total") or 0), float(okgp(o))))
             off += len(page)
             if len(page) < 10000: break
         first = {}
@@ -2454,7 +2457,9 @@ def pull_pos_branches():
             except Exception: continue
             c = out.setdefault(br, {}).setdefault(mon, [0, 0, 0, 0])
             while len(c) < 4: c.append(0)
-            c[0] += round(r["price_total"]); c[1] += round(r["margin"]); c[2] += int(r.get("order_id") or r["__count"])
+            # v10.3: report.pos.order gives price_total (VAT in) against an ex-VAT margin.
+            # This builds O.pos, which is where every branch margin in the dashboard comes from.
+            c[0] += round(r["price_total"]); c[1] += round(gp_inc(r["price_total"], r.get("margin"))); c[2] += int(r.get("order_id") or r["__count"])
             c[3] += round(float(r.get("product_qty") or 0))
         log("pos branches", len(out), "months", len(next(iter(out.values()), {})))
     except Exception as e:
@@ -5818,7 +5823,7 @@ def pull_promos():
                 cell = out["off"].setdefault(c, {}).setdefault(dy, [0, 0.0, 0.0])
                 cell[0] += 1
                 cell[1] += row.get("price_total") or 0
-                cell[2] += row.get("margin") or 0
+                cell[2] += gp_inc(row.get("price_total"), row.get("margin"))
         for c in out["off"]:
             for dy in out["off"][c]:
                 v = out["off"][c][dy]
@@ -5834,7 +5839,7 @@ def pull_promos():
             except Exception: continue
             out["offBase"][dy] = [int(row.get("date_count") or 0),
                                   round(row.get("price_total") or 0),
-                                  round(row.get("margin") or 0)]
+                                  round(gp_inc(row.get("price_total"), row.get("margin")))]
 
         probes = {}
         for label, dom in (("coupon", [["coupon_id", "!=", False]]),
@@ -5922,7 +5927,7 @@ def pull_promos():
                         if not ppid:
                             continue
                         life[ppid] = (float(row.get("price_total") or 0),
-                                      float(row.get("margin") or 0),
+                                      float(gp_inc(row.get("price_total"), row.get("margin"))),
                                       int(row.get("order_id") or row.get("order_id_count") or 0))
                 ltv = {}
                 for c, ps in cpart.items():
