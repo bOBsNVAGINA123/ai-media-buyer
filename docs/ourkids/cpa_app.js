@@ -101,6 +101,25 @@ function units(level){
   const sp=a.sp||0; if(sp>g._sp){g._sp=sp; g.th=a.th||a.im2; g.pl=null; g.topAd=a.n;}
  });
  return Object.values(G);}
+/* Attribution. Per-ad windows come straight off Meta on the same insights request, so this
+   is the ad's OWN 7d-click number, not one account-wide coefficient smeared over everything --
+   which would move every ad by the same factor and change no ranking at all. Incremental is
+   the exception: Meta only exposes it account-wide, so that option is honestly labelled. */
+const ATTR=(O&&O.attr)||{};
+function attrFactor(a,sel){
+ if(sel==='default')return {pu:1,pv:1,op:1,ov:1,src:'meta'};
+ if(sel==='incr'){
+  const m=(ATTR.meta||{}).incr, f=(ATTR.metaOff||{}).incr;
+  return {pu:m||1,pv:m||1,op:f||1,ov:f||1,src:'acct'};}
+ const w=a&&a.aw, sfx=sel==='7d'?'7':sel==='1d'?'1':'V';
+ if(w&&(w['pu'+sfx]!==undefined)){
+  const base=a.pur||0, bv=a.pv||0, bo=a.opur||0, bov=a.ofv||0;
+  const R=(x,b)=>b>0?Math.min(1.3,x/b):1;
+  return {pu:R(w['pu'+sfx],base),pv:R(w['pv'+sfx],bv),op:R(w['op'+sfx],bo),ov:R(w['ov'+sfx],bov),src:'ad'};}
+ const k=sel==='7d'?'7dc':sel==='1d'?'1dc':null;
+ if(!k)return {pu:1,pv:1,op:1,ov:1,src:'none'};
+ return {pu:(ATTR.meta||{})[k]||1,pv:(ATTR.meta||{})[k]||1,
+         op:(ATTR.metaOff||{})[k]||1,ov:(ATTR.metaOff||{})[k]||1,src:'acct'};}
 function dayIdx(winSel){const end=WN-MATURE; // exclusive
  if(winSel==='60')return [0,WN];
  const nd=parseInt(winSel,10); return [Math.max(0,end-nd),end];}
@@ -114,11 +133,14 @@ function build(){
        mins=parseFloat(document.getElementById('mins').value)||0,
        fSt=document.getElementById('st').value,fFmt=document.getElementById('fmt').value,
        fFn=document.getElementById('fn').value;
+ const attrSel=(document.getElementById('attr')||{}).value||'default';
  const level=(document.getElementById('lvl')||{}).value||'ad';
  const UNITS=units(level);
  let rows=UNITS.map(a=>{
   const sp=S(a,'sp',i0,i1); if(sp<=0)return null;
-  const pu=S(a,'pu',i0,i1),op=S(a,'op',i0,i1),pv=S(a,'pv',i0,i1),fv=S(a,'fv',i0,i1);
+  const AF=attrFactor(a,attrSel);
+  const pu=S(a,'pu',i0,i1)*AF.pu, op=S(a,'op',i0,i1)*AF.op,
+        pv=S(a,'pv',i0,i1)*AF.pv, fv=S(a,'fv',i0,i1)*AF.ov;
   const x=ADX[a.id]||[0,0,0,''];
   const k=basis==='on'?pu:basis==='off'?op*hair:pu+op*hair;
   const val=basis==='on'?pv:basis==='off'?fv*hair:pv+fv*hair;
@@ -130,9 +152,11 @@ function build(){
    oc:S(a,'oc',i0,i1),im:S(a,'im',i0,i1),nc:S(a,'nc',i0,i1),
    atc:atcOf(a,i0,i1,true),st:status(a),fmt:fmt(a),fn:funnel(a),lvl:level,kids:a.kids||1,topAd:a.topAd,
    g4:level==='ad'?ga4Of(a.n):null,
-   sp7:S(a,'sp',Math.max(i0,i1-7),i1),k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)
-     :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*hair
-     :S(a,'pu',Math.max(i0,i1-7),i1)+S(a,'op',Math.max(i0,i1-7),i1)*hair),
+   sp7:S(a,'sp',Math.max(i0,i1-7),i1),
+   k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu
+     :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair
+     :S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu+S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair),
+   af:AF,
    a:a};}).filter(Boolean);
  const universe=rows.slice();                       // prior is fit on everything, always
  const pr=fitPrior(universe,r=>r.k);
@@ -165,7 +189,9 @@ function build(){
    // trend: last third vs the two before it, on the shrunk rate. Gated on counts.
    const h=Math.floor((i1-i0)/2);
    const s1=S(r.a,'sp',i0,i0+h),s2=S(r.a,'sp',i0+h,i1);
-   const kk=(f,b,e)=>basis==='on'?S(r.a,'pu',b,e):basis==='off'?S(r.a,'op',b,e)*hair:S(r.a,'pu',b,e)+S(r.a,'op',b,e)*hair;
+   const A2=r.af||{pu:1,op:1};
+   const kk=(f,b,e)=>basis==='on'?S(r.a,'pu',b,e)*A2.pu:basis==='off'?S(r.a,'op',b,e)*A2.op*hair
+                    :S(r.a,'pu',b,e)*A2.pu+S(r.a,'op',b,e)*A2.op*hair;
    const k1=kk(0,i0,i0+h),k2=kk(0,i0+h,i1);
    if(k1>=10&&k2>=10&&s1>0&&s2>0){
      const l1=k1/s1,l2=k2/s2, lr=Math.log(l2/l1), se=Math.sqrt(1/k1+1/k2);
@@ -177,8 +203,8 @@ function build(){
     high. Everything forward-looking (Predict, the simulation) uses THIS one, and the gap
     between the two is reported rather than hidden. */
  const j0=Math.max(i0,i1-14);
- const rec=universe.map(r=>{const sp=S(r.a,'sp',j0,i1);
-   const pu=S(r.a,'pu',j0,i1),op=S(r.a,'op',j0,i1);
+ const rec=universe.map(r=>{const sp=S(r.a,'sp',j0,i1),A=r.af||{pu:1,op:1};
+   const pu=S(r.a,'pu',j0,i1)*A.pu, op=S(r.a,'op',j0,i1)*A.op;
    return {sp,k:basis==='on'?pu:basis==='off'?op*hair:pu+op*hair};});
  const prR=fitPrior(rec.filter(x=>x.sp>0),x=>x.k);
  universe.forEach((r,i)=>{const x=rec[i];
@@ -232,7 +258,7 @@ function build(){
   else if(live&&!loses&&r.cpaHi<scale)r.act='DEPENDS';   // cheap on Meta, invisible to GA4
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else r.act='HOLD';});
- return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,
+ return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,
          win:document.getElementById('win').value};
 }
 
@@ -715,7 +741,24 @@ function vAct(D){
  +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
  +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
  +'</div>'
- +'<div class="banner b"><b>What this is judging.</b> Gross profit minus spend, per '+NOUN[D.level]+', at '
+ +(D.attrSel!=='default'&&D.rows.length&&(D.rows[0].af||{}).src==='none'
+  ? '<div class="banner r"><b>1-day view is not available yet and the numbers below are still the default window.</b> '
+    +'Meta only returns it per ad, and the per-ad pull lands on the next hourly sync. '
+    +'Nothing on this page is currently a 1-day-view number \u2014 pick another option rather than reading these as one.</div>'
+  : '')
++(D.attrSel!=='default'&&(D.rows[0]||{}).af&&(D.rows[0].af.src!=='none')?'<div class="banner">'
+ +'<b>Attribution: '+({'7d':'7-day click','1d':'1-day click','1v':'1-day view only','incr':"Meta's own incremental"}[D.attrSel])+'.</b> '
+ +(D.rows.filter(r=>r.af&&r.af.src==='ad').length
+   ? D.rows.filter(r=>r.af&&r.af.src==='ad').length+' of '+D.rows.length+' '+NOUN[D.level]
+     +'s are using their OWN measured window from Meta, so the ranking can change, not just the level.'
+   : (D.attrSel==='incr'
+      ? 'Meta only publishes incremental at account level, so this is one coefficient applied to every '+NOUN[D.level]
+        +' \u2014 web \u00d7'+N2((ATTR.meta||{}).incr||1)+', in-store \u00d7'+N2((ATTR.metaOff||{}).incr||1)
+        +'. It moves the level, not the ranking.'
+      : 'Per-ad windows have not landed from the pipeline yet, so this is the account-wide coefficient applied to every '
+        +NOUN[D.level]+'. It moves the level, not the ranking \u2014 per-ad arrives on the next sync.'))
+ +'</div>':'')
++'<div class="banner b"><b>What this is judging.</b> Gross profit minus spend, per '+NOUN[D.level]+', at '
  +Math.round(D.hair*100)+'% in-store credit. Nothing that makes money can be told to turn off. '
  +'Cost per purchase still decides which of the profitable ones have room to scale, and every CPA is <b>shrunk</b> with a 90% interval '
  +'so a lucky three-purchase '+NOUN[D.level]+' cannot buy its way onto the raise list. Click anything to open it.</div>'
