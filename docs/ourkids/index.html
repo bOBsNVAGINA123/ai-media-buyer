@@ -363,7 +363,7 @@ function rtBase(m){
  const on={rev:(nr.nrev||0)+(nr.rrev||0),gp:(nr.ngp||0)+(nr.rgp||0),ord:(nr.nord||0)+(nr.rord||0),nc:nr.nord||0};
  const bd={};const st={rev:0,gp:0,ord:0,nc:0,rent:0,sal:0};
  Object.keys(O.pos||{}).forEach(b=>{const p=(O.pos[b]||{})[m],c=(O.bcost[b]||{})[m]||{},n=(O.bnr[b]||{})[m]||{};
-  const d={rev:p?p[0]:0,gp:p?p[1]:0,ord:p?p[2]:0,nc:n.nc||0,rent:c.rent||0,sal:c.sal||0};bd[b]=d;
+  const d={rev:p?p[0]:0,gp:p?gpAdj(p[0],p[1]):0,ord:p?p[2]:0,nc:n.nc||0,rent:c.rent||0,sal:c.sal||0};bd[b]=d;
   st.rev+=d.rev;st.gp+=d.gp;st.ord+=d.ord;st.nc+=d.nc;st.rent+=d.rent;st.sal+=d.sal;});
  if(!RT_AM)RT_AM=adMonthly();
  const ads=(RT_AM[m]||{}).s||0;
@@ -3411,7 +3411,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   // in-store legs (monthly feeds spread per day): store NEW-customer revenue & count (bnr), store GP (pos), offline advertising GL
   const stNR={},stNC={},stGP={},offAdv={};
   Object.keys(O.bnr||{}).forEach(b=>{Object.keys(O.bnr[b]||{}).forEach(m=>{const x=O.bnr[b][m]||{};stNR[m]=(stNR[m]||0)+(x.nrev||0);stNC[m]=(stNC[m]||0)+(x.nc||0);});});
-  Object.keys(O.pos||{}).forEach(b=>{Object.keys(O.pos[b]||{}).forEach(m=>{stGP[m]=(stGP[m]||0)+((O.pos[b][m]||[])[1]||0);});});
+  Object.keys(O.pos||{}).forEach(b=>{Object.keys(O.pos[b]||{}).forEach(m=>{const _v=O.pos[b][m]||[];stGP[m]=(stGP[m]||0)+gpAdj(_v[0]||0,_v[1]||0);});});
   const oa=m=>{if(offAdv[m]==null){try{offAdv[m]=(rtBase(m)||{}).offAdv||0;}catch(e){offAdv[m]=0;}}return offAdv[m];};
   const tF=(O.fin&&O.fin.start)?new Date(O.fin.start+'T00:00:00Z').getTime():null;
   for(let e=i1;e>=6&&wk.length<_bk;e-=7){let rev=0,ncr=0,sp=0,off=0,ncrS=0,gpO=0,gpS=0,nc=0,ncS=0,adv=0;
@@ -4266,7 +4266,7 @@ function ovRange(a,b){
  mo.forEach(([m,d])=>{let f;
   if(cut&&m===cut.slice(0,7)){const el=+lastDone.slice(8,10);f=el?Math.min(1,d/el):0;}
   else f=d/dim(m);
-  names.forEach(n=>{const P=(O.pos[n]||{})[m];if(!P)return;anyM=true;revT+=(P[0]||0)*f;gpT+=(P[1]||0)*f;ordT+=(P[2]||0)*f;});});
+  names.forEach(n=>{const P=(O.pos[n]||{})[m];if(!P)return;anyM=true;revT+=(P[0]||0)*f;gpT+=gpAdj(P[0]||0,P[1]||0)*f;ordT+=(P[2]||0)*f;});});
  if(anyM){bGp=gpT;bOrd=ordT;if(bRev==null)bRev=revT*ovNetFactor();}
  out.bRev=bRev;out.bGp=bGp;out.bOrd=bOrd;out.bApprox=!blCov&&anyM;
  /* ---- ad spend: the panel is exactly one year long, so a year-ago window has nothing to read ---- */
@@ -4628,7 +4628,7 @@ function beOffline(g){
  const done=AM.filter(x=>x!==nowM&&EXP[x]&&Object.keys(POS).some(b=>(POS[b]||{})[x]));
  if(!done.length)return;
  const bm=done[done.length-1],dim=new Date(Date.UTC(+bm.slice(0,4),+bm.slice(5,7),0)).getUTCDate();
- let rev=0,gp=0;Object.keys(POS).forEach(b=>{const v=(POS[b]||{})[bm];if(v){rev+=v[0]||0;gp+=v[1]||0;}});
+ let rev=0,gp=0;Object.keys(POS).forEach(b=>{const v=(POS[b]||{})[bm];if(v){rev+=v[0]||0;gp+=gpAdj(v[0],v[1]);}});
  if(!rev)return;
  const mSt=gp/rev;
  const E=EXP[bm]||{};
@@ -8118,7 +8118,8 @@ function rDC(){
  const offBgp=offB[1]?offB[2]/offB[1]*100:null;
  const _mrange=(k)=>{const POS=O.pos||{},m0=win[0].slice(0,7),m1=win[1].slice(0,7);let t=0;
    Object.keys(POS).forEach(b=>Object.keys(POS[b]||{}).forEach(m=>{
-     if(m<m0||m>m1)return; t+=(POS[b][m]||[])[k]||0;}));return t;};
+     if(m<m0||m>m1)return; const _v=POS[b][m]||[];
+     t+=(k===1)?gpAdj(_v[0]||0,_v[1]||0):(_v[k]||0);}));return t;};
  const offBordM=_mrange(2), offBrevM=_mrange(0), offBgpM=_mrange(1);
  const offBaov=offBordM?offBrevM/offBordM:null;
  const offBgpo=offBordM?offBgpM/offBordM:null;   // GP an ORDINARY receipt leaves, same months
@@ -8261,7 +8262,7 @@ function rDC(){
     e.onOrd+=v[0]||0; e.onRev+=v[1]||0; e.onDisc+=v[2]||0;}));
   Object.keys(PR.off||{}).forEach(c=>Object.keys(PR.off[c]||{}).forEach(d=>{
     const e=cell(d.slice(0,7)), v=PR.off[c][d]||[];
-    e.offOrd+=v[0]||0; e.offRev+=v[1]||0; e.offGp+=v[2]||0;}));
+    e.offOrd+=v[0]||0; e.offRev+=v[1]||0; e.offGp+=gpAdj(v[1]||0,v[2]||0);}));
   const keys=Object.keys(ms).sort();
   if(keys.length){
    monthBlock='<div style="font-size:12px;font-weight:800;color:#0F172A;margin:16px 0 4px">Every month in the feed, each against the one before</div>'
@@ -8558,7 +8559,7 @@ function offAudit(g){
  /* month + year columns come from the monthly POS ledger, which reaches back further than the
     daily series and carries margin the daily series does not */
  const mSum=(ms)=>{let rev=0,gp=0,ord=0,any=false;
-  ms.forEach(m=>names.forEach(n=>{const c=(POS[n]||{})[m];if(c){any=true;rev+=c[0]||0;gp+=c[1]||0;ord+=c[2]||0;}}));
+  ms.forEach(m=>names.forEach(n=>{const c=(POS[n]||{})[m];if(c){any=true;rev+=c[0]||0;gp+=gpAdj(c[0]||0,c[1]||0);ord+=c[2]||0;}}));
   return any?{rev,gp,ord}:null;};
  const curM=(O.today||'').slice(0,7), yr=curM.slice(0,4), mm=+curM.slice(5,7);
  const monthsOf=(y,upto)=>{const o=[];for(let k=1;k<=upto;k++)o.push(y+'-'+String(k).padStart(2,'0'));return o;};
@@ -13326,8 +13327,8 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
               omni:'Meta omni value − online net revenue (Meta’s implied offline)'}[OFFM];
   const STMG=(function(){try{const nm=(O.today||'').slice(0,7);
     const pm2=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(x=>x!==nm).slice(-1)[0];
-    if(!pm2)return 0.24;let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm2];if(v){r2+=v[0]||0;g2+=v[1]||0;}});
-    return r2>0?g2/r2:0.24;}catch(e){return 0.24;}})();
+    if(!pm2)return posMg();let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm2];if(v){r2+=v[0]||0;g2+=gpAdj(v[0],v[1]);}});
+    return r2>0?g2/r2:posMg();}catch(e){return posMg();}})();
   /* A month with no courier postings at all is priced from the trailing settled rate by
      s2(). That is the right call, but it must be visible on the cell, not only in a note. */
   const COSTEST=m=>{const S=S2f();if(!S||!s2h(m))return '';
@@ -13529,7 +13530,7 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
  const V=(_vMons?V0.map(r=>{
    if(!r.mon)return r;
    let rev=0,gp=0,hit=false;
-   Object.keys(r.mon).forEach(m=>{if(m>=_vMons.a&&m<=_vMons.b){rev+=r.mon[m][0]||0;gp+=r.mon[m][1]||0;hit=true;}});
+   Object.keys(r.mon).forEach(m=>{if(m>=_vMons.a&&m<=_vMons.b){rev+=r.mon[m][0]||0;gp+=gpAdj(r.mon[m][0]||0,r.mon[m][1]||0);hit=true;}});
    if(!hit)return null;
    const sc=r.r?rev/r.r:0;                     /* scale the window-less fields by revenue share */
    return Object.assign({},r,{r:rev,g:gp,q:Math.round((r.q||0)*sc),_win:1});
@@ -15987,7 +15988,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-211520';
+const BUILD='20260921-213013';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
