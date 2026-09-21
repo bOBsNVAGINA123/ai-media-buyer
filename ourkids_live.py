@@ -3506,11 +3506,17 @@ def pull_meta_ads(tok):
             for acct in _accts:
                 if acct in _dead: continue
                 allnc = _ALLNC.get(acct) or [MCC_ALLNC]
+                # v9.93: ask for the attribution windows on the SAME request -- `value` stays
+                # the default 7d-click/1d-view total, and each action object additionally
+                # carries 7d_click / 1d_click / 1d_view. That makes the attribution selector
+                # real per-ad numbers instead of one account-wide multiplier applied to
+                # everything, which would rank every ad identically and tell you nothing.
                 p = {"level": "ad", "time_increment": 1, "access_token": tok,
                      "time_range": json.dumps({"since": _cs, "until": _ce}),
                      "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,"
                                "spend,impressions,reach,outbound_clicks,actions,action_values,"
                                "video_play_actions",
+                     "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"]),
                      "limit": 500}
                 url = "%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p))
                 pages = 0
@@ -3554,6 +3560,9 @@ def pull_meta_ads(tok):
                                           "as": (r.get("adset_name") or "")[:60], "asid": r.get("adset_id"),
                                           "cmp": (r.get("campaign_name") or "")[:60], "cid": r.get("campaign_id"),
                                           "acct": ACCT_NAMES.get(acct, acct), "pf": "meta",
+                                          "aw": {k: 0.0 for k in ("pu7", "pv7", "op7", "ov7",
+                                                                  "pu1", "pv1", "op1", "ov1",
+                                                                  "puV", "pvV", "opV", "ovV")},
                                           "d": {k: [0.0] * 60 for k in ("sp", "pv", "fv", "pu", "op", "oc", "im", "rch", "nc", "ncv", "vv", "atc", "vp")}}
                         av = r.get("action_values") or []; ac = r.get("actions") or []
                         D = a["d"]
@@ -3568,6 +3577,10 @@ def pull_meta_ads(tok):
                         D["vv"][i] += _av(ac, ("video_view",))
                         D["atc"][i] += _av(ac, ("omni_add_to_cart",))
                         D["vp"][i] += _av(r.get("video_play_actions"), ("video_view",))
+                        AW = a["aw"]; PX = ("offsite_conversion.fb_pixel_purchase",); OFF = ("offline_conversion.purchase",)
+                        for _sfx, _wk in (("7", "7d_click"), ("1", "1d_click"), ("V", "1d_view")):
+                            AW["pu" + _sfx] += _avw(ac, PX, _wk); AW["pv" + _sfx] += _avw(av, PX, _wk)
+                            AW["op" + _sfx] += _avw(ac, OFF, _wk); AW["ov" + _sfx] += _avw(av, OFF, _wk)
                         ccv = _cc(av); cca = _cc(ac)
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
@@ -3583,6 +3596,7 @@ def pull_meta_ads(tok):
                       "nc": int(sum(D["nc"])), "ncv": round(sum(D["ncv"])), "vv": int(sum(D["vv"])),
                       "atc": int(sum(D["atc"])), "vp": int(sum(D["vp"]))})
             a["d"] = {k: [int(round(x)) for x in v] for k, v in D.items()}
+            a["aw"] = {k: int(round(v)) for k, v in a["aw"].items()}
             ads.append(a)
         # v9.8: this used to be a single global top-120. The big account's ads filled every
         # slot (its smallest still outspent everything on Basic), so the Basic account
@@ -6205,11 +6219,16 @@ def build():
     ii = MEAS["incr_pix"] + MEAS["incr_off"]
     if MEAS["incr_ok"] and ib > 0 and ii > 0:
         ATTR["meta"]["incr"] = round(ii / ib, 3)
-        ATTR["labels"]["incr"] = "Incremental \u2014 Meta ACTUAL (%.0f%% of live)" % (ATTR["meta"]["incr"] * 100)
         if ob > 0:
             ATTR["metaOff"]["incr"] = round(MEAS["incr_off"] / ob, 3)
         if MEAS["base"] > 0:
             ATTR["meta"]["incr"] = round(MEAS["incr_pix"] / MEAS["base"], 3)
+        # v9.93: this label used to be written BEFORE the two overrides above, so it printed
+        # the combined web+store ratio (59%) next to a web coefficient that had since become
+        # 79%. Write it last, and name both legs, because they are nothing like each other.
+        ATTR["labels"]["incr"] = ("Incremental \u2014 Meta ACTUAL (web %.0f%% of live, "
+                                  "in-store %.0f%%)" % (ATTR["meta"]["incr"] * 100,
+                                                        (ATTR.get("metaOff") or {}).get("incr", 0) * 100))
         log("meta INCREMENTAL actual :: web", ATTR["meta"]["incr"],
             ":: in-store", (ATTR.get("metaOff") or {}).get("incr"),
             ":: raw incr", int(ii), "of live", int(ib))
