@@ -187,6 +187,17 @@ function build(){
      :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair
      :S(a,'pu',Math.max(i0,i1-7),i1)*AF.pu+S(a,'op',Math.max(i0,i1-7),i1)*AF.op*hair),
    af:AF,
+   /* short windows. The grid already drops the newest 4 days, so "last 3" here is 4-7 days
+      old and about 90% matured -- still the freshest number worth printing. */
+   sp3:S(a,'sp',Math.max(i0,i1-3),i1),
+   sp3p:S(a,'sp',Math.max(i0,i1-6),Math.max(i0,i1-3)),
+   k3:(basis==='on'?S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu
+     :basis==='off'?S(a,'op',Math.max(i0,i1-3),i1)*AF.op*hair
+     :S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu+S(a,'op',Math.max(i0,i1-3),i1)*AF.op*hair),
+   k3p:(basis==='on'?S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu
+     :basis==='off'?S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*hair
+     :S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu+S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*hair),
+   spark:(a.d&&a.d.sp)?a.d.sp.slice(Math.max(i0,i1-28),i1):[],
    a:a};}).filter(Boolean);
  const universe=rows.slice();                       // prior is fit on everything, always
  const pr=fitPrior(universe,r=>r.k);
@@ -254,6 +265,9 @@ function build(){
    r.gpwLo = (isFinite(r.cpaRHi)?e7*1000/r.cpaRHi:0)*unit - r.sp7;
    r.gpwHi = (isFinite(r.cpaRLo)?e7*1000/r.cpaRLo:0)*unit - r.sp7;
    r.gpwPer= r.sp7>0?r.gpw/r.sp7:0;
+   r.cpa3=r.k3>0?r.sp3/r.k3:Infinity;
+   r.cpa3p=r.k3p>0?r.sp3p/r.k3p:Infinity;
+   r.d3=(isFinite(r.cpa3)&&isFinite(r.cpa3p)&&r.cpa3p>0)?r.cpa3/r.cpa3p-1:null;
    const eW=r.sp/1000, unitW=r.aovK*r.margK;
    r.gpHi=(isFinite(r.cpaLo)?eW*1000/r.cpaLo:0)*unitW - r.sp;   // best case over the window
    r.gpLo=(isFinite(r.cpaHi)?eW*1000/r.cpaHi:0)*unitW - r.sp;});
@@ -280,6 +294,7 @@ function build(){
    else if(live&&r.cpaHi<scale)r.act='SCALE';
    else if(!live&&r.cpaHi<scale&&r.k>=3)r.act='REACTIVATE';
    else if(r.k<3)r.act='THIN';
+   else if(!live)r.act='OFFOK';
    else r.act='HOLD';
    return;}
   const loses=r.gp<0;
@@ -293,6 +308,7 @@ function build(){
   else if(live&&!loses&&r.cpaHi<scale&&r.ga4!=='contradicts')r.act='SCALE';
   else if(live&&!loses&&r.cpaHi<scale)r.act='DEPENDS';   // cheap on Meta, invisible to GA4
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
+  else if(!live)r.act=(r.rob==='depends')?'OFFDEP':(loses?'OFFBAD':'OFFOK');
   else r.act='HOLD';});
  return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,
          win:document.getElementById('win').value};
@@ -343,15 +359,19 @@ function adLink(r){
  const b='https://adsmanager.facebook.com/adsmanager/manage/';
  if(r.lvl==='set')return b+'campaigns/adsets?act='+a+'&selected_adset_ids='+r.id;
  if(r.lvl==='cmp')return b+'campaigns?act='+a+'&selected_campaign_ids='+r.id;
- return r.pl||(b+'ads?act='+a+'&selected_ad_ids='+r.id);}
+ return b+'ads?act='+a+'&selected_ad_ids='+r.id;}
 function thumb(r,sz){sz=sz||40;
  const st='width:'+sz+'px;height:'+sz+'px;border-radius:8px;object-fit:cover;flex:none;background:#eef0f5';
  return r.th?'<img src="'+r.th+'" style="'+st+'" loading="lazy" alt=""/>'
             :'<div style="'+st+';display:flex;align-items:center;justify-content:center;color:#b6bdcc;font-size:15px">▦</div>';}
 function adCell(r){
- return '<a href="#" onclick="openAd(\''+r.id+'\');return false" style="display:flex;gap:9px;align-items:center;text-decoration:none;color:inherit">'
+ const sub=(!r.lvl||r.lvl==='ad')?(r.cmp||''):(r.kids+' ads · top: '+(r.topAd||''));
+ return '<div style="display:flex;gap:9px;align-items:center">'
+  +'<a href="#" onclick="openAd(\''+r.id+'\');return false" style="display:flex;gap:9px;align-items:center;text-decoration:none;color:inherit;min-width:0">'
   +thumb(r)+'<span style="min-width:0"><span class="nm" style="font-weight:700">'+r.n+'</span><br/>'
-  +'<span class="mut" style="font-size:10.5px">'+(r.lvl==='ad'?(r.cmp||''):r.kids+' ads · top: '+(r.topAd||''))+'</span></span></a>';}
+  +'<span class="mut" style="font-size:10.5px">'+sub+'</span></span></a>'
+  +'<a class="ext" href="'+adLink(r)+'" target="_blank" rel="noopener" title="Open in Meta Ads Manager" onclick="event.stopPropagation()">↗</a>'
+  +'</div>';}
 let LASTD=null;
 function openAd(id){
  const r=(LASTD&&LASTD.universe||[]).find(x=>x.id===id); if(!r)return;
@@ -364,8 +384,10 @@ function openAd(id){
  +'<div style="margin-top:8px"><span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span> '
  +'<span class="tg '+(r.st==='act'?'scale':'hold')+'">'+(r.st==='act'?'LIVE':'PAUSED')+'</span> '
  +'<span class="tg hold">'+r.fmt+'</span> <span class="tg hold">'+r.fn+'</span></div>'
- +'<a class="btn" style="margin-top:10px;display:inline-block;text-decoration:none" target="_blank" href="'+adLink(r)+'">'
- +(r.lvl==='ad'&&r.pl?'See the ad':'Open in Ads Manager')+'</a></div></div>'
+ +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+ +'<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="'+adLink(r)+'">Open in Ads Manager</a>'
+ +((!r.lvl||r.lvl==='ad')&&r.pl?'<a class="btn g" style="text-decoration:none" target="_blank" rel="noopener" href="'+r.pl+'">See the creative</a>':'')
+ +'</div></div></div>'
  +'<div class="two" style="margin-top:14px;gap:10px"><table>'
  +row('<b>Profit in window</b>','<span style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+'</span>')
  +row('<b>Profit per week now</b>','<span style="color:'+(r.gpw>=0?'#0d8a62':'#b81f45')+'">'+(r.gpw>=0?'+':'')+EGP(r.gpw)+'</span>  ('+EGP(r.gpwLo)+' to '+EGP(r.gpwHi)+')')
@@ -397,7 +419,8 @@ addEventListener('keydown',e=>{if(e.key==='Escape')closeAd();});
 
 /* ---------- plain-language verdicts ---------- */
 const VERB={KILL:'TURN OFF',CUT:'CUT BUDGET',SCALE:'RAISE 20%',REACTIVATE:'TURN BACK ON',
- HOLD:'LEAVE ALONE',THIN:'TOO NEW',DEPENDS:'CANNOT SAY YET'};
+ HOLD:'LEAVE RUNNING',THIN:'TOO NEW',DEPENDS:'CANNOT SAY YET',
+ OFFOK:'STAYS OFF',OFFBAD:'STAYS OFF \u2014 it lost money',OFFDEP:'STAYS OFF \u2014 undecidable',PAUSED:'PAUSED'};
 function noun(D){return NOUN[D&&D.level||'ad'];}
 function why(r,D){
  const x=Math.round(r.cpa/D.target*100)/100;
@@ -412,6 +435,23 @@ function why(r,D){
  if(r.act==='THIN')return '<b>Leave it running, do not judge it yet.</b> Only '+N1(r.k)+' purchases — at that count the data cannot tell a good ad from a lucky one.';
  return '<b>Leave it alone.</b> At '+EGP(r.cpa)+' it sits between the '+EGP(D.scale)+' scale line and the '+EGP(D.kill)+' kill line, so there is no move the data supports.';}
 
+/* A 28-day spend sparkline per row. Pauses, ramps and the shape of a budget change read
+   instantly here and not at all from a number. Plain inline SVG so it survives sorting. */
+function spark(v,w,h){
+ w=w||96; h=h||22;
+ if(!v||!v.length)return '<span class="mut">\u2014</span>';
+ const mx=Math.max.apply(null,v)||1, n=v.length, dx=w/Math.max(n-1,1);
+ let d='',area='M0,'+h;
+ for(let i=0;i<n;i++){const x=i*dx, y=h-(v[i]/mx)*(h-2)-1;
+  d+=(i?'L':'M')+x.toFixed(1)+','+y.toFixed(1); area+='L'+x.toFixed(1)+','+y.toFixed(1);}
+ area+='L'+w+','+h+'Z';
+ const half=Math.floor(n/2);
+ const a=v.slice(0,half).reduce((x,y)=>x+y,0), b=v.slice(half).reduce((x,y)=>x+y,0);
+ const c=b>a*1.1?'#12b886':(b<a*0.9?'#e23a63':'#9aa3b5');
+ return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'
+  +'<path d="'+area+'" fill="'+c+'" opacity=".13"/>'
+  +'<path d="'+d+'" fill="none" stroke="'+c+'" stroke-width="1.6" stroke-linejoin="round"/></svg>';}
+
 /* ---------- render helpers ---------- */
 const EGP=x=>!isFinite(x)?'\u2014':(x<0?'-':'')+'E\u00a3'+Math.abs(Math.round(x)).toLocaleString();
 const N0=x=>!isFinite(x)?'—':Math.round(x).toLocaleString();
@@ -425,12 +465,16 @@ let SORT={k:'sp',d:-1};
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
 function COLS(D){const H=Math.round(D.hair*100);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','sp','gp','ga4','cppOn','roasOn','cppOff','roasOff','cpa'];
+ const KEEP=['n','act','st','spark','sp','gp','ga4','cpa','cpa3','d3','roasOn','roasOff'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
  ['st','',r=>r.st==='act'?'<span class="g">live</span>':'<span class="mut">paused</span>'],
- ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],
+ ['spark','Last 28d',r=>spark(r.spark)],
+ ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],['sp3','last 3d',r=>EGP(r.sp3)],
+ ['cpa3','CPA last 3d',r=>isFinite(r.cpa3)?EGP(r.cpa3):'<span class="mut">no sale</span>'],
+ ['d3','3d vs prior 3d',r=>r.d3===null?'<span class="mut">\u2014</span>'
+   :(r.d3>0?'<span class="r">+':'<span class="g">')+Math.round(r.d3*100)+'%</span>'],
  ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
  ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
  ['ga4','GA4 check',r=>G4TAG(r)],
@@ -502,7 +546,9 @@ function boot(){
 }
 
 /* ---------- 1. THE GRID ---------- */
-const COL={KILL:'#e23a63',CUT:'#ff8b42',SCALE:'#12b886',REACTIVATE:'#5a5bf0',HOLD:'#9aa3b5',THIN:'#9d6bff',DEPENDS:'#f0b429'};
+const COL={KILL:'#e23a63',CUT:'#ff8b42',SCALE:'#12b886',REACTIVATE:'#5a5bf0',HOLD:'#9aa3b5',
+ THIN:'#9d6bff',DEPENDS:'#f0b429',OFFOK:'#c2c8d6',OFFBAD:'#c2c8d6',OFFDEP:'#c2c8d6',PAUSED:'#c2c8d6'};
+function CM(D){return (document.getElementById('cmode')||{}).value||'gp';}
 function vGrid(D){
  const t=D.tot, aov=t.k>0?t.val/t.k:0;
  const k=kpi('Spend',EGP(t.sp),t.n+' ads, min E£'+N0(parseFloat(document.getElementById('mins').value)))
@@ -513,16 +559,25 @@ function vGrid(D){
  +kpi('CPM',EGP(t.im?1000*t.sp/t.im:0),'CPC E£'+N2(t.oc?t.sp/t.oc:0)+' · CTR '+N2(t.im?100*t.oc/t.im:0)+'%')
  +kpi('Cost / add-to-cart',EGP(t.atc?t.sp/t.atc:0),t.atc?N0(t.atc)+' ATC':'no ATC data')
  +kpi('Click→purchase',N2(t.oc?100*t.pu/t.oc:0)+'%','online pixel only');
- const buckets={};D.rows.forEach(r=>{buckets[r.act]=(buckets[r.act]||0)+1;});
- const sum=Object.keys(COL).filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+x+' '+buckets[x]+'</span>').join(' ');
+ const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
+ const buckets={};D.rows.forEach(r=>{const k=GRP2[r.act]||r.act;buckets[k]=(buckets[k]||0)+1;});
+ const sum=['KILL','CUT','DEPENDS','SCALE','REACTIVATE','HOLD','THIN','PAUSED']
+   .filter(x=>buckets[x]).map(x=>'<span class="tg '+x.toLowerCase().slice(0,5)+'">'+(VERB[x]||x)+' '+buckets[x]+'</span>').join(' ');
  return '<div class="kpis">'+k+'</div>'
- +'<div class="banner b"><b>Colour is the verdict (profit), height is cost per purchase.</b> Right = big spender. Up = expensive. '
- +'<b>Bottom-right: proven cheap, raise it. Top-right: expensive at real money, turn it off.</b> '
- +'Left half is still testing — a cheap CPA there is mostly luck, so every dot is plotted at its <b>shrunk</b> CPA, not its raw one. '
- +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' · <b style="color:#5a5bf0">target</b> '+EGP(D.target)
- +' · <b style="color:#e23a63">kill</b> '+EGP(D.kill)+' · <b style="color:#12b886">scale</b> '+EGP(D.scale)+'.</div>'
- +card('Spend vs cost per purchase — every '+NOUN[D.level],
-   'Bubble size = purchases. Click any bubble to open it. Hit play to walk the window forward a week at a time and watch things drift. '+sum,
+ +'<div class="banner b">'+(CM(D)==='gp'
+ ? '<b>Height is money.</b> Above the black line an ad returns more gross profit than it costs; below it, it does not. '
+   +'Right is a big spender, so the bottom-right corner is where real money is being lost and the top-right is what pays for everything. '
+   +'The fourteen biggest spenders are drawn as their own creative.'
+ : '<b>The original method.</b> Right = big spender, up = expensive. Bottom-right: proven cheap. Top-right: expensive at real money. '
+   +'Left half is still testing, so every dot is its <b>shrunk</b> CPA, not its raw one. '
+   +'Lines: <b style="color:#9aa3b5">blended</b> '+EGP(D.cur)+' \u00b7 <b style="color:#5a5bf0">target</b> '+EGP(D.target)
+   +' \u00b7 <b style="color:#e23a63">kill</b> '+EGP(D.kill)+' \u00b7 <b style="color:#12b886">scale</b> '+EGP(D.scale)+'.')
+ +'</div>'
+ +card(CM(D)==='gp'?'Spend vs profit \u2014 every '+NOUN[D.level]:'Spend vs cost per purchase \u2014 every '+NOUN[D.level],
+   (CM(D)==='gp'
+     ?'Above the black line the '+NOUN[D.level]+' makes money, below it loses. Bubble size = purchases, the biggest spenders show their creative. '
+     :'The original method: height is cost per purchase. Bubble size = purchases. ')
+   +'Click anything to open it, or hit play to walk the window forward a week at a time. '+sum,
    '<div class="tp"><button class="btn" id="play">\u25b6 Play the 8 weeks</button>'
    +'<input type="range" id="scrub" min="0" value="0" step="1"/>'
    +'<span id="scrubL" class="mut"></span></div>'
@@ -542,15 +597,20 @@ function drawScatter(D){
    onClick:(e,els)=>{if(els.length){const d=e.chart.data.datasets[els[0].datasetIndex].data[els[0].index];
      if(d&&d.r)openAd(d.r.id);}},
    onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
-   scales:{x:{type:'logarithmic',title:{display:true,text:'Spend in window (E£, log)'},
-              grid:{color:'#eef0f5'}},
-           y:{title:{display:true,text:'Cost per purchase (E\u00a3)'},
-              min:-SCT.maxY*0.06,max:SCT.maxY*1.04,grid:{color:'#eef0f5'},
-              ticks:{callback:v=>v<0?'':v.toLocaleString()}}},
+   scales:{x:{type:'logarithmic',title:{display:true,text:'Spend in window (E\u00a3, log)'},
+              grid:{color:'#f1f3f8'},border:{display:false}},
+           y:SCT.mode==='gp'
+             ?{title:{display:true,text:'Gross profit per E\u00a31,000 spent'},
+               min:SCT.minY,max:SCT.maxY,grid:{color:c=>c.tick.value===0?'#2b3346':'#f1f3f8',
+               lineWidth:c=>c.tick.value===0?1.6:1},border:{display:false},
+               ticks:{callback:v=>(v>0?'+':'')+Math.round(v)}}
+             :{title:{display:true,text:'Cost per purchase (E\u00a3)'},
+               min:-SCT.maxY*0.06,max:SCT.maxY*1.04,grid:{color:'#f1f3f8'},border:{display:false},
+               ticks:{callback:v=>v<0?'':v.toLocaleString()}}},
    layout:{padding:{right:14,top:6}},
    plugins:{legend:{position:'bottom',labels:{filter:it=>it.text!=='trail'}},
     tooltip:{enabled:false,external:htmlTip}}},
-  plugins:[quadrants(D),refLines(D)]});
+  plugins:SCT.mode==='gp'?[gpBands(D)]:[quadrants(D),refLines(D)]});
  wireScrub(D);
 }
 const SCT={chart:null,frames:1,frame:0,byFrame:[],maxY:0,D:null,timer:null};
@@ -569,22 +629,56 @@ function buildFrames(D){
    const pu=S(r.a,'pu',D.i0,end),op=S(r.a,'op',D.i0,end);
    const k=basis==='on'?pu:basis==='off'?op*hair:pu+op*hair;
    const q=post(D.pr,k,sp);
-   m[r.id]={x:sp,y:q.cpa,k,r};});
+   const pv=S(r.a,'pv',D.i0,end)*(r.af?r.af.pv:1), fv=S(r.a,'fv',D.i0,end)*(r.af?r.af.ov:1);
+   const gp=pv*ECON.onDel + fv*hair*ECON.off - sp;
+   m[r.id]={x:sp,y:q.cpa,g:sp>0?1000*gp/sp:0,k,r};});
   SCT.byFrame.push(m);}
- const ys=[];D.rows.forEach(r=>{if(isFinite(r.cpaHi))ys.push(Math.min(r.cpaHi,D.kill*4));});
- ys.sort((a,b)=>a-b);
- SCT.maxY=Math.max(D.kill*1.25, ys.length?ys[Math.floor(ys.length*0.97)]:D.kill*2);
+ SCT.mode=(document.getElementById('cmode')||{}).value||'gp';
+ if(SCT.mode==='gp'){
+  const g=[];SCT.byFrame[SCT.frames-1]&&Object.values(SCT.byFrame[SCT.frames-1]).forEach(p=>g.push(p.g));
+  g.sort((a,b)=>a-b);
+  const lo=g.length?g[Math.floor(g.length*0.03)]:-500, hi=g.length?g[Math.floor(g.length*0.88)]:1500;
+  SCT.minY=Math.min(-150,lo*1.15); SCT.maxY=Math.max(300,hi*1.25);
+ }else{
+  const ys=[];D.rows.forEach(r=>{if(isFinite(r.cpaHi))ys.push(Math.min(r.cpaHi,D.kill*4));});
+  ys.sort((a,b)=>a-b);
+  SCT.minY=0; SCT.maxY=Math.max(D.kill*1.25, ys.length?ys[Math.floor(ys.length*0.97)]:D.kill*2);
+ }
 }
+const IMGC={};
+function pointImg(r){            // the creative itself as the marker, for the big spenders
+ if(!r.th)return null;
+ let i=IMGC[r.id];
+ if(!i){i=IMGC[r.id]=new Image(); i.src=r.th; i.width=34; i.height=34;
+   i.onload=()=>{if(SCT.chart&&SCT.mode==='gp'){SCT.chart.data.datasets=frameSets(SCT.D,SCT.frame);SCT.chart.update('none');}};}
+ return i.complete&&i.naturalWidth?i:null;}
 function frameSets(D,f){
  const m=SCT.byFrame[f]||{};
  const pts=Object.values(m);
+ const gpMode=SCT.mode==='gp';
  const rad=k=>Math.max(4,Math.min(26,4+Math.sqrt(Math.max(k,0))*1.6));
- const mk=act=>({label:act,
-   data:pts.filter(p=>p.r.act===act).map(p=>({x:p.x,y:Math.min(p.y,SCT.maxY*1.02),r:rad(p.k),ad:p.r,k:p.k,cpa:p.y})),
-   backgroundColor:COL[act]+'cc',borderColor:'#fff',borderWidth:1.5,
-   hoverBackgroundColor:COL[act],hoverBorderWidth:3,hoverBorderColor:COL[act]});
- return Object.keys(COL).map(mk).filter(d=>d.data.length);
+ const big=pts.slice().sort((a,b)=>b.x-a.x).slice(0,14).map(p=>p.r.id);
+ const yOf=p=>gpMode?Math.max(SCT.minY,Math.min(p.g,SCT.maxY)):Math.min(p.y,SCT.maxY*1.02);
+ const GRP={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
+ const keys=['KILL','CUT','DEPENDS','SCALE','REACTIVATE','HOLD','THIN','PAUSED'];
+ const mk=act=>{
+  const d=pts.filter(p=>(GRP[p.r.act]||p.r.act)===act);
+  return {label:act,
+   data:d.map(p=>({x:p.x,y:yOf(p),r:rad(p.k),ad:p.r,k:p.k,cpa:p.y,gp:p.g})),
+   pointStyle:d.map(p=>(big.indexOf(p.r.id)>-1?pointImg(p.r):'circle')||'circle'),
+   backgroundColor:(COL[act]||'#c2c8d6')+'cc',borderColor:'#fff',borderWidth:1.5,
+   hoverBackgroundColor:COL[act]||'#c2c8d6',hoverBorderWidth:3,hoverBorderColor:COL[act]||'#c2c8d6'};};
+ return keys.map(mk).filter(d=>d.data.length);
 }
+function gpBands(D){return {id:'gpb',beforeDatasetsDraw(ch){const{ctx,chartArea:a,scales}=ch;
+ const y0=scales.y.getPixelForValue(0);
+ ctx.save();
+ ctx.fillStyle='rgba(18,184,134,.06)';ctx.fillRect(a.left,a.top,a.right-a.left,Math.max(0,Math.min(y0,a.bottom)-a.top));
+ ctx.fillStyle='rgba(226,58,99,.07)';ctx.fillRect(a.left,Math.max(y0,a.top),a.right-a.left,a.bottom-Math.max(y0,a.top));
+ ctx.font='800 10.5px sans-serif';ctx.textAlign='right';
+ ctx.fillStyle='rgba(13,138,98,.6)';ctx.fillText('MAKES MONEY',a.right-10,a.top+16);
+ ctx.fillStyle='rgba(226,58,99,.6)';ctx.fillText('LOSES MONEY',a.right-10,a.bottom-8);
+ ctx.restore();}};}
 function quadrants(D){return {id:'q',beforeDatasetsDraw(ch){const{ctx,chartArea:a,scales}=ch;
  const ySc=scales.y.getPixelForValue(D.scale), yK=scales.y.getPixelForValue(D.kill);
  const xm=scales.x.getPixelForValue(Math.max(D.tot.sp/Math.max(D.rows.length,1),1));
@@ -620,7 +714,9 @@ function htmlTip(ctx){
   +'<div class="tn">'+r.n+'</div>'
   +'<div class="tg2 '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</div>'
   +'<div class="tl">'+EGP(d.x)+' spent · '+N1(d.k)+' purchases</div>'
-  +'<div class="tl"><b>'+EGP(d.cpa)+'</b> each · '+EGP(r.cpaLo)+'–'+EGP(r.cpaHi)+'</div>'
+  +'<div class="tl"><b>'+EGP(d.cpa)+'</b> each · '+EGP(r.cpaLo)+'\u2013'+EGP(r.cpaHi)+'</div>'
+  +'<div class="tl">profit <b style="color:'+(r.gp>=0?'#5ee0b0':'#ff8fab')+'">'+EGP(r.gp)+'</b>'
+  +(d.gp!==undefined?' \u00b7 '+EGP(d.gp)+' per E\u00a31,000':'')+'</div>'
   +'<div class="tl">online '+N2(r.roasOn)+'× · store '+N2(r.roasOff)+'×</div>'
   +'<div class="tl mut">'+(r.lvl==='ad'?r.cmp:r.kids+' ads')+'</div></div></div>';
  const b=ctx.chart.canvas.getBoundingClientRect();
@@ -739,7 +835,12 @@ function whyShort(r,D){
  if(r.act==='REACTIVATE')return 'Paused, but it made <b>'+EGP(r.gp)+'</b> on '+N1(r.k)+' purchases at '+EGP(r.cpa)
   +' each. <b>Switch '+it+' back on</b> unless it was a one-off promo.'+aovNote(r,D);
  if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases \u2014 the data cannot tell a good one from a lucky one yet. <b>Let it run.</b>';
- return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it alone.</b>'+aovNote(r,D);}
+ if(r.act==='OFFBAD')return 'Already off, and it lost <b>'+EGP(-r.gp)+'</b> while it ran. <b>Leave it off.</b>'+aovNote(r,D);
+ if(r.act==='OFFDEP')return 'Already off. Whether it made money depends entirely on the store-attribution question \u2014 '
+  +EGP(r.gp1)+' at Meta\u2019s numbers, '+EGP(r.gp0)+' on the pixel alone. <b>Leave it off until that is settled.</b>';
+ if(r.act==='OFFOK')return 'Already off. It made <b>'+EGP(r.gp)+'</b> while it ran, but returned '+EGP(1000*r.gpPerK)
+  +' per E\u00a31,000 against the account\u2019s own average, so there is no case for switching it back on ahead of the others.';
+ return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
 const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['Meta claims 3×+','cut'],
  contradicts:['GA4 sees none','kill'],thin:['too few','hold'],nodata:['no GA4 row','hold']};
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">—</span>';
@@ -931,11 +1032,10 @@ function drawPred(D){
 /* ---------- 4. IN-STORE vs ONLINE ---------- */
 function vStore(D){
  const [i0,i1]=[D.i0,D.i1];
- const rows=D.rows.map(r=>({id:r.id,n:r.n,cmp:r.cmp,th:r.th,acct:r.acct,pl:r.pl,act:r.act,
-   sp:r.sp,pu:r.pu,op:r.op,pv:r.pv,fv:r.fv,nc:r.nc,st:r.st,fn:r.fn,fmt:r.fmt,
-   cppOn:r.pu?r.sp/r.pu:Infinity, cppOff:r.op?r.sp/r.op:Infinity,
-   roasOn:r.sp?r.pv/r.sp:0, roasOff:r.sp?r.fv/r.sp:0,
-   aovOn:r.pu?r.pv/r.pu:0, aovOff:r.op?r.fv/r.op:0,
+ /* Carry the WHOLE row through. Cherry-picking fields here is what made every line read
+    "undefined ads . top:" and every GA4 cell a dash -- lvl, kids, topAd and the GA4 join
+    were simply never copied across. */
+ const rows=D.rows.map(r=>Object.assign({},r,{
    mix:(r.pv+r.fv)>0?r.fv/(r.pv+r.fv):0}));
  const T=k=>rows.reduce((s,r)=>s+r[k],0);
  const sp=T('sp'),pu=T('pu'),op=T('op'),pv=T('pv'),fv=T('fv');
@@ -977,6 +1077,7 @@ function vStore(D){
    table(sortRows(rows),[
     ['n','Ad',adCell],['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
     ['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
+    ['spark','Last 28d',r=>spark(r.spark)],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
     ['ga4','GA4 check',r=>G4TAG(r)],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
