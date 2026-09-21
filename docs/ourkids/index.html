@@ -4887,6 +4887,14 @@ function beScen(g){
  let spNow=0;for(let d=Date.parse(ST.s+'T00:00:00Z');d<=Date.parse(ST.e+'T00:00:00Z');d+=864e5){
   const i=Math.round((d-a0)/864e5);if(i>=0&&i<A.n)spNow+=(A.spend||[])[i]||0;}
  spNow=spNow/days||bins[Math.floor(bins.length/2)].sp;
+ /* v11.3 A WINDOW MEAN CAN DESCRIBE NO REAL DAY. Spend on this account ran E£66k/day to
+    13 Sep and E£28k/day after it, so an MTD average of E£53k is a level that never happened.
+    The mean still anchors the ladder (the bands are built from the same window), but the
+    last 7 days are printed beside it so the reader can see when the two disagree. */
+ const spLast7=(function(){let t=0,n=0;const end=Date.parse(ST.e+'T00:00:00Z');
+   for(let d=end-6*864e5;d<=end;d+=864e5){const i=Math.round((d-a0)/864e5);
+    if(i>=0&&i<A.n){t+=(A.spend||[])[i]||0;n++;}}return n?t/n:null;})();
+ const spDrift=(spLast7&&spNow)?Math.abs(spLast7/spNow-1):0;
  const merAt=s=>{if(s<=bins[0].sp)return bins[0].mer;
   if(s>=bins[bins.length-1].sp)return bins[bins.length-1].mer;
   for(let i=1;i<bins.length;i++){const a=bins[i-1],b=bins[i];
@@ -4910,7 +4918,7 @@ function beScen(g){
   b2+='<tr style="'+(hi2?'background:#eafaf1;':(nw?'background:#f4f6ff;':''))+'">'
    +'<td style="'+TD+';text-align:left;font-weight:'+((hi2||nw)?'800':'600')+'">'+M(r.s)+'/day'
      +(nw?' <span style="font-size:9px;color:#5a5bf0">YOU ARE HERE</span>':'')
-     +(hi2?' <span style="font-size:9px;color:#0f6e56">BEST</span>':'')+'</td>'
+     +(hi2?' <span style="font-size:9px;color:'+(best.pf>=0?'#0f6e56':'#8a5a1a')+'">'+(best.pf>=0?'BEST':'LEAST BAD')+'</span>':'')+'</td>'
    +'<td style="'+TD+'">'+r.mer.toFixed(2)+'×</td>'
    +'<td style="'+TD+'">'+M(r.rev)+'</td>'
    +'<td style="'+TD+'">'+M(r.gp)+'</td>'
@@ -4950,6 +4958,8 @@ function beScen(g){
  const tog='<a href="javascript:void(0)" onclick="beScope()" style="color:#5a5bf0;font-weight:800">'
   +(SCOPE==='both'?'☑ branches included':'☐ include the branches')+'</a>';
  const verdict='<b>Scope: '+(SCOPE==='both'?'webstore + the seven shops':'webstore only')+'</b> — '+tog+'. '
+  +(spDrift>0.15?'<div class="ins" style="margin-bottom:8px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>YOU ARE HERE is the average of your date box, and your spend moved inside it.</b> '+M(spNow)+'/day across the window, but '+M(spLast7)+'/day over the last seven days &mdash; '+(spLast7<spNow?'lower':'higher')+' by '+(spDrift*100).toFixed(0)+'%. Read the row nearest '+M(spLast7)+' for where you actually are now.</span></div></div>':'')
+  +'<div class="ins" style="margin-bottom:8px"><div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>Why this card can say &ldquo;loses money&rdquo; while the Daily Profit Engine says it makes money &mdash; and both be right.</b> This one charges <b>'+M(FX)+' a day</b> of overhead: packing, plus the webstore&rsquo;s revenue-weighted share of HQ rent, comms, other OpEx and non-branch payroll, from the posted book for '+(fixedDay.bm||'&mdash;')+'. The Daily Profit Engine charges <b>none of it</b> &mdash; it stops at COGS, ads, delivery and order opex, which is the right stack for &ldquo;is the next pound of spend worth it&rdquo;. The gap between the two cards is exactly that '+M(FX)+' a day, i.e. '+M(FX*30.44)+' a month. Neither is wrong; they answer different questions, and you should not average them.</span></div></div>'
   +'<b>Break-even sales: '+M(beRev)+' a day.</b> That covers today’s '+M(spNow)+' of ads and '+M(FX)
   +' of fixed costs at a '+(mBlend*100).toFixed(1)+'% margin — a MER of '+(beMer?beMer.toFixed(2):'—')
   +'×, against '+be.toFixed(2)+'× for the ads alone. <b>Best level on the measured curve: '+M(best.s)+'/day</b> → '
@@ -16361,7 +16371,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-231606';
+const BUILD='20260921-233940';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
