@@ -51,6 +51,9 @@ function post(pr,k,sp){const e=sp/1000,sh=pr.a+k,rt=pr.b+e;
 /* ---------- data prep ---------- */
 const O=window.O, SEED=window.CPASEED||{};
 const ADX=SEED.adx||{}, TOUCH=(O&&O.touch&&O.touch.last)?O.touch:(SEED.touch||{});
+const G4=((O&&O.ga4ads&&O.ga4ads.ads)||(SEED.ga4ads&&SEED.ga4ads.ads)||{});
+const G4LIVE=!!(O&&O.ga4ads&&O.ga4ads.ads);
+function ga4Of(name){return G4[(name||'').trim().toLowerCase().slice(0,80)]||null;}
 const MADS0=(O.mads||[]).filter(a=>a.pf==='meta');
 /* The pipeline now carries add-to-cart, video plays and status on every ad. Until the
    first run that has them lands, fall back to the snapshot in cpa_seed.js. */
@@ -126,6 +129,7 @@ function build(){
    aovOn:pu?pv/pu:0, aovOff:op?fv/op:0,
    oc:S(a,'oc',i0,i1),im:S(a,'im',i0,i1),nc:S(a,'nc',i0,i1),
    atc:atcOf(a,i0,i1,true),st:status(a),fmt:fmt(a),fn:funnel(a),lvl:level,kids:a.kids||1,topAd:a.topAd,
+   g4:level==='ad'?ga4Of(a.n):null,
    sp7:S(a,'sp',Math.max(i0,i1-7),i1),k7:(basis==='on'?S(a,'pu',Math.max(i0,i1-7),i1)
      :basis==='off'?S(a,'op',Math.max(i0,i1-7),i1)*hair
      :S(a,'pu',Math.max(i0,i1-7),i1)+S(a,'op',Math.max(i0,i1-7),i1)*hair),
@@ -141,6 +145,15 @@ function build(){
    r.gp=r.pv*0.161 + r.fv*hair*0.243 - r.sp;
    /* The same ad at the three defensible in-store credits. If the SIGN moves between them,
       the verdict is an artifact of a constant nobody has verified, not a finding. */
+   /* Second opinion. GA4 counts the same ad from the site's own side, and the two disagree
+      by a median 1.51x with a per-ad range of 0.14x to 6.38x -- so it is read per ad, never
+      applied as a blanket factor. An ad Meta claims purchases for that GA4 never saw is the
+      one case where "scale it" should never be printed. */
+   r.gTx=r.g4?r.g4[1]:null; r.gSess=r.g4?r.g4[0]:null; r.gRev=r.g4?r.g4[2]:null;
+   r.gRatio=(r.gTx!==null&&r.gTx>0)?r.pu/r.gTx:null;
+   r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
+        :(r.gTx>=10&&r.gRatio!==null&&r.gRatio<=2.5)?'confirms'
+        :(r.gRatio!==null&&r.gRatio>3)?'overclaims':'thin');
    r.gp0=r.pv*0.161 - r.sp;                       // store credit 0 -- online only
    r.gp1=r.pv*0.161 + r.fv*0.243 - r.sp;          // store credit 100% -- Meta's own claim
    r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
@@ -215,7 +228,8 @@ function build(){
   if(live&&r.rob==='depends'){r.act='DEPENDS';return;}
   if(live&&loses&&r.gpHi<0)r.act='KILL';
   else if(live&&loses)r.act='CUT';
-  else if(live&&!loses&&r.cpaHi<scale)r.act='SCALE';
+  else if(live&&!loses&&r.cpaHi<scale&&r.ga4!=='contradicts')r.act='SCALE';
+  else if(live&&!loses&&r.cpaHi<scale)r.act='DEPENDS';   // cheap on Meta, invisible to GA4
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else r.act='HOLD';});
  return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,
@@ -226,8 +240,14 @@ function build(){
    The simulation assumes an ad keeps its CPA when you give it 20% more budget.
    That is an assumption, not a measurement, so measure it: every week-on-week
    budget rise of >=20% in the last 60 days, and what CPA did the next week. */
+/* v2. The first version of this compared an ad's CPA before and after a budget rise and
+   booked the whole difference to the rise. It has a control now: ads whose budget barely
+   moved over the same weeks. On this account the raised group came out BETTER than the flat
+   control, so the "scaling costs you CPA" drag I was applying was really just the decay every
+   ad has. It also reports reach, frequency and CPM, because that is what a budget rise
+   actually moves. */
 function budgetHoldTest(basis,hair,level){
- const out=[];
+ const out=[],flat=[],cut=[];
  units(level||'ad').forEach(a=>{
   const sp=a.d.sp||[];
   const kk=(b,e)=>{let t=0;for(let i=b;i<e;i++){const p=(a.d.pu||[])[i]||0,o=(a.d.op||[])[i]||0;
@@ -235,14 +255,23 @@ function budgetHoldTest(basis,hair,level){
   for(let w=0;w+14<=WN-MATURE;w+=7){
    let s1=0,s2=0;for(let i=w;i<w+7;i++)s1+=sp[i]||0;for(let i=w+7;i<w+14;i++)s2+=sp[i]||0;
    if(s1<3000||s2<=0)continue;
-   const g=s2/s1-1; if(g<0.20)continue;
+   const g=s2/s1-1;
    const k1=kk(w,w+7),k2=kk(w+7,w+14);
    if(k1<5||k2<1)continue;
-   out.push({g,c1:s1/k1,c2:s2/k2,r:(s2/k2)/(s1/k1),k1,k2,n:a.n});}});
+   const sum=(k3,b,e)=>{let t=0;for(let i2=b;i2<e;i2++)t+=((a.d[k3]||[])[i2]||0);return t;};
+   const i1=sum('im',w,w+7),i2=sum('im',w+7,w+14),r1=sum('rch',w,w+7),r2=sum('rch',w+7,w+14);
+   const rec={g,c1:s1/k1,c2:s2/k2,r:(s2/k2)/(s1/k1),k1,k2,n:a.n,
+     dR:r1>0?r2/r1-1:0, dF:(i1>0&&r1>0&&r2>0)?(i2/r2)/(i1/r1)-1:0,
+     dM:i1>0&&i2>0?(s2/i2)/(s1/i1)-1:0};
+   if(g>=0.20)out.push(rec); else if(Math.abs(g)<0.10)flat.push(rec); else if(g<=-0.20)cut.push(rec);}});
+ const M2=a2=>{if(!a2.length)return null;const v=a2.map(x=>x.r).sort((x,y)=>x-y);return v[Math.floor(v.length/2)];};
+ const MD=(a2,f)=>{if(!a2.length)return 0;const v=a2.map(f).sort((x,y)=>x-y);return v[Math.floor(v.length/2)];};
  out.sort((x,y)=>x.r-y.r);
- const med=out.length?out[Math.floor(out.length/2)].r:null;
- const worse=out.filter(x=>x.r>1).length;
- return {n:out.length,med,worse,rows:out};}
+ return {n:out.length,med:M2(out),worse:out.filter(x=>x.r>1).length,rows:out,
+   nFlat:flat.length,medFlat:M2(flat),worseFlat:flat.filter(x=>x.r>1).length,
+   nCut:cut.length,medCut:M2(cut),
+   reach:MD(out,x=>x.dR),freq:MD(out,x=>x.dF),cpm:MD(out,x=>x.dM),
+   reachCut:MD(cut,x=>x.dR)};}
 
 /* ---------- ad identity: thumbnail, link, modal ---------- */
 const ACCT_ID={'Ourkids EGP':'336343742536460','Basic':'652528128810469'};
@@ -289,6 +318,9 @@ function openAd(id){
  +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven 4.11)')
  +row('ROAS total, this basis',N2(r.roasAll))
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
+ +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
+   :N0(r.gTx)+' vs Meta\u2019s '+N0(r.pu)+(r.gRatio===null?'':'  \u2014 Meta claims '+N2(r.gRatio)+'\u00d7'))
+ +row('GA4 revenue',r.gRev===null||r.gRev===undefined?'\u2014':EGP(r.gRev)+' vs Meta\u2019s '+EGP(r.pv))
  +row('Add-to-carts',N0(r.atc)+(r.atc?'  at '+EGP(r.cpatc)+' each':''))
  +row('Outbound clicks',N0(r.oc)+'  at E\u00a3'+N2(r.oc?r.sp/r.oc:0)+' each')
  +row('Trend',r.trend===null?'not enough purchases to test':(r.trend>0?'CPA rising '+Math.round(r.trend*100)+'%':'CPA falling '+Math.round(-r.trend*100)+'%')+(r.trendSig?' (significant)':' (not significant)'))
@@ -329,7 +361,7 @@ let SORT={k:'sp',d:-1};
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
 function COLS(D){const H=Math.round(D.hair*100);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','sp','gp','cppOn','roasOn','cppOff','roasOff','cpa'];
+ const KEEP=['n','act','st','sp','gp','ga4','cppOn','roasOn','cppOff','roasOff','cpa'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
@@ -337,6 +369,9 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],
  ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
  ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
+ ['ga4','GA4 check',r=>G4TAG(r)],
+ ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
+ ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">—</span>':N2(r.gRatio)+'×'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
  ['roasOn','ROAS online',r=>(r.roasOn>=6.21?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
@@ -593,7 +628,9 @@ function doCard(r,D){
  +'<div class="s">'+whyShort(r,D)+'</div>'+swing(r)
  +'<div class="m"><b style="color:'+(r.gp>=0?'#0d8a62':'#b81f45')+'">'+(r.gp>=0?'+':'')+EGP(r.gp)+' profit</b>'
  +' &nbsp;·&nbsp; '+EGP(r.sp7)+'/wk &nbsp;·&nbsp; online '+N0(r.pu)+' @ '+EGP(r.cppOn)+' ('+N2(r.roasOn)+'\u00d7)'
- +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'\u00d7)</div></div></div>';}
+ +' &nbsp;·&nbsp; store '+N0(r.op)+' @ '+EGP(r.cppOff)+' ('+N2(r.roasOff)+'\u00d7)'
+ +(r.lvl==='ad'&&r.ga4&&r.ga4!=='nodata'?' &nbsp;·&nbsp; GA4 saw '+N0(r.gTx)+' ('+(r.gRatio===null?'\u2014':N2(r.gRatio)+'\u00d7 Meta')+')':'')
+ +'</div></div></div>';}
 /* When CPA and profit disagree it is almost always AOV. Say so on the card rather than
    letting the reader find a 25x ROAS sitting under the word "kill". */
 function aovNote(r,D){
@@ -604,6 +641,10 @@ function aovNote(r,D){
            :'more, smaller orders, so its CPA flatters it.')+'</span>';}
 function whyShort(r,D){
  const it=r.lvl==='ad'?'it':'the whole '+noun(D);
+ if(r.act==='DEPENDS'&&r.ga4==='contradicts'){
+  return '<b>Meta says this works. GA4 has never seen a single sale from it.</b> Meta claims '+N0(r.pu)
+   +' online purchases; GA4 recorded '+N0(r.gTx)+' transactions on '+N0(r.gSess)+' sessions from this ad name. '
+   +'<b>No raise until that is explained</b> \u2014 it is running at '+EGP(r.sp7)+'/wk.';}
  if(r.act==='DEPENDS'){
   const sh=(r.pv+r.fv)>0?r.fv/(r.pv+r.fv):0;
   return '<b>The answer depends entirely on whether Meta\u2019s store attribution is real.</b> '
@@ -628,6 +669,10 @@ function whyShort(r,D){
   +' each. <b>Switch '+it+' back on</b> unless it was a one-off promo.'+aovNote(r,D);
  if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases \u2014 the data cannot tell a good one from a lucky one yet. <b>Let it run.</b>';
  return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it alone.</b>'+aovNote(r,D);}
+const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['Meta claims 3×+','cut'],
+ contradicts:['GA4 sees none','kill'],thin:['too few','hold'],nodata:['no GA4 row','hold']};
+function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">—</span>';
+ const t=G4LAB[r.ga4]||['?','hold'];return '<span class="tg '+t[1]+'" title="Meta '+N0(r.pu)+' online purchases vs GA4 '+(r.gTx===null?'no data':N0(r.gTx)+' transactions')+'">'+t[0]+'</span>';}
 function sec(title,n,note,body){
  return '<div class="hd"><h2>'+title+'</h2><span class="n">'+n+'</span></div>'
   +(note?'<div class="mut" style="font-size:11.8px;margin:-4px 0 9px;line-height:1.55">'+note+'</div>':'')+body;}
@@ -641,7 +686,7 @@ function vAct(D){
  const dead=D.rows.filter(r=>r.st==='act'&&r.k<1&&r.sp>=(D.tot.val/Math.max(D.tot.k,1))*0.5);
  const grid=list=>list.length?'<div class="do">'+list.map(r=>doCard(r,D)).join('')+'</div>'
    :'<div class="mut" style="font-size:12.5px">Nothing qualifies.</div>';
- const drag=bh.med||1;
+ const drag=bh.med||1, dragF=bh.medFlat||1;
  const depends=D.rows.filter(r=>r.act==='DEPENDS').sort((a,b)=>b.sp7-a.sp7);
  const liveAll=D.rows.filter(r=>r.st==='act');
  const decidable=liveAll.filter(r=>r.rob!=='depends');
@@ -660,7 +705,7 @@ function vAct(D){
  +kpi('Raise 20%',scale.length,'can absorb '+EGP(S.scale.reduce((s,r)=>s+r.sp7*0.2,0))+'/wk','#12b886')
  +kpi('Turn back on',react.length,'paused and proven','#5a5bf0')
  +kpi('CPA now',EGP(S.cpaNow),'current split, same estimator')
- +kpi('CPA after',EGP(S.cpaNew),PC(dl)+' · with the scaling drag '+EGP(S.cpaNew*drag),dl<0?'#12b886':'#e23a63')
+ +kpi('CPA after',EGP(S.cpaNew),PC(dl)+' if the kept ones hold their rate',dl<0?'#12b886':'#e23a63')
  +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
  +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
  +'</div>'
@@ -703,15 +748,32 @@ function vAct(D){
    'Spent more than half an AOV and bought nothing. No estimate needed.',grid(dead)):'')
  +sec('The whole list, with both ROAS','','Sort any column. Online and in-store shown separately — in this window their per-ad costs correlate '+N2(corrOnOff(D.rows))+', so a winner on one is not a winner on the other.',
    table(sortRows(D.rows),COLS(D),'tg'))
- +sec('Does scaling actually hold?',bh.n+' cases measured',
-   'The one assumption behind "raise it 20%". Every week-on-week budget rise of 20%+ in the window, and what CPA did the week after.',
-   '<div class="kpis">'+kpi('Median CPA move',bh.med===null?'—':PC(bh.med-1),'after a 20%+ rise',(drag>1?'#e23a63':'#12b886'))
-   +kpi('Got worse',bh.n?Math.round(100*bh.worse/bh.n)+'%':'—',bh.worse+' of '+bh.n+' cases')
-   +kpi('Applied to the projection',EGP(S.cpaNew*drag),'instead of '+EGP(S.cpaNew))+'</div>'
+ +sec('Does raising budget actually cost you CPA?',bh.n+' raises vs '+bh.nFlat+' flat-budget controls',
+   'Every week-on-week budget rise of 20%+ in the window and what CPA did the week after \u2014 measured against '+NOUN[D.level]
+   +'s whose budget barely moved over the same weeks. Without that control the ordinary week-to-week decay gets booked as a '
+   +'scaling penalty, which is the mistake the first version of this page made.',
+   '<div class="kpis">'
+   +kpi('Raised 20%+',bh.med===null?'\u2014':PC(bh.med-1),'median CPA move, n='+bh.n,(drag>1?'#e23a63':'#12b886'))
+   +kpi('Flat budget (control)',bh.medFlat===null?'\u2014':PC(bh.medFlat-1),'median CPA move, n='+bh.nFlat,(dragF>1?'#e23a63':'#12b886'))
+   +kpi('Cut 20%+',bh.medCut===null?'\u2014':PC(bh.medCut-1),'median CPA move, n='+bh.nCut)
+   +kpi('Reach bought',PC(bh.reach),'by the ones that raised','#12b886')
+   +kpi('Frequency moved',PC(bh.freq),'barely \u2014 the money bought new people')
+   +kpi('CPM moved',PC(bh.cpm),'the auction did not punish it')+'</div>'
+   +'<div class="banner '+(drag<=dragF?'b':'r')+'">'
+   +(drag<=dragF
+     ? '<b>Raising budget did not cost CPA here.</b> A 20%+ rise moved CPA '+PC(drag-1)
+       +'; budgets that sat still over the same weeks moved '+PC(dragF-1)+'. The rise bought '+PC(bh.reach)
+       +' more reach at '+PC(bh.cpm)+' CPM with frequency '+PC(bh.freq)
+       +' \u2014 new people, not more impressions on the same ones. Cutting 20%+ improved CPA '+PC((bh.medCut||1)-1)
+       +' and gave up '+PC(bh.reachCut)+' of reach: that is the actual trade.'
+     : '<b>Raising budget did cost CPA here.</b> Raised '+PC(drag-1)+' against '+PC(dragF-1)
+       +' for the flat control \u2014 treat the raise list as smaller than it looks.')
+   +'</div>'
    +(bh.n?table(bh.rows.slice(0,20).concat(bh.rows.slice(-20)),
      [['n','Ad',r=>'<span class="nm">'+r.n+'</span>'],['g','Budget rise',r=>PC(r.g)],
       ['c1','CPA before',r=>EGP(r.c1)],['c2','CPA after',r=>EGP(r.c2)],
       ['r','Change',r=>(r.r>1?'<span class="r">':'<span class="g">')+PC(r.r-1)+'</span>'],
+      ['dR','Reach',r=>PC(r.dR)],['dF','Frequency',r=>PC(r.dF)],['dM','CPM',r=>PC(r.dM)],
       ['k1','Purch before',r=>N1(r.k1)],['k2','after',r=>N1(r.k2)]]):''));
 }
 function corrOnOff(rows){const a=rows.filter(r=>isFinite(r.cppOn)&&isFinite(r.cppOff));
@@ -828,7 +890,10 @@ function vStore(D){
     ['n','Ad',adCell],['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
     ['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
-    ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
+    ['ga4','GA4 check',r=>G4TAG(r)],
+ ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
+ ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">—</span>':N2(r.gRatio)+'×'],
+ ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
     ['op','Store purch',r=>N0(r.op)],['cppOff','Store CPP',r=>EGP(r.cppOff)],['roasOff','Store ROAS',r=>N2(r.roasOff)],['aovOff','Store AOV',r=>EGP(r.aovOff)],
     ['nc','Store new cust',r=>N0(r.nc)],
     ['mix','Store share',r=>Math.round(r.mix*100)+'%']]));
