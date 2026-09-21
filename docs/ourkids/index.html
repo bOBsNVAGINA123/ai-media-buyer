@@ -9990,7 +9990,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
   +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc.m+' ('+bc.l30.toFixed(2)+'x, nCAC E&pound; '+bc.ncac.toFixed(0)+'). Weakest: '+wc.m+' ('+wc.l30.toFixed(2)+'x, nCAC E&pound; '+wc.ncac.toFixed(0)+'). Pull the media mix that ran in '+bc.m+'.</span></div></div>';}
  pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);applyHeat(g);blendCacCard(g);
  // ALL customers: total GP vs media spend
- const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=(O.shop.gp[i]||0)*1000;SHM[m].net+=((O.shop.rev[i]||0)-(O.shop.ref[i]||0))*1000;}
+ const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SHM[m].net+=((O.shop.rev[i]||0)-(O.shop.ref[i]||0))*1000;}
  const amons=Object.keys(AM2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1&&AM2[m].s>0&&SHM[m]);
  if(amons.length){
   let h5='<div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr><th style="text-align:left">Month</th><th>Shopify GP (actual, ALL customers)</th><th>Media spend</th><th>GP : Spend</th><th>Net rev : Spend (MER)</th></tr>';
@@ -10932,7 +10932,7 @@ function rIns(){if(TAB!=='iq')return;dCh();const g=document.getElementById('g9')
  if(BSs.length){
   const CM2=O.aw[1].slice(0,7);
   const cov=n=>{const ms2=Object.keys(PS[n]||{}).sort().filter(m=>m<CM2).slice(-3);let gp2=0,cost=0;
-   ms2.forEach(m=>{gp2+=PS[n][m][1];const bc=((O.bcost||{})[n]||{})[m]||{};cost+=((bc.sal>0)?bc.sal:((FF.branches.find(b=>b.name===n)||{}).payroll||0))+((bc.rent>0)?bc.rent:0);});
+   ms2.forEach(m=>{gp2+=gpAdj(PS[n][m][0],PS[n][m][1]);const bc=((O.bcost||{})[n]||{})[m]||{};cost+=((bc.sal>0)?bc.sal:((FF.branches.find(b=>b.name===n)||{}).payroll||0))+((bc.rent>0)?bc.rent:0);});
    return cost?gp2/cost:null;};
   const rank=BSs.map(n=>({n,l:BS[n].ltgp||0,c:cov(n),np:cov(n)==null?null:cov(n)-1})).sort((a,b)=>b.l-a.l);
   const top=rank[0],safe=rank.find(x=>x.np==null||x.np>=1)||top;
@@ -10972,10 +10972,10 @@ function SIGX(){
  const AM=Object.keys(MS).sort().filter(m=>m>'2024-11'&&m<CURM);
  const lm=AM[AM.length-1],pm=AM[AM.length-2],iL=AM.length-1;
  if(!lm)return [];
- const rev=(n,m)=>PS[n]&&PS[n][m]?PS[n][m][0]:null, gpf=(n,m)=>PS[n]&&PS[n][m]?PS[n][m][1]:null;
+ const rev=(n,m)=>PS[n]&&PS[n][m]?PS[n][m][0]:null, gpf=(n,m)=>PS[n]&&PS[n][m]?gpAdj(PS[n][m][0],PS[n][m][1]):null;
  const contrib=(n,m)=>{const P=PS[n]&&PS[n][m];if(!P)return null;const bc=(BC[n]||{})[m]||{};
   const FB=(FF.branches||[]).find(b=>b.name===n)||{};
-  return P[1]-((bc.sal>0)?bc.sal:(FB.payroll||0))-((bc.rent>0)?bc.rent:0);};
+  return gpAdj(P[0],P[1])-((bc.sal>0)?bc.sal:(FB.payroll||0))-((bc.rent>0)?bc.rent:0);};
  const avgBefore=(f,n,k)=>{const a=[];for(let j=Math.max(0,iL-k);j<iL;j++){const v=f(n,AM[j]);if(v!=null)a.push(v);}
   return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
  /* company monthly net profit -- the yardstick every finding is measured against */
@@ -11203,8 +11203,9 @@ function vizActions(g){
   const c=PS[n][cur], p=PS[n][prv]; if(!c)return;
   const bc=(BC[n]||{})[cur]||{}, nb=(BNR[n]||{})[cur]||{}, pb=(BNR[n]||{})[prv]||{};
   const rent=bc.rent||0, sal=bc.sal||0;
-  rows.push({b:n,rev:c[0],gp:c[1],rent,sal,contrib:c[1]-rent-sal,
-    gpP:p?p[1]:null,nc:nb.nc||0,ncP:pb.nc||0,
+  const _cg=gpAdj(c[0],c[1]);
+  rows.push({b:n,rev:c[0],gp:_cg,rent,sal,contrib:_cg-rent-sal,
+    gpP:p?gpAdj(p[0],p[1]):null,nc:nb.nc||0,ncP:pb.nc||0,
     rentPct:c[0]?rent/c[0]*100:0, cPct:c[0]?(c[1]-rent-sal)/c[0]*100:0});
  });
  if(!rows.length)return;
@@ -11280,9 +11281,9 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
  const L=allM.filter(m=>m>=ST.pm0&&m<=ST.pm1);
  const Lc=L.filter(m=>m>WARM); // commentary months
  const CURM=O.aw[1].slice(0,7);
- const rev=(n,m)=>PS[n][m]?PS[n][m][0]:null, gp=(n,m)=>PS[n][m]?PS[n][m][1]:null;
+ const rev=(n,m)=>PS[n][m]?PS[n][m][0]:null, gp=(n,m)=>PS[n][m]?gpAdj(PS[n][m][0],PS[n][m][1]):null;
  const contrib=(n,m)=>{const P=PS[n][m];if(!P)return null;const bc=(BC[n]||{})[m]||{};const FXB2=FF.branches.find(b=>b.name===n)||{};
-  return P[1]-((bc.sal>0)?bc.sal:(FXB2.payroll||0))-((bc.rent>0)?bc.rent:0);};
+  return gpAdj(P[0],P[1])-((bc.sal>0)?bc.sal:(FXB2.payroll||0))-((bc.rent>0)?bc.rent:0);};
  // ===== 1 · BRIEFING: what changed =====
  (function(){const rows=[];const FMs=allM.filter(m=>m>WARM&&m<CURM);const Wm=Lc.filter(m=>m<CURM);const Ms=Wm.length>=2?Wm:FMs;
   const lm=Ms.slice(-1)[0],pm2=Ms.slice(-2)[0];
@@ -11431,7 +11432,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    Lf.map(m=>m.slice(2)),sm,M.fmt,{key:'vzmet',sf:M.sf||M.fmt,cmt:cmt});})();
  // ===== 2b · BREAKEVEN RANKED BAR =====
  (function(){const FMs=allM.filter(m=>m>WARM&&m<CURM);const WFull=Lc.filter(m=>m<CURM);const take=(WFull.length?WFull:FMs).slice(-3);if(!take.length)return;
-  const rows=names.map(n=>{let gp2=0,cost=0;take.forEach(m=>{const P=PS[n][m];if(!P)return;gp2+=P[1];const bc=(BC[n]||{})[m]||{};const FXB2=FF.branches.find(b=>b.name===n)||{};cost+=((bc.sal>0)?bc.sal:(FXB2.payroll||0))+((bc.rent>0)?bc.rent:0);});
+  const rows=names.map(n=>{let gp2=0,cost=0;take.forEach(m=>{const P=PS[n][m];if(!P)return;gp2+=gpAdj(P[0],P[1]);const bc=(BC[n]||{})[m]||{};const FXB2=FF.branches.find(b=>b.name===n)||{};cost+=((bc.sal>0)?bc.sal:(FXB2.payroll||0))+((bc.rent>0)?bc.rent:0);});
    return cost?{n,x:gp2/cost,gp:gp2,cost:cost}:null;}).filter(Boolean).sort((a,b)=>b.x-a.x);
   if(!rows.length)return;
   /* v9.7 diverging bar anchored at 1.00x. The old version drew every bar from zero, so a
@@ -11458,7 +11459,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
   const stNC=m=>names.reduce((a,n)=>a+((BNR[n]&&BNR[n][m])?(BNR[n][m].nc||0):0),0);
   const stRR=m=>names.reduce((a,n)=>a+((BNR[n]&&BNR[n][m])?(BNR[n][m].rrev||0):0),0);
   const stRev=m=>names.reduce((a,n)=>a+(PS[n][m]?PS[n][m][0]:0),0);
-  const stGp=m=>names.reduce((a,n)=>a+(PS[n][m]?PS[n][m][1]:0),0);
+  const stGp=m=>names.reduce((a,n)=>a+(PS[n][m]?gpAdj(PS[n][m][0],PS[n][m][1]):0),0);
   const onN=k=>m=>(NR[m]?(NR[m][k]||0):null);
   vzLineCard(g,'odoo','New customers over time &mdash; Retail vs Shopify'+INFO('Retail = people whose first-ever OurKids receipt anywhere was rung at a branch that month (POS crawl). Shopify = first-time Shopify orders that month. A customer counts once, forever.'),
    'First-ever customers per month. * = month still running &mdash; it will always look like a drop until it closes.',lbl,
@@ -11865,7 +11866,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
  (function(){const M2={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M2[m]=M2[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M2[m].r+=O.fin.refund[i]*1000;M2[m].gp+=O.fin.gp[i]*1000;}
   const A3={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A3[m]=(A3[m]||0)+(O.ad.spend[i]||0);}
   const onGp=m=>M2[m]?M2[m].gp*(M2[m].g?1-M2[m].r/M2[m].g:1):0;
-  const rtGp=m=>names.reduce((a,n)=>a+(PS[n][m]?PS[n][m][1]:0),0);
+  const rtGp=m=>names.reduce((a,n)=>a+(PS[n][m]?gpAdj(PS[n][m][0],PS[n][m][1]):0),0);
   const rtRev=m=>names.reduce((a,n)=>a+(PS[n][m]?PS[n][m][0]:0),0);
   const Lg=L.filter(m=>M2[m]||rtRev(m));
   // ---------- GROSS PROFIT OVER TIME (Shopify + retail, stacked) ----------
@@ -12024,7 +12025,7 @@ function brWater(n){const PS=O.pos||{},BC=(O.bcost||{})[n]||{};const {A,names}=p
  const mons2=Object.keys(PS[n]||{}).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
  let rev=0,gp=0,sal=0,rent=0,util=0,mkt=0;
  const FXB={};FF.branches.forEach(b=>FXB[b.name]=b);
- mons2.forEach(m=>{const P=PS[n][m];rev+=P[0];gp+=P[1];
+ mons2.forEach(m=>{const P=PS[n][m];rev+=P[0];gp+=gpAdj(P[0],P[1]);
   sal+=(BC[m]&&BC[m].sal>0)?BC[m].sal:((FXB[n]||{}).payroll||0);
   rent+=(BC[m]&&BC[m].rent>0)?BC[m].rent:0;
   const e=O.exp&&O.exp[m];const tp=names.reduce((a2,x)=>a2+((PS[x]&&PS[x][m])?PS[x][m][0]:0),0);const sh2=tp?P[0]/tp:0;
@@ -12039,7 +12040,7 @@ function coWater(){const {M,A,names}=pnlAgg();const PS=O.pos||{};
  const mons2=Object.keys(O.exp||{}).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
  let onNet=0,onGp=0,ret=0,retGp=0,ads=0;const EXS={};
  mons2.forEach(m=>{if(M[m]){onNet+=M[m].g-M[m].r;onGp+=M[m].gp*(M[m].g?1-M[m].r/M[m].g:1);}
-  names.forEach(n=>{const P=PS[n]&&PS[n][m];if(P){ret+=P[0];retGp+=P[1];}});
+  names.forEach(n=>{const P=PS[n]&&PS[n][m];if(P){ret+=P[0];retGp+=gpAdj(P[0],P[1]);}});
   if(A[m])ads+=A[m].s||0;
   const e=O.exp[m]||{};Object.keys(e).forEach(k=>EXS[k]=(EXS[k]||0)+e[k]);});
  const opxT=Object.values(EXS).reduce((a2,b)=>a2+b,0);
@@ -12060,7 +12061,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
   const bm=Object.keys(PS[names[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];if(!bm)return;
   const rows=names.map(n=>{
    const v=(PS[n]||{})[bm];if(!v)return null;
-   const gp2=v[1]||0;
+   const gp2=gpAdj(v[0]||0,v[1]||0);
    const sal=(((BC[n]||{})[bm]||{}).sal)||((FF.branches.find(b=>b.name===n)||{}).payroll||0);
    const r12=Object.keys(BC[n]||{}).sort().filter(m=>m!==nowM).slice(-12);
    const rent=r12.length?r12.reduce((a,m)=>a+(((BC[n]||{})[m]||{}).rent||0),0)/r12.length:0;
@@ -12196,7 +12197,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
   const win=(n,k)=>{const ms=Object.keys(PS2[n]||{}).sort().filter(m=>m!==partialM);const take=ms.slice(-k);
    if(!take.length)return null;
    const rr=rentRun(n);let gp=0,cost=0;
-   take.forEach(m=>{const P=PS2[n][m];if(!P)return;gp+=P[1];const bc=(BC2[n]||{})[m]||{};
+   take.forEach(m=>{const P=PS2[n][m];if(!P)return;gp+=gpAdj(P[0],P[1]);const bc=(BC2[n]||{})[m]||{};
     cost+=(bc.sal>0?bc.sal:((FF.branches.find(b=>b.name===n)||{}).payroll||0))+(rr?rr.perMonth:0);
     const e=O.exp&&O.exp[m];if(e){const tp=names.reduce((a2,x)=>a2+((PS2[x]&&PS2[x][m])?PS2[x][m][0]:0),0);const sh2=tp&&P?P[0]/tp:0;cost+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;}});
    return cost?{g:gp/cost,n:(gp-cost)/cost,noRent:noRent(n)}:null;};
@@ -13138,7 +13139,7 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   const d=DD[i];if(d===O.partial)continue; // today is partial -- do not judge it
   const ai=Math.round((Date.parse(d)-Date.parse(O.ad.start))/864e5);
   if(ai<0||ai>=O.ad.n)continue;
-  const gRev=(O.shop.rev[i]||0)*1000,ref=(O.shop.ref[i]||0)*1000,gp=(O.shop.gp[i]||0)*1000,ord=O.shop.ord[i]||0;
+  const gRev=(O.shop.rev[i]||0)*1000,ref=(O.shop.ref[i]||0)*1000,gp=gpAdj(gRev,(O.shop.gp[i]||0)*1000),ord=O.shop.ord[i]||0;
   const sp=((O.ad.mspend||[])[ai]||0)+((O.ad.gspend||[])[ai]||0)+((O.ad.tspend||[])[ai]||0);
   if(gRev<=0&&sp<=0)continue;
   const mPct=gRev>0?gp/gRev:0;
@@ -15988,7 +15989,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-213848';
+const BUILD='20260921-214629';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
