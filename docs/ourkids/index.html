@@ -93,7 +93,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <label>COMPARE TO</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select><span id="cmpuse" style="font-size:10.5px;margin-left:8px"></span><span id="cmpst" style="font-size:10.5px;font-weight:700;margin-left:7px"></span>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
 <div class="banner" id="bn"></div><div class="grid" id="g1"></div></div>
-<div id="offC" class="hide"><div class="bar"><span class="hide"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select></span><span class="hide"><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select></span><label style="margin-left:8px" title="Meta only measures in-store revenue for a branch when that branch own custom conversion fires. Off = branches with no measurement show a dash. On = network Meta offline value is spread across branches by revenue share and badged allocated."><input type="checkbox" id="alloc" onchange="setAlloc(this.checked)"/> allocate Meta offline (modelled)</label><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="35.1"/><label>Refund %</label><input id="rf" style="width:60px" value="6.0"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
+<div id="offC" class="hide"><div class="bar"><span class="hide"><label>Window</label><select id="bw" onchange="rOff()"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option></select></span><span class="hide"><label>Attr · Meta</label><select id="am2"></select><label>Google</label><select id="ag2"></select><label>TikTok</label><select id="ax2"></select></span><label style="margin-left:8px" title="Meta only measures in-store revenue for a branch when that branch own custom conversion fires. Off = branches with no measurement show a dash. On = network Meta offline value is spread across branches by revenue share and badged allocated."><input type="checkbox" id="alloc" onchange="setAlloc(this.checked)"/> allocate Meta offline (modelled)</label><label style="margin-left:8px">GP %</label><input id="gp" style="width:60px" value="26.6"/><label>Refund %</label><input id="rf" style="width:60px" value="17.5"/><label>Growth %</label><input id="tgt" style="width:56px" value="10"/><label><input type="checkbox" id="oh" style="width:auto"> load overhead</label><div class="sp"></div><button class="btn g" onclick="resetOff()">Reset</button></div>
 <div class="banner" id="bn2"></div><div class="grid" id="g2"></div></div>
 <div id="plC" class="hide"><div class="banner" id="bn3"></div><div class="grid" id="g3"></div></div>
 <div id="pnC" class="hide"><div class="banner" id="bn4"></div><div class="grid" id="g4"></div></div>
@@ -104,7 +104,7 @@ table.bt th[title],table.bt td[title]{position:relative;cursor:help}table.bt th[
 <div id="iqC" class="hide"><div class="banner" id="bn9"></div><div class="grid" id="g9"></div></div>
 <div id="miC" class="hide"><div class="banner" id="bn10"></div><div class="grid" id="g10"></div></div>
 <div id="aiC" class="hide"><div class="banner" id="bn13"></div><div class="grid" id="g13"></div></div>
-<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="auC" class="hide"><div class="banner" id="bn_au"></div><div class="grid" id="g_au"></div></div><div id="avC" class="hide"><div class="banner" id="bn_av"></div><div class="grid" id="g_av"></div></div><div id="agC" class="hide"><div class="banner" id="bn_ag"></div><div class="grid" id="g_ag"></div></div><div id="aqC" class="hide"><div class="banner" id="bn_aq"></div><div class="grid" id="g_aq"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="mtC" class="hide"><div class="banner" id="bn31"></div><div class="grid" id="g31"></div></div><div id="ggC" class="hide"><div class="banner" id="bn32"></div><div class="grid" id="g32"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="dcC" class="hide"><div class="banner" id="bn_dc"></div><div class="grid" id="g_dc"></div></div><div id="foC" class="hide"><div class="banner" id="bn_fo"></div><div class="grid" id="g_fo"></div></div><div id="tmC" class="hide"><div class="banner" id="bn_tm"></div><div class="grid" id="g_tm"></div></div><div id="bfC" class="hide"><div class="banner" id="bn_bf"></div><div class="grid" id="g_bf"></div></div><div id="cvC" class="hide"><div class="banner" id="bn_cv"></div><div class="grid" id="g_cv"></div></div><div id="hmC" class="hide"><div class="banner" id="bn_hm"></div><div class="grid" id="g_hm"></div></div><div id="mnC" class="hide"><div class="banner" id="bn_mn"></div><div class="grid" id="g_mn"></div></div><div id="beC" class="hide"><div class="banner" id="bn_be"></div><div class="grid" id="g_be"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="mdC" class="hide"><div class="banner" id="bn25"></div><div class="grid" id="g25"></div></div><div id="clC" class="hide"><div class="banner" id="bn30"></div><div class="grid" id="g30"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
+<div id="csC" class="hide"><div class="banner" id="bn14"></div><div class="grid" id="g14"></div></div><div id="vlC" class="hide"><div class="banner" id="bn12"></div><div class="grid" id="g12"></div></div><div id="cpC" class="hide"><div class="banner" id="bn15"></div><div class="grid" id="g15"></div></div><div id="cjC" class="hide"><div class="banner" id="bn16"></div><div class="grid" id="g16"></div></div><div id="bgC" class="hide"><div class="banner" id="bn17"></div><div class="grid" id="g17"></div></div><div id="mbC" class="hide"><div class="banner" id="bn19"></div><div class="grid" id="g19"></div></div><div id="coC" class="hide"><div class="banner" id="bn18"></div><div class="grid" id="g18"></div></div><div id="rtC" class="hide"><div class="banner" id="bn20"></div><div class="grid" id="g20"></div></div><div id="ltC" class="hide"><div class="banner" id="bn21"></div><div class="grid" id="g21"></div></div><div id="trC" class="hide"><div class="banner" id="bn22"></div><div class="grid" id="g22"></div></div><div id="auC" class="hide"><div class="banner" id="bn_au"></div><div class="grid" id="g_au"></div></div><div id="avC" class="hide"><div class="banner" id="bn_av"></div><div class="grid" id="g_av"></div></div><div id="agC" class="hide"><div class="banner" id="bn_ag"></div><div class="grid" id="g_ag"></div></div><div id="aqC" class="hide"><div class="banner" id="bn_aq"></div><div class="grid" id="g_aq"></div></div><div id="tkC" class="hide"><div class="banner" id="bn24"></div><div class="grid" id="g24"></div></div><div id="mtC" class="hide"><div class="banner" id="bn31"></div><div class="grid" id="g31"></div></div><div id="ggC" class="hide"><div class="banner" id="bn32"></div><div class="grid" id="g32"></div></div><div id="abC" class="hide"><div class="banner" id="bn23"></div><div class="grid" id="g23"></div></div><div id="siC" class="hide"><div class="banner" id="bn26"></div><div class="grid" id="g26"></div></div><div id="dcC" class="hide"><div class="banner" id="bn_dc"></div><div class="grid" id="g_dc"></div></div><div id="foC" class="hide"><div class="banner" id="bn_fo"></div><div class="grid" id="g_fo"></div></div><div id="tmC" class="hide"><div class="banner" id="bn_tm"></div><div class="grid" id="g_tm"></div></div><div id="bfC" class="hide"><div class="banner" id="bn_bf"></div><div class="grid" id="g_bf"></div></div><div id="cvC" class="hide"><div class="banner" id="bn_cv"></div><div class="grid" id="g_cv"></div></div><div id="hmC" class="hide"><div class="banner" id="bn_hm"></div><div class="grid" id="g_hm"></div></div><div id="mnC" class="hide"><div class="banner" id="bn_mn"></div><div class="grid" id="g_mn"></div></div><div id="beC" class="hide"><div class="banner" id="bn_be"></div><div class="grid" id="g_be"></div></div><div id="glC" class="hide"><div class="banner" id="bn_gl"></div><div class="grid" id="g_gl"></div></div><div id="whyC" class="hide"><div class="banner" id="bn27"></div><div class="grid" id="g27"></div></div><div id="ceC" class="hide"><div class="banner" id="bn28"></div><div class="grid" id="g28"></div></div><div id="icC" class="hide"><div class="banner" id="bn29"></div><div class="grid" id="g29"></div></div><div id="mdC" class="hide"><div class="banner" id="bn25"></div><div class="grid" id="g25"></div></div><div id="clC" class="hide"><div class="banner" id="bn30"></div><div class="grid" id="g30"></div></div><div id="rmC" class="hide"><div class="banner" id="bn11"></div><div class="grid" id="g11"></div></div>
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
@@ -308,7 +308,13 @@ function rtExpKey(m,sub){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.toLo
 /* Lazy, and off window.O only: the module-level `O` is a `let` that boot() fills later, so
    reading it at parse time gave undefined and silently disabled the bridge. */
 var _GPADJC=null;
-function GPADJ(){if(_GPADJC===null){try{_GPADJC=((window.O||{}).gpBasis)?0:(0.96-1/1.14);}catch(e){_GPADJC=0;}}return _GPADJC;}
+/* v10.8 THE STAMP MUST BE THE EXACT BASIS, NOT MERELY PRESENT.
+   The first corrected crawl stamped "govt4" while pull_shop_channel and pull_pos_monthly were
+   still on raw Odoo margin -- so a truthy-stamp test switched this bridge OFF and every
+   webstore and branch margin in the tool silently fell back to the old basis. Gate on the
+   exact basis the collector must reach: anything earlier keeps the bridge on. */
+var GP_BASIS_OK='govt4b';
+function GPADJ(){if(_GPADJC===null){try{_GPADJC=((window.O||{}).gpBasis===GP_BASIS_OK)?0:(0.96-1/1.14);}catch(e){_GPADJC=0.08280701754385955;}}return _GPADJC;}
 function gpAdj(rev,gp){return (gp||0)+(rev||0)*GPADJ();}   // rev must be VAT-INCLUSIVE
 function gpStale(){return GPADJ()>0;}
 /* v10.3 ONE FALLBACK, NOT NINETEEN. Nineteen call sites each wrapped _gpPct() in their own
@@ -1146,12 +1152,13 @@ const TABGROUPS=[
  ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
- ['P&L',[['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
+ ['P&L',[['gl','Growth Lab'],['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
  ['Traffic & creative',[['cv','CVR doctor'],['mn','Menu map'],['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
  ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
 ];
 const TABQ={
+ gl:'Every lever you actually control, on a slider \u2014 what each is worth per month and per year, and which to pull first.',
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
  why:'What actually moved revenue: more orders, basket size, price per item, discounts.',
  ab:'The specific actions worth taking, ranked by the money riding on each.',
@@ -1513,7 +1520,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
@@ -1521,7 +1528,7 @@ function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['dc','dcC'],['fo','foC'],['cv','cvC'],['hm','hmC'],['mn','mnC'],['be','beC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['gl','glC'],['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['dc','dcC'],['fo','foC'],['cv','cvC'],['hm','hmC'],['mn','mnC'],['be','beC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -3362,6 +3369,273 @@ function rMENU(){if(TAB!=='mn')return;dCh();
  pnlCard(g,'ins','How the page itself gets used',
   '<b>Show more is clicked '+Math.round(MENUSNAP.ui[0][1]/MENUSNAP.menu[0][1])+'× more often than the busiest menu item.</b> That is the collection grid being paged through by hand — every one of those clicks is somebody who did not find it in the menu and is now hunting. The search box is clicked '+MENUSNAP.ui[4][1].toLocaleString()+' times over the same month.',ub);
 }
+/* ===================== v10.8 GROWTH LAB =====================
+   Every lever the business actually controls, on a slider, with its baseline MEASURED from
+   this payload rather than typed in. Two engines, kept apart on purpose:
+
+     RUN-RATE   monthly revenue = sessions x CVR x AOV, cascaded through cancellation,
+                refunds, margin, delivery, ads and overhead. x12 is a run-rate, i.e. "if this
+                month repeated twelve times".
+     COHORT     what one year of acquisition is worth over the customers' life: new customers
+                x AOV x orders-per-year, moved by repeat rate.
+
+   They answer different questions and must never be added together -- the same order would be
+   counted in both. The card says so where it could be misread.
+
+   Nothing here is an assumed elasticity. A slider moves an input; the arithmetic that carries
+   it to revenue is the same arithmetic the P&L uses, and it is printed under each result. */
+var GLS=null;
+function glBase(){
+ if(GLS&&GLS._b)return GLS._b;
+ const A=O.ad,SH=O.shop,F=O.fin;
+ const nowM=(O.today||'').slice(0,7);
+ /* last COMPLETE month with an ad feed, a shop feed and a POS month */
+ const ms=[];for(let i=0;i<A.n;i++){const m=aD(i).slice(0,7);if(ms[ms.length-1]!==m)ms.push(m);}
+ const cand=ms.filter(m=>m!==nowM&&adFull(m));
+ const bm=cand[cand.length-1]||ms[ms.length-2];
+ let spend=0,sess=0,nc=0,rc=0,ncrev=0,rcrev=0;
+ const t0=Date.parse(A.start+'T00:00:00Z');
+ for(let i=0;i<A.n;i++){const d=new Date(t0+i*864e5).toISOString().slice(0,10);
+  if(d.slice(0,7)!==bm)continue;
+  spend+=(A.spend||[])[i]||0;sess+=(A.sessions||[])[i]||0;
+  nc+=(A.newcust||[])[i]||0;rc+=(A.retcust||[])[i]||0;
+  ncrev+=(A.ncrev||[])[i]||0;rcrev+=(A.rcrev||[])[i]||0;}
+ let gross=0,ref=0,ord=0,cxv=0,cxn=0;
+ for(let i=0;i<F.n;i++){const d=DD[i];if(d.slice(0,7)!==bm)continue;
+  gross+=((SH.rev||[])[i]||0)*1000;ref+=((SH.ref||[])[i]||0)*1000;ord+=(SH.ord||[])[i]||0;
+  cxv+=((F.cxsv||[])[i]||0)*1000;cxn+=((F.cxsn||[])[i]||0);}
+ let brRev=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[bm];if(v)brRev+=v[0]||0;});
+ const q=GPQ();
+ const S2=S2f();const si=S2?S2If()[bm]:null;
+ const parcels=(si!=null&&bostaN(bm))?bostaN(bm):null;
+ const courier=(si!=null)?(s2('cost',bm)||0):0;
+ const shipCol=(si!=null)?(s2('col',bm)||0):0;
+ const ovh=(O.exp&&O.exp[bm])?expTot(bm):0;
+ const J=((O.jour||{}).scopes||{});
+ const jn=J.SHOPIFY||J.ONLINE||null;
+ const b={bm:bm,
+  spend:spend, sess:sess, ord:ord, gross:gross, ref:ref, cxv:cxv, cxn:cxn,
+  nc:nc, rc:rc, ncrev:ncrev, rcrev:rcrev,
+  /* v10.8 CVR and AOV are measured on different order sets and must not be multiplied
+     naively. Odoo's order count is CONFIRMED orders; cancelled ones sit beside it in cxsn.
+     Demand orders = confirmed + cancelled, so sessions x CVR gives demand, cancellation
+     removes a share of it, and what is left times AOV reproduces the actual gross sales
+     exactly. The first cut multiplied confirmed orders by AOV and THEN deducted the
+     cancellation rate, charging it twice and understating the month by ~11%. */
+  ordD: ord+cxn,
+  cvr: sess?(ord+cxn)/sess*100:0,
+  aov: ord?gross/ord:0,
+  cx:  (ord+cxn)?cxn/(ord+cxn)*100:0,
+  rf:  gross?ref/gross*100:0,
+  mg:  q.gpOnGross*100,
+  parcels:parcels, perParcel:(parcels&&courier)?courier/parcels:0,
+  ppo:(parcels&&ord)?parcels/ord:1,
+  shipPerOrder: ord?shipCol/ord:0,
+  brRev:brRev, brMg:posMg()*100, ovh:ovh,
+  rep:jn?jn.rep:0, oyr:jn?jn.oyr:0, ltgp:jn?jn.ltgp:0,
+  cac: nc?spend/nc:0};
+ (GLS=GLS||{})._b=b;return b;}
+function glV(k){const b=glBase();GLS=GLS||{};return (GLS[k]!=null)?GLS[k]:b[k];}
+window.glSet=function(k,v){GLS=GLS||{};GLS[k]=parseFloat(v);rGL();};
+window.glReset=function(){const b=glBase();GLS={_b:b};rGL();};
+/* the run-rate cascade, run once on the baseline and once on the slider values */
+function glRun(V){
+ const ordD=V.sess*V.cvr/100;                     /* orders PLACED, cancellations included */
+ const orders=ordD*(1-V.cx/100);                  /* confirmed orders */
+ const demand=ordD*V.aov;                         /* everything placed, at basket value */
+ const grossS=orders*V.aov;                       /* confirmed gross sales */
+ const net=grossS*(1-V.rf/100);                   /* after refunds */
+ const gp=net*V.mg/100;                           /* 4% basis */
+ const courier=orders*V.ppo*V.perParcel;          /* only confirmed orders ship */
+ const shipIn=orders*V.shipPerOrder;
+ const gpDel=gp+shipIn-courier;                   /* delivered GP */
+ const brGP=V.brRev*V.brMg/100;
+ const afterAds=gpDel+brGP-V.spend;
+ const afterAll=afterAds-V.ovh;
+ return {ordD,orders,demand,gross:grossS,net,gp,courier,shipIn,gpDel,brGP,afterAds,afterAll,
+   revTot:net+V.brRev};}
+function rGL(){if(TAB!=='gl')return;dCh();
+ const g=document.getElementById('g_gl');if(!g)return;g.innerHTML='';
+ const b=glBase();
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v>=0?'+':'−')+M(v);
+ document.getElementById('bn_gl').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Every slider starts at what <b>'+b.bm+'</b> actually did &mdash; the last complete month with a full ad feed. Drag one and every number below recomputes through the same arithmetic the P&amp;L uses. <b>This tab does not follow the date box</b>: it is a model of a month, not a report of one.';
+ const KEYS=['sess','cvr','aov','cx','rf','mg','perParcel','ppo','shipPerOrder','spend','brRev','brMg','ovh'];
+ const V={};KEYS.forEach(k=>V[k]=glV(k));
+ const B={};KEYS.forEach(k=>B[k]=b[k]);
+ const now=glRun(B), sc=glRun(V);
+ /* ---------- 1. the headline ---------- */
+ const dM=sc.revTot-now.revTot, dY=dM*12;
+ const dGP=sc.afterAds-now.afterAds, dGPy=dGP*12;
+ const kp=[['Monthly revenue',sc.revTot,null,'cur'],['Annual run-rate',sc.revTot*12,null,'cur'],
+   ['Contribution after ads',sc.afterAds,null,'cur'],['After ads AND overhead',sc.afterAll,null,'cur']];
+ let head='<div class="kpis">'+kH(kp,'gl')+'</div>'
+  +'<div style="margin-top:10px;padding:11px 13px;border-radius:10px;border:1px solid '+(dM>=0?'#bfe3d0':'#f3c9d3')+';background:'+(dM>=0?'#f2fbf6':'#fff5f7')+'">'
+  +'<div style="font-size:12.5px;font-weight:800;color:'+(dM>=0?'#0f6e56':'#a3271a')+'">'
+  +'Against '+b.bm+': '+SG(dM)+' a month &middot; '+SG(dY)+' a year in revenue &middot; '+SG(dGPy)+' a year in contribution after ads</div>'
+  +'<div style="font-size:11px;color:#4a5a70;margin-top:4px;line-height:1.5">Annual figures are a <b>run-rate</b> &mdash; this month twelve times. They are not a forecast: they carry no seasonality, and August on this account is roughly twice an ordinary month.</div></div>';
+ pnlCard(g,'blend','Growth Lab &mdash; what the levers are worth'
+  +INFO('Baseline is '+b.bm+' as it actually happened. Monthly revenue = webstore net revenue + branch till revenue. Contribution after ads = delivered webstore GP + branch GP - all ad spend. After overhead also subtracts the whole posted expense book for that month.'),
+  'Drag any slider below. Everything recomputes live.',head);
+ /* ---------- 2. the sliders ---------- */
+ const SL=[
+  ['ONLINE DEMAND',[
+   ['sess','Sessions per month',0.3,2.5,1,v=>Math.round(v).toLocaleString(),'Shopify sessions in '+b.bm+'. Includes the Singapore datacentre bot traffic, which converts at zero — so a session gain only pays if it is human.'],
+   ['cvr','Conversion rate',0.4,3,0.01,v=>v.toFixed(2)+'%','Orders ÷ sessions, measured. The single highest-leverage number on this page: it multiplies every pound of traffic you already pay for.'],
+   ['aov','Average order value',0.5,2.5,1,v=>'E£'+Math.round(v).toLocaleString(),'Gross sales ÷ confirmed orders. Moves through units-per-basket × price-per-unit — see Why revenue moved for which half is actually moving.']]],
+  ['LEAKS',[
+   ['cx','Cancellation rate',0,3,0.1,v=>v.toFixed(1)+'%','Cancelled value ÷ demand placed. Pure leak: the demand was generated and paid for in ad spend, then walked.'],
+   ['rf','Refund rate',0,2.5,0.1,v=>v.toFixed(1)+'%','Posted credit notes ÷ gross sales. A refunded order loses the sale AND pays the courier twice.'],
+   ['perParcel','Courier cost per parcel',0.5,2,1,v=>'E£'+Math.round(v),'Posted courier bill ÷ parcels Bosta actually moved. This is the rate, not the bill ÷ orders.'],
+   ['ppo','Parcels per order',0.5,1.6,0.01,v=>v.toFixed(2)+'×','Above 1.00 means return legs and re-sends. Every 0.1 here is a tenth of a courier fee on every order.'],
+   ['shipPerOrder','Shipping collected per order',0,3,1,v=>'E£'+Math.round(v),'What customers pay you for delivery, per confirmed order.']]],
+  ['MARGIN & COST',[
+   ['mg','Online gross margin',0.5,1.8,0.1,v=>v.toFixed(1)+'%','On the 4% basis: revenue × 0.96 − cost. Moves with vendor and category mix — the Vendor Capital tab ranks who carries it.'],
+   ['brRev','Branch monthly revenue',0.3,2,1000,v=>'E£'+Math.round(v).toLocaleString(),'The seven tills, VAT-inclusive, in '+b.bm+'.'],
+   ['brMg','Branch gross margin',0.5,1.8,0.1,v=>v.toFixed(1)+'%','Real POS margin on the 4% basis.'],
+   ['spend','Ad spend per month',0,3,1000,v=>'E£'+Math.round(v).toLocaleString(),'Meta + Google + TikTok. Raising it does NOT raise sessions on this slider — move sessions yourself, so the two effects stay separable.'],
+   ['ovh','Monthly overhead',0.5,1.6,1000,v=>'E£'+Math.round(v).toLocaleString(),'The whole posted expense book for '+b.bm+', ad invoices excluded (they are in Ad spend).']]]];
+ let sh='';
+ SL.forEach(sec=>{
+  sh+='<div style="font-size:9.5px;font-weight:800;letter-spacing:.09em;color:#64748b;margin:14px 0 6px">'+sec[0]+'</div>';
+  sec[1].forEach(x=>{
+   const k=x[0],lo=b[k]*x[1],hi=b[k]*x[2],cur=V[k],base=b[k];
+   const d=base?((cur/base-1)*100):0;
+   sh+='<div style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
+    +'<div style="font-size:11.5px;font-weight:700" title="'+String(x[6]).replace(/"/g,'&quot;')+'">'+x[1]
+    +'<div style="font-size:9.5px;font-weight:600;color:#8a93a6">was '+x[5](base)+'</div></div>'
+    +'<input type="range" min="'+lo+'" max="'+(hi||1)+'" step="'+x[4]+'" value="'+cur+'" oninput="glSet(\''+k+'\',this.value)" style="width:100%">'
+    +'<div style="text-align:right"><b style="font-size:13px;font-variant-numeric:tabular-nums">'+x[5](cur)+'</b>'
+    +'<div style="font-size:10px;font-weight:700;color:'+(Math.abs(d)<0.05?'#8a93a6':(d>0?'#0f6e56':'#a3271a'))+'">'+(Math.abs(d)<0.05?'at baseline':(d>0?'+':'')+d.toFixed(1)+'%')+'</div></div>'
+    +'</div>';});});
+ sh+='<div style="margin-top:12px"><button class="btn g" onclick="glReset()">Reset every slider to '+b.bm+'</button></div>';
+ pnlCard(g,'blend','The levers','Each range runs from a real fraction of the measured value to a real multiple of it, so the ends of every slider are reachable numbers rather than round ones.',sh);
+ /* ---------- 3. the cascade, printed ---------- */
+ const TD='padding:5px 9px;border-bottom:1px solid #eef0f5;text-align:right;font-variant-numeric:tabular-nums;font-size:12px';
+ const NM=v=>Math.round(v).toLocaleString();
+ const rowc=(n,a2,b2,note,bold,cnt)=>{const F=cnt?NM:M,S2=cnt?(v=>(v>=0?'+':'−')+NM(Math.abs(v))):SG;
+  return '<tr'+(bold?' style="font-weight:800;background:#f7f8fc"':'')+'><td style="'+TD+';text-align:left">'+n+'</td>'
+  +'<td style="'+TD+'">'+F(a2)+'</td><td style="'+TD+'">'+F(b2)+'</td>'
+  +'<td style="'+TD+';color:'+((b2-a2)>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+S2(b2-a2)+'</td>'
+  +'<td style="'+TD+';text-align:left;font-size:10.5px;color:#8a93a6;white-space:normal">'+note+'</td></tr>';};
+ let ct='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TD+';text-align:left;font-size:9.5px;color:#64748b;text-transform:uppercase">Line</th>'
+  +'<th style="'+TD+';font-size:9.5px;color:#64748b;text-transform:uppercase">'+b.bm+' actual</th>'
+  +'<th style="'+TD+';font-size:9.5px;color:#64748b;text-transform:uppercase">Scenario</th>'
+  +'<th style="'+TD+';font-size:9.5px;color:#64748b;text-transform:uppercase">Change</th>'
+  +'<th style="'+TD+';text-align:left;font-size:9.5px;color:#64748b;text-transform:uppercase">How it is computed</th></tr>'
+  +rowc('Orders placed',now.ordD,sc.ordD,'sessions &times; CVR &mdash; includes the ones later cancelled',0,1)
+  +rowc('Orders confirmed',now.orders,sc.orders,'orders placed &times; (1 &minus; cancellation rate)',0,1)
+  +rowc('Demand placed',now.demand,sc.demand,'orders placed &times; AOV')
+  +rowc('Confirmed gross sales',now.gross,sc.gross,'orders confirmed &times; AOV &mdash; reproduces the actual month exactly')
+  +rowc('Webstore net revenue',now.net,sc.net,'confirmed &times; (1 &minus; refund rate)',1)
+  +rowc('Webstore gross profit',now.gp,sc.gp,'net revenue &times; margin (4% basis)')
+  +rowc('Shipping collected',now.shipIn,sc.shipIn,'orders &times; shipping per order')
+  +rowc('Courier bill',-now.courier,-sc.courier,'orders &times; parcels per order &times; cost per parcel')
+  +rowc('Delivered webstore GP',now.gpDel,sc.gpDel,'GP + shipping collected &minus; courier',1)
+  +rowc('Branch gross profit',now.brGP,sc.brGP,'branch revenue &times; branch margin')
+  +rowc('Ad spend',-V.spend,-V.spend,'as set')
+  +rowc('Contribution after ads',now.afterAds,sc.afterAds,'delivered GP + branch GP &minus; ad spend',1)
+  +rowc('Overhead',-B.ovh,-V.ovh,'posted expense book, ad invoices excluded')
+  +rowc('After ads AND overhead',now.afterAll,sc.afterAll,'the bottom line of the month',1)
+  +'</table></div>';
+ pnlCard(g,'blend','The cascade &mdash; every line, both scenarios','Read left to right: what the month did, what the sliders make it do, and the arithmetic in between. No step is hidden.',ct);
+ /* ---------- 4. WHICH LEVER FIRST: one at a time, same realistic step ---------- */
+ /* Every lever is moved by the SAME relative amount (10% of its own current value, in the
+    direction that helps) with everything else held at baseline. That is the only way the
+    ranking means anything: a list built from whatever each slider happens to be set to
+    ranks the sliders you dragged, not the levers that matter. */
+ const STEP=0.10;
+ const LV=[['cvr','Conversion rate',1],['aov','Average order value',1],['sess','Sessions',1],
+   ['mg','Online gross margin',1],['brRev','Branch revenue',1],['brMg','Branch margin',1],
+   ['cx','Cancellation rate',-1],['rf','Refund rate',-1],['perParcel','Courier per parcel',-1],
+   ['ppo','Parcels per order',-1],['shipPerOrder','Shipping collected per order',1],
+   ['ovh','Overhead',-1]];
+ const rank=LV.map(l=>{const W=Object.assign({},B);
+   W[l[0]]=B[l[0]]*(1+l[2]*STEP);
+   const r=glRun(W);
+   return {k:l[0],n:l[1],dir:l[2],rev:(r.revTot-now.revTot)*12,gp:(r.afterAds-now.afterAds)*12,
+     from:B[l[0]],to:W[l[0]]};})
+  .filter(x=>isFinite(x.gp)).sort((a2,b2)=>b2.gp-a2.gp);
+ const mxg=Math.max.apply(null,rank.map(x=>Math.abs(x.gp)).concat([1]));
+ const fmtL=(k,v)=>{const f={cvr:x=>x.toFixed(2)+'%',cx:x=>x.toFixed(1)+'%',rf:x=>x.toFixed(1)+'%',
+   mg:x=>x.toFixed(1)+'%',brMg:x=>x.toFixed(1)+'%',ppo:x=>x.toFixed(2)+'×',
+   sess:x=>Math.round(x).toLocaleString()+' sessions'}[k];
+   return f?f(v):'E£'+Math.round(v).toLocaleString();};
+ let rk='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TD+';text-align:left;font-size:9.5px;color:#64748b;text-transform:uppercase">Lever</th>'
+  +'<th style="'+TD+';text-align:left;font-size:9.5px;color:#64748b;text-transform:uppercase">A 10% move means</th>'
+  +'<th style="'+TD+';font-size:9.5px;color:#64748b;text-transform:uppercase">Annual revenue</th>'
+  +'<th style="'+TD+';font-size:9.5px;color:#64748b;text-transform:uppercase">Annual contribution</th>'
+  +'<th style="'+TD+';text-align:left;font-size:9.5px;color:#64748b;text-transform:uppercase">Relative weight</th></tr>';
+ rank.forEach((x,i)=>{
+  const w=Math.abs(x.gp)/mxg*100;
+  rk+='<tr><td style="'+TD+';text-align:left;font-weight:800">'+(i+1)+'. '+x.n+'</td>'
+   +'<td style="'+TD+';text-align:left;font-size:11px;color:#5b6478">'+fmtL(x.k,x.from)+' &rarr; <b>'+fmtL(x.k,x.to)+'</b></td>'
+   +'<td style="'+TD+';font-weight:700">'+SG(x.rev)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+SG(x.gp)+'</td>'
+   +'<td style="'+TD+';text-align:left"><div style="background:#eef0f5;border-radius:5px;height:13px;width:100%"><div style="width:'+w.toFixed(1)+'%;background:'+(x.gp>=0?'#12a06e':'#e23a63')+';height:13px;border-radius:5px"></div></div></td></tr>';});
+ rk+='</table></div>';
+ pnlCard(g,'blend','Which lever first &mdash; every one moved 10%, one at a time'
+  +INFO('Each row moves ONE lever by 10% of its own current value, in the helpful direction, with everything else held at the baseline month. Ranked by annual contribution after ads. This is a sensitivity ranking, not a plan: it says where the arithmetic is steepest, not where the effort is cheapest.'),
+  'A 10% move is not equally hard on every row &mdash; that is the judgement this table cannot make for you. What it can say is which 10% is worth the most. '
+  +'<b>Rows that tie are not a bug.</b> Levers that multiply into the same product move it identically: branch revenue and branch margin both scale branch GP; AOV and online margin both scale webstore GP; sessions and conversion rate both scale orders. Where two rows tie, the arithmetic is indifferent and the choice is entirely about which one you can actually move &mdash; on this account sessions are bought and conversion is built, which is why they are worth the same here and nothing like the same in practice.',rk);
+ /* ---------- 5. the plan, as a waterfall ---------- */
+ const moved=KEYS.filter(k=>Math.abs((V[k]||0)-(B[k]||0))>Math.abs(B[k]||1)*0.0005);
+ let wf='';
+ if(!moved.length){
+  wf='<div style="padding:16px;text-align:center;color:#8a93a6;font-size:12px">Nothing is off baseline yet. Drag a slider above and the plan builds itself here &mdash; one bar per lever, in the order you would actually do them.</div>';
+ }else{
+  /* additive attribution: apply the moved levers one at a time, in ranking order, and credit
+     each with the change it causes GIVEN the ones already applied. Order matters when levers
+     multiply, so the order used is printed and the residual is shown rather than smeared. */
+  const order=rank.map(x=>x.k).filter(k=>moved.indexOf(k)>=0).concat(moved.filter(k=>rank.every(x=>x.k!==k)));
+  const W=Object.assign({},B);let prev=now.afterAds*12;const steps=[];
+  order.forEach(k=>{W[k]=V[k];const r=glRun(W);const v=r.afterAds*12;steps.push({k,d:v-prev});prev=v;});
+  const target=sc.afterAds*12, start=now.afterAds*12;
+  const nm={};LV.forEach(l=>nm[l[0]]=l[1]);SL.forEach(s2=>s2[1].forEach(x=>nm[x[0]]=x[1]));
+  const span=Math.max(Math.abs(target-start),1);
+  wf='<div style="font-size:11.5px;color:#4a5a70;line-height:1.55;margin-bottom:10px">From <b>'+M(start)+'</b> of annual contribution after ads at the '+b.bm+' baseline, to <b>'+M(target)+'</b> with your sliders. Each bar is what that one lever adds <b>given the ones above it</b> &mdash; levers multiply, so the order is the ranking order and is printed rather than assumed away.</div>'
+   +'<div style="display:flex;flex-direction:column;gap:5px">'
+   +steps.map(st=>{const w=Math.min(100,Math.abs(st.d)/span*100);
+     return '<div style="display:grid;grid-template-columns:200px 1fr 130px;gap:10px;align-items:center">'
+      +'<div style="font-size:11.5px;font-weight:700">'+(nm[st.k]||st.k)+'</div>'
+      +'<div style="background:#f0f2f7;border-radius:5px;height:15px"><div style="width:'+w.toFixed(1)+'%;background:'+(st.d>=0?'#12a06e':'#e23a63')+';height:15px;border-radius:5px"></div></div>'
+      +'<div style="text-align:right;font-weight:800;font-size:12px;color:'+(st.d>=0?'#0f6e56':'#a3271a')+'">'+SG(st.d)+'</div></div>';}).join('')
+   +'</div>'
+   +'<div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#f7f8fc;border:1px solid #e2e6ef">'
+   +'<div style="font-size:12.5px;font-weight:800">Plan total: '+SG(target-start)+' of annual contribution after ads</div>'
+   +'<div style="font-size:11px;color:#5b6478;margin-top:4px">Revenue effect '+SG(dY)+' a year. '
+   +'Break-even on the scenario margin is '+((sc.net&&sc.gpDel)?(1/(sc.gpDel/sc.net)).toFixed(2):'—')+'× against '+((now.net&&now.gpDel)?(1/(now.gpDel/now.net)).toFixed(2):'—')+'× today.</div></div>';}
+ pnlCard(g,'blend','The plan &mdash; what you changed, in the order you would do it',
+  'Built from the sliders you moved. Nothing here is a recommendation the tool invented; it is your scenario, decomposed.',wf);
+ /* ---------- 6. cohort engine, kept separate ---------- */
+ const rep=glV('rep'), oyr=glV('oyr');
+ const cohNow=b.nc*12*b.aov*b.oyr, cohSc=b.nc*12*V.aov*oyr;
+ let ch='<div style="font-size:11.5px;color:#4a5a70;line-height:1.55;margin-bottom:10px">'
+  +'<b>A different question from everything above.</b> The run-rate asks what this month is worth twelve times. This asks what <b>one year of acquisition</b> is worth over those customers&rsquo; lives. The same order can appear in both, so <b>never add these two numbers together</b>.</div>'
+  +'<div style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
+  +'<div style="font-size:11.5px;font-weight:700">Repeat rate (1st &rarr; 2nd)<div style="font-size:9.5px;font-weight:600;color:#8a93a6">was '+b.rep.toFixed(1)+'%</div></div>'
+  +'<input type="range" min="'+(b.rep*0.5)+'" max="'+(b.rep*2.5)+'" step="0.1" value="'+rep+'" oninput="glSet(\'rep\',this.value)" style="width:100%">'
+  +'<div style="text-align:right"><b style="font-size:13px">'+rep.toFixed(1)+'%</b></div></div>'
+  +'<div style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
+  +'<div style="font-size:11.5px;font-weight:700">Orders per customer / year<div style="font-size:9.5px;font-weight:600;color:#8a93a6">was '+b.oyr.toFixed(2)+'</div></div>'
+  +'<input type="range" min="'+(b.oyr*0.5)+'" max="'+(b.oyr*2.5)+'" step="0.01" value="'+oyr+'" oninput="glSet(\'oyr\',this.value)" style="width:100%">'
+  +'<div style="text-align:right"><b style="font-size:13px">'+oyr.toFixed(2)+'</b></div></div>'
+  +'<table style="width:100%;border-collapse:collapse;margin-top:10px">'
+  +rowc('New customers acquired per year',b.nc*12,b.nc*12,'measured in '+b.bm+', &times; 12',0,1)
+  +rowc('Revenue from one year of acquisition',cohNow,cohSc,'new customers &times; AOV &times; orders per customer per year',1)
+  +rowc('Gross profit on it',cohNow*B.mg/100,cohSc*V.mg/100,'&times; online margin')
+  +rowc('Cost to acquire them',b.cac*b.nc*12,b.cac*b.nc*12,'measured CAC E£'+Math.round(b.cac).toLocaleString()+' &times; new customers')
+  +'</table>'
+  +'<div style="margin-top:10px;font-size:11.5px;color:#4a5a70">LTGP : CAC moves from <b>'+(b.cac?(b.ltgp/b.cac).toFixed(2):'—')+'×</b> to <b>'+(b.cac?((b.ltgp*(oyr/(b.oyr||1))*(V.mg/B.mg))/b.cac).toFixed(2):'—')+'×</b>. '
+  +'Measured lifetime gross profit per customer is E£'+Math.round(b.ltgp).toLocaleString()+' against a CAC of E£'+Math.round(b.cac).toLocaleString()+'. '
+  +'<span style="color:#b8621b">The repeat-rate slider does not feed the revenue line above it</span> &mdash; orders per year is the variable the measured lifetime figures are actually built on, and moving both would count the same behaviour twice.</div>';
+ pnlCard(g,'blend','Cohort engine &mdash; what a year of acquisition is worth'
+  +INFO('New customers and CAC measured in '+b.bm+'. Orders per customer per year and lifetime gross profit come from the Odoo customer crawl over the whole history, not this window.'),
+  'Retention and LTV:CAC live here, deliberately apart from the run-rate model above.',ch);
+}
+
 function rBE(){if(TAB!=='be')return;dCh();const g=document.getElementById('g_be');g.innerHTML='';
  const bn=document.getElementById('bn_be');
  if(bn)bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. What the webstore and the shops each have to SELL before they make money — and the cash number that also refills the shelves. The webstore card follows your date box for today’s spend level; the shop and cash cards read the last complete accounting month, because rent, payroll and purchase orders only exist as monthly postings.';
@@ -9808,7 +10082,7 @@ function yoyChannels(g){
 function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2');g.innerHTML='';try{bCustKPI(g);}catch(e){}try{idCapture(g);}catch(e){}try{yoyChannels(g);}catch(e){}
  try{conclCard(g,'What this says',scopeVerdicts());}catch(e){}
  try{offAudit(g);}catch(e){}try{promoCard(g);}catch(e){}try{offOnChart(g);}catch(e){}try{weekdayCard(g);}catch(e){}setTimeout(()=>{try{secOff(g);}catch(e){}},0);bScore(g);bncYoY(g);bncTs(g);
- const gp=(+document.getElementById('gp').value||35.1)/100,rf=(+document.getElementById('rf').value||6.0)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
+ const gp=(+document.getElementById('gp').value||26.6)/100,rf=(+document.getElementById('rf').value||17.5)/100,tg=(+document.getElementById('tgt').value||0)/100,oh=document.getElementById('oh').checked,cm=gp*(1-rf),ov=offI();
  const live=O.bl&&O.bl.n&&O.bl.b;
  // window = the GLOBAL date filter (the old bw select is gone); indices resolved by DATE, not by tail offset
  const _bw=cmpWr(ST.s,ST.e);const N=Math.max(1,span(ST.s,ST.e));const wf=N/30.44;
@@ -10443,7 +10717,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='au')return (typeof rAU==='function'?rAU():pnlMissing('auC'));if(t==='av')return (typeof rAV==='function'?rAV():pnlMissing('avC'));if(t==='ag')return (typeof rAG==='function'?rAG():pnlMissing('agC'));if(t==='aq')return (typeof rAQ==='function'?rAQ():pnlMissing('aqC'));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -13424,7 +13698,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    ST.pOff?['Attributed in-store revenue','Meta&rsquo;s offline conversion value for the month, taken from the ads API. <b>It is a claim matched from your POS customer file, not a measured lift</b>, and it is deliberately fenced into its own memo block: no revenue, margin, contribution or EBITDA line in blocks 1&ndash;6 contains a pound of it. Regression on this account shows Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled, which is what the 0.217 incremental model prices in.']:null
   ],'<b>Reading order.</b> Block 1 is demand and what walked; block 2 is what was billed and kept; block 3 is product margin; block 4 is what delivery costs; block 5 is media; block 6 is the bottom line. Each block subtracts to its own bold row, and the bold row feeds the next block.');
   const BASISNOTE=gpStale()
-   ?'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>Gross profit on this table is corrected in the page, not yet in the feed.</b> The published payload still carries Odoo&rsquo;s raw <code>margin</code> for this channel, so the page adds the 8.28%-of-revenue adjustment itself. It switches off automatically on the first sync that stamps the new basis &mdash; it cannot be applied twice.</span></div></div>'
+   ?'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>Gross profit on this table is corrected in the page, not yet in the feed.</b> The published payload is stamped <code>'+esc((window.O||{}).gpBasis||'none')+'</code> and this page needs <code>'+GP_BASIS_OK+'</code>, so it adds the 8.28%-of-revenue adjustment itself. It switches off automatically on the first sync that stamps the right basis &mdash; it cannot be applied twice.</span></div></div>'
    :'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#12a06e"></span><span><b>Gross profit on this table is on the 4% basis at source</b> &mdash; the collector rebuilds it as revenue &times; 0.96 &minus; cost. Payload basis: <code>'+esc(O.gpBasis||'')+'</code>.</span></div></div>';
   pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',BASISNOTE+T(SL2,mons)+SHCALC);}
  // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
@@ -15989,7 +16263,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-214629';
+const BUILD='20260921-222425';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
