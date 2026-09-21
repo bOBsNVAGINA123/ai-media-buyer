@@ -95,6 +95,10 @@ tr.cl{cursor:pointer}
  <div><label>Conversion basis</label><br/><select id="basis">
   <option value="on">Online only (pixel)</option><option value="off">In-store only (offline CAPI)</option>
   <option value="bl" selected>Blended (online + in-store)</option></select></div>
+ <div><label>Attribution</label><br/><select id="attr">
+  <option value="default" selected>Default · 7d click + 1d view</option>
+  <option value="7d">7-day click</option><option value="1d">1-day click</option>
+  <option value="1v">1-day view only</option><option value="incr">Incremental (Meta's own)</option></select></div>
  <div><label>In-store credit</label><br/><select id="hair">
   <option value="1">100% — Meta's claim</option><option value="0.214" selected>21.4% — measured incremental</option><option value="0">0% — ignore in-store</option></select></div>
  <div><label>Window</label><br/><select id="win">
