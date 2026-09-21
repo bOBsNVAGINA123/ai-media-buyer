@@ -155,16 +155,45 @@ function attrFactor(a,sel){
  if(!k)return {pu:1,pv:1,op:1,ov:1,src:'none'};
  return {pu:(ATTR.meta||{})[k]||1,pv:(ATTR.meta||{})[k]||1,
          op:(ATTR.metaOff||{})[k]||1,ov:(ATTR.metaOff||{})[k]||1,src:'acct'};}
-function dayIdx(winSel){const end=WN-MATURE; // exclusive
- if(winSel==='60')return [0,WN];
- const nd=parseInt(winSel,10); return [Math.max(0,end-nd),end];}
+/* ---------- date range ----------------------------------------------------------
+   Any range inside the 60 days the pipeline carries, not four canned presets. The two
+   date inputs are the source of truth; the quick-range buttons just set them. MATURE is
+   still honoured by the DEFAULT range, but a deliberate choice to include the immature
+   tail is allowed and labelled rather than blocked. */
+function dIdx(v){return Math.round((new Date(v+'T00:00:00')-new Date(WSTART+'T00:00:00'))/864e5);}
+function iDate(i){const d=new Date(WSTART+'T00:00:00');d.setDate(d.getDate()+i);
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+const PRESETS=[['3d',3],['7d',7],['14d',14],['28d',28],['56d',56],['Max',WN]];
+function setRange(i0,i1){ // i1 exclusive
+ const a=document.getElementById('d0'), b=document.getElementById('d1');
+ if(a)a.value=iDate(Math.max(0,i0)); if(b)b.value=iDate(Math.min(WN-1,i1-1));}
+function pickRange(days){
+ const end=(days>=WN)?WN:WN-MATURE;     // Max deliberately includes the immature tail
+ setRange(Math.max(0,end-days),end); boot();}
+function initDates(){
+ const a=document.getElementById('d0'), b=document.getElementById('d1');
+ if(!a||!b)return;
+ a.min=b.min=iDate(0); a.max=b.max=iDate(WN-1);
+ if(!a.value||!b.value)setRange(Math.max(0,WN-MATURE-56),WN-MATURE);
+ const cur=curRange();
+ document.getElementById('pres').innerHTML=PRESETS.map(function(p){
+   const days=p[1], end=(days>=WN)?WN:WN-MATURE, on=(cur[0]===Math.max(0,end-days)&&cur[1]===end);
+   return '<span class="pz'+(on?' on':'')+'" onclick="pickRange('+days+')">'+p[0]+'</span>';}).join('');}
+function curRange(){
+ const a=document.getElementById('d0'), b=document.getElementById('d1');
+ if(!a||!b||!a.value||!b.value)return [Math.max(0,WN-MATURE-56),WN-MATURE];
+ let i0=Math.max(0,Math.min(WN-1,dIdx(a.value)));
+ let i1=Math.max(0,Math.min(WN-1,dIdx(b.value)))+1;
+ if(i1<=i0)i1=i0+1;
+ return [i0,i1];}
+function dayIdx(){return curRange();}
 const S=(a,k,i0,i1)=>{const v=(a.d&&a.d[k])||[];let t=0;for(let i=i0;i<i1;i++)t+=v[i]||0;return t;};
 
 function build(){
  const basis=document.getElementById('basis').value,
        hairSel=document.getElementById('hair').value,
        hair=(hairSel==='ad')?null:parseFloat(hairSel),
-       [i0,i1]=dayIdx(document.getElementById('win').value),
+       [i0,i1]=dayIdx(),
        tgtPct=parseFloat(document.getElementById('tgt').value),
        mins=parseFloat(document.getElementById('mins').value)||0,
        fSt=document.getElementById('st').value,fFmt=document.getElementById('fmt').value,
@@ -384,7 +413,7 @@ function build(){
  CURG=cur; PREF=f.length;
  f=applyLabel(f);
  return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,hairSel,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,anomSel,dropped,
-         win:document.getElementById('win').value};
+         win:(i1-i0)+'d'};
 }
 
 /* ---------- the falsifying test the whole "scale it 20%" step rests on ----------
@@ -660,11 +689,17 @@ function boot(){
  document.querySelectorAll('.bar select, .bar input').forEach(e=>{
    e.onchange=()=>boot(); e.oninput=()=>{clearTimeout(e._t); e._t=setTimeout(boot,250);};});
  GCAP=ga4Capture();
+ initDates();
  const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
- document.getElementById('sub').textContent=
-  st0.toISOString().slice(0,10)+' → '+end.toISOString().slice(0,10)+' · '+D.rows.length+' Meta ads · synced '+(O.lastSync||'');
+ const imm=D.i1>WN-MATURE?(D.i1-(WN-MATURE)):0;
+ document.getElementById('sub').innerHTML=
+  (imm?'<span style="color:#b45309;font-weight:700">Includes '+imm+' day'+(imm>1?'s':'')
+    +' too fresh to judge \u2014 conversions are still landing.</span> &nbsp;':'')+
+ 
+  st0.toISOString().slice(0,10)+' \u2192 '+end.toISOString().slice(0,10)+' \u00b7 '+(D.i1-D.i0)+' days \u00b7 '
+  +D.rows.length+' Meta ads \u00b7 synced '+(O.lastSync||'');
  const uAll=D.universe.filter(r=>r.sp>=(parseFloat(document.getElementById('mins').value)||0));
  const nOff=uAll.filter(r=>r.act==='KILL').length, nUp=uAll.filter(r=>r.act==='SCALE').length,
        nDep=uAll.filter(r=>r.act==='DEPENDS').length;
