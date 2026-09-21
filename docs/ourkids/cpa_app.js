@@ -1014,6 +1014,18 @@ function vAct(D){
  const dead=D.rows.filter(r=>r.st==='act'&&r.k<1&&r.sp>=(D.tot.val/Math.max(D.tot.k,1))*0.5);
  const grid=list=>list.length?'<div class="do">'+list.map(r=>doCard(r,D)).join('')+'</div>'
    :'<div class="mut" style="font-size:12.5px">Nothing qualifies.</div>';
+ /* A filter click means "show me those ads" -- so show THEM, first, and nothing else
+    above them. The tile wall and the projection are about the whole account; rendering
+    them on top of a one-ad selection is how "show them" managed to show everything BUT
+    the ad. */
+ if(LBLSEL){
+  const one=D.rows.length===1;
+  return '<div class="hd"><h2>'+(one?'Here it is':'Here they are')+'</h2>'
+   +'<span class="n">'+D.rows.length+' '+NOUN[D.level]+(one?'':'s')+', sorted by spend</span></div>'
+   +grid(D.rows.slice().sort((a,b)=>b.sp-a.sp).slice(0,40))
+   +(D.rows.length?sec('The numbers','','Click a column head to sort. Click a row for the full breakdown.',
+      table(sortRows(D.rows),COLS(D),'tg')):'');
+ }
  const drag=bh.med||1, dragF=bh.medFlat||1;
  const depends=D.rows.filter(r=>r.act==='DEPENDS').sort((a,b)=>b.sp7-a.sp7);
  const liveAll=D.rows.filter(r=>r.st==='act');
