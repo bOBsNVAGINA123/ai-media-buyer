@@ -85,6 +85,10 @@ const G4=((O&&O.ga4ads&&O.ga4ads.ads)||(SEED.ga4ads&&SEED.ga4ads.ads)||{});
 const G4LIVE=!!(O&&O.ga4ads&&O.ga4ads.ads);
 let GCAP=null;
 function ga4Of(name){return G4[(name||'').trim().toLowerCase().slice(0,80)]||null;}
+const NAMECLAIM=(function(){var m={};(window.O&&O.mads||[]).forEach(function(a){
+ if(a.pf!=='meta')return; var k=(a.n||'').trim().toLowerCase().slice(0,80);
+ m[k]=(m[k]||0)+(a.pur||0);});return m;})();
+function claimOf(a){return NAMECLAIM[(a.n||'').trim().toLowerCase().slice(0,80)]||a.pur||0;}
 const MADS0=(O.mads||[]).filter(a=>a.pf==='meta');
 /* The pipeline now carries add-to-cart, video plays and status on every ad. Until the
    first run that has them lands, fall back to the snapshot in cpa_seed.js. */
@@ -208,6 +212,14 @@ function build(){
      :basis==='off'?S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*H
      :S(a,'pu',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.pu+S(a,'op',Math.max(i0,i1-6),Math.max(i0,i1-3))*AF.op*H),
    spark:(a.d&&a.d.sp)?a.d.sp.slice(Math.max(i0,i1-28),i1):[],
+   /* the last 14 days it ACTUALLY ran inside the window -- for a paused ad this is the
+      end of its life, which is what decides whether it deserves to come back */
+   tail:(function(){var ds=(a.d&&a.d.sp)||[],ix=[],x;
+     for(x=i0;x<i1;x++)if((ds[x]||0)>0)ix.push(x);
+     ix=ix.slice(-14);
+     var tsp=0,tpv=0,tfv=0;
+     ix.forEach(function(x2){tsp+=ds[x2]||0;tpv+=(a.d.pv||[])[x2]||0;tfv+=(a.d.fv||[])[x2]||0;});
+     return {sp:tsp,gp:tpv*AF.pv*ECON.onDel+tfv*AF.ov*H*ECON.off-tsp,days:ix.length};})(),
    a:a};}).filter(Boolean);
  const universe=rows.slice();                       // prior is fit on everything, always
  const pr=fitPrior(universe,r=>r.k);
@@ -231,7 +243,11 @@ function build(){
    r.vShare=(AWx&&base>0)?Math.max(0,(base-AWx.pu7)/base):null;
    r.vRaw=AWx?AWx.puV:null;
    r.gTx=r.g4?r.g4[1]:null; r.gSess=r.g4?r.g4[0]:null; r.gRev=r.g4?r.g4[2]:null;
-   r.gRatio=(r.gTx!==null&&r.gTx>0)?r.pu/r.gTx:null;
+   /* GA4's count covers ITS whole 60d window. Comparing it against a claim re-cut to the
+      page's window produced "GA4 saw 20 of 18". Both sides now use the full-window,
+      default-attribution claim (a.pur) -- the only apples-to-apples pair available. */
+   r.puClaim=r.a?claimOf(r.a):r.pu;
+   r.gRatio=(r.gTx!==null&&r.gTx>0)?r.puClaim/r.gTx:null;
    /* Judged against the MEASURED capture rate, not against 1.0. GA4 catches ~64% of orders,
       so an ad whose Meta:GA4 ratio is ~1.56 is in perfect agreement -- calling that
       "overclaiming" (as this did) was grading every ad against a baseline that never existed. */
@@ -246,7 +262,7 @@ function build(){
    const A=[];
    const dsp=(r.a.d&&r.a.d.sp)?r.a.d.sp.slice(i0,i1):[];
    const days=dsp.filter(x=>x>0).length, mx=dsp.length?Math.max.apply(null,dsp):0;
-   if(r.ga4==='contradicts')A.push('GA4 records no sale at all on '+N0(r.pu)+' claimed');
+   if(r.ga4==='contradicts')A.push('GA4 records no sale at all on '+N0(r.puClaim)+' claimed');
    if(r.gNorm!==null&&r.gNorm>3)A.push('Meta claims '+N2(r.gNorm)+'\u00d7 more than GA4 normally under-counts by');
    if(r.gNorm!==null&&r.gNorm<0.33)A.push('GA4 sees '+N2(1/r.gNorm)+'\u00d7 more than Meta claims');
    if(r.sp>0&&mx/r.sp>=0.6)A.push('one day carried '+Math.round(100*mx/r.sp)+'% of its spend');
@@ -345,7 +361,13 @@ function build(){
   else if(live&&loses)r.act='CUT';
   else if(live&&!loses&&r.cpaHi<scale&&r.ga4!=='contradicts')r.act='SCALE';
   else if(live&&!loses&&r.cpaHi<scale)r.act='DEPENDS';   // cheap on Meta, invisible to GA4
-  else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
+  /* lifetime profit is not enough to bring an ad back: it must have STILL been making
+     money over its last 14 running days, and not have a significantly rising CPA. The
+     old rule recommended reactivating ads whose own sparkline shows them dying. */
+  else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK
+          &&r.tail&&r.tail.gp>0&&!(r.trendSig&&r.trend>0)
+          &&r.ga4!=='contradicts'&&r.ga4!=='overclaims'
+          &&(!r.anom||!r.anom.length))r.act='REACTIVATE';
   else if(!live)r.act=(r.rob==='depends')?'OFFDEP':(loses?'OFFBAD':'OFFOK');
   else r.act='HOLD';});
  CURG=cur; PREF=f.length;
@@ -450,7 +472,7 @@ function openAd(id){
  +row('Flags',(!r.anom||!r.anom.length)?'nothing odd'
    :'<span style="color:#a35a12">'+r.anom.join('<br/>')+'</span>')
  +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
-   :N0(r.gTx)+' vs Meta\u2019s '+N0(r.pu)+(r.gRatio===null?'':'  \u2014 Meta claims '+N2(r.gRatio)+'\u00d7'))
+   :N0(r.gTx)+' vs Meta\u2019s '+N0(r.puClaim)+' over the same 60 days')
  +row('GA4 revenue',r.gRev===null||r.gRev===undefined?'\u2014':EGP(r.gRev)+' vs Meta\u2019s '+EGP(r.pv))
  +row('Add-to-carts',N0(r.atc)+(r.atc?'  at '+EGP(r.cpatc)+' each':''))
  +row('Outbound clicks',N0(r.oc)+'  at E\u00a3'+N2(r.oc?r.sp/r.oc:0)+' each')
@@ -530,7 +552,7 @@ function COLS(D){const H=hairLbl(D);
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 saw',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">\u2014</span>'
-   :N0(r.gTx)+' <span class="mut">of '+N0(r.pu)+' claimed</span>'],
+   :N0(r.gTx)+' <span class="mut">of '+N0(r.puClaim)+' claimed \u00b7 60d</span>'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
   ['roasOn','ROAS online',r=>(r.roasOn>=ECON.beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
@@ -935,7 +957,7 @@ function doCard(r,D){
  + stat('CPP in-store',EGP(r.cppOff),N0(r.op)+' purchases')
  + stat('ROAS in-store',N2(r.roasOff)+'×',Math.round((r.hairUsed||0)*100)+'% click-driven')
  + stat('ROAS credited',N2(r.roasAll)+'×','online + store credited',r.roasAll>=ECON.beOn?'#0d8a62':'#b81f45')
- + stat('GA4 check',r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu),
+ + stat('GA4 check',r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.puClaim),
         g4Text(r),
         r.ga4==='contradicts'||r.ga4==='overclaims'?'#b81f45':(r.ga4==='confirms'?'#0c9e6e':undefined))
  +'</div>'+swing(r)+'</div>';}
@@ -950,7 +972,7 @@ function aovNote(r,D){
 function whyShort(r,D){
  const it=r.lvl==='ad'?'it':'the whole '+noun(D);
  if(r.act==='DEPENDS'&&r.ga4==='contradicts'){
-  return '<b>Meta says this works. GA4 has never seen a single sale from it.</b> Meta claims '+N0(r.pu)
+  return '<b>Meta says this works. GA4 has never seen a single sale from it.</b> Meta claims '+N0(r.puClaim)
    +' online purchases; GA4 recorded '+N0(r.gTx)+' transactions on '+N0(r.gSess)+' sessions from this ad name. '
    +'<b>No raise until that is explained</b> \u2014 it is running at '+EGP(r.sp7)+'/wk.';}
  if(r.act==='DEPENDS'){
@@ -973,14 +995,19 @@ function whyShort(r,D){
   +'<b>Halve the budget</b> instead of killing it, and re-read in a week.'+aovNote(r,D);
  if(r.act==='SCALE')return 'Makes <b>'+EGP(r.gp)+'</b>'+per+' and buys at '+EGP(r.cpa)+', under the '+EGP(D.scale)
   +' scale line even at its worst. <b>Raise to '+EGP(r.sp7*1.2)+'/wk</b>, then re-read.'+aovNote(r,D);
- if(r.act==='REACTIVATE')return 'Paused, but it made <b>'+EGP(r.gp)+'</b> on '+N1(r.k)+' purchases at '+EGP(r.cpa)
-  +' each. <b>Switch '+it+' back on</b> unless it was a one-off promo.'+aovNote(r,D);
+ if(r.act==='REACTIVATE')return 'Paused, but it was <b>still working when it stopped</b>: '
+  +EGP(r.tail.gp)+' profit over its final '+r.tail.days+' running days ('+EGP(r.tail.sp)+' spent), '
+  +(r.trend===null?'too few purchases to test the trend':(r.trend>0?'CPA drifting up '+Math.round(r.trend*100)+'% (not significant)':'CPA falling '+Math.round(-r.trend*100)+'%'))
+  +'. Lifetime '+EGP(r.gp)+' at '+EGP(r.cpa)+' each. <b>Switch '+it+' back on</b> unless it was a one-off promo.'+aovNote(r,D);
  if(r.act==='THIN')return 'Only '+N1(r.k)+' purchases \u2014 the data cannot tell a good one from a lucky one yet. <b>Let it run.</b>';
  if(r.act==='OFFBAD')return 'Already off, and it lost <b>'+EGP(-r.gp)+'</b> while it ran. <b>Leave it off.</b>'+aovNote(r,D);
  if(r.act==='OFFDEP')return 'Already off. Whether it made money depends entirely on the store-attribution question \u2014 '
   +EGP(r.gp1)+' at Meta\u2019s numbers, '+EGP(r.gp0)+' on the pixel alone. <b>Leave it off until that is settled.</b>';
- if(r.act==='OFFOK')return 'Already off. It made <b>'+EGP(r.gp)+'</b> while it ran, but returned '+EGP(1000*r.gpPerK)
-  +' per E\u00a31,000 against the account\u2019s own average, so there is no case for switching it back on ahead of the others.';
+ if(r.act==='OFFOK')return 'Already off, and it should stay off. Lifetime it made <b>'+EGP(r.gp)+'</b>, but '
+  +((r.tail&&r.tail.gp<=0)?'over its <b>final '+r.tail.days+' running days it was losing '+EGP(-r.tail.gp)+'</b> \u2014 it died before it was paused'
+    :(r.trendSig&&r.trend>0)?'its CPA was <b>rising '+Math.round(r.trend*100)+'% and significantly</b> when it stopped'
+    :'it returned '+EGP(1000*r.gpPerK)+' per E\u00a31,000, below the account\u2019s own average')
+  +'. No case for bringing it back ahead of the others.';
  return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
 /* GA4 verdicts in words a person can act on. GA4 only sees ~64% of orders, so
    "GA4 saw 20 of 29" IS agreement -- the tooltip does that arithmetic for the reader. */
@@ -989,7 +1016,7 @@ const G4CLS={confirms:'scale',overclaims:'cut',contradicts:'kill',thin:'hold',no
    given GA4 only captures ~64% of orders; the tag says how far off that it is. */
 function g4Text(r){
  if(!r.ga4||r.ga4==='nodata')return 'no GA4 data';
- if(r.ga4==='contradicts')return 'GA4 saw 0 of '+N0(r.pu);
+ if(r.ga4==='contradicts')return 'GA4 saw 0 of '+N0(r.puClaim);
  if(r.ga4==='thin')return 'too few to check';
  const n=r.gNorm;
  if(n===null||n===undefined)return 'no GA4 data';
@@ -998,8 +1025,8 @@ function g4Text(r){
  return 'GA4 '+Math.round(100/n)+'% agrees';}
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">\u2014</span>';
  const tip=r.gTx===null?'This ad name never appears in GA4, so there is no independent check.'
-  :'Meta claims '+N0(r.pu)+' online purchases. GA4 independently recorded '+N0(r.gTx)
-  +'. GA4 normally sees only ~64% of orders, so about '+N0(Math.round(r.pu*0.64))+' would be normal here.';
+  :'Over the same 60 days, counting every ad that shares this name: Meta claims '+N0(r.puClaim)+' online purchases, GA4 independently recorded '+N0(r.gTx)
+  +'. GA4 normally sees only ~64% of orders, so about '+N0(Math.round(r.puClaim*0.64))+' would be normal.';
  return '<span class="tg '+(G4CLS[r.ga4]||'hold')+'" title="'+tip.replace(/"/g,'')+'">'+g4Text(r)+'</span>';}
 /* the Simple / Everything toggle applies here too -- this table was 30 columns wide */
 function PCOLS(all){
@@ -1106,7 +1133,7 @@ function vAct(D){
      ['n',NOUN[D.level].replace(/^./,function(c){return c.toUpperCase();}),adCell],
      ['sp','Spend',function(r){return EGP(r.sp);}],
      ['pu','Meta online',function(r){return N0(r.pu);}],
-     ['gTx','GA4 saw',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu);}],
+     ['gTx','GA4 saw',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.puClaim);}],
      ['anom','Why it is flagged',function(r){return '<span style="white-space:normal;display:inline-block;max-width:520px;text-align:left">'+r.anom.join('<br/>')+'</span>';}]])):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
    'Gross profit minus spend, at '+hairLbl(D)+' in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
@@ -1285,7 +1312,7 @@ function vStore(D){
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 saw',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">\u2014</span>'
-   :N0(r.gTx)+' <span class="mut">of '+N0(r.pu)+' claimed</span>'],
+   :N0(r.gTx)+' <span class="mut">of '+N0(r.puClaim)+' claimed \u00b7 60d</span>'],
  ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
     ['op','Store purch',r=>N0(r.op)],['cppOff','Store CPP',r=>EGP(r.cppOff)],['roasOff','Store ROAS',r=>N2(r.roasOff)],['aovOff','Store AOV',r=>EGP(r.aovOff)],
     ['nc','Store new cust',r=>N0(r.nc)],
