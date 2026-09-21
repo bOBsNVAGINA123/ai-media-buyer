@@ -155,8 +155,20 @@ function rng(s,e){if(O.partial&&e>=O.partial)e=addD(O.partial,-1);const i0=idxOf
    want the network total (marketplace comparison, network share). */
 const SHOPMAP={rev:'rev',gp:'gp',refund:'ref',orders:'ord'};
 function fSumAll(k,s,e){const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.fin[k][i]||0;return t*(SC[k]||1);}
+/* v11.1 fSum IS THE ACCESSOR THE WHOLE OVERVIEW RUNS ON -- and its 'gp' branch read
+   O.shop.gp raw. That is why the Overview said "margin narrowed to 28.3%" while the same
+   days in the ledger are 34.7%: every gross-profit-derived figure on that tab (margin, GP,
+   GP per order, net contribution, the MER verdicts) was on the pre-correction basis, no
+   matter how many individual cards had been fixed. Bridged here, once, at the source every
+   consumer goes through. fSumAll() reads O.fin, which the collector already corrects, and
+   is deliberately left alone. */
 function fSum(k,s,e){const m=SHOPMAP[k];if(!(m&&O.shop&&O.shop[m]))return fSumAll(k,s,e);
- const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[m][i]||0;return t*(SC[k]||1);}
+ const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.shop[m][i]||0;
+ t=t*(SC[k]||1);
+ if(k==='gp'){let rv=0;const rm=SHOPMAP.rev;
+  for(let i=r[0];i<=r[1];i++)rv+=(O.shop[rm]||[])[i]||0;
+  return gpAdj(rv*(SC.rev||1),t);}
+ return t;}
 function fShop(s,e){const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=(O.fin.chD.Shopify[i]||0)*1000;return t;}
 function fChan(s,e){const r=rng(s,e),o={};Object.keys(O.fin.chD).forEach(c=>o[c]=0);if(!r)return o;for(let i=r[0];i<=r[1];i++)Object.keys(o).forEach(c=>o[c]+=(O.fin.chD[c][i]||0)*1000);return o;}
 function aD(i){const d=new Date(O.ad.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);}
@@ -13455,7 +13467,14 @@ function peSel(k,v){ST[k]=v;if(TAB==='pn')rPnl();}
 function rPE(g){
  if(!O.shop||!O.ad||!O.ship2)return;
  const money=v=>Math.round(v).toLocaleString();
- let r=rng(ST.s,ST.e);if(r){r=[Math.max(0,Math.min(r[0],r[1]-27)),r[1]];} // at least 28 days of history so a 7-day filter still gets a real curveif(!r)return;
+ /* v11.1 TWO BUGS ON ONE LINE.
+    1. This forced the window open to at least 28 days, so selecting L7D produced a card that
+       said "28 days · 5,681 orders" and then told you, in its own words, that it ran on "the
+       28 days you have SELECTED". The tab header promises day-exact. It is day-exact now.
+    2. The `if(!r)return;` guard had been absorbed into the end of the comment above it, so a
+       null range fell straight through instead of bailing. */
+ const r=rng(ST.s,ST.e);
+ if(!r)return;
  /* Read the cost through s2() so the unsettled month arrives modelled rather than as a zero:
    this engine answers "spend more or cut", and a month with no delivery cost in it says cut
    nothing and spend freely. */
@@ -13545,7 +13564,7 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
      different costs. Say so here rather than leaving two numbers to argue with each other. */
   +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #f0c07a;background:#fff9f0;border-radius:0 8px 8px 0;font-size:11.5px;color:#6b5730;line-height:1.6">'
    +'<b>This will not equal the EBITDA on Shopify P&amp;L, and both are right.</b> '
-   +'This engine runs on the <b>'+days.length+' days you have selected</b> ('+money(tOrd)+' orders) and carries COGS, ads, delivery and <b>order opex</b> &mdash; packing, bags and payment fees, '+('E&pound; '+money(tOp))+' here. '
+   +'This engine runs on <b>exactly the '+days.length+' days in your date box</b> ('+money(tOrd)+' orders) and carries COGS, ads, delivery and <b>order opex</b> &mdash; packing, bags and payment fees, '+('E&pound; '+money(tOp))+' here. '
    +'It does <b>not</b> carry e-com payroll unless you put it in the box above, which is why the fixed-opex field exists. '
    +'The P&amp;L runs on <b>calendar months</b> and does the opposite: it deducts payroll and leaves order opex out. '
    +'Same business, two different cost sets over two different windows &mdash; use this one for "is the next pound of spend worth it" and the P&amp;L for "did the channel wash its face last month".</div>'
@@ -16339,7 +16358,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-225853';
+const BUILD='20260921-230649';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
