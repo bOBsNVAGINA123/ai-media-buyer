@@ -100,6 +100,13 @@ def dkey(s):
     return datetime.datetime.strptime(s, "%d %b %Y").date().isoformat()
 
 GOVT_RATE = 0.04
+# v10.3 BASIS STAMP. The 4% correction landed in the daily online feed on the first sync after
+# it shipped, but every figure that comes out of the HEAVY crawl -- O.pos branch margins, vmon,
+# pmon, the journey LTGPs, the deciles -- kept the old basis for as long as the crawl had no
+# reason to rerun. The payload then held two incompatible margins at once with nothing saying
+# so. Stamping the basis and treating a stale stamp as schema drift forces exactly one crawl
+# and then switches itself off, the same self-disabling pattern the other _thin() checks use.
+GP_BASIS = "govt4"
 def okgp(r):
     """Gross profit on the basis this business actually pays.
 
@@ -6084,6 +6091,8 @@ def build():
                 return "vendor stock cost mostly zero (template-vs-variant read)"
             if not ((pv.get("promo") or {}).get("codeLTV")):
                 return "promo codeLTV missing"
+            if pv.get("gpBasis") != GP_BASIS:
+                return "GP basis changed to %s (crawl figures still on the old one)" % GP_BASIS
         except Exception:
             pass
         return None
@@ -6336,7 +6345,7 @@ def build():
                              "p": [round(ms.get(d, {}).get("p", 0.0)) for d in win],
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
-              "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
+              "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
