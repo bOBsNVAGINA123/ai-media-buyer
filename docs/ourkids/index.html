@@ -311,6 +311,50 @@ var _GPADJC=null;
 function GPADJ(){if(_GPADJC===null){try{_GPADJC=((window.O||{}).gpBasis)?0:(0.96-1/1.14);}catch(e){_GPADJC=0;}}return _GPADJC;}
 function gpAdj(rev,gp){return (gp||0)+(rev||0)*GPADJ();}   // rev must be VAT-INCLUSIVE
 function gpStale(){return GPADJ()>0;}
+/* v10.3 ONE FALLBACK, NOT NINETEEN. Nineteen call sites each wrapped _gpPct() in their own
+   try/catch with their own hardcoded margin -- 0.185, 0.266, 0.2357, break-evens of 3.76 and
+   2.94 side by side -- so the number a card fell back to depended on which card it was, and
+   the 4% correction had to be chased through every one of them. GPQ() is the only safe
+   accessor; GPFB is the only fallback, and it is the measured basis, not a memory of one. */
+var GPFB={gpOn:0.2468,gpSt:0.367,gpOnGross:0.3513,drag:0.1045,dragShip:0.0259,dragPay:0.0786,dragCost:0.061,dragCol:0.0351};
+function GPQ(){try{const q=_gpPct();return (q&&q.gpOn>0)?q:GPFB;}catch(e){return GPFB;}}
+function GPBE(){const q=GPQ();return q.gpOn>0?1/q.gpOn:1/GPFB.gpOn;}
+/* v10.3 ONE BRANCH MARGIN, ONE BRIDGE. Four cards each rebuilt the POS margin inline and each
+   multiplied it straight into O.bl -- and O.bl is the daily POS journal NET of tax while the
+   margin is struck on report.pos.order price_total, which is not. Every branch gross profit in
+   the tool was therefore ~14% light, in four places, with four different fallbacks (0.24,
+   0.236). posMg() is the margin; BLX() is the bridge, MEASURED month by month on the months
+   where the daily feed covers every day rather than assumed at 1.14; brGPn() takes a net-of-tax
+   till figure and returns gross profit. Nothing else should touch O.pos[..][1]. */
+var _POSMGC=null;
+function posMg(){if(_POSMGC!==null)return _POSMGC;
+ try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
+  const ks=Object.keys(P);if(!ks.length)return (_POSMGC=GPFB.gpSt);
+  const pm=Object.keys(P[ks[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
+  if(!pm)return (_POSMGC=GPFB.gpSt);
+  let r=0,g=0;ks.forEach(b=>{const v=(P[b]||{})[pm];if(v){r+=v[0]||0;g+=gpAdj(v[0],v[1]);}});
+  return (_POSMGC=(r>0?g/r:GPFB.gpSt));}catch(e){return (_POSMGC=GPFB.gpSt);}}
+function posMgMonth(){try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
+  const ks=Object.keys(P);if(!ks.length)return '';
+  return Object.keys(P[ks[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0]||'';}catch(e){return '';}}
+var _BLXC=null;
+function blxStats(){if(_BLXC!==null)return _BLXC;
+ try{const O2=window.O,bl=O2&&O2.bl;if(!bl)return (_BLXC={r:1,n:0,lo:1,hi:1});
+  const b1=Date.parse(bl.start+'T00:00:00Z'),dsum={},dn={};
+  for(let i=0;i<bl.n;i++){const d=new Date(b1+i*864e5).toISOString().slice(0,10),mm=d.slice(0,7);
+   let v=0;Object.keys(bl.b).forEach(b2=>{v+=bl.b[b2][i]||0;});
+   dsum[mm]=(dsum[mm]||0)+v;if(v>0)dn[mm]=(dn[mm]||0)+1;}
+  const rs=[];Object.keys(dsum).forEach(mm=>{
+   const dim=new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0)).getUTCDate();
+   if((dn[mm]||0)<dim)return;
+   let pr=0;Object.keys(O2.pos||{}).forEach(b2=>{const v=(O2.pos[b2]||{})[mm];if(v)pr+=v[0]||0;});
+   if(pr>0&&dsum[mm]>0)rs.push(pr/dsum[mm]);});
+  if(!rs.length)return (_BLXC={r:1,n:0,lo:1,hi:1});
+  rs.sort((a2,b2)=>a2-b2);
+  return (_BLXC={r:rs[Math.floor(rs.length/2)],n:rs.length,lo:rs[0],hi:rs[rs.length-1]});}
+ catch(e){return (_BLXC={r:1,n:0,lo:1,hi:1});}}
+function BLX(){return blxStats().r;}
+function brGPn(netTill){return (netTill==null)?null:netTill*BLX()*posMg();}
 function expTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.indexOf('(memo)')<0)t+=E[k];return t;}
 function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
@@ -551,7 +595,7 @@ function rLT(){if(TAB!=='lt')return;dCh();
  const sc=LTS.sc,h=LTS.h,L=RT_LT[sc],hi=ltIdx(h);
  const C=ltCac(sc),cac=C.cac,cur=L?L.cur:[],ltgp=L?L.cur[hi]:null;
  const ratio=(ltgp!=null&&cac)?ltgp/cac:null,pay=L?ltPay(cur,cac):null;
- document.getElementById('bn21').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>LTGP : CAC</b> \u2014 what one acquired customer pays back in <b>real gross profit</b> (Odoo margins, returns netted) against what they cost to acquire. LTGP is a static read-only Odoo pull ('+RT_PULL+'); <b>CAC and OpEx are live</b> from the books and ad accounts, so the ratio moves as spend moves. <b>3\u00D7 at 365 days is the healthy line; under 1\u00D7 you are buying customers at a loss.</b> <b style="color:#b8860b">This tab does not follow the date filter</b> \u2014 LTGP needs a customer&rsquo;s whole life, so cohorts are fixed and CAC is the blended cost over the last 13 complete months.';
+ document.getElementById('bn21').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>LTGP : CAC</b> \u2014 what one acquired customer pays back in <b>real gross profit</b> (Odoo margins, returns netted) against what they cost to acquire. LTGP is a static read-only Odoo pull ('+RT_PULL+'); <b>CAC and OpEx are live</b> from the books and ad accounts, so the ratio moves as spend moves. <b>3\u00D7 at 365 days is the healthy line; under 1\u00D7 you are buying customers at a loss.</b> <b style="color:#b8860b">This tab does not follow the date filter</b> \u2014 LTGP needs a customer&rsquo;s whole life, so cohorts are fixed and CAC is the blended cost over the last 13 complete months. <b style="color:#b8860b">These LTGP figures predate the 4% basis correction.</b> They were baked from a read-only Odoo pull on '+RT_PULL+', when gross profit was still Odoo&rsquo;s raw ex-VAT margin over a VAT-inclusive revenue &mdash; so every LTGP on this tab is understated by roughly 8.28% of the matching revenue, and the ratios below are therefore CONSERVATIVE. They are not corrected here because the baked rows carry no revenue companion to correct them with, and inventing one would be worse than saying so. Live LTGP figures elsewhere in the tool (Journeys, Acquisition-hook brands) are on the new basis and will read higher for the same customers.';
  const chips=LT_SCOPES().map(function(x){return '<span class="chip" style="'+(x===sc?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="ltSel(\''+x.replace(/'/g,"\\'")+'\')">'+x+'</span>';}).join(' ');
  const hchips=RT_LTH.map(function(x){return '<span class="chip" style="'+(x===h?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ltSelH('+x+')">'+x+' days</span>';}).join(' ');
  /* ---- 1. headline + payback curve ---- */
@@ -1929,7 +1973,7 @@ function storyFlow(g,o){
  const N=v=>Math.round(Math.abs(v)).toLocaleString();
  const pc=(c,p)=>(p&&isFinite(p)&&p!==0)?((c/p-1)*100):null;
  const sg=v=>v==null?'':(v>=0?'+':'−')+Math.abs(v).toFixed(1)+'%';
- const be=(function(){try{const x=_gpPct();return x.gpOn>0?1/x.gpOn:3.76;}catch(e){return 3.76;}})();
+ const be=GPBE();
 
  const dNet=pc(o.net[0],o.net[1]), dOrd=pc(o.ord[0],o.ord[1]), dAov=pc(o.aov[0],o.aov[1]);
  const dSess=pc(o.sess&&o.sess[0],o.sess&&o.sess[1]), dCvr=pc(o.cvr&&o.cvr[0],o.cvr&&o.cvr[1]);
@@ -2172,7 +2216,7 @@ function okCauses(o){
      (out.cvr||[]).slice(0,1).forEach(x=>out.mer.push(x));
     }
    }catch(e){}
-   const beL=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
+   const beL=GPBE();
    out.mer.push(['note','<b>The '+beL.toFixed(2)+'\u00d7 break-even here covers COGS only</b> \u2014 it is the point where the media pays for the goods. The Daily Profit Engine uses a higher one because it also carries delivery and order opex; both are correct for what they cover, and the higher one is the one that decides whether the month made money.']);
   }
  }catch(e){}
@@ -2296,7 +2340,7 @@ function glance(g,o){
      +arrow(v)+' '+Math.abs(v).toFixed(1)+'%</span>';};
 
  const days=Math.max(1,span(ST.s,ST.e));
- const be=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
+ const be=GPBE();
 
  /* ---- 1. WHERE ARE WE ---------------------------------------------------- */
  const BA=okBlendedAmer(o);
@@ -2315,8 +2359,7 @@ function glance(g,o){
   const bm=done[done.length-1];
   const dim2=(m=>{const y=+m.slice(0,4),mo=+m.slice(5,7);return new Date(Date.UTC(y,mo,0)).getUTCDate();})(bm);
   const opxD=expTot(bm)/dim2;
-  let br=0,bg=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][bm];if(v){br+=v[0]||0;bg+=v[1]||0;}});
-  const stMg=br>0?bg/br:0.24;
+  const stMg=posMg();   /* v10.3: shared, on the 4% basis; the tax bridge is applied inside brGPn() */
   const blSum=(a,b)=>{if(!O.bl)return null;let t=0;
    const i0=Math.round((Date.parse(a)-Date.parse(O.bl.start))/864e5),i1=Math.round((Date.parse(b)-Date.parse(O.bl.start))/864e5);
    if(i0<0)return null;
@@ -2341,7 +2384,7 @@ function glance(g,o){
   const _dropped=(function(){try{return Math.max(0,span(ST.s,ST.e)-span(ST.s,matureEnd));}catch(e){return 0;}})();
   const calcNP=(gp2,sp2,a,b)=>{const d2=Math.max(1,span(a,b));const st=blSum(a,b);
    if(st==null)return null;
-   return gp2+mktGP(a,b)+st*stMg-sp2-opxD*d2;};
+   return gp2+mktGP(a,b)+brGPn(st)-sp2-opxD*d2;};
   /* everything below reads the MATURE window; the tile subtitle says how many days were held back */
   const _mS=ST.s,_mE=(matureEnd>=ST.s)?matureEnd:ST.s;
   const _gpM=(function(){try{return fSum('gp',_mS,_mE);}catch(e){return o.gp[0];}})();
@@ -2535,16 +2578,13 @@ function glance(g,o){
    return hit?t2:null;}catch(e){return null;}};
  const _pwG=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
  const _bRev=_blW(ST.s,ST.e), _bRevP=_pwG&&_pwG[0]?_blW(_pwG[0],_pwG[1]):null;
- const _stMgG=(function(){try{const nowM3=(O.today||'').slice(0,7);
-   const pm3=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM3).slice(-1)[0];
-   let r3=0,g3=0;if(pm3)Object.keys(O.pos).forEach(b3=>{const v3=O.pos[b3][pm3];if(v3){r3+=v3[0]||0;g3+=v3[1]||0;}});
-   return r3>0?g3/r3:0.24;}catch(e){return 0.24;}})();
+ const _stMgG=posMg();
  if(_bRev!=null){
   tiles.push(['Revenue',M(o.net[0]+_bRev),
     (_bRevP!=null&&(o.net[1]+_bRevP))?(( (o.net[0]+_bRev)/(o.net[1]+_bRevP)-1)*100):null,true,
     'webstore net + branch tills (daily, net of VAT)','co','revc']);
-  tiles.push(['Gross profit, est',M(o.gp[0]+_bRev*_stMgG),
-    (_bRevP!=null&&(o.gp[1]+_bRevP*_stMgG))?(((o.gp[0]+_bRev*_stMgG)/(o.gp[1]+_bRevP*_stMgG)-1)*100):null,true,
+  tiles.push(['Gross profit, est',M(o.gp[0]+brGPn(_bRev)),
+    (_bRevP!=null&&(o.gp[1]+brGPn(_bRevP)))?(((o.gp[0]+brGPn(_bRev))/(o.gp[1]+brGPn(_bRevP))-1)*100):null,true,
     'webstore actual + branch revenue at last month\u2019s POS margin','co','gpc']);}
  const _bnc=(function(){try{return okBranchNC(ST.s,ST.e,'nc');}catch(e){return null;}})();
  const _bncP=(function(){try{const w=cmpWr(ST.s,ST.e);return w&&w[0]?okBranchNC(w[0],w[1],'nc'):null;}catch(e){return null;}})();
@@ -2681,7 +2721,7 @@ function glance(g,o){
   TD.gp=hd('Gross profit '+M(o.gp[0])+' = revenue × margin')
    +row('Net revenue',o.net[0],o.net[1],true,M(o.net[0]))
    +row('Margin',o.gpct[0],o.gpct[1],true,(o.gpct[0]||0).toFixed(1)+'% vs '+(o.gpct[1]||0).toFixed(1)+'% — mix or discounting')
-   +(_bRev!=null?row('BRANCHES GP, est (same days)',_bRev*_stMgG,_bRevP!=null?_bRevP*_stMgG:null,true,'branch revenue at last month\u2019s '+( _stMgG*100).toFixed(1)+'% POS margin'):'');
+   +(_bRev!=null?row('BRANCHES GP, est (same days)',brGPn(_bRev),_bRevP!=null?brGPn(_bRevP):null,true,'branch revenue at last month\u2019s '+( _stMgG*100).toFixed(1)+'% POS margin'):'');
   TD.sp=hd('Ad spend '+M(o.sp[0])+' — one budget, split by platform')
    +row('Meta',o.msp&&o.msp[0],o.msp&&o.msp[1],false,M((o.msp&&o.msp[0])||0))
    +row('Google',o.gsp&&o.gsp[0],o.gsp&&o.gsp[1],false,M((o.gsp&&o.gsp[0])||0))
@@ -2729,8 +2769,8 @@ function glance(g,o){
    s+='<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">GROSS PROFIT</div>';
    s+=line('Webstore gross profit (Shopify, Odoo margin)',NP.gp!=null?NP.gp:o.gp[0]);
    if(NP.mkt)s+=line('Marketplace gross profit (Amazon / Noon / Homzmart)',NP.mkt,'— added in v9.73; it was missing while their costs were charged');
-   if(NP.st!=null)s+=line('Branch gross profit',NP.st*NP.stMg,'= E£'+Math.round(NP.st).toLocaleString()+' of till revenue × '+(NP.stMg*100).toFixed(1)+'% ('+bkM+' POS margin)');
-   const _gpAll=(NP.gp!=null?NP.gp:o.gp[0])+(NP.mkt||0)+((NP.st!=null)?NP.st*NP.stMg:0);
+   if(NP.st!=null)s+=line('Branch gross profit',brGPn(NP.st),'= E£'+Math.round(NP.st).toLocaleString()+' of till revenue (net of tax) × '+BLX().toFixed(3)+' to the billed basis × '+(NP.stMg*100).toFixed(1)+'% ('+bkM+' POS margin, 4% basis)');
+   const _gpAll=(NP.gp!=null?NP.gp:o.gp[0])+(NP.mkt||0)+((NP.st!=null)?brGPn(NP.st):0);
    s+=line('Total gross profit',_gpAll);
    s+=rule+'<div style="font-weight:800;font-size:11px;color:#64748B;margin-top:6px">CONTRIBUTION</div>';
    s+=line('Ad spend (whole account, both businesses)',-(NP.sp!=null?NP.sp:o.sp[0]));
@@ -2827,7 +2867,7 @@ function glance(g,o){
    +(_bRev!=null?row('Branches (tills, net of VAT)',_bRev,_bRevP,true,M(_bRev)+' · '+Math.round(_bRev/(o.net[0]+_bRev)*100)+'%'):'');
   TD.gpc=hd('Company gross profit, est — the two legs')
    +row('Webstore GP (actual)',o.gp[0],o.gp[1],true,M(o.gp[0]))
-   +(_bRev!=null?row('Branch GP (revenue × '+( _stMgG*100).toFixed(1)+'% last-month POS margin)',_bRev*_stMgG,_bRevP!=null?_bRevP*_stMgG:null,true,M(_bRev*_stMgG)+' — estimate; the exact figure posts monthly on Branches P&L'):'');
+   +(_bRev!=null?row('Branch GP (till revenue × '+BLX().toFixed(3)+' × '+(_stMgG*100).toFixed(1)+'% last-month POS margin, 4% basis)',brGPn(_bRev),_bRevP!=null?brGPn(_bRevP):null,true,M(brGPn(_bRev))+' — estimate; the exact figure posts monthly on Branches P&L'):'');
   const brDrill=key2=>{try{const BD5=O.bnrD;if(!BD5||!BD5._w)return '';
     const t6=Date.parse(BD5._w.start);const pw6=_pwG;
     const per=(br,a,b)=>{let t7=0,hit=false;for(let d=Date.parse(a);d<=Date.parse(b);d+=864e5){const i=Math.round((d-t6)/864e5);
@@ -4331,7 +4371,7 @@ function ovRange(a,b){
    month (or quarter) of days renders. */
 function merHeat(g){
  const A=O.ad,F=O.fin;if(!A||!F||!F.rev)return;
- const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357};}})();
+ const q=GPQ();
  const be=q.gpOn>0?1/q.gpOn:5.4;
  const mf=af('meta'),gf=af('google'),tf=af('tt');
  const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
@@ -4454,10 +4494,7 @@ function beScen(g){
     against: the webstore alone, or the webstore plus what the tills took on the same days. */
  const SCOPE=(window.BESC==='both')?'both':'on';
  const BL=O.bl,bl0=BL?Date.parse(BL.start+'T00:00:00Z'):null;
- const stMg=(function(){try{const nowM=(O.today||'').slice(0,7);
-   const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(x=>x!==nowM).slice(-1)[0];
-   let r2=0,g2=0;if(pm)Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=v[1]||0;}});
-   return r2>0?g2/r2:0.236;}catch(e){return 0.236;}})();
+ const stMg=posMg()*BLX();   /* v10.3: shared margin, bridged onto the net-of-tax daily feed these rows use */
  const brRev=ds=>{if(!BL)return 0;const i=Math.round((Date.parse(ds+'T00:00:00Z')-bl0)/864e5);
    if(i<0||i>=BL.n)return 0;let t=0;Object.keys(BL.b).forEach(b=>{t+=(BL.b[b]||[])[i]||0;});return t;};
  const rows=[];
@@ -4611,7 +4648,7 @@ function beOffline(g){
  const P=O.purch||{};
  const pm=Object.keys(P).filter(x=>x<=bm).sort().slice(-3);
  const buyAvg=pm.length?pm.reduce((a,x)=>a+(P[x]||0),0)/pm.length:null;
- const gpMo=rev*mSt+onRev*(function(){try{return _gpPct().gpOn;}catch(e){return 0.185;}})();
+ const gpMo=rev*mSt+onRev*GPQ().gpOn;
  const adsMo=(function(){try{const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z');let t=0,d0=bm+'-01';
    const dEnd=bm+'-'+String(dim).padStart(2,'0');
    for(let d=Date.parse(d0+'T00:00:00Z');d<=Date.parse(dEnd+'T00:00:00Z');d+=864e5){
@@ -4645,7 +4682,10 @@ function beOffline(g){
      +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;font-weight:800;white-space:nowrap;color:'+(c[1].indexOf('−')===0?'#a3271a':'#0f172a')+'">'+c[1]+'</td>'
      +'<td style="padding:5px 8px;border-bottom:1px solid #eef0f5;color:#8a93a6;font-size:11px">'+c[2]+'</td></tr>';}).join('')
    +'</table></div>';
-  const cashBE=cashNeed/((rev*mSt+onRev*0.185)/(rev+onRev));
+  /* v10.3: this carried a hardcoded 0.185 online margin in LIVE arithmetic -- not a fallback,
+     the actual divisor -- two lines below gpMo, which reads the measured figure. The cash
+     break-even was therefore struck on a margin the tool had already stopped believing. */
+  const cashBE=cashNeed/((rev*mSt+onRev*GPQ().gpOn)/(rev+onRev));
   pnlCard(g,'odoo','Cash break-even — the number that also refills the shelves'
    +INFO('A break-even that only covers ads and OpEx is not the retailer’s break-even: gross profit also has to buy next month’s stock. Inventory is the CONFIRMED purchase-order value from Odoo (state purchase or done), averaged over the last three complete months so one big order does not set the bar. The blended margin used to convert cash into a sales target is the company’s own: webstore delivered margin and branch POS margin, weighted by their revenue.'),
    '<b>To pay for ads, overhead AND restock, the company needs '+M(cashBE)+' of sales a month</b> — against '+M(rev+onRev)+' actually sold in '+bm+'. Inventory alone is '+M(buyAvg)+' a month, which is '+(gpMo?Math.round(buyAvg/gpMo*100):0)+'% of all the gross profit the business makes.',t2);}
@@ -4653,33 +4693,15 @@ function beOffline(g){
 function dailyBE(g){
  const A=O.ad,F=O.fin;if(!A||!F)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
- const {gpOn,gpSt}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
+ const {gpOn,gpSt}=GPQ();
  const be=gpOn>0?1/gpOn:3.76;
  /* branch margin for the daily leg: last complete POS month (rent-free gross margin) */
  const nowM=(O.today||'').slice(0,7);
  const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
- let stMg=gpSt;if(pm){let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=gpAdj(v[0],v[1]);}});if(r2>0)stMg=g2/r2;}
- /* v10.3 TWO DIFFERENT TILL REVENUES. stMg is a margin struck on report.pos.order price_total,
-    which is VAT-INCLUSIVE. O.bl -- the daily branch feed every row below uses -- comes off the
-    POS journals NET of tax and runs about 1.14x smaller. Multiplying the one by the other took
-    roughly 14% off every branch gross-profit figure in this card. The bridge is not assumed at
-    1.14: it is measured, month by month, on the months where the daily feed covers every day,
-    and the median of those is used. */
- const _blX=(function(){try{const bl=O.bl;if(!bl)return null;const b1=Date.parse(bl.start+'T00:00:00Z');
-   const dsum={},dn={};
-   for(let i=0;i<bl.n;i++){const d=new Date(b1+i*864e5).toISOString().slice(0,10),mm=d.slice(0,7);
-    let v=0;Object.keys(bl.b).forEach(b2=>{v+=bl.b[b2][i]||0;});
-    dsum[mm]=(dsum[mm]||0)+v;if(v>0)dn[mm]=(dn[mm]||0)+1;}
-   const rs=[];Object.keys(dsum).forEach(mm=>{
-    const dim=new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0)).getUTCDate();
-    if((dn[mm]||0)<dim)return;                       // partial month -> not a ratio
-    let pr=0;Object.keys(O.pos||{}).forEach(b2=>{const v=(O.pos[b2]||{})[mm];if(v)pr+=v[0]||0;});
-    if(pr>0&&dsum[mm]>0)rs.push(pr/dsum[mm]);});
-   if(!rs.length)return null;rs.sort((a,b2)=>a-b2);
-   return {r:rs[Math.floor(rs.length/2)],n:rs.length,lo:rs[0],hi:rs[rs.length-1]};}catch(e){return null;}})();
- const BLX=_blX?_blX.r:1;
- /* One number for "branch gross profit from a day of the net-of-tax daily feed". */
- const brGP=v=>(v==null)?null:v*BLX*stMg;
+ const stMg=posMg();
+ /* v10.3: the POS margin is struck on VAT-inclusive till revenue while the daily feed these
+    rows use is net of tax. The measured bridge lives in one helper at the top of this file. */
+ const _blX=blxStats(), BLXv=BLX(), brGP=brGPn;
  const beAll=(function(){ // blended break-even at this window's actual web/branch revenue mix
   return null;})();
  const _drag=(function(){try{return _gpPct().drag||0;}catch(e){return 0;}})();
@@ -4826,7 +4848,7 @@ function dailyBE(g){
    +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
    +'<tr style="font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase">'
    +'<th style="padding:4px 9px;text-align:left">Month</th><th style="padding:4px 9px;text-align:right">Webstore GP</th>'
-   +'<th style="padding:4px 9px;text-align:right">Branch GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills &times; '+BLX.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%</div></th><th style="padding:4px 9px;text-align:right">Ads</th>'
+   +'<th style="padding:4px 9px;text-align:right">Branch GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills &times; '+BLXv.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%</div></th><th style="padding:4px 9px;text-align:right">Ads</th>'
    +'<th style="padding:4px 9px;text-align:right">Overhead (own month)</th><th style="padding:4px 9px;text-align:right">Result</th></tr>'
    +out.join('')+'</table></div>';}catch(e){return '';}})();
  const _beCalc=CALCX([
@@ -4840,7 +4862,7 @@ function dailyBE(g){
   ['After ads AND overhead (webstore)','The line above, minus the webstore&rsquo;s slice of that day&rsquo;s overhead: packing and bags in full, plus HQ rent, comms, other OpEx and non-branch payroll apportioned by the webstore&rsquo;s share of company revenue in <b>that same month</b> ('+(_ovhAny?(_ovhAny.wOn*100).toFixed(0):'~20')+'% most recently), divided by the days in that month.'],
   ['Branch revenue','The seven tills&rsquo; own daily takings from the POS crawl, <b>net of VAT</b> (Odoo holds them VAT-inclusive; this is that figure &divide; 1.14). Nothing here is attributed to advertising.'],
   ['MER (webstore + branches)','(Webstore revenue + branch revenue) &divide; ad spend. A scale ratio only: regression on this account shows Meta spend does <b>not</b> predict branch revenue once trend and the Friday/Saturday pattern are controlled, so a big number here is store footfall, not ad performance.'],
-  ['After ADS only (incl. branches)','Webstore GP + branch GP &minus; ad spend. Branch GP = the day&rsquo;s till revenue &times; '+BLX.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%. The middle factor bridges two different till revenues: the daily feed is NET of tax, while the POS margin of '+(stMg*100).toFixed(1)+'% (last complete month, '+(pm||'&mdash;')+') is struck on the VAT-inclusive figure. It is measured on the '+(_blX?_blX.n:0)+' months where the daily feed covers every day (range '+(_blX?_blX.lo.toFixed(3)+'&ndash;'+_blX.hi.toFixed(3):'&mdash;')+'), not assumed at 1.14. Rent-free and before any store cost.'],
+  ['After ADS only (incl. branches)','Webstore GP + branch GP &minus; ad spend. Branch GP = the day&rsquo;s till revenue &times; '+BLXv.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%. The middle factor bridges two different till revenues: the daily feed is NET of tax, while the POS margin of '+(stMg*100).toFixed(1)+'% (last complete month, '+(pm||'&mdash;')+') is struck on the VAT-inclusive figure. It is measured on the '+(_blX?_blX.n:0)+' months where the daily feed covers every day (range '+(_blX?_blX.lo.toFixed(3)+'&ndash;'+_blX.hi.toFixed(3):'&mdash;')+'), not assumed at 1.14. Rent-free and before any store cost.'],
   ['After ads AND overhead (incl. branches)','The same, minus <b>the whole company&rsquo;s posted expense book for that day&rsquo;s own month</b> &divide; its days: branch rent, branch and HQ payroll, utilities, packing, card and collection fees, cargo, maintenance, comms. Platform ad invoices are excluded from it &mdash; they are already charged from the APIs in the Spend column, and counting the ledger copy too would double-charge about E&pound;3M a month.']
  ],'<b>What this table cannot tell you.</b> Overhead is a monthly commitment divided by the days in its month, so every day carries the same slice whatever it sold. A slow day will always print red and a peak day green, and neither on its own is a decision &mdash; read the month block at the top for that. <b>Which month&rsquo;s book each day uses:</b> its own. Before v10.2 every day of every month was charged the last COMPLETE month&rsquo;s book, which on this account is August at E&pound;8.20M &mdash; the back-to-school peak &mdash; so ordinary September days were handed peak-month rent and payroll. A month whose ledger is still filling is now charged the median of the last four settled months instead of its partial postings, and says so in the row.');
  pnlCard(g,'blend','Every day against break-even'
@@ -6363,7 +6385,7 @@ function creativeFatigue(g){
  const costly=scored.filter(x=>x.f.cls==='COSTS UP').sort((a,b)=>(b.f.sig.cpp||0)-(a.f.sig.cpp||0));
  const fresh=scored.filter(x=>x.f.cls==='HEALTHY'||x.f.cls==='WATCH').sort((a,b)=>b.a.sp-a.a.sp);
  const tiredSp=tired.reduce((a,x)=>a+x.a.sp,0);
- const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
+ const beFat=GPBE();
  const TH='padding:5px 7px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 7px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap';
  const sigChips=f=>f.parts.map(p=>{
@@ -7091,7 +7113,7 @@ function merDaily(g){
  const TS=a=>a.slice(selOff).reduce((x,y)=>x+(y||0),0);
  const tSp=TS(spend), tNc=TS(nc), tRc=TS(rc), tOff=TS(off), tSh=TS(shop);
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
- const _gpo=(function(){try{return _gpPct().gpOn;}catch(e){return 0.266;}})();
+ const _gpo=GPQ().gpOn;
  const _be=_gpo>0?1/_gpo:3.76, _merW=tSp?tSh/tSp:0;
  const _gpAfter=tSh*_gpo-tSp;
  const _verd=!tSp?'' :
@@ -7152,7 +7174,7 @@ function merDaily(g){
  splitPanel('merpan',lab,
    {sets:money,h:170,fmt:v=>'E£'+Math.round(v).toLocaleString()},
    {sets:ratio,h:180,fmt:v=>v.toFixed(2)+'\u00d7',
-    ref:(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})()});
+    ref:GPBE()});
 }
 /* v9.46 NEW-AUDIENCE SPEND AND REACH (Meta).
    "How much am I spending to reach people who have never bought from me, and how many of them am I
@@ -7509,7 +7531,7 @@ function rCV(){
  if(!G4||!G4.pages||!G4.pages.length){bn.innerHTML='&#8635; The GA4 funnel pull ships with the NEXT collector run — the route is wired (Egypt-only, 60 days daily, by landing page) and this tab fills itself when it lands.';return;}
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const N2=v=>Math.round(v).toLocaleString();
- const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357};}})();
+ const q=GPQ();
  const t0=Date.parse(G4.start);
  const ix=d=>Math.round((Date.parse(d)-t0)/864e5);
  let i1=Math.min(G4.n-1,ix(ST.e)), i0=Math.max(0,ix(ST.s));
@@ -8410,7 +8432,7 @@ function promoCard(g){
  const C=PR.codes, NONE=PR.none;
  const tOrd=C.reduce((a,b)=>a+b.ord,0), tGross=C.reduce((a,b)=>a+b.gross,0), tDisc=C.reduce((a,b)=>a+b.disc,0);
  const allOrd=tOrd+((NONE&&NONE.ord)||0), allGross=tGross+((NONE&&NONE.gross)||0);
- const gp=(function(){try{return _gpPct().gpOn;}catch(e){return 0.266;}})();
+ const gp=GPQ().gpOn;
  /* A discount is not a cost like a cost -- it comes straight off gross profit, pound for
     pound, because the goods still cost what they cost. */
  const gpLost=tDisc;
@@ -12951,7 +12973,7 @@ function trueROAS(g){
  const nowM=(O.today||'').slice(0,7);
  const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&adFull(m)&&ADm[m]&&ADm[m].s).slice(-6);
  if(ms.length<2)return;
- const {gpOn}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266};}})();
+ const {gpOn}=GPQ();
  const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
  const TD='padding:6px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
  let b='';
@@ -14814,7 +14836,7 @@ function rMETA(){
  rows.sort((x,y)=>y.sc.s-x.sc.s);
  /* break-even for this tab's own verdict guard -- creativeFatigue() on the Money desk has
     its own copy and the two functions do not share scope */
- const beFat=(function(){try{const {gpOn}=_gpPct();return gpOn>0?1/gpOn:2.94;}catch(e){return 2.94;}})();
+ const beFat=GPBE();
  const pull=rows.filter(r=>r.enough&&r.sc.s>=RV.pull);
  const watch=rows.filter(r=>r.enough&&r.sc.s>=50&&r.sc.s<RV.pull);
 
@@ -14843,7 +14865,7 @@ function rMETA(){
     tab is reading -- and the ad name opens that exact ad in Ads Manager. Editing stays in Ads
     Manager on purpose: the Meta API force-pauses an active ad on edit (measured on this
     account), so an in-tool edit button would be a trap. */
- const _gpF=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
+ const _gpF=GPQ();
  const fatPas=function(a){let sp=0,pv=0,fv=0;const d=a.d||{};
   for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}
   pv*=fON;fv*=fOFF;
@@ -14938,7 +14960,7 @@ function rMETA(){
 
  /* ---------- 0. the decisions, priced (prepended above everything) ---------- */
  try{
-  const GPo=(function(){try{return _gpPct().gpOn;}catch(e){return 0.266;}})();
+  const GPo=GPQ().gpOn;
   const BE=GPo>0?(1/GPo):3.76;
   const mo=30/Math.max(1,PW.n);                     /* range -> per month */
   const slice=(a,i0,i1)=>{let sp=0,val=0,pur=0,im=0,clk=0;const d=a.d;
@@ -15059,7 +15081,7 @@ function rMETA(){
     derivation: every live ad whose value -- BOTH legs, at real margins, at your attribution --
     did not cover its spend over the days you picked, in pounds and per day. */
  try{(function(){
-  const {gpOn:_go,gpSt:_gs}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266,gpSt:0.285};}})();
+  const {gpOn:_go,gpSt:_gs}=GPQ();
   const days=PW.n||1;
   /* grouped by AD SET: the budget lever lives there, so the row must too */
   const AS={};let okGp=0,okSp=0;
@@ -15110,7 +15132,7 @@ function rMETA(){
   let sp=0,pv=0,fv=0;
   ads.forEach(a=>{const d=a.d;for(let k=PW.a;k<=PW.b;k++){sp+=(d.sp&&d.sp[k])||0;pv+=(d.pv&&d.pv[k])||0;fv+=(d.fv&&d.fv[k])||0;}});
   if(!(sp>1000&&pv>0))return;
-  const q=(function(){try{return _gpPct();}catch(e){return {gpOn:0.2357,gpOnGross:0.266,gpSt:0.285,dragShip:0.034,dragPay:0.047,drag:0.081};}})();
+  const q=GPQ();
   const incr=((O.attr&&O.attr.meta&&O.attr.meta.incr)||0.61);
   /* the attribution step FOLLOWS the tab's selector: pick 7d-click or Incremental up top and
      this bar becomes your chosen ladder; on the default (live) setting it shows Meta's own
@@ -15344,7 +15366,7 @@ function rGOOG(){
   +'<th style="'+TH+'">Split</th><th style="'+TH+';text-align:left">Do</th></tr>'+ab+'</table></div>');
 
  /* ---- 3. campaigns on their own money ---- */
- const {gpOn}=(function(){try{return _gpPct();}catch(e){return {gpOn:0.266};}})();
+ const {gpOn}=GPQ();
  const be=gpOn>0?1/gpOn:3.76;
  const cr=ads.map(a=>{const c=agg(PW.a,PW.b,[a]),p=PW.ok?agg(PW.pa,PW.pb,[a]):agg(0,-1,[a]);
    return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
@@ -15965,7 +15987,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-203620';
+const BUILD='20260921-211520';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
