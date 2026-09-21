@@ -173,6 +173,8 @@ function build(){
       by a median 1.51x with a per-ad range of 0.14x to 6.38x -- so it is read per ad, never
       applied as a blanket factor. An ad Meta claims purchases for that GA4 never saw is the
       one case where "scale it" should never be printed. */
+   const AWx=r.a&&r.a.aw, base=r.a&&r.a.pur;
+   r.vShare=(AWx&&base>0)?AWx.puV/base:null;    // share of purchases credited to 1-day VIEW
    r.gTx=r.g4?r.g4[1]:null; r.gSess=r.g4?r.g4[0]:null; r.gRev=r.g4?r.g4[2]:null;
    r.gRatio=(r.gTx!==null&&r.gTx>0)?r.pu/r.gTx:null;
    r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
@@ -344,6 +346,8 @@ function openAd(id){
  +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven 4.11)')
  +row('ROAS total, this basis',N2(r.roasAll))
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
+ +row('Credited to a VIEW, not a click',r.vShare===null||r.vShare===undefined?'\u2014'
+   :Math.round(r.vShare*100)+'% of its purchases  (7d-click '+Math.round((r.a.aw.pu7/Math.max(r.a.pur,1))*100)+'%, 1d-click '+Math.round((r.a.aw.pu1/Math.max(r.a.pur,1))*100)+'%)')
  +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
    :N0(r.gTx)+' vs Meta\u2019s '+N0(r.pu)+(r.gRatio===null?'':'  \u2014 Meta claims '+N2(r.gRatio)+'\u00d7'))
  +row('GA4 revenue',r.gRev===null||r.gRev===undefined?'\u2014':EGP(r.gRev)+' vs Meta\u2019s '+EGP(r.pv))
@@ -408,6 +412,8 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['roasAll','ROAS total',r=>'<b>'+N2(r.roasAll)+'</b>'],
  ['cpa','CPA used',r=>'<b>'+EGP(r.cpa)+'</b>'],
  ['cpaLo','best case',r=>EGP(r.cpaLo)],['cpaHi','worst case',r=>EGP(r.cpaHi)],
+ ['vShare','View-through',r=>r.vShare===null||r.vShare===undefined?'<span class="mut">—</span>'
+   :(r.vShare>0.4?'<span class="r">':'')+Math.round(r.vShare*100)+'%'+(r.vShare>0.4?'</span>':'')],
  ['cpatc','Cost/ATC',r=>EGP(r.cpatc)],
  ['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn],
  ['trend','Trend',r=>r.trend===null?'<span class="mut">too few</span>'
