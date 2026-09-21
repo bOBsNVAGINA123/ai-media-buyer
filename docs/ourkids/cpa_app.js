@@ -197,6 +197,9 @@ function build(){
    /* short windows. The grid already drops the newest 4 days, so "last 3" here is 4-7 days
       old and about 90% matured -- still the freshest number worth printing. */
    sp3:S(a,'sp',Math.max(i0,i1-3),i1),
+   val3:(basis==='on'?S(a,'pv',Math.max(i0,i1-3),i1)*AF.pv
+     :basis==='off'?S(a,'fv',Math.max(i0,i1-3),i1)*AF.ov*H
+     :S(a,'pv',Math.max(i0,i1-3),i1)*AF.pv+S(a,'fv',Math.max(i0,i1-3),i1)*AF.ov*H),
    sp3p:S(a,'sp',Math.max(i0,i1-6),Math.max(i0,i1-3)),
    k3:(basis==='on'?S(a,'pu',Math.max(i0,i1-3),i1)*AF.pu
      :basis==='off'?S(a,'op',Math.max(i0,i1-3),i1)*AF.op*H
@@ -291,6 +294,7 @@ function build(){
    r.gpwHi = (isFinite(r.cpaRLo)?e7*1000/r.cpaRLo:0)*unit - r.sp7;
    r.gpwPer= r.sp7>0?r.gpw/r.sp7:0;
    r.cpa3=r.k3>0?r.sp3/r.k3:Infinity;
+   r.roas3=r.sp3>0?r.val3/r.sp3:0;
    r.cpa3p=r.k3p>0?r.sp3p/r.k3p:Infinity;
    r.d3=(isFinite(r.cpa3)&&isFinite(r.cpa3p)&&r.cpa3p>0)?r.cpa3/r.cpa3p-1:null;
    const eW=r.sp/1000, unitW=r.aovK*r.margK;
@@ -344,6 +348,7 @@ function build(){
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else if(!live)r.act=(r.rob==='depends')?'OFFDEP':(loses?'OFFBAD':'OFFOK');
   else r.act='HOLD';});
+ CURG=cur; PREF=f.length;
  f=applyLabel(f);
  return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,hairSel,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,anomSel,dropped,
          win:document.getElementById('win').value};
@@ -505,8 +510,8 @@ let SORT={k:'sp',d:-1};
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
 function COLS(D){const H=hairLbl(D);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','spark','sp','gp','cppOn','roasOn','cppOff','roasOff','clickShare',
-   'roasAll','cpa','cpa3','d3','ga4','anom'];
+ const KEEP=['n','act','st','spark','sp','sp3','gp','cppOn','roasOn','cppOff','roasOff',
+   'roasAll','cpa','cpa3','roas3','d3','ga4','anom'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
@@ -514,6 +519,7 @@ function COLS(D){const H=hairLbl(D);
  ['spark','Last 28d',r=>spark(r.spark)],
  ['sp','Spend',r=>EGP(r.sp)],['sp7','last 7d',r=>EGP(r.sp7)],['sp3','last 3d',r=>EGP(r.sp3)],
  ['cpa3','CPA last 3d',r=>isFinite(r.cpa3)?EGP(r.cpa3):'<span class="mut">no sale</span>'],
+ ['roas3','ROAS last 3d',r=>r.sp3>0?((r.roas3>=ECON.beOn?'<span class="g">':'<span class="r">')+N2(r.roas3)+'\u00d7</span>'):'<span class="mut">\u2014</span>'],
  ['d3','3d vs prior 3d',r=>r.d3===null?'<span class="mut">\u2014</span>'
    :(r.d3>0?'<span class="r">+':'<span class="g">')+Math.round(r.d3*100)+'%</span>'],
  ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
@@ -523,9 +529,8 @@ function COLS(D){const H=hairLbl(D);
    :(r.clickShare<0.4?'<span class="r">':'')+Math.round(r.clickShare*100)+'%'+(r.clickShare<0.4?'</span>':'')],
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
- ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
- ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
-   :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
+ ['gTx','GA4 saw',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">\u2014</span>'
+   :N0(r.gTx)+' <span class="mut">of '+N0(r.pu)+' claimed</span>'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
   ['roasOn','ROAS online',r=>(r.roasOn>=ECON.beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
@@ -559,7 +564,7 @@ function wireSort(render){document.querySelectorAll('th[data-k]').forEach(t=>t.o
 /* ---------- label filter + bulk open ----------------------------------------------
    Click a label to narrow the page to it, then open exactly that set in Ads Manager.
    Meta accepts a comma-separated id list, so the selection travels. */
-let LABELS={}, LBLSEL=null;
+let LABELS={}, LBLSEL=null, CURG=0, PREF=0;
 function labelBar(D){
  const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
  const b={}; D.universe.filter(r=>r.sp>=(parseFloat(document.getElementById('mins').value)||0))
@@ -572,6 +577,7 @@ function labelBar(D){
  const fns=[...new Set(D.universe.map(r=>r.fn))];
  const extra=fmts.map(x=>'<span class="lb sub'+(LBLSEL==='fmt:'+x?' on':'')+'" onclick="pickLabel(\'fmt:'+x+'\')">'+x+'</span>').join('')
   +fns.map(x=>'<span class="lb sub'+(LBLSEL==='fn:'+x?' on':'')+'" onclick="pickLabel(\'fn:'+x+'\')">'+x+'</span>').join('')
+  +'<span class="lb sub'+(LBLSEL==='cheap'?' on':'')+'" onclick="pickLabel(\'cheap\')">below avg CPP</span>'
   +'<span class="lb sub'+(LBLSEL==='live'?' on':'')+'" onclick="pickLabel(\'live\')">live only</span>'
   +'<span class="lb sub'+(LBLSEL==='flag'?' on':'')+'" onclick="pickLabel(\'flag\')">flagged odd</span>';
  const ids=D.rows.map(r=>r.id).filter(Boolean);
@@ -580,7 +586,12 @@ function labelBar(D){
  const url=lvl==='set'?base+'campaigns/adsets?act='+acct+'&selected_adset_ids='+ids.slice(0,60).join(',')
       :lvl==='cmp'?base+'campaigns?act='+acct+'&selected_campaign_ids='+ids.slice(0,60).join(',')
       :base+'ads?act='+acct+'&selected_ad_ids='+ids.slice(0,60).join(',');
- return '<div class="lbar">'+chips+'<span class="lbsep"></span>'+extra
+ const NAMES={cheap:'below the account\u2019s average CPP',live:'live ads only',flag:'flagged as odd'};
+ const fname=LBLSEL?(NAMES[LBLSEL]||((VERB[LBLSEL]||LBLSEL).toLowerCase())):null;
+ const fb=LBLSEL?'<div class="fbanner"><b>Filtered:</b> showing '+D.rows.length+' of '+PREF+' '+NOUN[D.level]
+  +'s \u2014 '+fname+'. Every list, chart and total below reflects only these.'
+  +'<span class="x" onclick="pickLabel(null)">Show everything</span></div>':'';
+ return fb+'<div class="lbar">'+chips+'<span class="lbsep"></span>'+extra
   +(LBLSEL?'<span class="lb clr" onclick="pickLabel(null)">clear filter</span>':'')
   +'<span class="lbspace"></span>'
   +'<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="'+url+'">'
@@ -590,6 +601,7 @@ function applyLabel(rows){
  if(!LBLSEL)return rows;
  const GRP2={OFFOK:'PAUSED',OFFBAD:'PAUSED',OFFDEP:'PAUSED'};
  if(LBLSEL==='live')return rows.filter(r=>r.st==='act');
+ if(LBLSEL==='cheap')return rows.filter(r=>isFinite(r.cpa)&&r.cpa<CURG);
  if(LBLSEL==='flag')return rows.filter(r=>r.anom&&r.anom.length);
  if(LBLSEL.indexOf('fmt:')===0)return rows.filter(r=>r.fmt===LBLSEL.slice(4));
  if(LBLSEL.indexOf('fn:')===0)return rows.filter(r=>r.fn===LBLSEL.slice(3));
@@ -614,9 +626,12 @@ function boot(){
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
  document.getElementById('sub').textContent=
   st0.toISOString().slice(0,10)+' → '+end.toISOString().slice(0,10)+' · '+D.rows.length+' Meta ads · synced '+(O.lastSync||'');
- document.getElementById('p1').innerHTML='Blended CPA <b>'+EGP(D.cur)+'</b>';
- document.getElementById('p2').innerHTML='Target <b>'+EGP(D.target)+'</b>';
- document.getElementById('p3').innerHTML='Kill <b>'+EGP(D.kill)+'</b> · Scale <b>'+EGP(D.scale)+'</b>';
+ const uAll=D.universe.filter(r=>r.sp>=(parseFloat(document.getElementById('mins').value)||0));
+ const nOff=uAll.filter(r=>r.act==='KILL').length, nUp=uAll.filter(r=>r.act==='SCALE').length,
+       nDep=uAll.filter(r=>r.act==='DEPENDS').length;
+ document.getElementById('p1').innerHTML='Turn off <b style="color:#dc2650">'+nOff+'</b> · Raise <b style="color:#0c9e6e">'+nUp+'</b> · Unclear <b style="color:#b45309">'+nDep+'</b>';
+ document.getElementById('p2').innerHTML='CPA <b>'+EGP(D.cur)+'</b> → target <b>'+EGP(D.target)+'</b>';
+ document.getElementById('p3').innerHTML='Kill line <b>'+EGP(D.kill)+'</b> · Scale line <b>'+EGP(D.scale)+'</b>';
  document.getElementById('ft').innerHTML=
   'Source: the same live <code>data.js</code> the OurKids dashboard reads (Meta per-ad daily, 60d, rebuilt hourly). '
   +'Per-ad add-to-cart / status / format '+(ADXLIVE?'<b>live</b> from the pipeline, re-cuts with the window.':'from a 2026-07-23→09-16 snapshot — goes live on the next pipeline run, after which it re-cuts with the window.')
@@ -913,8 +928,9 @@ function doCard(r,D){
  + stat('CPP in-store',EGP(r.cppOff),N0(r.op)+' purchases')
  + stat('ROAS in-store',N2(r.roasOff)+'×',Math.round((r.hairUsed||0)*100)+'% click-driven')
  + stat('ROAS credited',N2(r.roasAll)+'×','online + store credited',r.roasAll>=ECON.beOn?'#0d8a62':'#b81f45')
- + stat('GA4 saw',r.gTx===null||r.gTx===undefined?'—':N0(r.gTx),
-        r.gNorm===null||r.gNorm===undefined?'no GA4 row':N2(r.gNorm)+'× vs normal gap')
+ + stat('GA4 saw',r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu),
+        r.ga4? (G4LAB[r.ga4]||[''])[0] : 'no GA4 data',
+        r.ga4==='contradicts'||r.ga4==='overclaims'?'#b81f45':(r.ga4==='confirms'?'#0c9e6e':undefined))
  +'</div>'+swing(r)+'</div>';}
 /* When CPA and profit disagree it is almost always AOV. Say so on the card rather than
    letting the reader find a 25x ROAS sitting under the word "kill". */
@@ -959,10 +975,20 @@ function whyShort(r,D){
  if(r.act==='OFFOK')return 'Already off. It made <b>'+EGP(r.gp)+'</b> while it ran, but returned '+EGP(1000*r.gpPerK)
   +' per E\u00a31,000 against the account\u2019s own average, so there is no case for switching it back on ahead of the others.';
  return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
-const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['2\u00d7 above normal','cut'],
- contradicts:['GA4 sees none','kill'],thin:['too few','hold'],nodata:['no GA4 row','hold']};
-function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">—</span>';
- const t=G4LAB[r.ga4]||['?','hold'];return '<span class="tg '+t[1]+'" title="Meta '+N0(r.pu)+' online purchases vs GA4 '+(r.gTx===null?'no data':N0(r.gTx)+' transactions')+'">'+t[0]+'</span>';}
+/* GA4 verdicts in words a person can act on. GA4 only sees ~64% of orders, so
+   "GA4 saw 20 of 29" IS agreement -- the tooltip does that arithmetic for the reader. */
+const G4LAB={confirms:['GA4 backs it up','scale'],overclaims:['claims too much','cut'],
+ contradicts:['invisible to GA4','kill'],thin:['too small to check','hold'],nodata:['no GA4 data','hold']};
+function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">\u2014</span>';
+ const t=G4LAB[r.ga4]||['?','hold'];
+ const tip=r.gTx===null?'This ad name never appears in GA4, so there is no independent check.'
+  :'Meta claims '+N0(r.pu)+' online purchases. GA4 independently recorded '+N0(r.gTx)
+  +'. GA4 normally sees only ~64% of orders, so about '+N0(Math.round(r.pu*0.64))+' would be normal here. '
+  +(r.ga4==='confirms'?'That is roughly what it saw: the claim checks out.'
+   :r.ga4==='contradicts'?'Seeing ZERO is not normal: do not trust this claim.'
+   :r.ga4==='overclaims'?'It saw far less than that: treat the claim with suspicion.'
+   :'Too few purchases to judge either way.');
+ return '<span class="tg '+t[1]+'" title="'+tip.replace(/"/g,'')+'">'+t[0]+'</span>';}
 /* the Simple / Everything toggle applies here too -- this table was 30 columns wide */
 function PCOLS(all){
  if((document.getElementById('dens')||{}).value==='f')return all;
@@ -1056,7 +1082,7 @@ function vAct(D){
      ['n',NOUN[D.level].replace(/^./,function(c){return c.toUpperCase();}),adCell],
      ['sp','Spend',function(r){return EGP(r.sp);}],
      ['pu','Meta online',function(r){return N0(r.pu);}],
-     ['gTx','GA4 tx',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx);}],
+     ['gTx','GA4 saw',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx)+' of '+N0(r.pu);}],
      ['anom','Why it is flagged',function(r){return '<span style="white-space:normal;display:inline-block;max-width:520px;text-align:left">'+r.anom.join('<br/>')+'</span>';}]])):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
    'Gross profit minus spend, at '+hairLbl(D)+' in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
@@ -1114,9 +1140,11 @@ function vPred(D){
  const f=live.map(r=>{const e=r.sp7/1000;
    return Object.assign({},r,{fc:e*r.lamR,fcLo:e*1000/r.cpaRHi,fcHi:e*1000/r.cpaRLo});});
  const T=k=>f.reduce((s,r)=>s+r[k],0);
- const shrunkTot=T('sp7')/Math.max(T('fc'),1e-9);
- const winCPA=live.reduce((s,r)=>s+r.sp,0)/Math.max(live.reduce((s,r)=>s+r.k,0),1e-9);
- const naive=T('sp7')/Math.max(live.reduce((s,r)=>s+r.k7,0),1e-9);
+ const fcT=T('fc');
+ const shrunkTot=fcT>=1?T('sp7')/fcT:NaN;
+ const kAllW=live.reduce((s,r)=>s+r.k,0), k7All=live.reduce((s,r)=>s+r.k7,0);
+ const winCPA=kAllW>=1?live.reduce((s,r)=>s+r.sp,0)/kAllW:NaN;
+ const naive=k7All>=1?T('sp7')/k7All:NaN;
  const rising=D.rows.filter(r=>r.trendSig&&r.trend>0).sort((a,b)=>b.trend-a.trend);
  const falling=D.rows.filter(r=>r.trendSig&&r.trend<0).sort((a,b)=>a.trend-b.trend);
  const byFmt={},byFn={};
@@ -1124,17 +1152,17 @@ function vPred(D){
    const o=m[k]=m[k]||{sp:0,k:0,val:0,atc:0,n:0};o.sp+=r.sp;o.k+=r.k;o.val+=r.val;o.atc+=r.atc;o.n++;});});
  const grp=m=>table(Object.entries(m).map(([k,v])=>({g:k,n:v.n,sp:v.sp,k2:v.k,
     cpa:v.k?v.sp/v.k:Infinity,roas:v.sp?v.val/v.sp:0,aov:v.k?v.val/v.k:0,catc:v.atc?v.sp/v.atc:Infinity,
-    sh:v.sp/D.tot.sp})).sort((a,b)=>b.sp-a.sp),
+    sh:v.sp/Math.max(D.rows.reduce((x,r2)=>x+r2.sp,0),1)})).sort((a,b)=>b.sp-a.sp),
   [['g','Group',r=>'<b>'+r.g+'</b>'],['n','Ads',r=>r.n],['sp','Spend',r=>EGP(r.sp)],
    ['sh','Share',r=>Math.round(r.sh*100)+'%'],['k2','Purch',r=>N1(r.k2)],['cpa','CPA',r=>EGP(r.cpa)],
    ['aov','AOV',r=>EGP(r.aov)],['roas','ROAS',r=>N2(r.roas)],['catc','Cost/ATC',r=>EGP(r.catc)]]);
  return '<div class="kpis">'
  +kpi('Next 7d purchases',N0(T('fc')),'90% CI '+N0(T('fcLo'))+'–'+N0(T('fcHi'))+' at today\'s budget')
  +kpi('Spend it assumes',EGP(T('sp7')),live.length+' live ads, last 7d held flat')
- +kpi('Forward CPA',EGP(shrunkTot),'shrunk on the last 14 mature days')
- +kpi('Naive 7d CPA',EGP(naive),'what the raw last-7d numbers say',naive<shrunkTot?'#e23a63':'#12b886')
- +kpi('Window CPA',EGP(winCPA),'same ads, whole '+(D.i1-D.i0)+'d window')
- +kpi('Decay',PC(shrunkTot/winCPA-1),'recent vs window — the back-to-school gap',shrunkTot>winCPA?'#e23a63':'#12b886')
+ +kpi('Forward CPA',isFinite(shrunkTot)?EGP(shrunkTot):'\u2014',isFinite(shrunkTot)?'shrunk on the last 14 mature days':'nothing forecastable in this selection')
+ +kpi('Naive 7d CPA',isFinite(naive)?EGP(naive):'\u2014',isFinite(naive)?'what the raw last-7d numbers say':'no purchases in the last 7d',(isFinite(naive)&&naive<shrunkTot)?'#e23a63':'#12b886')
+ +kpi('Window CPA',isFinite(winCPA)?EGP(winCPA):'\u2014','same ads, whole '+(D.i1-D.i0)+'d window')
+ +kpi('Decay',(isFinite(shrunkTot)&&isFinite(winCPA))?PC(shrunkTot/winCPA-1):'\u2014','recent vs window \u2014 the back-to-school gap',shrunkTot>winCPA?'#e23a63':'#12b886')
  +kpi('CPA rising (sig.)',rising.length+' ads','spend E£'+N0(rising.reduce((s,r)=>s+r.sp7,0))+'/wk','#e23a63')
  +kpi('CPA falling (sig.)',falling.length+' ads','spend E£'+N0(falling.reduce((s,r)=>s+r.sp7,0))+'/wk','#12b886')
  +'</div>'
@@ -1166,6 +1194,8 @@ function vPred(D){
 function drawPred(D){
  const c=document.getElementById('tr'); if(!c)return;
  const r=D.rows.filter(x=>x.trend!==null).sort((a,b)=>b.trend-a.trend).slice(0,30);
+ if(!r.length){c.parentElement.innerHTML='<div class="mut" style="padding:30px 10px;font-size:12.5px">'
+  +'Nothing in this selection has enough purchases in both halves of the window to test a trend. Widen the selection.</div>';return;}
  new Chart(c,{type:'bar',data:{labels:r.map(x=>x.n.slice(0,26)),datasets:[{data:r.map(x=>x.trend*100),
   backgroundColor:r.map(x=>x.trend>0?(x.trendSig?'#e23a63':'#f7bfcd'):(x.trendSig?'#12b886':'#b7e8d6'))}]},
   options:{maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},
@@ -1204,33 +1234,34 @@ function vStore(D){
  +kpi('Online AOV',EGP(pu?pv/pu:0),'Meta-reported')
  +kpi('In-store AOV',EGP(op?fv/op:0),'Meta-reported, offline CAPI')
  +'</div>'
- +'<div class="banner r"><b>The in-store number is a matching claim, not a measurement of lift.</b> '
+ +(D.rows.length>=10&&!LBLSEL?'<div class="banner r"><b>The in-store number is a matching claim, not a measurement of lift.</b> '
  +'Meta credits itself E£'+N0(fv)+' of store revenue in this window on E£'+N0(sp)+' of spend. '
  +'Actual branch revenue over the same days, from Odoo, was E£'+N0(brRev)+' — so Meta is claiming <b>'
- +(brRev?Math.round(100*fv/brRev):0)+'% of everything the seven shops sold</b>, for 3% of company revenue in ad spend. '
+ +(brRev?(100*fv/brRev>=1?''+Math.round(100*fv/brRev):(Math.round(1000*fv/brRev)/10).toFixed(1)):'?')+'% of everything the seven shops sold</b>. '
  +'That is '+N2(fv/sp)+'× and it would be the best media on earth. It is not: the store CAPI feed matches a purchase to anyone '
  +'who saw an ad, and in the regression already run in this account Meta spend stops predicting branch revenue once trend and the Fri/Sat '
  +'pattern are controlled — the coefficient turns negative. The 21.4% figure is this account\'s own measured incremental share for '
  +'offline conversions (Meta\'s attribution-comparison read), and it is the one to plan on. At 21.4%, in-store Meta runs at '
- +N2(fv*0.214/sp)+'× against a '+N2(beOff)+'× breakeven — i.e. it does not clear.</div>'
- +'<div class="banner b">Online and in-store do not rank the same ads. The correlation between an ad\'s online CPP and its in-store CPP '
+ +N2(fv*0.214/sp)+'× against a '+N2(beOff)+'× breakeven — i.e. it does not clear.</div>':'')
+ +(D.rows.length>=8?'<div class="banner b">Online and in-store do not rank the same ads. The correlation between an ad\'s online CPP and its in-store CPP '
  +'in this window is <b>'+N2(corr(rows.filter(r=>isFinite(r.cppOn)&&isFinite(r.cppOff)).map(r=>r.cppOn),
    rows.filter(r=>isFinite(r.cppOn)&&isFinite(r.cppOff)).map(r=>r.cppOff)))+'</b>. '
- +'If that is near zero, picking winners on one basis tells you nothing about the other, and the blended grid is averaging two different games.</div>'
+ +'If that is near zero, picking winners on one basis tells you nothing about the other, and the blended grid is averaging two different games.</div>':'')
  +card('Online vs in-store, per ad','Sorted by spend. "Store share" is the in-store portion of the value Meta claims for that ad.',
    table(sortRows(rows),[
     ['n','Ad',adCell],['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
     ['st','Live',r=>r.st==='act'?'<span class="g">on</span>':'<span class="mut">off</span>'],
     ['spark','Last 28d',r=>spark(r.spark)],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
+    ['sp3','Spend 3d',r=>EGP(r.sp3)],
+    ['roas3','ROAS 3d',r=>r.sp3>0?N2(r.roas3)+'\u00d7':'<span class="mut">\u2014</span>'],
     ['ga4','GA4 check',r=>G4TAG(r)],
  ['clickShare','Store click share',r=>r.clickShare===null||r.clickShare===undefined?'<span class="mut">\u2014</span>'
    :(r.clickShare<0.4?'<span class="r">':'')+Math.round(r.clickShare*100)+'%'+(r.clickShare<0.4?'</span>':'')],
  ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
    :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
- ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
- ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
-   :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
+ ['gTx','GA4 saw',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">\u2014</span>'
+   :N0(r.gTx)+' <span class="mut">of '+N0(r.pu)+' claimed</span>'],
  ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
     ['op','Store purch',r=>N0(r.op)],['cppOff','Store CPP',r=>EGP(r.cppOff)],['roasOff','Store ROAS',r=>N2(r.roasOff)],['aovOff','Store AOV',r=>EGP(r.aovOff)],
     ['nc','Store new cust',r=>N0(r.nc)],
