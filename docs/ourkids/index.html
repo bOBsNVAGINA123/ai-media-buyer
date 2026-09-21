@@ -361,6 +361,22 @@ function blxStats(){if(_BLXC!==null)return _BLXC;
  catch(e){return (_BLXC={r:1,n:0,lo:1,hi:1});}}
 function BLX(){return blxStats().r;}
 function brGPn(netTill){return (netTill==null)?null:netTill*BLX()*posMg();}
+/* v10.9 THE SHARED-OVERHEAD POOL, MEASURED. The branch break-even allocator was splitting a
+   baked E£1,203,956/month from the offline sheet. The posted book already says what the
+   non-branch overhead is: HQ and warehouse rent, comms, other OpEx, and the payroll that is
+   not branch salaries. Platform ad invoices stay out (expTot excludes the memo bucket, and
+   ads are charged from the APIs). Last complete month with a book. */
+var _SHOVC=null;
+function sharedOvhM(){if(_SHOVC!==null)return _SHOVC;
+ try{const O2=window.O,E=O2.exp||{};
+  const nowM=(O2.today||'').slice(0,7);
+  const ms=Object.keys(E).filter(m=>m!==nowM&&expTot(m)>0).sort();
+  const m=ms[ms.length-1];if(!m)return (_SHOVC=null);
+  const e=E[m]||{};
+  const brSal=Object.keys(O2.bcost||{}).reduce((a,b)=>a+(((O2.bcost[b]||{})[m]||{}).sal||0),0);
+  const v=(e['Rent — HQ / warehouses / flats']||0)+(e['Comms & internet']||0)+(e['Other OpEx']||0)
+        +(e['Packing & bags']||0)+Math.max(0,(e['Payroll & benefits']||0)-brSal);
+  return (_SHOVC={v:Math.round(v),m:m});}catch(e){return (_SHOVC=null);}}
 function expTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.indexOf('(memo)')<0)t+=E[k];return t;}
 function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
@@ -1152,7 +1168,8 @@ const TABGROUPS=[
  ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
- ['P&L',[['gl','Growth Lab'],['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
+ ['Growth Lab',[['gl','Growth Lab']]],
+ ['P&L',[['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
  ['Traffic & creative',[['cv','CVR doctor'],['mn','Menu map'],['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
  ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
@@ -5827,7 +5844,7 @@ function platformTree(g){
  const PC=(c,p)=>(p==null||!p||!isFinite(c/p))?'—':((c/p-1>=0?'+':'−')+Math.abs((c/p-1)*100).toFixed(0)+'%');
  const CO=(c,p,good)=>{if(p==null||!p||!isFinite(c/p))return '#9aa3b5';const up=c>=p;return (good===false?!up:up)?'#12a06e':'#e23a63';};
  const {gpOn}=_gpPct();
- const be=gpOn>0?1/gpOn:3.5;   // breakeven ROAS on the real online gross margin
+ const be=gpOn>0?1/gpOn:GPBE();   // breakeven ROAS on the real online gross margin
  const days=Math.max(1,span(s,e));
  const rows=[],cards=[];
  PFDEF.forEach(P=>{
@@ -5988,7 +6005,7 @@ function googleChain(g){
     breakeven -- lifting that cap buys more losses. Every capped campaign is therefore checked
     against its own economics before it is recommended, and the ones that do not clear breakeven
     are called out as the opposite of an opportunity. */
- const {gpOn:_gp}=_gpPct(); const _be=_gp>0?1/_gp:3.5;
+ const {gpOn:_gp}=_gpPct(); const _be=_gp>0?1/_gp:GPBE();
  const _gi=((O.attr||{}).google||{}).incr||1;
  /* Judge on the RECENT window, not the campaign's lifetime. DSA reads 6.11x over all time and
     1.92x over the fortnight since it was relaunched -- a budget decision is about what it does
@@ -6356,7 +6373,7 @@ function mdScore(r,gpOn,be){
 function moneyDesk(g){
  const {rows,gpOn,W,noWin,noWinSp,ttHeld,ttSp,partial}=mdRows();
  if(!rows.length){pnlCard(g,'ins','Money desk','No ad entities in this sync.','');return;}
- const be=gpOn>0?1/gpOn:3.5;
+ const be=gpOn>0?1/gpOn:GPBE();
  const R=mdRoll(rows,MDLVL).map(r=>Object.assign(r,mdScore(r,gpOn,be)));
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SG=v=>(v>=0?'+':'−')+M(v);
@@ -6879,7 +6896,7 @@ function creMatrix(g){
     weeks ago next to what is live now, and the quadrant you act on has to be the current one.
     Falls back to lifetime only if the selected range has no overlap with the ad feed at all. */
  const AT=O.attr||{}, iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1;
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const CW=mdWin(), MW=O.madsW;
  let winMode=true;
  let R=(O.mads||[]).map(a=>{
@@ -9018,7 +9035,7 @@ function alertBand(g){
  });
  /* ---- 3. money losing money right now, from the desk's own scoring ---- */
  try{
-  const {rows,gpOn}=mdRows(); const be=gpOn>0?1/gpOn:3.5;
+  const {rows,gpOn}=mdRows(); const be=gpOn>0?1/gpOn:GPBE();
   const R=mdRoll(rows,'ad').map(r=>Object.assign(r,mdScore(r,gpOn,be)));
   const cuts=R.filter(r=>!r.thin&&r.v==='CUT');
   const bleed=cuts.reduce((a,r)=>a+r.gp,0);
@@ -9102,7 +9119,7 @@ function rCL(){if(TAB!=='cl')return;dCh();const g=document.getElementById('g30')
 }
 function changeLog(g){
  const W=O.madsW||{n:60,start:'—'}, GW=O.gadsW||null;
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const AT=O.attr||{};
  const iM=(AT.meta&&AT.meta.incr)||1, iMo=(AT.metaOff&&AT.metaOff.incr)||1, iG=(AT.google&&AT.google.incr)||1;
  let ev=[];
@@ -10096,7 +10113,8 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   const r=ov[b.name+'_rev']!=null?ov[b.name+'_rev']:(lv||b.revEst);
   const rn=ov[b.name+'_rent']!=null?ov[b.name+'_rent']:b.rentEst,op=ov[b.name+'_opex']!=null?ov[b.name+'_opex']:b.opexEst;
   return{...b,rev:r,liveRev:lv,prevRev:pv,rent:rn,opex:op};});
- const tot=B.reduce((a,b)=>a+b.rev,0)||1,pool=oh?FF.company.overheadPoolDefault:0;
+ const _sh=sharedOvhM();
+ const tot=B.reduce((a,b)=>a+b.rev,0)||1,pool=oh?((_sh&&_sh.v)||FF.company.overheadPoolDefault):0;
  B.forEach(b=>{b.al=oh?Math.round(pool*b.rev/tot):0;b.fx=(b.payroll+b.rent+b.opex+b.al)*wf;b.be=b.fx/cm;b.ov=b.rev-b.be;b.pf=b.rev*cm-b.fx;});
  document.getElementById('pp').innerHTML='Range <b>'+ST.s+'</b> \u2192 '+ST.e+' \u00b7 branch model, <b>'+FF.branches.length+' branches</b>'+(live?' · retail revenue <b>LIVE from Odoo</b>':'');
  const mv=Math.round(mvN*afo()),mp=tot?mv/tot*100:0;
@@ -14141,9 +14159,9 @@ function _gpPct(){
  const _GW=90;
  let so=0,go=0;(function(){const R=(O.shop&&O.shop.rev)||[],G=(O.shop&&O.shop.gp)||[];
   for(let i=Math.max(0,R.length-_GW);i<R.length;i++){so+=R[i]||0;go+=gpAdj(R[i]||0,G[i]||0);}})();
- const gpOnGross=so>5e3?go/so:(FF&&FF.company?FF.company.gpPct:0.3628);
+ const gpOnGross=so>5e3?go/so:(FF&&FF.company&&FF.company.gpPct?FF.company.gpPct:GPFB.gpOnGross);
  let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=gpAdj(v[0],v[1]);}));
- const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.3628);
+ const gpSt=sr>0?sg/sr:GPFB.gpSt;
  let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
   const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
@@ -14191,7 +14209,7 @@ function cmpLaunches(g){
  const PWL=pfWin(W);
  const N=W.n, today=PWL.b, from0=PWL.a, LOOK=Math.min(45,today);
  const fON=af('meta'), fOFF=afo(), fG=af('google');
- const {gpOn,gpSt}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn,gpSt}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SM=v=>(v>=0?'+':'−')+M(v);
  const iso=k=>{const d=new Date(W.start+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+k);return d.toISOString().slice(0,10);};
@@ -16116,7 +16134,7 @@ function offlineDowCard(g){const A=O.ad;if(!A||!A.instoreMeta){return;}const mon
 function budgetBoard(g){const money=v=>Math.round(v).toLocaleString();
  const camps=abCamps().camps.filter(c=>c.sp>0);
  if(!camps.length){pnlCard(g,'meta','Budget Advisor','No per-campaign ad data in the feed yet.','');return;}
- const {gpOn}=_gpPct();const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct();const be=gpOn>0?1/gpOn:GPBE();
  const barFor=c=>c.intent==='prospecting'?be:(c.intent==='retargeting'?be*1.4:be*1.15);
  const seen=abGet(AB_SEEN,{}),today=abToday(),log=abGet(AB_CHG,[]);let dirty=false;
  const act=camps.filter(c=>c.active&&c.daily>=100).sort((a,b)=>b.daily-a.daily);
@@ -16263,7 +16281,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-222425';
+const BUILD='20260921-223124';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -16321,7 +16339,9 @@ function icDelta(cur,prev){
   +';font-weight:700">'+(d>=0?'+':'\u2212')+Math.abs(d).toFixed(d>=100?0:1)+'%'
   +'<span style="display:block;font-size:9.5px;color:#9aa3b5;font-weight:600">E\u00a3'+Math.round(prev).toLocaleString()+'</span></td>';}
 function rIC(){if(TAB!=='ic')return;dCh();const g=document.getElementById('g29');g.innerHTML='';
- const A=O.ad;const AT=O.attr||{};const GP=((FF&&FF.company&&FF.company.gpPct)||0.266);
+ const A=O.ad;const AT=O.attr||{};/* v10.9 was FF.company.gpPct with a 0.266 fallback -- the baked sheet, on the old basis.
+    Measured gross margin on the 4% basis instead; the sheet is no longer consulted here. */
+ const GP=GPQ().gpOnGross;
  const t0=A?new Date(A.start+'T00:00:00Z').getTime():0;const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
  const S=(k,a,b)=>{let t=0;for(let i=Math.max(0,ix(a));i<=Math.min(A.n-1,ix(b));i++)t+=(A[k]||[])[i]||0;return t;};
  const M=v=>'E£ '+Math.round(v).toLocaleString();const X=v=>(v==null||!isFinite(v))?'—':v.toFixed(2)+'x';
@@ -17128,7 +17148,7 @@ function vIC(g){try{
  const A=O.attr||{}; const AD=O.ad||{}; if(!AD.n)return;
  const W=Math.max(1,span(ST.s,ST.e)); const a0=Math.max(0,AD.n-W);
  const sum=arr=>{if(!arr)return 0;let t=0;for(let i=a0;i<AD.n;i++)t+=arr[i]||0;return t;};
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const PF=[['meta','Meta',sum(AD.mspend),sum(AD.mecomrev)],
            ['google','Google',sum(AD.gspend),sum(AD.gecomrev)],
            ['tt','TikTok',sum(AD.tspend),sum(AD.ttValue)]];
@@ -17154,7 +17174,7 @@ function vTK(g){try{
  if(!T.length){conclCard(g,'What TikTok says',[[VC.mute,'<b>No TikTok ad spend in this payload.</b> The Marketing API app is unapproved on this account, so what is here comes from Shopify referrer tagging and a bridge file — treat any absence as missing data, not as zero spend.']]);return;}
  const sp=T.reduce((a,x)=>a+(x.sp||0),0), val=T.reduce((a,x)=>a+(x.pv||x.ov||0),0);
  const pur=T.reduce((a,x)=>a+(x.pur||0),0);
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const roas=sp?val/sp:0, m=((O.attr||{}).tt||{}).incr;
  const L=[[roas>=be?VC.good:VC.bad,
   '<b>'+_vM(sp)+' spent across '+T.length+' ads returned '+_vM(val)+' — '+roas.toFixed(2)+'&times; reported</b>, against a '+be.toFixed(2)+'&times; breakeven'+(pur?' on '+Math.round(pur)+' purchases':'')+'.']];
@@ -17168,7 +17188,7 @@ function vTK(g){try{
 
 /* ---- Campaigns: where the money sits and whether it is earning ---- */
 function vCE(g){try{
- const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:3.5;
+ const {gpOn}=_gpPct(); const be=gpOn>0?1/gpOn:GPBE();
  const fON=af('meta'),fOFF=afo(),fG=af('google');
  const C=[];
  const mc={};
