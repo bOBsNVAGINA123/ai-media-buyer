@@ -111,7 +111,7 @@ function attrFactor(a,sel){
  if(sel==='incr'){
   const m=(ATTR.meta||{}).incr, f=(ATTR.metaOff||{}).incr;
   return {pu:m||1,pv:m||1,op:f||1,ov:f||1,src:'acct'};}
- const w=a&&a.aw, sfx=sel==='7d'?'7':sel==='1d'?'1':'V';
+ const w=a&&a.aw, sfx=sel==='7d'?'7':'1';
  if(w&&(w['pu'+sfx]!==undefined)){
   const base=a.pur||0, bv=a.pv||0, bo=a.opur||0, bov=a.ofv||0;
   const R=(x,b)=>b>0?Math.min(1.3,x/b):1;
@@ -174,7 +174,11 @@ function build(){
       applied as a blanket factor. An ad Meta claims purchases for that GA4 never saw is the
       one case where "scale it" should never be printed. */
    const AWx=r.a&&r.a.aw, base=r.a&&r.a.pur;
-   r.vShare=(AWx&&base>0)?AWx.puV/base:null;    // share of purchases credited to 1-day VIEW
+   /* Net view-through: the share of credited purchases that exist ONLY because of a view.
+      Account-wide this is 4%, not the 19% you get by reading Meta's 1d_view count as a share
+      -- that count overlaps the click count and is not a slice of the default window. */
+   r.vShare=(AWx&&base>0)?Math.max(0,(base-AWx.pu7)/base):null;
+   r.vRaw=AWx?AWx.puV:null;
    r.gTx=r.g4?r.g4[1]:null; r.gSess=r.g4?r.g4[0]:null; r.gRev=r.g4?r.g4[2]:null;
    r.gRatio=(r.gTx!==null&&r.gTx>0)?r.pu/r.gTx:null;
    r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
@@ -346,8 +350,8 @@ function openAd(id){
  +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven 4.11)')
  +row('ROAS total, this basis',N2(r.roasAll))
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
- +row('Credited to a VIEW, not a click',r.vShare===null||r.vShare===undefined?'\u2014'
-   :Math.round(r.vShare*100)+'% of its purchases  (7d-click '+Math.round((r.a.aw.pu7/Math.max(r.a.pur,1))*100)+'%, 1d-click '+Math.round((r.a.aw.pu1/Math.max(r.a.pur,1))*100)+'%)')
+ +row('Would vanish without view-through',r.vShare===null||r.vShare===undefined?'\u2014'
+   :Math.round(r.vShare*100)+'% of its credited purchases  (7d-click keeps '+N0(r.a.aw.pu7)+' of '+N0(r.a.pur)+', 1d-click '+N0(r.a.aw.pu1)+')')
  +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
    :N0(r.gTx)+' vs Meta\u2019s '+N0(r.pu)+(r.gRatio===null?'':'  \u2014 Meta claims '+N2(r.gRatio)+'\u00d7'))
  +row('GA4 revenue',r.gRev===null||r.gRev===undefined?'\u2014':EGP(r.gRev)+' vs Meta\u2019s '+EGP(r.pv))
@@ -412,8 +416,8 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['roasAll','ROAS total',r=>'<b>'+N2(r.roasAll)+'</b>'],
  ['cpa','CPA used',r=>'<b>'+EGP(r.cpa)+'</b>'],
  ['cpaLo','best case',r=>EGP(r.cpaLo)],['cpaHi','worst case',r=>EGP(r.cpaHi)],
- ['vShare','View-through',r=>r.vShare===null||r.vShare===undefined?'<span class="mut">—</span>'
-   :(r.vShare>0.4?'<span class="r">':'')+Math.round(r.vShare*100)+'%'+(r.vShare>0.4?'</span>':'')],
+ ['vShare','View-only',r=>r.vShare===null||r.vShare===undefined?'<span class="mut">—</span>'
+   :(r.vShare>0.25?'<span class="r">':'')+Math.round(r.vShare*100)+'%'+(r.vShare>0.25?'</span>':''),],
  ['cpatc','Cost/ATC',r=>EGP(r.cpatc)],
  ['fmt','Format',r=>r.fmt],['fn','Funnel',r=>r.fn],
  ['trend','Trend',r=>r.trend===null?'<span class="mut">too few</span>'
@@ -747,13 +751,8 @@ function vAct(D){
  +kpi('Purchases',PC(S.expK/Math.max(S.expNow,1e-9)-1),'volume — if this falls, the CPA win is fake',S.expK>=S.expNow?'#12b886':'#e23a63')
  +kpi('Gross profit',EGP(S.gpDelta)+'/wk','at '+(Math.round(S.marg*1000)/10)+'% blended margin',S.gpDelta>=0?'#12b886':'#e23a63')
  +'</div>'
- +(D.attrSel!=='default'&&D.rows.length&&(D.rows[0].af||{}).src==='none'
-  ? '<div class="banner r"><b>1-day view is not available yet and the numbers below are still the default window.</b> '
-    +'Meta only returns it per ad, and the per-ad pull lands on the next hourly sync. '
-    +'Nothing on this page is currently a 1-day-view number \u2014 pick another option rather than reading these as one.</div>'
-  : '')
-+(D.attrSel!=='default'&&(D.rows[0]||{}).af&&(D.rows[0].af.src!=='none')?'<div class="banner">'
- +'<b>Attribution: '+({'7d':'7-day click','1d':'1-day click','1v':'1-day view only','incr':"Meta's own incremental"}[D.attrSel])+'.</b> '
+ +(D.attrSel!=='default'&&(D.rows[0]||{}).af&&(D.rows[0].af.src!=='none')?'<div class="banner">'
+ +'<b>Attribution: '+({'7d':'7-day click (view-through stripped out)','1d':'1-day click','incr':"Meta's own incremental"}[D.attrSel])+'.</b> '
  +(D.rows.filter(r=>r.af&&r.af.src==='ad').length
    ? D.rows.filter(r=>r.af&&r.af.src==='ad').length+' of '+D.rows.length+' '+NOUN[D.level]
      +'s are using their OWN measured window from Meta, so the ranking can change, not just the level.'
