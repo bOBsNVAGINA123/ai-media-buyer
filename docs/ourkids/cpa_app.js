@@ -993,9 +993,9 @@ function g4Text(r){
  if(r.ga4==='thin')return 'too few to check';
  const n=r.gNorm;
  if(n===null||n===undefined)return 'no GA4 data';
- if(n>=0.8&&n<=1.25)return 'GA4 '+Math.round(100/n)+'% agrees';
- if(n>1.25)return 'Meta claims '+N2(n)+'\u00d7 too much';
- return 'GA4 sees '+N2(1/n)+'\u00d7 MORE';}
+ if(n>1.6)return 'Meta claims '+N2(n)+'\u00d7 too much';
+ if(n<0.5)return 'GA4 reports '+N2(1/n)+'\u00d7 the number';
+ return 'GA4 '+Math.round(100/n)+'% agrees';}
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">\u2014</span>';
  const tip=r.gTx===null?'This ad name never appears in GA4, so there is no independent check.'
   :'Meta claims '+N0(r.pu)+' online purchases. GA4 independently recorded '+N0(r.gTx)
