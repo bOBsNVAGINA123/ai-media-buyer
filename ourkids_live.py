@@ -988,6 +988,49 @@ def _google_at():
         log("google token", str(e)[:120]); return None
 
 
+def pull_ga4_ads(days=60):
+    """v9.92 PER-AD GA4, Egypt only. Meta stamps utm_content with the ad name and utm_term
+    with the ad set id, so GA4 can price a Meta ad INDEPENDENTLY of Meta. Worth doing because
+    the two disagree hard: across 80 matched ads Meta claimed 1.55x GA4's transactions, and the
+    per-ad ratio ran from 0.14x to 6.38x -- so it is not a constant you can haircut, it has to
+    be read ad by ad. Four ads carried 20+ Meta-claimed online purchases with ZERO GA4
+    transactions; one of them was on the tool's own scale list."""
+    at = _google_at()
+    if not at:
+        return None
+    prop = os.environ.get("GA4_PROPERTY", "297783390")
+    end = END.isoformat(); start = (END - datetime.timedelta(days=days - 1)).isoformat()
+    body = {"dateRanges": [{"startDate": start, "endDate": end}],
+            "dimensions": [{"name": "sessionManualAdContent"}],
+            "metrics": [{"name": "sessions"}, {"name": "transactions"},
+                        {"name": "purchaseRevenue"}, {"name": "addToCarts"}],
+            "dimensionFilter": {"andGroup": {"expressions": [
+                {"filter": {"fieldName": "country", "stringFilter": {"value": "Egypt"}}},
+                {"filter": {"fieldName": "sessionSource",
+                            "inListFilter": {"values": ["fb", "ig"]}}}]}},
+            "limit": 2000}
+    try:
+        req = urllib.request.Request(
+            "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
+            data=json.dumps(body).encode(),
+            headers={"Authorization": "Bearer " + at, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            d = json.loads(r.read())
+    except Exception as e:
+        log("ga4 ads", str(e)[:180]); return None
+    out = {}
+    for row in (d.get("rows") or []):
+        n = (row["dimensionValues"][0].get("value") or "").strip()
+        if not n or n in ("(not set)", "(none)"):
+            continue
+        v = [float(x.get("value") or 0) for x in row["metricValues"]]
+        out[n.lower()[:80]] = [int(v[0]), int(v[1]), round(v[2]), int(v[3])]
+    if not out:
+        log("ga4 ads :: 0 rows"); return None
+    log("ga4 ads ::", len(out), "ad names ::", sum(v[1] for v in out.values()), "transactions")
+    return {"win": [start, end], "ads": out}
+
+
 def pull_ga4_touch(days=60):
     """v9.91 FIRST-TOUCH vs LAST-TOUCH, Egypt only, rebuilt from SOURCE.
 
@@ -6246,6 +6289,7 @@ def build():
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "touch": safe(pull_ga4_touch) or prev.get("touch") or {},
+              "ga4ads": safe(pull_ga4_ads) or prev.get("ga4ads") or {},
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
               "cvr": _cvr_with_stock_hist(XTRA.get("cvr") or prev.get("cvr") or {}, prev),
