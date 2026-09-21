@@ -296,6 +296,21 @@ function rtExpKey(m,sub){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.toLo
    31.01.05.03/.07 — the SAME money already charged everywhere as API ad spend. Every OpEx
    total must exclude it or ads are counted twice. expTot() is the only sanctioned way to
    total a month of O.exp. */
+/* v10.3 THE 4% BASIS, AND THE BRIDGE WHILE THE PAYLOAD CATCHES UP.
+   Odoo strikes `margin` on price_subtotal (ex-VAT) while every revenue figure here is
+   amount_total / price_total (VAT in). Pairing them put an ex-VAT profit over a VAT-inclusive
+   revenue and understated every margin by 8.28% of revenue (0.96 - 1/1.14). The 14% never
+   applied to this business: the charge actually remitted is 4%.
+   The collector now rebuilds gross profit as revenue x 0.96 - cost and stamps O.gpBasis. Until
+   a sync carrying that stamp lands, the page applies the identical adjustment itself so no
+   table shows the old basis; the moment the stamp appears the adjustment turns itself off, so
+   it can never be applied twice. Gate every margin read through GPADJ, never by hand. */
+/* Lazy, and off window.O only: the module-level `O` is a `let` that boot() fills later, so
+   reading it at parse time gave undefined and silently disabled the bridge. */
+var _GPADJC=null;
+function GPADJ(){if(_GPADJC===null){try{_GPADJC=((window.O||{}).gpBasis)?0:(0.96-1/1.14);}catch(e){_GPADJC=0;}}return _GPADJC;}
+function gpAdj(rev,gp){return (gp||0)+(rev||0)*GPADJ();}   // rev must be VAT-INCLUSIVE
+function gpStale(){return GPADJ()>0;}
 function expTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.indexOf('(memo)')<0)t+=E[k];return t;}
 function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
@@ -4643,7 +4658,28 @@ function dailyBE(g){
  /* branch margin for the daily leg: last complete POS month (rent-free gross margin) */
  const nowM=(O.today||'').slice(0,7);
  const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
- let stMg=gpSt;if(pm){let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=v[1]||0;}});if(r2>0)stMg=g2/r2;}
+ let stMg=gpSt;if(pm){let r2=0,g2=0;Object.keys(O.pos).forEach(b=>{const v=O.pos[b][pm];if(v){r2+=v[0]||0;g2+=gpAdj(v[0],v[1]);}});if(r2>0)stMg=g2/r2;}
+ /* v10.3 TWO DIFFERENT TILL REVENUES. stMg is a margin struck on report.pos.order price_total,
+    which is VAT-INCLUSIVE. O.bl -- the daily branch feed every row below uses -- comes off the
+    POS journals NET of tax and runs about 1.14x smaller. Multiplying the one by the other took
+    roughly 14% off every branch gross-profit figure in this card. The bridge is not assumed at
+    1.14: it is measured, month by month, on the months where the daily feed covers every day,
+    and the median of those is used. */
+ const _blX=(function(){try{const bl=O.bl;if(!bl)return null;const b1=Date.parse(bl.start+'T00:00:00Z');
+   const dsum={},dn={};
+   for(let i=0;i<bl.n;i++){const d=new Date(b1+i*864e5).toISOString().slice(0,10),mm=d.slice(0,7);
+    let v=0;Object.keys(bl.b).forEach(b2=>{v+=bl.b[b2][i]||0;});
+    dsum[mm]=(dsum[mm]||0)+v;if(v>0)dn[mm]=(dn[mm]||0)+1;}
+   const rs=[];Object.keys(dsum).forEach(mm=>{
+    const dim=new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0)).getUTCDate();
+    if((dn[mm]||0)<dim)return;                       // partial month -> not a ratio
+    let pr=0;Object.keys(O.pos||{}).forEach(b2=>{const v=(O.pos[b2]||{})[mm];if(v)pr+=v[0]||0;});
+    if(pr>0&&dsum[mm]>0)rs.push(pr/dsum[mm]);});
+   if(!rs.length)return null;rs.sort((a,b2)=>a-b2);
+   return {r:rs[Math.floor(rs.length/2)],n:rs.length,lo:rs[0],hi:rs[rs.length-1]};}catch(e){return null;}})();
+ const BLX=_blX?_blX.r:1;
+ /* One number for "branch gross profit from a day of the net-of-tax daily feed". */
+ const brGP=v=>(v==null)?null:v*BLX*stMg;
  const beAll=(function(){ // blended break-even at this window's actual web/branch revenue mix
   return null;})();
  const _drag=(function(){try{return _gpPct().drag||0;}catch(e){return 0;}})();
@@ -4702,9 +4738,9 @@ function dailyBE(g){
    ovOn:_ov?_ov.on:null, ovAll:_ov?_ov.all:null, ovEst:!!(_ov&&_ov.est),
    mer:sp>0?rev/sp:null, amer:sp>0?nc/sp:null,
    merAll:(sp>0&&br!=null)?(rev+br)/sp:null,
-   pas:gp2-sp, pasAll:br!=null?gp2+br*stMg-sp:null,
+   pas:gp2-sp, pasAll:br!=null?gp2+brGP(br)-sp:null,
    pasN:_ov?gp2-sp-_ov.on:null,
-   pasAllN:(_ov&&br!=null)?gp2+br*stMg-sp-_ov.all:null});}
+   pasAllN:(_ov&&br!=null)?gp2+brGP(br)-sp-_ov.all:null});}
  if(rows.length<2)return;
  const grade=(v,b2)=>{if(v==null)return 'background:#f7f8fc;color:#c9ccd6';
   const r2=v/b2;
@@ -4748,8 +4784,8 @@ function dailyBE(g){
   +cell(1,gMoney(tOvOn!=null?tGp-tSp-tOvOn:null),tOvOn!=null?((tGp-tSp-tOvOn>=0?'+':'−')+M(tGp-tSp-tOvOn)):'—')
   +'<td style="'+TD+'">'+(tBr!=null?M(tBr):'—')+'</td>'
   +cell(1,tBr!=null?grade((tRev+tBr)/tSp,be):grade(null,be),tBr!=null&&tSp?((tRev+tBr)/tSp).toFixed(1)+'×':'—')
-  +cell(1,tBr!=null?gMoney(tGp+tBr*stMg-tSp):gMoney(null),tBr!=null?((tGp+tBr*stMg-tSp>=0?'+':'−')+M(tGp+tBr*stMg-tSp)):'—')
-  +cell(1,(tBr!=null&&tOvAll!=null)?gMoney(tGp+tBr*stMg-tSp-tOvAll):gMoney(null),(tBr!=null&&tOvAll!=null)?((tGp+tBr*stMg-tSp-tOvAll>=0?'+':'−')+M(tGp+tBr*stMg-tSp-tOvAll)):'—')
+  +cell(1,tBr!=null?gMoney(tGp+brGP(tBr)-tSp):gMoney(null),tBr!=null?((tGp+brGP(tBr)-tSp>=0?'+':'−')+M(tGp+brGP(tBr)-tSp)):'—')
+  +cell(1,(tBr!=null&&tOvAll!=null)?gMoney(tGp+brGP(tBr)-tSp-tOvAll):gMoney(null),(tBr!=null&&tOvAll!=null)?((tGp+brGP(tBr)-tSp-tOvAll>=0?'+':'−')+M(tGp+brGP(tBr)-tSp-tOvAll)):'—')
   +'</tr>';
  /* v10.2 THE MONTH IS THE P&L PERIOD, NOT THE DAY. Rent and payroll are charged monthly and
     arrive whether or not a Tuesday sells. Spreading them flat across 30 days and colouring the
@@ -4772,12 +4808,12 @@ function dailyBE(g){
    if(O.bl)for(let i=0;i<O.bl.n;i++){const dd=new Date(b0+i*864e5).toISOString().slice(0,10);
     if(dd.slice(0,7)===m&&dd<=today)Object.keys(O.bl.b).forEach(b2=>{brv+=O.bl.b[b2][i]||0;});}
    if(!dys)return null;
-   const ovh=ov.all*dys, tot=gp+brv*stMg-spd-ovh;
+   const ovh=ov.all*dys, bgp=brGP(brv), tot=gp+bgp-spd-ovh;
    const part=dys<ov.dim;
    return '<tr><td style="padding:5px 9px;text-align:left;font-weight:800;white-space:nowrap">'+m
     +'<div style="font-size:9px;font-weight:600;color:#8a93a6">'+dys+' of '+ov.dim+' days'+(part?' so far':'')+'</div></td>'
     +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">'+M(gp)+'</td>'
-    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">'+M(brv*stMg)+'</td>'
+    +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">'+M(bgp)+'</td>'
     +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">&minus;'+M(spd)+'</td>'
     +'<td style="padding:5px 9px;text-align:right;font-variant-numeric:tabular-nums">&minus;'+M(ovh)
     +(ov.est?'<div style="font-size:9px;color:#b8621b;font-weight:700">estimated &mdash; ledger still filling</div>':'')+'</td>'
@@ -4786,11 +4822,11 @@ function dailyBE(g){
   if(!out.length)return '';
   return '<div style="border:1px solid #cfe3f5;background:#f5fafe;border-radius:10px;padding:11px 12px;margin-bottom:12px">'
    +'<div style="font-size:12px;font-weight:800;color:#1d3f63;margin-bottom:3px">Where each month actually stands &mdash; whole company, on its own ledger</div>'
-   +'<div style="font-size:11px;color:#4a5a70;line-height:1.5;margin-bottom:7px">A red day below is a day that did not cover its <b>1/'+(_ovhAny?_ovhAny.dim:30)+'th slice of that month&rsquo;s fixed costs</b>. Rent and payroll do not arrive daily, so a quiet Tuesday always prints red. <b>This block is the number that decides whether money was made</b> &mdash; the grid underneath only says which days pulled their weight.</div>'
+   +'<div style="font-size:11px;color:#4a5a70;line-height:1.5;margin-bottom:7px">A red day below is a day that did not cover its <b>1/'+(_ovhAny?_ovhAny.dim:30)+'th slice of that month&rsquo;s fixed costs</b>. Rent and payroll do not arrive daily, so a quiet Tuesday always prints red. <b>This block is the number that decides whether money was made</b> &mdash; the grid underneath only says which days pulled their weight. Gross profit here is on the <b>4% basis</b>: revenue &times; 0.96 &minus; cost, the charge this business actually remits, not the 14% that was being subtracted by pairing an ex-VAT margin with a VAT-inclusive revenue.</div>'
    +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
    +'<tr style="font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase">'
    +'<th style="padding:4px 9px;text-align:left">Month</th><th style="padding:4px 9px;text-align:right">Webstore GP</th>'
-   +'<th style="padding:4px 9px;text-align:right">Branch GP</th><th style="padding:4px 9px;text-align:right">Ads</th>'
+   +'<th style="padding:4px 9px;text-align:right">Branch GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills &times; '+BLX.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%</div></th><th style="padding:4px 9px;text-align:right">Ads</th>'
    +'<th style="padding:4px 9px;text-align:right">Overhead (own month)</th><th style="padding:4px 9px;text-align:right">Result</th></tr>'
    +out.join('')+'</table></div>';}catch(e){return '';}})();
  const _beCalc=CALCX([
@@ -4804,7 +4840,7 @@ function dailyBE(g){
   ['After ads AND overhead (webstore)','The line above, minus the webstore&rsquo;s slice of that day&rsquo;s overhead: packing and bags in full, plus HQ rent, comms, other OpEx and non-branch payroll apportioned by the webstore&rsquo;s share of company revenue in <b>that same month</b> ('+(_ovhAny?(_ovhAny.wOn*100).toFixed(0):'~20')+'% most recently), divided by the days in that month.'],
   ['Branch revenue','The seven tills&rsquo; own daily takings from the POS crawl, <b>net of VAT</b> (Odoo holds them VAT-inclusive; this is that figure &divide; 1.14). Nothing here is attributed to advertising.'],
   ['MER (webstore + branches)','(Webstore revenue + branch revenue) &divide; ad spend. A scale ratio only: regression on this account shows Meta spend does <b>not</b> predict branch revenue once trend and the Friday/Saturday pattern are controlled, so a big number here is store footfall, not ad performance.'],
-  ['After ADS only (incl. branches)','Webstore GP + branch GP &minus; ad spend, where branch GP is branch revenue &times; '+(stMg*100).toFixed(1)+'% &mdash; the real POS margin of the last complete month ('+(pm||'&mdash;')+'), rent-free and before any store cost.'],
+  ['After ADS only (incl. branches)','Webstore GP + branch GP &minus; ad spend. Branch GP = the day&rsquo;s till revenue &times; '+BLX.toFixed(3)+' &times; '+(stMg*100).toFixed(1)+'%. The middle factor bridges two different till revenues: the daily feed is NET of tax, while the POS margin of '+(stMg*100).toFixed(1)+'% (last complete month, '+(pm||'&mdash;')+') is struck on the VAT-inclusive figure. It is measured on the '+(_blX?_blX.n:0)+' months where the daily feed covers every day (range '+(_blX?_blX.lo.toFixed(3)+'&ndash;'+_blX.hi.toFixed(3):'&mdash;')+'), not assumed at 1.14. Rent-free and before any store cost.'],
   ['After ads AND overhead (incl. branches)','The same, minus <b>the whole company&rsquo;s posted expense book for that day&rsquo;s own month</b> &divide; its days: branch rent, branch and HQ payroll, utilities, packing, card and collection fees, cargo, maintenance, comms. Platform ad invoices are excluded from it &mdash; they are already charged from the APIs in the Spend column, and counting the ledger copy too would double-charge about E&pound;3M a month.']
  ],'<b>What this table cannot tell you.</b> Overhead is a monthly commitment divided by the days in its month, so every day carries the same slice whatever it sold. A slow day will always print red and a peak day green, and neither on its own is a decision &mdash; read the month block at the top for that. <b>Which month&rsquo;s book each day uses:</b> its own. Before v10.2 every day of every month was charged the last COMPLETE month&rsquo;s book, which on this account is August at E&pound;8.20M &mdash; the back-to-school peak &mdash; so ordinary September days were handed peak-month rent and payroll. A month whose ledger is still filling is now charged the median of the last four settled months instead of its partial postings, and says so in the row.');
  pnlCard(g,'blend','Every day against break-even'
@@ -13246,7 +13282,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  const SP=(O.ship&&O.ship.grp)||null,SG=(k,m)=>(SP&&SP[k]&&SP[k][m])||0;
  const shipHas=m=>s2h(m)?1:(SP?(SG('rev',m)||SG('paid',m)||SG('coll',m)||SG('hand',m)||SG('gain',m)):0);
  const shipNet=m=>s2h(m)?(s2('col',m)-s2('cost',m)):(shipHas(m)?SG('rev',m)-SG('paid',m)-SG('coll',m)-SG('hand',m):0);
- const GPF=m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null;
+ const GPF=m=>SH[m]&&SH[m].g?gpAdj(SH[m].g,SH[m].gp)*(1-SH[m].r/SH[m].g):null;
  // ---- 1 · SHOPIFY P&L — ACTUALS ----
  if(O.shop){
   /* v10.2 P&L REORDERED INTO BLOCKS. The old order told the demand story twice -- "Demand
@@ -13275,6 +13311,17 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
   const COSTEST=m=>{const S=S2f();if(!S||!s2h(m))return '';
    return (S.cost[S2If()[m]]||0)>0?'':' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="No courier postings for this month yet — priced from the rate actually paid across the trailing settled months.">EST</span>';};
   const MTDMK=m=>m===CURM?' <span style="font-size:8.5px;color:#5a5bf0;font-weight:800" title="Month to date — this column stops at '+(O.today||'today')+', so every line in it is a part-month. Do not compare it with a full month.">MTD</span>':'';
+  /* v10.3 THE 4% BASIS, MADE VISIBLE. Odoo's `margin` is struck on price_subtotal (ex-VAT)
+     while these revenue rows are amount_total (VAT in). The collector now rebuilds gross
+     profit as revenue x 0.96 - cost, which is the charge this business actually remits. Left
+     alone, that 4% would vanish silently into the COGS line (COGS was "net revenue - gross
+     profit", which after the correction is the real cost PLUS the charge). It gets its own
+     line instead, and the identity still closes exactly:
+         net revenue - government charge - COGS = gross profit. */
+  const GOVT=0.04;
+  const NETR=m=>(SH[m]&&SH[m].g)?SH[m].g-SH[m].r:null;
+  const GVC_N=m=>{const n=NETR(m);return n==null?null:-n*GOVT;};
+  const COGS_N=m=>{const n=NETR(m),g2=GPF(m);return (n==null||g2==null)?null:-(n*(1-GOVT)-g2);};
   const SL2=[
    {hdr:'1 &middot; DEMAND &mdash; what customers tried to buy'},
    {n:'Demand placed (confirmed + cancelled)',f:m=>SH[m]&&SH[m].g?SH[m].g+((CX[m]&&CX[m].v)||0):null,fmt:POS,sh:1,q:'cxdeduct',mk:MTDMK,tt:'Everything ordered in the month before anyone cancelled anything: confirmed gross sales plus the value of the orders later cancelled. This is the demand your ads and your store actually generated.'},
@@ -13290,10 +13337,13 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,ind:1},
    {n:'AOV (real)',f:m=>SH[m]&&SH[m].o?SH[m].g/SH[m].o:null,fmt:POS,sh:1,ind:1,tt:'Gross sales &divide; confirmed orders.'},
    null,
-   {hdr:'3 &middot; PRODUCT MARGIN'},
-   {n:'COGS (actual)',f:m=>SH[m]&&SH[m].g?-((SH[m].g-SH[m].r)-SH[m].gp*(1-SH[m].r/SH[m].g)):null,fmt:NEG,sh:0,q:'sh_cogs',tt:'Net revenue &minus; net gross profit. Cost of the goods that were KEPT: refunded orders take their COGS out with them, so COGS is struck off NET sales, not gross.'},
-   {n:'Gross profit',f:m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null,fmt:POS,sh:1,b:1,q:'sh_gp',tt:'Odoo margin on the Shopify channel, less the margin that went back out with refunds. Net revenue &minus; COGS = this line, exactly.'},
-   {n:'GP margin, %',f:m=>SH[m]&&SH[m].g?SH[m].gp/SH[m].g*100:null,fmt:PCT,sh:1,ind:1},
+   {hdr:'3 &middot; PRODUCT MARGIN &mdash; struck on the 4% basis'},
+   {n:'Less: government charge ('+(GOVT*100).toFixed(0)+'% of net revenue)',f:GVC_N,fmt:NEG,sh:1,gd:-1,tt:'The charge actually remitted on this revenue: 4% of it. Odoo strikes its margin on price_subtotal, which is ex-VAT, while the revenue rows above are amount_total, which is not — pairing the two put an ex-VAT profit over a VAT-inclusive revenue and understated every margin here by 8.28% of revenue. The 14% never applied to this business. This line makes the charge that DOES apply explicit instead of leaving it buried inside COGS.'},
+   {n:'Revenue after the government charge',f:m=>{const n=NETR(m);return n==null?null:n*(1-GOVT);},fmt:POS,sh:1,b:1,tt:'Net revenue &times; 0.96. This is the revenue that gross profit is actually struck on.'},
+   {n:'COGS (actual, ex-tax cost of goods)',f:COGS_N,fmt:NEG,sh:0,q:'sh_cogs',tt:'Revenue after the government charge &minus; gross profit. Cost of the goods that were KEPT: refunded orders take their COGS out with them, so COGS is struck off NET sales, not gross. It no longer carries the 4% charge — that is the line above.'},
+   {n:'Gross profit',f:m=>GPF(m),fmt:POS,sh:1,b:1,q:'sh_gp',tt:'Revenue after the government charge &minus; COGS, exactly. Odoo margin on the Shopify channel rebuilt on the basis this business actually pays, less the margin that went back out with refunds.'},
+   {n:'GP margin, % of net revenue',f:m=>{const n=NETR(m),g2=GPF(m);return (n&&g2!=null)?g2/n*100:null;},fmt:PCT,sh:1,ind:1,tt:'Gross profit &divide; net revenue. AFTER the government charge — this is the margin the break-even multiple is built from.'},
+   {n:'Product margin BEFORE the government charge, %',f:m=>{const n=NETR(m),g2=GPF(m);return (n&&g2!=null)?(g2+n*GOVT)/n*100:null;},fmt:PCT,sh:1,ind:1,tt:'The same margin with the 4% added back: what the goods earn before the state takes its share. Shown so the two numbers cannot be confused — they differ by exactly 4 points of revenue.'},
    null,
    {hdr:'4 &middot; DELIVERY &mdash; what it costs to hand the order over'},
    {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed.'},
@@ -13337,8 +13387,10 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    ['Less: cancelled before billing','The cancelled order value. Subtracting it from the row above gives gross sales exactly. It appears once more at the very bottom next to the cancelled count &mdash; as information, charged in no line between.'],
    ['Gross sales','Odoo Shopify-team confirmed sale orders. Noon, Amazon and Homzmart are excluded; this is the webstore only.'],
    ['Less: refunds','Posted credit notes tagged to the Shopify team, in the month the credit note was posted. Real postings, not a refund rate.'],
-   ['COGS','Net revenue &minus; net gross profit. Refunded orders take their cost out with them, so COGS is struck off NET sales rather than gross &mdash; which is why it does not equal units &times; cost.'],
-   ['Gross profit','Odoo&rsquo;s own margin on those orders, less the margin that left with refunds. Product only: no delivery, no ads, no overhead.'],
+   ['Government charge','<b>4% of net revenue</b>, taken from Odoo <code>sale.order.amount_total</code>. Odoo strikes its <code>margin</code> field on <code>price_subtotal</code> (ex-VAT) while the revenue rows above are <code>amount_total</code> (VAT in); pairing them put an ex-VAT profit over a VAT-inclusive revenue and understated every margin on this table by <b>8.28% of revenue</b> (0.96 &minus; 1/1.14). The 14% never applied to this business &mdash; the charge actually remitted is 4%. It now has its own line instead of hiding inside COGS. It is <b>not</b> in the OpEx book either: the only tax account in the 31.* tree is 31.01.08.20.00 &ldquo;Building Tax&rdquo;, E&pound;40,560 posted once in June 2026. Nothing is charged twice.'],
+   ['COGS','Revenue after the government charge &minus; gross profit. Refunded orders take their cost out with them, so COGS is struck off NET sales rather than gross &mdash; which is why it does not equal units &times; cost. Before v10.3 this line was <i>net revenue</i> &minus; gross profit, so it silently carried the 4% charge as if it were cost of goods.'],
+   ['Gross profit','<code>amount_total &times; 0.96 &minus; (amount_untaxed &minus; margin)</code> per order, summed, less the margin that left with refunds. Product only: no delivery, no ads, no overhead. Measured over the 90 days to 20 Sep this moves online gross margin from 25.79% to <b>34.07%</b>, delivered margin from ~15.3% to <b>~23.6%</b>, and break-even ROAS from 6.54&times; to <b>4.24&times;</b> &mdash; every ad between those two break-evens was being shown as losing money while making it.'],
+   ['The two margin lines','&ldquo;GP margin, % of net revenue&rdquo; is <b>after</b> the government charge and is the one the break-even multiple is built from. &ldquo;Product margin BEFORE the government charge&rdquo; adds the 4% back. They differ by exactly 4 points of revenue, by construction.'],
    ['Shipping collected','The three shipping SKUs on the sale orders, price above zero, in the month the order was placed.'],
    ['Courier paid to Bosta','Posted debits to 31.01.08.34.00 &ldquo;Bosta collection fees&rdquo;, plus the identical postings mis-coded to 31.01.08.17.00 before Jan 2026. <b>A cell marked EST has no postings for that month yet</b> and is priced at the rate actually paid per confirmed order across the trailing settled months &mdash; never left at zero, which would book the whole shipping collection as profit.'],
    ['The three &ldquo;of which&rdquo; rows','Splits of that same courier bill, not extra charges. Return legs and outbound sends use Bosta&rsquo;s own measured per-delivery mix (16.5% / 83.5%); the unpaid-shipping row uses the share of confirmed orders carrying no paid shipping line. They are indented for that reason.'],
@@ -13347,7 +13399,10 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    ['What EBITDA here does NOT include','Rent, HQ payroll, utilities, maintenance, comms and the branch book. Those are company-level and are charged on the Blended tab, where the webstore takes its revenue-weighted share of them. This tab stops at the webstore&rsquo;s own costs.'],
    ST.pOff?['Attributed in-store revenue','Meta&rsquo;s offline conversion value for the month, taken from the ads API. <b>It is a claim matched from your POS customer file, not a measured lift</b>, and it is deliberately fenced into its own memo block: no revenue, margin, contribution or EBITDA line in blocks 1&ndash;6 contains a pound of it. Regression on this account shows Meta spend does not predict branch revenue once trend and the Friday/Saturday pattern are controlled, which is what the 0.217 incremental model prices in.']:null
   ],'<b>Reading order.</b> Block 1 is demand and what walked; block 2 is what was billed and kept; block 3 is product margin; block 4 is what delivery costs; block 5 is media; block 6 is the bottom line. Each block subtracts to its own bold row, and the bold row feeds the next block.');
-  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',T(SL2,mons)+SHCALC);}
+  const BASISNOTE=gpStale()
+   ?'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#c9834a"></span><span><b>Gross profit on this table is corrected in the page, not yet in the feed.</b> The published payload still carries Odoo&rsquo;s raw <code>margin</code> for this channel, so the page adds the 8.28%-of-revenue adjustment itself. It switches off automatically on the first sync that stamps the new basis &mdash; it cannot be applied twice.</span></div></div>'
+   :'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#12a06e"></span><span><b>Gross profit on this table is on the 4% basis at source</b> &mdash; the collector rebuilds it as revenue &times; 0.96 &minus; cost. Payload basis: <code>'+esc(O.gpBasis||'')+'</code>.</span></div></div>';
+  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',BASISNOTE+T(SL2,mons)+SHCALC);}
  // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
  if(O.exp&&Object.keys(O.exp).length){
   const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Platform ads via bills (memo)','Maintenance','Comms & internet','Other OpEx'];
@@ -13779,9 +13834,17 @@ function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16')
    share of net revenue, averaged over the last three complete ledger months. Break-evens rise
    with it -- honestly. The gross figure stays available as gpOnGross for pure product maths. */
 function _gpPct(){
- let so=0,go=0;((O.shop&&O.shop.rev)||[]).forEach((v,i)=>{so+=v||0;go+=((O.shop.gp||[])[i])||0;});
- const gpOnGross=so>2e5?go/so:(FF&&FF.company?FF.company.gpPct:0.3628);
- let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=v[1]||0;}));
+ /* v10.3 MEASURE IT, AND MEASURE IT RECENTLY. The old guard was `so>2e5` with `so` summed in
+    THOUSANDS, i.e. it demanded E£200M of Shopify revenue before it would trust its own feed.
+    The feed holds E£131.7M over 778 days, so the test never passed and every break-even in the
+    tool was quietly running off a hardcoded config constant instead of the ledger. It is also
+    the wrong window: a break-even multiple should follow the margin the business is earning
+    NOW, not its two-year average. Last 90 days, config only as a genuine fallback. */
+ const _GW=90;
+ let so=0,go=0;(function(){const R=(O.shop&&O.shop.rev)||[],G=(O.shop&&O.shop.gp)||[];
+  for(let i=Math.max(0,R.length-_GW);i<R.length;i++){so+=R[i]||0;go+=gpAdj(R[i]||0,G[i]||0);}})();
+ const gpOnGross=so>5e3?go/so:(FF&&FF.company?FF.company.gpPct:0.3628);
+ let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=gpAdj(v[0],v[1]);}));
  const gpSt=sr>0?sg/sr:(FF&&FF.company?FF.company.gpPct:0.3628);
  let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
@@ -15902,7 +15965,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-200204';
+const BUILD='20260921-203620';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
