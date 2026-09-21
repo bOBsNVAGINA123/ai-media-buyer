@@ -83,6 +83,7 @@ const O=window.O, SEED=window.CPASEED||{};
 const ADX=SEED.adx||{}, TOUCH=(O&&O.touch&&O.touch.last)?O.touch:(SEED.touch||{});
 const G4=((O&&O.ga4ads&&O.ga4ads.ads)||(SEED.ga4ads&&SEED.ga4ads.ads)||{});
 const G4LIVE=!!(O&&O.ga4ads&&O.ga4ads.ads);
+let GCAP=null;
 function ga4Of(name){return G4[(name||'').trim().toLowerCase().slice(0,80)]||null;}
 const MADS0=(O.mads||[]).filter(a=>a.pf==='meta');
 /* The pipeline now carries add-to-cart, video plays and status on every ad. Until the
@@ -222,9 +223,14 @@ function build(){
    r.vRaw=AWx?AWx.puV:null;
    r.gTx=r.g4?r.g4[1]:null; r.gSess=r.g4?r.g4[0]:null; r.gRev=r.g4?r.g4[2]:null;
    r.gRatio=(r.gTx!==null&&r.gTx>0)?r.pu/r.gTx:null;
+   /* Judged against the MEASURED capture rate, not against 1.0. GA4 catches ~64% of orders,
+      so an ad whose Meta:GA4 ratio is ~1.56 is in perfect agreement -- calling that
+      "overclaiming" (as this did) was grading every ad against a baseline that never existed. */
+   const exp=GCAP?1/GCAP.cap:1.56;
+   r.gNorm=(r.gRatio!==null)?r.gRatio/exp:null;
    r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
-        :(r.gTx>=10&&r.gRatio!==null&&r.gRatio<=2.5)?'confirms'
-        :(r.gRatio!==null&&r.gRatio>3)?'overclaims':'thin');
+        :(r.gTx>=10&&r.gNorm!==null&&r.gNorm<=1.6)?'confirms'
+        :(r.gNorm!==null&&r.gNorm>2)?'overclaims':'thin');
    r.gp0=r.pv*ECON.onDel - r.sp;                       // store credit 0 -- online only
    r.gp1=r.pv*ECON.onDel + r.fv*ECON.off - r.sp;          // store credit 100% -- Meta's own claim
    r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
@@ -479,7 +485,8 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
  ['ga4','GA4 check',r=>G4TAG(r)],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
- ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">—</span>':N2(r.gRatio)+'×'],
+ ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
+   :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
   ['roasOn','ROAS online',r=>(r.roasOn>=ECON.beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
@@ -523,6 +530,7 @@ function boot(){
     A list that has to be maintained by hand is a list that will be wrong. */
  document.querySelectorAll('.bar select, .bar input').forEach(e=>{
    e.onchange=()=>boot(); e.oninput=()=>{clearTimeout(e._t); e._t=setTimeout(boot,250);};});
+ GCAP=ga4Capture();
  const D=build(); LASTD=D;
  const end=new Date(WSTART); end.setDate(end.getDate()+D.i1-1);
  const st0=new Date(WSTART); st0.setDate(st0.getDate()+D.i0);
@@ -846,7 +854,7 @@ function whyShort(r,D){
  if(r.act==='OFFOK')return 'Already off. It made <b>'+EGP(r.gp)+'</b> while it ran, but returned '+EGP(1000*r.gpPerK)
   +' per E\u00a31,000 against the account\u2019s own average, so there is no case for switching it back on ahead of the others.';
  return 'Makes <b>'+EGP(r.gp)+'</b>'+per+', but at '+EGP(r.cpa)+' there is no headroom to scale. <b>Leave it running as is.</b>'+aovNote(r,D);}
-const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['Meta claims 3×+','cut'],
+const G4LAB={confirms:['GA4 agrees','scale'],overclaims:['2\u00d7 above normal','cut'],
  contradicts:['GA4 sees none','kill'],thin:['too few','hold'],nodata:['no GA4 row','hold']};
 function G4TAG(r){if(r.lvl!=='ad'||!r.ga4)return '<span class="mut">—</span>';
  const t=G4LAB[r.ga4]||['?','hold'];return '<span class="tg '+t[1]+'" title="Meta '+N0(r.pu)+' online purchases vs GA4 '+(r.gTx===null?'no data':N0(r.gTx)+' transactions')+'">'+t[0]+'</span>';}
@@ -1086,7 +1094,8 @@ function vStore(D){
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
     ['ga4','GA4 check',r=>G4TAG(r)],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
- ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">—</span>':N2(r.gRatio)+'×'],
+ ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
+   :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
  ['pu','Online purch',r=>N0(r.pu)],['cppOn','Online CPP',r=>EGP(r.cppOn)],['roasOn','Online ROAS',r=>(r.roasOn>=beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],['aovOn','Online AOV',r=>EGP(r.aovOn)],
     ['op','Store purch',r=>N0(r.op)],['cppOff','Store CPP',r=>EGP(r.cppOff)],['roasOff','Store ROAS',r=>N2(r.roasOff)],['aovOff','Store AOV',r=>EGP(r.aovOff)],
     ['nc','Store new cust',r=>N0(r.nc)],
@@ -1098,6 +1107,21 @@ function corr(a,b){const n=a.length;if(n<3)return NaN;
  return sab/Math.sqrt(sa*sb);}
 
 /* ---------- 5. FIRST vs LAST TOUCH ---------- */
+/* GA4 does not see every order. Measured against Odoo over the same window it catches about
+   two thirds, and 1/that is 1.56 -- which is almost exactly the "Meta claims 1.55x GA4" gap I
+   reported earlier as if it were Meta over-claiming. It is mostly GA4 under-counting. Every
+   GA4-denominated figure on this page is corrected by it, and the raw one shown beside it. */
+function ga4Capture(){
+ try{
+  const T=TOUCH, w=T.win||SEED.touchWin; if(!w)return null;
+  const tx=Object.values(T.last||{}).reduce((a,v)=>a+v[1],0);
+  const F=(window.O||{}).fin; if(!F||!tx)return null;
+  const s0=new Date(F.start);
+  const i=Math.round((new Date(w[0])-s0)/864e5), j=Math.round((new Date(w[1])-s0)/864e5);
+  if(i<0||j>=F.n||j<i)return null;
+  let ord=0; for(let x=i;x<=j;x++)ord+=F.orders[x]||0;
+  return ord>0?{cap:tx/ord,tx,ord}:null;
+ }catch(e){return null;}}
 function adSpend(){ /* platform spend over the touch window, straight off the live daily series */
  const w=TOUCH.win||SEED.touchWin; const A=O.ad;
  if(!w||!A||!A.start)return (SEED.spend)||{};
@@ -1110,9 +1134,11 @@ function vTouch(D){
  const keys=[...new Set([...Object.keys(L),...Object.keys(F)])];
  const tot=o=>Object.values(o).reduce((s,v)=>s+v[1],0);
  const tL=tot(L),tF=tot(F);
+ const CAP=ga4Capture(), cf=CAP?CAP.cap:1;
  const rows=keys.map(k=>{const l=L[k]||[0,0,0,0], f=F[k]||[0,0,0,0], sp=SP[k]||0;
   return {ch:k,sp,lS:l[0],lT:l[1],lR:l[2],lA:l[3],fS:f[0],fT:f[1],fR:f[2],fA:f[3],
    lCPA:sp&&l[1]?sp/l[1]:Infinity, fCPA:sp&&f[1]?sp/f[1]:Infinity,
+   lCPAc:sp&&l[1]?sp/(l[1]/cf):Infinity, fCPAc:sp&&f[1]?sp/(f[1]/cf):Infinity,
    lROAS:sp?l[2]/sp:0, fROAS:sp?f[2]/sp:0,
    lATC:sp&&l[3]?sp/l[3]:Infinity, fATC:sp&&f[3]?sp/f[3]:Infinity,
    dT:l[1]?f[1]/l[1]-1:0, dR:l[2]?f[2]/l[2]-1:0};}).sort((a,b)=>b.lR-a.lR);
@@ -1128,16 +1154,26 @@ function vTouch(D){
    return prv>0?cur/prv-1:0;};
  const gGrow=grow('gspend'), mGrow=grow('mspend');
  return '<div class="kpis">'
- +kpi('Meta — last touch',EGP(m.lCPA),N0(m.lT)+' tx · ROAS '+N2(m.lROAS))
- +kpi('Meta — first touch',EGP(m.fCPA),N0(m.fT)+' tx · ROAS '+N2(m.fROAS))
+ +kpi('GA4 capture',CAP?Math.round(CAP.cap*100)+'%':'—',
+      CAP?N0(CAP.tx)+' GA4 transactions against '+N0(CAP.ord)+' Odoo online orders':'not measurable','#f0b429')
+ +kpi('Meta — last touch',EGP(m.lCPAc),'corrected for capture · raw '+EGP(m.lCPA))
+ +kpi('Meta — first touch',EGP(m.fCPAc),'corrected · raw '+EGP(m.fCPA))
  +kpi('Meta, model gap',PC(m.dT),'transactions, first vs last','#5a5bf0')
- +kpi('Google — last touch',EGP(g.lCPA),N0(g.lT)+' tx · ROAS '+N2(g.lROAS))
- +kpi('Google — first touch',EGP(g.fCPA),N0(g.fT)+' tx · ROAS '+N2(g.fROAS))
+ +kpi('Google — last touch',EGP(g.lCPAc),'corrected · raw '+EGP(g.lCPA))
+ +kpi('Google — first touch',EGP(g.fCPAc),'corrected · raw '+EGP(g.fCPA))
  +kpi('Google, model gap',PC(g.dT),'first touch credits it less','#e23a63')
  +kpi('Meta cost / ATC',EGP(m.lATC),'last touch · first '+EGP(m.fATC))
  +kpi('Google cost / ATC',EGP(g.lATC),'last touch · first '+EGP(g.fATC),'#12b886')
  +'</div>'
- +'<div class="banner r"><b>Before any of this is read: GA4\'s own channel grouping is broken on this property.</b> '
+ +'<div class="banner"><b>What E'+'\u00a3'+N0(m.lCPAc)+' means, and what it does not.</b> It is <b>total Meta spend '
+ +'\u00f7 the online transactions GA4 credits to Meta</b>. Two things distort the raw version. '
+ +'GA4 sees only <b>'+(CAP?Math.round(CAP.cap*100):'?')+'%</b> of the orders Odoo records, so the raw E'+'\u00a3'+N0(m.lCPA)
+ +' is inflated by roughly 1/'+(CAP?N2(CAP.cap):'?')+'; the tiles show the corrected figure with the raw one beneath. '
+ +'And the numerator is <b>all</b> Meta spend, including what buys footfall \u2014 the same budget also bought in-store purchases '
+ +'this denominator cannot see. Corrected, it lands at E'+'\u00a3'+N0(m.lCPAc)+', within a few pounds of Meta\'s own online CPA, '
+ +'which is the useful finding here: once you account for GA4\'s capture gap the two platforms broadly agree about online. '
+ +'For the number you act on, use the online CPP on the In-store vs online tab, which is denominated in Odoo orders.</div>'
++'<div class="banner r"><b>Before any of this is read: GA4\'s own channel grouping is broken on this property.</b> '
  +'Meta stamps <code>utm_medium</code> with the placement name (<code>Facebook_Mobile_Feed</code>, <code>Instagram_Stories</code>), '
  +'so GA4 files most paid social as <b>Organic Social</b> — 821k Egypt sessions of it in this window. '
  +'Every number on this tab is therefore rebuilt from <b>source</b>, not from GA4\'s channel: '
@@ -1166,7 +1202,8 @@ function vTouch(D){
     ['ch','Channel',r=>'<b>'+r.ch+'</b>'],['sp','Spend',r=>r.sp?EGP(r.sp):'<span class="mut">—</span>'],
     ['lT','Tx last',r=>N0(r.lT)],['fT','Tx first',r=>N0(r.fT)],['dT','Δ tx',r=>(r.dT>0?'<span class="g">':'<span class="r">')+PC(r.dT)+'</span>'],
     ['lR','Rev last',r=>EGP(r.lR)],['fR','Rev first',r=>EGP(r.fR)],['dR','Δ rev',r=>(r.dR>0?'<span class="g">':'<span class="r">')+PC(r.dR)+'</span>'],
-    ['lCPA','CPA last',r=>EGP(r.lCPA)],['fCPA','CPA first',r=>EGP(r.fCPA)],
+    ['lCPAc','CPA last',r=>EGP(r.lCPAc)],['fCPAc','CPA first',r=>EGP(r.fCPAc)],
+    ['lCPA','raw last',r=>'<span class="mut">'+EGP(r.lCPA)+'</span>'],
     ['lROAS','ROAS last',r=>r.sp?N2(r.lROAS):'—'],['fROAS','ROAS first',r=>r.sp?N2(r.fROAS):'—'],
     ['lATC','Cost/ATC last',r=>EGP(r.lATC)],['fATC','first',r=>EGP(r.fATC)]]))
  +card('What each model does to the mix','The channels that move between models are the ones where the journey has more than one step.',
