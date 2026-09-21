@@ -2,7 +2,7 @@
 <title>OurKids — CPA Grid</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="./data.js"></script>
-<script src="./cpa_seed.js?v=1790025314"></script>
+<script src="./cpa_seed.js?v=1790026403"></script>
 <style>
 :root{
  --ink:#0f1420;--body:#3c4356;--mut:#8a92a6;--faint:#b6bdcc;
@@ -47,6 +47,14 @@ select:focus,input:focus{outline:2px solid var(--accSoft);border-color:var(--acc
 .sp{flex:1}
 
 /* label chips */
+.dr{display:flex;align-items:center;gap:6px}
+.dr input[type=date]{padding:7px 8px;font-size:12px;max-width:140px}
+.dr .dash{color:var(--faint);font-weight:800}
+.pres{display:flex;gap:4px;flex-wrap:wrap}
+.pz{cursor:pointer;padding:7px 10px;border-radius:9px;font-size:11.5px;font-weight:800;background:var(--soft);
+ border:1px solid var(--line);color:var(--body);user-select:none;transition:.1s}
+.pz:hover{border-color:var(--acc);color:var(--acc)}
+.pz.on{background:var(--ink);border-color:var(--ink);color:#fff}
 .lbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:12px}
 .lb{cursor:pointer;padding:6px 12px;border-radius:999px;font-size:11.5px;font-weight:700;
  background:var(--card);color:var(--body);border:1px solid var(--line);user-select:none;transition:.1s}
@@ -202,9 +210,9 @@ tr.cl{cursor:pointer}
   <option value="1">100% — Meta's claim</option>
   <option value="0.214">21.4% — account incremental</option>
   <option value="0">0% — ignore in-store</option></select></div>
- <div><label>Window</label><select id="win">
-  <option value="56">56d mature (drops last 4d)</option><option value="28">28d mature</option>
-  <option value="14">14d mature</option><option value="60">60d full (immature tail)</option></select></div>
+ <div><label>Dates</label>
+  <div class="dr"><input id="d0" type="date"/><span class="dash">–</span><input id="d1" type="date"/></div></div>
+ <div><label>Quick range</label><div class="pres" id="pres"></div></div>
  <div><label>Target CPA cut</label><select id="tgt">
   <option value="0.10">10%</option><option value="0.15" selected>15%</option>
   <option value="0.20">20%</option><option value="0.25">25%</option></select></div>
@@ -229,5 +237,5 @@ tr.cl{cursor:pointer}
 <div class="foot" id="ft"></div>
 </div></div>
 <div id="modal"></div>
-<script src="./cpa_app.js?v=1790025314"></script>
+<script src="./cpa_app.js?v=1790026403"></script>
 </body></html>
