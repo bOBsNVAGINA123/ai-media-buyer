@@ -231,6 +231,19 @@ function build(){
    r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
         :(r.gTx>=10&&r.gNorm!==null&&r.gNorm<=1.6)?'confirms'
         :(r.gNorm!==null&&r.gNorm>2)?'overclaims':'thin');
+   /* ---- anomaly flags. Every one is a stated threshold on measured data, and an excluded
+      row is always listed with its reason -- a filter that drops rows silently is worse than
+      no filter, because the totals move and nothing says why. */
+   const A=[];
+   const dsp=(r.a.d&&r.a.d.sp)?r.a.d.sp.slice(i0,i1):[];
+   const days=dsp.filter(x=>x>0).length, mx=dsp.length?Math.max.apply(null,dsp):0;
+   if(r.ga4==='contradicts')A.push('GA4 records no sale at all on '+N0(r.pu)+' claimed');
+   if(r.gNorm!==null&&r.gNorm>3)A.push('Meta claims '+N2(r.gNorm)+'\u00d7 more than GA4 normally under-counts by');
+   if(r.gNorm!==null&&r.gNorm<0.33)A.push('GA4 sees '+N2(1/r.gNorm)+'\u00d7 more than Meta claims');
+   if(r.sp>0&&mx/r.sp>=0.6)A.push('one day carried '+Math.round(100*mx/r.sp)+'% of its spend');
+   if(days>0&&days<4)A.push('ran on only '+days+' day'+(days>1?'s':''));
+   if(r.pu>=5&&r.oc>0&&r.oc<r.pu)A.push('more purchases than outbound clicks');
+   r.anom=A;
    r.gp0=r.pv*ECON.onDel - r.sp;                       // store credit 0 -- online only
    r.gp1=r.pv*ECON.onDel + r.fv*ECON.off - r.sp;          // store credit 100% -- Meta's own claim
    r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
@@ -277,7 +290,16 @@ function build(){
    const eW=r.sp/1000, unitW=r.aovK*r.margK;
    r.gpHi=(isFinite(r.cpaLo)?eW*1000/r.cpaLo:0)*unitW - r.sp;   // best case over the window
    r.gpLo=(isFinite(r.cpaHi)?eW*1000/r.cpaHi:0)*unitW - r.sp;});
+ /* in-store outliers can only be judged against the account, so this one runs after */
+ const accOff=(function(){var a=0,b=0;universe.forEach(function(r){a+=r.fv;b+=r.sp;});return b>0?a/b:0;})();
+ universe.forEach(function(r){
+  if(accOff>0&&r.roasOff>accOff*3&&r.roasOn<ECON.beOn)
+   r.anom.push('in-store ROAS '+N2(r.roasOff)+'\u00d7 is over 3\u00d7 the account while online is below breakeven');});
+ const anomSel=(document.getElementById('anom')||{}).value||'keep';
  let f=universe.filter(r=>r.sp>=mins);
+ const dropped=universe.filter(function(r){return r.sp>=mins&&r.anom.length;});
+ if(anomSel==='drop')f=f.filter(function(r){return !r.anom.length;});
+ else if(anomSel==='only')f=f.filter(function(r){return r.anom.length;});
  if(fSt!=='all')f=f.filter(r=>r.st===fSt);
  if(fFmt!=='all')f=f.filter(r=>r.fmt===fFmt);
  if(fFn!=='all')f=f.filter(r=>r.fn===fFn);
@@ -316,7 +338,7 @@ function build(){
   else if(!live&&!loses&&r.rob==='make'&&r.gpPerK>=accGpPerK)r.act='REACTIVATE';
   else if(!live)r.act=(r.rob==='depends')?'OFFDEP':(loses?'OFFBAD':'OFFOK');
   else r.act='HOLD';});
- return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,
+ return {rows:f,universe,tot,cur,target,kill,scale,basis,hair,pr,prA,prR,i0,i1,j0,tgtPct,level,judge,attrSel,anomSel,dropped,
          win:document.getElementById('win').value};
 }
 
@@ -410,6 +432,8 @@ function openAd(id){
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
  +row('Would vanish without view-through',r.vShare===null||r.vShare===undefined?'\u2014'
    :Math.round(r.vShare*100)+'% of its credited purchases  (7d-click keeps '+N0(r.a.aw.pu7)+' of '+N0(r.a.pur)+', 1d-click '+N0(r.a.aw.pu1)+')')
+ +row('Flags',(!r.anom||!r.anom.length)?'nothing odd'
+   :'<span style="color:#a35a12">'+r.anom.join('<br/>')+'</span>')
  +row('GA4 transactions',r.gTx===null||r.gTx===undefined?'no GA4 row for this ad name'
    :N0(r.gTx)+' vs Meta\u2019s '+N0(r.pu)+(r.gRatio===null?'':'  \u2014 Meta claims '+N2(r.gRatio)+'\u00d7'))
  +row('GA4 revenue',r.gRev===null||r.gRev===undefined?'\u2014':EGP(r.gRev)+' vs Meta\u2019s '+EGP(r.pv))
@@ -471,7 +495,7 @@ let SORT={k:'sp',d:-1};
    not rank the same ads (r=0.06 in this window) -- a blended-only view hides that. */
 function COLS(D){const H=Math.round(D.hair*100);
  const simple=(document.getElementById('dens')||{}).value!=='f';
- const KEEP=['n','act','st','spark','sp','gp','ga4','cpa','cpa3','d3','roasOn','roasOff'];
+ const KEEP=['n','act','st','spark','sp','gp','ga4','anom','cpa','cpa3','d3','roasOn','roasOff'];
  const all=[
  ['n','Ad',adCell],
  ['act','What to do',r=>'<span class="tg '+r.act.toLowerCase().slice(0,5)+'">'+VERB[r.act]+'</span>'],
@@ -484,6 +508,8 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['gp','Profit',r=>(r.gp>=0?'<span class="g">+':'<span class="r">')+EGP(r.gp)+'</span>'],
  ['gpw','Profit/wk',r=>(r.gpw>=0?'<span class="g">+':'<span class="r">')+EGP(r.gpw)+'</span>'],
  ['ga4','GA4 check',r=>G4TAG(r)],
+ ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
+   :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
  ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
    :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
@@ -886,6 +912,9 @@ function vAct(D){
  const winners=D.rows.filter(r=>r.gp>0);
  return '<div class="kpis">'
  +kpi('Decidable now',decidable.length+' of '+liveAll.length,'same call whatever the store credit','#12b886')
+ +kpi(D.anomSel==='drop'?'Excluded':'Flagged odd',D.dropped.length,
+      D.anomSel==='drop'?EGP(D.dropped.reduce(function(a,r){return a+r.sp;},0))+' taken out'
+      :EGP(D.dropped.reduce(function(a,r){return a+r.sp;},0))+' still counted','#ff8b42')
  +kpi('Undecidable',depends.length+' live','verdict flips with the store number','#f0b429')
  +kpi('The swing',EGP(swing1-swing0),'profit gap between 0% and 100% store credit','#f0b429')
  +kpi('Losing money',losers.length+' live',EGP(-lost)+' gone at 21.4% credit','#e23a63')
@@ -931,6 +960,18 @@ function vAct(D){
    'Each of these is profitable at Meta\u2019s own in-store numbers and loss-making at the pixel-only numbers. '
    +'No instruction is issued for them because the data does not contain one. Leave them running and go settle the attribution question — '
    +'that is the single highest-value thing on this page.',grid(depends.slice(0,12))):'')
++(D.dropped.length?sec(D.anomSel==='drop'?'Excluded as anomalies'
+     :(D.anomSel==='only'?'Anomalies only \u2014 everything else is hidden':'Flagged as odd, still included'),
+   D.dropped.length+' '+NOUN[D.level]+'s \u00b7 '+EGP(D.dropped.reduce(function(a,r){return a+r.sp;},0))+' of spend',
+   D.anomSel==='keep'
+     ? 'These are still in every number on this page. Set <b>Anomalies \u2192 Exclude</b> in the bar to take them out and watch what moves.'
+     : 'Out of every total above. Each row says why \u2014 no row is dropped without one.',
+   table(D.dropped.slice().sort(function(a,b){return b.sp-a.sp;}),[
+     ['n',NOUN[D.level].replace(/^./,function(c){return c.toUpperCase();}),adCell],
+     ['sp','Spend',function(r){return EGP(r.sp);}],
+     ['pu','Meta online',function(r){return N0(r.pu);}],
+     ['gTx','GA4 tx',function(r){return r.gTx===null||r.gTx===undefined?'\u2014':N0(r.gTx);}],
+     ['anom','Why it is flagged',function(r){return '<span style="white-space:normal;display:inline-block;max-width:520px;text-align:left">'+r.anom.join('<br/>')+'</span>';}]])):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
    'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
    +'Everything here is taking money out at the 21.4% credit. The ones that also lose at 100% credit are in the turn-off list below; '
@@ -1024,6 +1065,8 @@ function vPred(D){
     ['roas','ROAS',r=>N2(r.roas)],
     ['gpw','Profit next 7d',r=>(r.gpw<0?'<span class="r">':'<span class="g">')+EGP(r.gpw)+'</span>'],
     ['ga4','GA4 check',r=>G4TAG(r)],
+ ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
+   :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
     ['trend','Trend',r=>r.trend===null?'<span class="mut">n/a</span>':(r.trend>0?'<span class="r">+':'<span class="g">')+Math.round(r.trend*100)+'%</span>'+(r.trendSig?' *':'')]])))
  +'<div class="two">'
  +card('By format (step 6)','Formats are inferred from video-play rate per impression, not from Meta\'s creative type field — <5% static, 5–45% mixed/carousel, >45% video.',grp(byFmt))
@@ -1093,6 +1136,8 @@ function vStore(D){
     ['spark','Last 28d',r=>spark(r.spark)],
     ['fn','Funnel',r=>r.fn],['sp','Spend',r=>EGP(r.sp)],
     ['ga4','GA4 check',r=>G4TAG(r)],
+ ['anom','Flags',r=>!r.anom||!r.anom.length?'<span class="mut">clean</span>'
+   :'<span class="tg cut" title="'+r.anom.join(' \u00b7 ').replace(/"/g,'')+'">'+r.anom.length+' odd</span>'],
  ['gTx','GA4 tx',r=>r.gTx===null||r.gTx===undefined?'<span class="mut">—</span>':N0(r.gTx)],
  ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">\u2014</span>'
    :N2(r.gRatio)+'\u00d7 <span class="mut">('+(r.gNorm===null?'':N2(r.gNorm)+'\u00d7 vs normal)')+'</span>'],
