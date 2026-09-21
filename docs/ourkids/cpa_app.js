@@ -48,6 +48,36 @@ function post(pr,k,sp){const e=sp/1000,sh=pr.a+k,rt=pr.b+e;
  const lam=sh/rt, lo=gammaInv(sh,0.05)/rt, hi=gammaInv(sh,0.95)/rt;
  return {lam,cpa:lam>0?1000/lam:Infinity,cpaLo:hi>0?1000/hi:Infinity,cpaHi:lo>0?1000/lo:Infinity};}
 
+/* ---------- economics ----------------------------------------------------------
+   CORRECTED 21 Sep 2026, the 4% basis. Odoo strikes `margin` ex-VAT while every revenue
+   field here is VAT-inclusive, so pairing them understated every margin by 8.28% of revenue
+   (0.96 - 1/1.14) -- and the 14% never applied to this business anyway, the charge actually
+   remitted is 4%. This page was running on the superseded 16.1% / 6.21x pair, which
+   understated online contribution by a third and called profitable ads losers.
+
+   In-store is MEASURED live off O.pos, which the collector already puts on the corrected
+   basis via gp_inc(). Online delivered is the vault figure; the live gross is measured
+   beside it so drift shows up instead of going silent. */
+const ECON=(function(){
+ let posM=null;
+ try{
+  const P=(window.O||{}).pos||{}; let rev=0,gp=0;
+  for(const b in P){const m=P[b];
+   for(const k in m){if(k<'2026-06')continue; rev+=m[k][0]||0; gp+=m[k][1]||0;}}
+  if(rev>0)posM=gp/rev;
+ }catch(e){}
+ let onGross=null;
+ try{
+  const F=(window.O||{}).fin; if(F&&F.rev&&F.gp){
+   const n=F.n, a=Math.max(0,n-90);
+   let r=0,g=0; for(let i=a;i<n;i++){r+=F.rev[i]||0; g+=F.gp[i]||0;}
+   if(r>0)onGross=g/r;}
+ }catch(e){}
+ const onDel=0.247;                      // delivered: gross less courier + COD drag
+ const off=posM||0.243;
+ return {onDel, onGross, off, beOn:1/onDel, beOff:1/off, posMeasured:posM!==null};
+})();
+
 /* ---------- data prep ---------- */
 const O=window.O, SEED=window.CPASEED||{};
 const ADX=SEED.adx||{}, TOUCH=(O&&O.touch&&O.touch.last)?O.touch:(SEED.touch||{});
@@ -166,7 +196,7 @@ function build(){
    /* Money, not cost per purchase. CPA punishes an ad for selling fewer, bigger baskets --
       and this account's in-store AOV runs from E£866 to E£4,964 across ads, so CPA and
       profit rank them differently. Contribution is what actually pays the rent. */
-   r.gp=r.pv*0.161 + r.fv*hair*0.243 - r.sp;
+   r.gp=r.pv*ECON.onDel + r.fv*hair*ECON.off - r.sp;
    /* The same ad at the three defensible in-store credits. If the SIGN moves between them,
       the verdict is an artifact of a constant nobody has verified, not a finding. */
    /* Second opinion. GA4 counts the same ad from the site's own side, and the two disagree
@@ -184,12 +214,12 @@ function build(){
    r.ga4=(r.g4===null)?'nodata':((r.gTx===0&&r.pu>=20)?'contradicts'
         :(r.gTx>=10&&r.gRatio!==null&&r.gRatio<=2.5)?'confirms'
         :(r.gRatio!==null&&r.gRatio>3)?'overclaims':'thin');
-   r.gp0=r.pv*0.161 - r.sp;                       // store credit 0 -- online only
-   r.gp1=r.pv*0.161 + r.fv*0.243 - r.sp;          // store credit 100% -- Meta's own claim
+   r.gp0=r.pv*ECON.onDel - r.sp;                       // store credit 0 -- online only
+   r.gp1=r.pv*ECON.onDel + r.fv*ECON.off - r.sp;          // store credit 100% -- Meta's own claim
    r.rob=(r.gp<0&&r.gp0<0&&r.gp1<0)?'lose':((r.gp>0&&r.gp0>0&&r.gp1>0)?'make':'depends');
    r.gpPerK=r.sp>0?1000*r.gp/r.sp:0;
    r.aovK=r.k>0?r.val/r.k:0;
-   r.margK=(r.pv+r.fv*hair)>0?(r.pv*0.161+r.fv*hair*0.243)/(r.pv+r.fv*hair):0.161;
+   r.margK=(r.pv+r.fv*hair)>0?(r.pv*ECON.onDel+r.fv*hair*ECON.off)/(r.pv+r.fv*hair):ECON.onDel;
    r.cpatc=r.atc>0?r.sp/r.atc:Infinity;
    r.cpatcS=r.atc>0?post(prA,r.atc,r.sp).cpa:Infinity;
    // trend: last third vs the two before it, on the shrunk rate. Gated on counts.
@@ -345,9 +375,9 @@ function openAd(id){
  +row('CPP online',EGP(r.cppOn))+row('CPP in-store',EGP(r.cppOff))
  +row('CPP blended (raw)',EGP(r.cppAll))+row('CPP blended (shrunk)',EGP(r.cpa))
  +row('90% interval',EGP(r.cpaLo)+' – '+EGP(r.cpaHi))+'</table><table>'
- +row('ROAS online',N2(r.roasOn)+'  (breakeven 6.21)')
+ +row('ROAS online',N2(r.roasOn)+'  (breakeven '+N2(ECON.beOn)+')')
  +row('ROAS in-store, claimed',N2(r.roasOff))
- +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven 4.11)')
+ +row('ROAS in-store, at '+Math.round(LASTD.hair*100)+'%',N2(r.roasOffInc)+'  (breakeven '+N2(ECON.beOff)+')')
  +row('ROAS total, this basis',N2(r.roasAll))
  +row('AOV online',EGP(r.aovOn))+row('AOV in-store',EGP(r.aovOff))
  +row('Would vanish without view-through',r.vShare===null||r.vShare===undefined?'\u2014'
@@ -408,11 +438,11 @@ function COLS(D){const H=Math.round(D.hair*100);
  ['gRatio','Meta ÷ GA4',r=>r.gRatio===null?'<span class="mut">—</span>':N2(r.gRatio)+'×'],
  ['pu','Online purch',r=>N0(r.pu)],
  ['cppOn','CPP online',r=>EGP(r.cppOn)],
- ['roasOn','ROAS online',r=>(r.roasOn>=6.21?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
+  ['roasOn','ROAS online',r=>(r.roasOn>=ECON.beOn?'<span class="g">':'<span class="r">')+N2(r.roasOn)+'</span>'],
  ['op','Store purch',r=>N0(r.op)],
  ['cppOff','CPP store',r=>EGP(r.cppOff)],
  ['roasOff','ROAS store',r=>N2(r.roasOff)],
- ['roasOffInc','ROAS store @'+H+'%',r=>(r.roasOffInc>=4.11?'<span class="g">':'<span class="r">')+N2(r.roasOffInc)+'</span>'],
+ ['roasOffInc','ROAS store @'+H+'%',r=>(r.roasOffInc>=ECON.beOff?'<span class="g">':'<span class="r">')+N2(r.roasOffInc)+'</span>'],
  ['roasAll','ROAS total',r=>'<b>'+N2(r.roasAll)+'</b>'],
  ['cpa','CPA used',r=>'<b>'+EGP(r.cpa)+'</b>'],
  ['cpaLo','best case',r=>EGP(r.cpaLo)],['cpaHi','worst case',r=>EGP(r.cpaHi)],
@@ -456,7 +486,11 @@ function boot(){
   'Source: the same live <code>data.js</code> the OurKids dashboard reads (Meta per-ad daily, 60d, rebuilt hourly). '
   +'Per-ad add-to-cart / status / format '+(ADXLIVE?'<b>live</b> from the pipeline, re-cuts with the window.':'from a 2026-07-23→09-16 snapshot — goes live on the next pipeline run, after which it re-cuts with the window.')
   +' GA4 first/last touch '+(TOUCHLIVE?'<b>live</b>.':'snapshot 2026-09-20.')
-  +' Per-ad GA4 cross-check '+(G4LIVE?'<b>live</b> ('+Object.keys(G4).length+' ad names).':'snapshot.');
+  +' Per-ad GA4 cross-check '+(G4LIVE?'<b>live</b> ('+Object.keys(G4).length+' ad names).':'snapshot.')
+  +' Margins on the corrected 4% basis: <b>'+(Math.round(ECON.onDel*1000)/10)+'%</b> delivered online (breakeven '
+  +N2(ECON.beOn)+'\u00d7), <b>'+(Math.round(ECON.off*1000)/10)+'%</b> in store'
+  +(ECON.posMeasured?' (measured live off Odoo POS)':' (fallback constant)')
+  +(ECON.onGross?', online gross measuring '+(Math.round(ECON.onGross*1000)/10)+'% over the last 90 days':'')+'.';
  document.getElementById('body').innerHTML=
   TAB==='grid'?vGrid(D):TAB==='act'?vAct(D):TAB==='pred'?vPred(D):
   TAB==='store'?vStore(D):TAB==='touch'?vTouch(D):vMeth(D);
@@ -475,7 +509,7 @@ function vGrid(D){
  +kpi('Purchases',N0(t.k),D.basis==='bl'?N0(t.pu)+' online + '+N0(t.op*D.hair)+' in-store credited':'')
  +kpi('CPA (measured)',EGP(D.cur),'spend ÷ purchases, this basis')
  +kpi('AOV',EGP(aov),D.basis==='bl'?'online E£'+N0(t.pu?t.pv/t.pu:0)+' · in-store E£'+N0(t.op?t.fv/t.op:0):'')
- +kpi('ROAS',N2(t.sp?t.val/t.sp:0),'breakeven 6.21× online / 4.11× in-store')
+ +kpi('ROAS',N2(t.sp?t.val/t.sp:0),'breakeven '+N2(ECON.beOn)+'\u00d7 online / '+N2(ECON.beOff)+'\u00d7 in-store')
  +kpi('CPM',EGP(t.im?1000*t.sp/t.im:0),'CPC E£'+N2(t.oc?t.sp/t.oc:0)+' · CTR '+N2(t.im?100*t.oc/t.im:0)+'%')
  +kpi('Cost / add-to-cart',EGP(t.atc?t.sp/t.atc:0),t.atc?N0(t.atc)+' ATC':'no ATC data')
  +kpi('Click→purchase',N2(t.oc?100*t.pu/t.oc:0)+'%','online pixel only');
@@ -643,12 +677,12 @@ function simulate(D){
     stated budget). Comparing a lag-depressed raw 7d count against a lag-free model
     would book the conversion tail as if the reallocation had earned it. */
  const expNow=live.reduce((s,r)=>s+r.sp7/1000*r.lamR,0);
- /* Margin is basis-aware: 16.1% delivered on online (courier + COD drag already taken),
-    24.3% on store revenue, which carries neither. */
+ /* Margin is basis-aware: delivered online (courier + COD already taken), gross in store,
+    which carries neither. Both come from ECON. */
  const kAll=live.reduce((s,r)=>s+r.k,0);
  const aovK=kAll>0?live.reduce((s,r)=>s+r.val,0)/kAll:0;
  const vOn=live.reduce((s,r)=>s+r.pv,0), vOff=live.reduce((s,r)=>s+r.fv,0)*D.hair;
- const marg=(vOn+vOff)>0?(vOn*0.161+vOff*0.243)/(vOn+vOff):0.161;
+ const marg=(vOn+vOff)>0?(vOn*ECON.onDel+vOff*ECON.off)/(vOn+vOff):ECON.onDel;
  const gpDelta=(expK-expNow)*aovK*marg-(spNew-base7);
  return {kill,scale,keep,freed,used,parked,base7,spNew,aovK,gpDelta,marg,
    cpaNow:expNow>0?base7/expNow:0, kNow, expNow, cpaRaw7:kNow>0?base7/kNow:0,
@@ -784,7 +818,7 @@ function vAct(D){
    +'No instruction is issued for them because the data does not contain one. Leave them running and go settle the attribution question — '
    +'that is the single highest-value thing on this page.',grid(depends.slice(0,12))):'')
 +sec('Losing money right now',losers.length+' live '+NOUN[D.level]+'s · '+EGP(-lost)+' gone',
-   'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit and the vault margins (16.1% delivered online, 24.3% in store). '
+   'Gross profit minus spend, at '+Math.round(D.hair*100)+'% in-store credit on the corrected 4% basis: '+(Math.round(ECON.onDel*1000)/10)+'% delivered online, '+(Math.round(ECON.off*1000)/10)+'% in store. '
    +'Everything here is taking money out at the 21.4% credit. The ones that also lose at 100% credit are in the turn-off list below; '
    +'the rest are in the undecidable section. Sorted by how much.',grid(losers.slice(0,24)))
 +sec('Turn these off',kill.length+' '+NOUN[D.level]+'s · '+EGP(S.freed)+' a week',
@@ -866,7 +900,7 @@ function vPred(D){
  +'<div class="banner"><b>What this is.</b> Each ad\'s purchase rate, times next week\'s budget at today\'s spend. Nothing else — no stock, no promo calendar, no seasonality. '
  +'It uses the <b>last 14 mature days only</b>, because back-to-school sits inside this window and August rates do not forecast September. '
  +'<b>Decay</b> is that gap: positive means the grid\'s window CPA is flattering these ads against how they run now.</div>'
- +card('Next 7 days, per ad','Forecast at each '+NOUN[D.level]+'\'s own last-7d budget, on its last-14-day rate. Profit uses 16.1% delivered margin online and 24.3% in store, so it matches the verdicts.',
+ +card('Next 7 days, per ad','Forecast at each '+NOUN[D.level]+'\'s own last-7d budget, on its last-14-day rate. Profit uses '+(Math.round(ECON.onDel*1000)/10)+'% delivered online and '+(Math.round(ECON.off*1000)/10)+'% in store, so it matches the verdicts.',
    table(sortRows(f).slice(0,80),PCOLS([
     ['n','Ad',adCell],['sp7','Budget 7d',r=>EGP(r.sp7)],
     ['k7','Purch last 7d',r=>N1(r.k7)],['fc','Forecast next 7d',r=>'<b>'+N1(r.fc)+'</b>'],
@@ -906,7 +940,7 @@ function vStore(D){
  const T=k=>rows.reduce((s,r)=>s+r[k],0);
  const sp=T('sp'),pu=T('pu'),op=T('op'),pv=T('pv'),fv=T('fv');
  const H=D.hair;
- const beOn=6.21, beOff=1/0.243;
+ const beOn=ECON.beOn, beOff=ECON.beOff;
  /* What share of ACTUAL branch revenue Meta is claiming. Straight off the live Odoo
     branch daily series in data.js, over exactly the window on screen. */
  const brRev=(()=>{const B=O.bnrD,w=B&&B._w; if(!w)return 0;
@@ -920,8 +954,8 @@ function vStore(D){
  +kpi('Online CPP',EGP(pu?sp/pu:0),N0(pu)+' pixel purchases')
  +kpi('In-store CPP (claimed)',EGP(op?sp/op:0),N0(op)+' offline CAPI purchases')
  +kpi('In-store CPP @21.4%',EGP(op?sp/(op*0.214):0),'at the measured incremental rate')
- +kpi('Online ROAS',N2(sp?pv/sp:0),'breakeven '+N2(beOn)+'× at 16.1% delivered margin',pv/sp>beOn?'#12b886':'#e23a63')
- +kpi('In-store ROAS (claimed)',N2(sp?fv/sp:0),'breakeven '+N2(beOff)+'× at 24.3% store margin','#12b886')
+ +kpi('Online ROAS',N2(sp?pv/sp:0),'breakeven '+N2(beOn)+'\u00d7 at '+(Math.round(ECON.onDel*1000)/10)+'% delivered margin',pv/sp>beOn?'#12b886':'#e23a63')
+ +kpi('In-store ROAS (claimed)',N2(sp?fv/sp:0),'breakeven '+N2(beOff)+'\u00d7 at '+(Math.round(ECON.off*1000)/10)+'% store margin','#12b886')
  +kpi('In-store ROAS @21.4%',N2(sp?fv*0.214/sp:0),'below breakeven '+N2(beOff)+'×',(fv*0.214/sp)>beOff?'#12b886':'#e23a63')
  +kpi('Online AOV',EGP(pu?pv/pu:0),'Meta-reported')
  +kpi('In-store AOV',EGP(op?fv/op:0),'Meta-reported, offline CAPI')
