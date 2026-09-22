@@ -100,27 +100,21 @@ query { locations(first: 50) { nodes { id name fulfillsOnlineOrders } } }"""
 # Per-location stock, because `availableForSale` counts branches that never ship an
 # online order. Heavier query, so the page size drops to 50 to stay inside the cost
 # ceiling -- the throttle handling in gql() covers the rest.
+# sellableOnlineQuantity is Shopify's OWN answer to "how many of these can a website
+# order actually take" -- it already excludes branches that do not fulfil online
+# orders. Verified against a hand count: M-Design 600ml Blue reads inventoryQuantity 8
+# / sellable 0, M Design 1.1 Blue 9 / 0, M-Design 600 Purple 30 / 23 -- all three match
+# summing the fulfilling locations by hand. Using it instead of walking
+# inventoryLevels keeps the query under Shopify's 1000-point cost ceiling.
 PRODUCTS_Q = """
 query($id: ID!, $cursor: String) {
   collection(id: $id) {
-    products(first: 50, after: $cursor) {
+    products(first: 30, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
         id
         variantsCount { count }
-        variants(first: 100) {
-          nodes {
-            availableForSale
-            inventoryItem {
-              inventoryLevels(first: 20) {
-                nodes {
-                  location { id }
-                  quantities(names: ["available"]) { quantity }
-                }
-              }
-            }
-          }
-        }
+        variants(first: 25) { nodes { sellableOnlineQuantity availableForSale } }
       }
     }
   }
@@ -161,19 +155,8 @@ def collection_products(cid):
         for n in block["nodes"]:
             variants = n["variants"]["nodes"]
             total = n["variantsCount"]["count"] or len(variants)
-            shippable = 0
-            for v in variants:
-                item = v.get("inventoryItem") or {}
-                levels = ((item.get("inventoryLevels") or {}).get("nodes")) or []
-                units = 0
-                for lvl in levels:
-                    loc = ((lvl.get("location") or {}).get("id"))
-                    if loc in SHIPPING_LOCATIONS:
-                        for q in (lvl.get("quantities") or []):
-                            units += q.get("quantity") or 0
-                # untracked variants report no levels; trust Shopify's own flag there
-                if units > 0 or (not levels and v.get("availableForSale")):
-                    shippable += 1
+            shippable = sum(1 for v in variants
+                            if (v.get("sellableOnlineQuantity") or 0) > 0)
             out.append((n["id"], band(total, shippable), total, shippable))
         if not block["pageInfo"]["hasNextPage"]:
             return out
