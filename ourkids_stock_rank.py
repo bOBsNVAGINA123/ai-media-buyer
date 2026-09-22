@@ -120,6 +120,16 @@ query($id: ID!, $cursor: String) {
   }
 }"""
 
+# The storefront cannot see sellableOnlineQuantity -- Liquid has no such field -- so
+# the band is stamped onto the product and the theme reads it back. That makes the
+# grid and search order correct on EVERY page, not just the one Liquid is rendering.
+METAFIELD_M = """
+mutation($metafields: [MetafieldsSetInput!]!) {
+  metafieldsSet(metafields: $metafields) {
+    userErrors { field message }
+  }
+}"""
+
 REORDER_M = """
 mutation($id: ID!, $moves: [MoveInput!]!) {
   collectionReorderProducts(id: $id, moves: $moves) {
@@ -198,7 +208,10 @@ def rank_collection(node):
     print("  MOVE %-26s %d products | %d picked-over + %d sold-out -> tail"
           % (handle, total, thin, gone))
     if DRY_RUN:
+        print("       would stamp custom.online_band on %d products" % len(items))
         return len(moves)
+
+    stamp_bands(items)
 
     res = gql(REORDER_M, {"id": cid, "moves": moves})["collectionReorderProducts"]
     if res["userErrors"]:
@@ -206,6 +219,22 @@ def rank_collection(node):
         return 0
     time.sleep(1.5)                                       # let the job settle
     return len(moves)
+
+
+def stamp_bands(items):
+    """Write custom.online_band so the theme can order any page, not just page one."""
+    payload = [{"ownerId": pid, "namespace": "custom", "key": "online_band",
+                "type": "number_integer", "value": str(b)} for pid, b, _, _ in items]
+    for i in range(0, len(payload), 25):                  # metafieldsSet caps at 25
+        chunk = payload[i:i + 25]
+        try:
+            res = gql(METAFIELD_M, {"metafields": chunk})["metafieldsSet"]
+            if res["userErrors"]:
+                print("       band stamp rejected: %s" % json.dumps(res["userErrors"])[:160])
+                return
+        except Exception as e:
+            print("       band stamp failed: %s" % str(e)[:140])
+            return
 
 
 SHIPPING_LOCATIONS = set()
