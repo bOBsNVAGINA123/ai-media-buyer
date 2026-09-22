@@ -213,9 +213,15 @@ def rank_collection(node):
 
     stamp_bands(items)
 
-    res = gql(REORDER_M, {"id": cid, "moves": moves})["collectionReorderProducts"]
+    try:
+        res = gql(REORDER_M, {"id": cid, "moves": moves})["collectionReorderProducts"]
+    except Exception as e:
+        print("       REJECTED: %s" % str(e)[:200])
+        WRITE_DENIED.append("collectionReorderProducts")
+        return 0
     if res["userErrors"]:
         print("       REJECTED: %s" % json.dumps(res["userErrors"])[:200])
+        WRITE_DENIED.append("collectionReorderProducts")
         return 0
     time.sleep(1.5)                                       # let the job settle
     return len(moves)
@@ -231,13 +237,16 @@ def stamp_bands(items):
             res = gql(METAFIELD_M, {"metafields": chunk})["metafieldsSet"]
             if res["userErrors"]:
                 print("       band stamp rejected: %s" % json.dumps(res["userErrors"])[:160])
+                WRITE_DENIED.append("metafieldsSet")
                 return
         except Exception as e:
             print("       band stamp failed: %s" % str(e)[:140])
+            WRITE_DENIED.append("metafieldsSet")
             return
 
 
 SHIPPING_LOCATIONS = set()
+WRITE_DENIED = []          # every write rejected by Shopify, so the run can fail loudly
 
 
 def load_locations():
@@ -273,7 +282,18 @@ def main():
             moved += rank_collection(node)
         except Exception as e:                            # one bad collection must not kill the run
             print("  FAIL %-26s %s" % (node["handle"], str(e)[:160]))
+            if "Access denied" in str(e) or "access scope" in str(e):
+                WRITE_DENIED.append("collectionReorderProducts")
     print("done: %d products repositioned across %d collections" % (moved, len(found)))
+
+    # A scheduled job that changes nothing must NOT report success -- otherwise a
+    # missing API scope looks identical to "there was nothing to do", and the run
+    # goes green every night while the storefront stays unmerchandised.
+    if WRITE_DENIED and not DRY_RUN:
+        kinds = ", ".join(sorted(set(WRITE_DENIED)))
+        sys.exit("FAILED: every write was rejected (%s). The token behind SHOPIFY_TOKEN "
+                 "needs the write_products scope -- Shopify admin > Apps > Develop apps "
+                 "> Configuration > Admin API scopes. Nothing was changed." % kinds)
 
 
 if __name__ == "__main__":
