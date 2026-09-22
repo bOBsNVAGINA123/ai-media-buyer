@@ -94,15 +94,33 @@ query($q: String!) {
   }
 }"""
 
+LOCATIONS_Q = """
+query { locations(first: 50) { nodes { id name fulfillsOnlineOrders } } }"""
+
+# Per-location stock, because `availableForSale` counts branches that never ship an
+# online order. Heavier query, so the page size drops to 50 to stay inside the cost
+# ceiling -- the throttle handling in gql() covers the rest.
 PRODUCTS_Q = """
 query($id: ID!, $cursor: String) {
   collection(id: $id) {
-    products(first: 250, after: $cursor) {
+    products(first: 50, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
         id
         variantsCount { count }
-        variants(first: 100) { nodes { availableForSale } }
+        variants(first: 100) {
+          nodes {
+            availableForSale
+            inventoryItem {
+              inventoryLevels(first: 20) {
+                nodes {
+                  location { id }
+                  quantities(names: ["available"]) { quantity }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -118,7 +136,11 @@ mutation($id: ID!, $moves: [MoveInput!]!) {
 
 
 def band(total_variants, available_variants):
-    """1 = fully shoppable, 2 = picked over, 3 = sold out."""
+    """1 = fully shoppable, 2 = picked over, 3 = nothing shippable.
+
+    `available_variants` counts variants with stock at a location that fulfils
+    online orders -- not Shopify's availableForSale, which includes branches that
+    never ship."""
     if available_variants == 0:
         return 3
     if total_variants <= 1:
@@ -138,9 +160,21 @@ def collection_products(cid):
         block = data["collection"]["products"]
         for n in block["nodes"]:
             variants = n["variants"]["nodes"]
-            avail = sum(1 for v in variants if v["availableForSale"])
             total = n["variantsCount"]["count"] or len(variants)
-            out.append((n["id"], band(total, avail), total, avail))
+            shippable = 0
+            for v in variants:
+                item = v.get("inventoryItem") or {}
+                levels = ((item.get("inventoryLevels") or {}).get("nodes")) or []
+                units = 0
+                for lvl in levels:
+                    loc = ((lvl.get("location") or {}).get("id"))
+                    if loc in SHIPPING_LOCATIONS:
+                        for q in (lvl.get("quantities") or []):
+                            units += q.get("quantity") or 0
+                # untracked variants report no levels; trust Shopify's own flag there
+                if units > 0 or (not levels and v.get("availableForSale")):
+                    shippable += 1
+            out.append((n["id"], band(total, shippable), total, shippable))
         if not block["pageInfo"]["hasNextPage"]:
             return out
         cursor = block["pageInfo"]["endCursor"]
@@ -191,9 +225,31 @@ def rank_collection(node):
     return len(moves)
 
 
+SHIPPING_LOCATIONS = set()
+
+
+def load_locations():
+    """Only locations that fulfil online orders can serve a website order.
+
+    `fulfillsOnlineOrders` gates order ROUTING, not availability -- Shopify happily
+    counts a branch that never ships toward availableForSale, so a product can sell
+    online with nothing at a shippable location (measured: 63% of units in a Lunch
+    Bags sample sat at non-fulfilling branches, and 4 of 12 products were buyable
+    with zero shippable units). Ranking on availableForSale would therefore promote
+    stock that cannot be posted.
+    """
+    nodes = gql(LOCATIONS_Q)["locations"]["nodes"]
+    ships = [n for n in nodes if n["fulfillsOnlineOrders"]]
+    SHIPPING_LOCATIONS.update(n["id"] for n in ships)
+    print("shippable locations: %s" % ", ".join(sorted(n["name"] for n in ships)))
+    print("ignored (no online fulfilment): %s"
+          % ", ".join(sorted(n["name"] for n in nodes if not n["fulfillsOnlineOrders"])))
+
+
 def main():
     print("Ourkids stock-depth merchandising%s" % ("  [DRY RUN]" if DRY_RUN else ""))
     print("store=%s  collections=%d  max_moves=%d" % (STORE, len(HANDLES), MAX_MOVES))
+    load_locations()
     q = " OR ".join("handle:%s" % h for h in HANDLES)
     found = gql(COLLECTION_Q, {"q": q})["collections"]["nodes"]
     missing = sorted(set(HANDLES) - {n["handle"] for n in found})
