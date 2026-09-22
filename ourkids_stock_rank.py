@@ -249,6 +249,29 @@ SHIPPING_LOCATIONS = set()
 WRITE_DENIED = []          # every write rejected by Shopify, so the run can fail loudly
 
 
+def show_token_scopes():
+    """Ask Shopify what this token can actually do.
+
+    A scope ticked in the admin UI does not necessarily reach an already-issued
+    token, and there is more than one custom app on this store -- so "the admin
+    says write_products" is not evidence that THIS token has it. /admin/oauth/
+    access_scopes.json answers for the token itself and settles both questions.
+    """
+    url = "https://%s/admin/oauth/access_scopes.json" % STORE
+    req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": TOKEN})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            scopes = sorted(h["handle"] for h in json.loads(r.read().decode())["access_scopes"])
+    except Exception as e:
+        print("could not read token scopes: %s" % str(e)[:120]); return
+    writes = [s_ for s_ in scopes if s_.startswith("write_")]
+    print("TOKEN scopes (%d): %s" % (len(scopes), ", ".join(scopes)))
+    print("TOKEN write scopes: %s" % (", ".join(writes) if writes else "NONE"))
+    if "write_products" not in scopes:
+        print("--> this token does NOT carry write_products, so it is not the app "
+              "that was just edited, or the token predates the change and must be reissued.")
+
+
 def load_locations():
     """Only locations that fulfil online orders can serve a website order.
 
@@ -270,6 +293,7 @@ def load_locations():
 def main():
     print("Ourkids stock-depth merchandising%s" % ("  [DRY RUN]" if DRY_RUN else ""))
     print("store=%s  collections=%d  max_moves=%d" % (STORE, len(HANDLES), MAX_MOVES))
+    show_token_scopes()
     load_locations()
     q = " OR ".join("handle:%s" % h for h in HANDLES)
     found = gql(COLLECTION_Q, {"q": q})["collections"]["nodes"]
