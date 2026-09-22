@@ -1,0 +1,49 @@
+name: Ourkids stock-depth merchandising
+
+# Shopify has no sort by stock depth -- "available" is binary, so a product with one
+# size left can outrank a fully stocked one on best-seller history alone. A theme can
+# only reorder the page it is rendering. Every Ourkids collection is automated AND
+# carries sortOrder MANUAL, which makes collectionReorderProducts legal on them, and
+# that is the only thing that reorders a WHOLE collection. Runs on GitHub's servers,
+# so it keeps working with no laptop and nobody watching.
+on:
+  schedule:
+    # 03:40 UTC daily = 06:40 Cairo, before the morning traffic. Off the :00 minute
+    # deliberately -- GitHub throttles crons set to exactly :00 and silently drops them.
+    - cron: "40 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = print the plan, change nothing"
+        required: false
+        default: "0"
+      handles:
+        description: "Comma-separated collection handles (blank = the default set)"
+        required: false
+        default: ""
+      max_moves:
+        description: "Most products to reposition per collection"
+        required: false
+        default: "250"
+
+concurrency:
+  group: stock-rank
+  cancel-in-progress: false
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Demote picked-over products to the bottom of each collection
+        env:
+          SHOPIFY_STORE:       ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:       ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          DRY_RUN:             ${{ github.event.inputs.dry_run || '0' }}
+          COLLECTION_HANDLES:  ${{ github.event.inputs.handles || '' }}
+          MAX_MOVES:           ${{ github.event.inputs.max_moves || '250' }}
+        run: python3 ourkids_stock_rank.py
