@@ -1552,7 +1552,7 @@ def pull_tiktok_ads():
 
 def pull_shop_channel(fin_win):
     """Shopify-team daily actuals: revenue, margin, orders, refunds (credit notes are team-tagged)."""
-    out = {"srev": {}, "sgp": {}, "sord": {}, "sref": {}}
+    out = {"srev": {}, "sgp": {}, "sord": {}, "sref": {}, "srefO": {}}
     try:
         g = oexec("sale.order", "read_group",
                   [[["state", "in", ["sale", "done"]], ["team_id.name", "=", "Shopify"], ["date_order", ">=", fin_win[0]]],
@@ -1569,6 +1569,48 @@ def pull_shop_channel(fin_win):
         for r in g:
             d = _gday(r.get("invoice_date:day"))
             if d: out["sref"][d] = round(r["amount_total"])
+        # v11.6 REFUNDS BELONG TO THE ORDER, NOT TO THE DAY ACCOUNTING POSTED THEM.
+        # The credit notes are posted in batches, so by posting date a Friday reads 67% refunds
+        # and the Monday after reads 0%. Neither happened. Every credit note carries
+        # invoice_origin = the Shopify order name, and that joins to sale.order 100% of the time
+        # (2,290 of 2,290 tested), with a median lag of 7 days -- the Bosta return cycle, not an
+        # accounting lag. Attributing each credit note to its ORDER's date turns a 32.8% posted
+        # "refund rate" over the last fortnight into the real 11.7%.
+        # Shipped as a SECOND series so both bases stay visible and nothing silently changes.
+        try:
+            cns = []
+            off = 0
+            while True:
+                page = oexec("account.move", "search_read",
+                             [[["move_type", "=", "out_refund"], ["state", "=", "posted"],
+                               ["team_id.name", "=", "Shopify"], ["invoice_date", ">=", fin_win[0]]]],
+                             {"fields": ["invoice_date", "invoice_origin", "amount_total"],
+                              "limit": 5000, "offset": off, "order": "id"})
+                if not page: break
+                cns += page; off += len(page)
+                if len(page) < 5000: break
+            names = sorted({c["invoice_origin"] for c in cns if c.get("invoice_origin")})
+            odate = {}
+            for i in range(0, len(names), 500):
+                for o in oexec("sale.order", "search_read", [[["name", "in", names[i:i + 500]]]],
+                               {"fields": ["name", "date_order"], "limit": 5000}):
+                    odate[o["name"]] = str(o["date_order"])[:10]
+            hit = miss = 0
+            for c in cns:
+                d = odate.get(c.get("invoice_origin"))
+                amt = c.get("amount_total") or 0
+                if d:
+                    hit += 1
+                    out["srefO"][d] = out["srefO"].get(d, 0) + amt
+                else:
+                    # unmatched: leave it on its posting date so no money disappears
+                    miss += 1
+                    d2 = str(c.get("invoice_date"))[:10]
+                    out["srefO"][d2] = out["srefO"].get(d2, 0) + amt
+            for d in list(out["srefO"]): out["srefO"][d] = round(out["srefO"][d])
+            log("refunds matched to order date", hit, "unmatched", miss)
+        except Exception as e:
+            log("refund-by-order fail", str(e)[:150])
         log("shop-channel days", len(out["srev"]))
     except Exception as e:
         log("shop-channel fail", str(e)[:150])
@@ -6289,7 +6331,8 @@ def build():
             ":: 1dc", ATTR["metaOff"]["1dc"], ":: incr", ATTR["metaOff"]["incr"],
             ":: live offline value", int(ob))
     fwin = drange(datetime.date.fromisoformat(fin["start"]), END)
-    sh = {"rev": [int(round(shc["srev"].get(d, 0) / 1000.0)) for d in fwin],
+    sh = {"refO": [int(round(shc.get("srefO", {}).get(d, 0) / 1000.0)) for d in fwin],
+          "rev": [int(round(shc["srev"].get(d, 0) / 1000.0)) for d in fwin],
           "gp": [int(round(shc["sgp"].get(d, 0) / 1000.0)) for d in fwin],
           "ref": [int(round(shc["sref"].get(d, 0) / 1000.0)) for d in fwin],
           "ord": [int(shc["sord"].get(d, 0)) for d in fwin]}
@@ -6423,7 +6466,7 @@ def build():
         safe(sync_gmb_branch_sales)
         log("audience syncs done :: total run %.1f min" % ((time.time() - RUN_T0) / 60))
 
-OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1549,"revEst":6488299,"rentEst":0,"opexEst":192879,"ordersMo":4188},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1531,"revEst":8637062,"rentEst":555308,"opexEst":152753,"ordersMo":5642},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1845,"revEst":11081404,"rentEst":280603,"opexEst":150079,"ordersMo":6005},{"name":"Zayed","payroll":181843,"hc":17,"aov":1271,"revEst":5436455,"rentEst":316957,"opexEst":141983,"ordersMo":4278},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1605,"revEst":7749223,"rentEst":191882,"opexEst":134212,"ordersMo":4827},{"name":"October","payroll":149101,"hc":13,"aov":1417,"revEst":3939967,"rentEst":448146,"opexEst":116418,"ordersMo":2781},{"name":"Smouha","payroll":139685,"hc":14,"aov":1330,"revEst":5060067,"rentEst":269417,"opexEst":109066,"ordersMo":3804}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.3488,"refundRate":0.0599,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026","revSource":"report.pos.order 2026-08-22..2026-09-20"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is MEASURED from report.pos.order, 30 days to 20 Sep 2026: EGP 48.4M/month across the seven branches. It is NOT walled off from the read-only account. The previous payroll-weighted estimate of 19.95M/mo understated the branches by 143%, and misallocated them - New Cairo was out by 269%, Dokki by 68%.","rent":"Rent is MEASURED - GL 31.01.04.02.00 RENT Branches, split by analytic tag, 12 months to 20 Sep 2026, EGP 24.75M/yr. Dokki is 0: it carries no rent line at all (owned). Opex is still an EDITABLE placeholder at 5% of revenue.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard.","aov":"AOV and orders are MEASURED from report.pos.order using order_id:count_distinct, 30 days to 20 Sep 2026. Seven branches: 31,525 orders, EGP 1,535 average basket, 3.60 units per basket. The previous figures understated every branch by 17-39%."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
+OFFLINE_JSON = r'''{"currency":"EGP","brand":"OurKids","branches":[{"name":"Dokki","payroll":247027,"hc":25,"aov":1328.4,"revEst":3857585,"rentEst":308607,"opexEst":192879},{"name":"Mall of Arabia","payroll":195636,"hc":17,"aov":1286.0,"revEst":3055060,"rentEst":244405,"opexEst":152753},{"name":"New Cairo","payroll":192211,"hc":16,"aov":1329.3,"revEst":3001576,"rentEst":240126,"opexEst":150079},{"name":"Zayed","payroll":181843,"hc":17,"aov":991.9,"revEst":2839668,"rentEst":227173,"opexEst":141983},{"name":"Nasr City","payroll":171890,"hc":19,"aov":1303.0,"revEst":2684242,"rentEst":214739,"opexEst":134212},{"name":"October","payroll":149101,"hc":13,"aov":1206.0,"revEst":2328368,"rentEst":186269,"opexEst":116418},{"name":"Smouha","payroll":139685,"hc":14,"aov":1050.0,"revEst":2181327,"rentEst":174506,"opexEst":109066}],"company":{"payrollTotal":2906175,"branchPayroll":1277393,"warehousePayroll":420305,"ecomPayroll":372076,"hqPayroll":783651,"envelope":52750,"gpPct":0.3488,"refundRate":0.175,"overheadPoolDefault":1203956,"aggRetailMonthly":19947826},"meta":{"offlineValue":1016656,"offlinePur":664,"window":"25 Jun \u2013 24 Jul 2026"},"attr":{"order":["default","7dc","1dc","incr"],"labels":{"default":"Default 7DC/1DV (LIVE)","7dc":"7-day click (modeled)","1dc":"1-day click (modeled)","incr":"Incremental \u2014 MODELLED (no live Meta pull)"},"meta":{"default":1.0,"7dc":0.94,"1dc":0.78,"incr":0.6},"metaOff":{"default":1.0,"7dc":0.42,"1dc":0.24,"incr":0.17}},"notes":{"revenue":"Branch revenue is an EDITABLE ESTIMATE (payroll-weighted split of the ERP-audit E\u00a3458.8M since Aug-2024 \u2248 19.95M/mo). Real POS revenue is walled off from the read-only Odoo account (audit S-01). Type real per-branch numbers to make breakeven exact.","rent":"Rent + opex are EDITABLE placeholders (8% / 5% of revenue). Enter your real lease + running costs.","payroll":"Payroll is EXACT \u2014 Excel 'OurKids payroll by function', June 2026.","gp":"Contribution margin uses net GP% 26.6% (Odoo margin, recent) and refund rate 17.5% (ERP audit S-03).","newret":"Per-branch new/returning split needs POS access (walled). Online new/returning shown on the main dashboard."},"bltg":{"asOf":"2026-07-22","perCustomer":{"October":1231,"Dokki":1168,"New Cairo":1084,"Zayed":1059,"Nasr City":948,"Smouha":810,"Mall of Arabia":807}}}'''
 
 def _dataface():
     """What is actually sitting in data.js right now, so status.json can report it
