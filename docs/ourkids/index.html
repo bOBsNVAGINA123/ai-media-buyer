@@ -4839,6 +4839,7 @@ function beScen(g){
  const SCOPE=(window.BESC==='both')?'both':'on';
  const BL=O.bl,bl0=BL?Date.parse(BL.start+'T00:00:00Z'):null;
  const stMg=posMg()*BLX();   /* v10.3: shared margin, bridged onto the net-of-tax daily feed these rows use */
+ const _gpG=GPQ().gpOnGross;   /* gross margin, before the delivery drag */
  const brRev=ds=>{if(!BL)return 0;const i=Math.round((Date.parse(ds+'T00:00:00Z')-bl0)/864e5);
    if(i<0||i>=BL.n)return 0;let t=0;Object.keys(BL.b).forEach(b=>{t+=(BL.b[b]||[])[i]||0;});return t;};
  const rows=[];
@@ -4922,38 +4923,102 @@ function beScen(g){
    +'<td style="'+TD+'">'+r.mer.toFixed(2)+'×</td>'
    +'<td style="'+TD+'">'+M(r.rev)+'</td>'
    +'<td style="'+TD+'">'+M(r.gp)+'</td>'
+   +'<td style="'+TD+';color:'+((r.pf+FX)>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+SM(r.pf+FX)+'</td>'
    +'<td style="'+TD+';color:'+(r.pf>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+SM(r.pf)+'</td>'
    +'<td style="'+TD+';color:'+(r.pf>=0?'#0f6e56':'#a3271a')+'">'+SM(r.pf*30)+'</td></tr>';});
  const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Ad spend</th><th style="'+TH+'">MER there<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">measured</div></th>'
-  +'<th style="'+TH+'">Sales/day</th><th style="'+TH+'">Delivered GP/day</th><th style="'+TH+'">Profit/day</th><th style="'+TH+'">Profit/month</th></tr>'
+  +'<th style="'+TH+'">Sales/day</th><th style="'+TH+'">Delivered GP/day</th>'
+  +'<th style="'+TH+'">After ads<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">/day</div></th>'
+  +'<th style="'+TH+'">After ads + HQ<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">/day</div></th>'
+  +'<th style="'+TH+'">After ads + HQ<div style="font-weight:600;font-size:8px;text-transform:none;color:#8a93a6">/month</div></th></tr>'
   +b2+'</table></div>';
  const binTxt=bins.map(b=>M(b.sp)+'→'+b.mer.toFixed(2)+'×').join(' · ');
  /* v9.99 THE REAL DAYS. The ladder is a model; this is what actually happened, day by day, at
     the spend you actually set — same margin and same fixed-cost charge, so the two are directly
     comparable and nobody has to trust a projection to see whether the days paid. */
+ /* v11.4 ACTUAL DAYS, NOT ONE DAY. This was clipped to the date box, so selecting a single
+    day produced a one-row table under a ladder of ten hypotheticals -- the opposite of what
+    the card is for. It now always shows a real run of trading days ending at the date box,
+    because "what did the last fortnight actually do" is the question this table answers. */
+ /* v11.5 GROSS -> NET, AND OVERHEAD BY THE DAY'S OWN SHARE.
+    Three things were wrong with this table and all three flattered nothing, they just made an
+    ordinary week look like a catastrophe.
+    1. SPEND. In "webstore only" scope it charged the entire company budget -- Meta, Google and
+       TikTok in full -- against webstore-only sales. On 2026-09-08 that is E£60,868 against a
+       website that Meta itself says it drove 37% of the value for. Webstore scope now pays the
+       webstore's share: Google and TikTok whole, Meta split by its OWN reported web-vs-store
+       value. Both scope pays everything, which is the only other consistent pairing.
+    2. OVERHEAD. A flat 1/30th per day charged a dead Tuesday the same head-office cost as the
+       best Saturday of the month. It is now the MONTH's cost apportioned by that day's share of
+       that month's net revenue -- a day that does 5% of the month carries 5% of the overhead.
+    3. It printed one profit number with everything already inside it. Gross sales, refunds,
+       net revenue, gross profit, delivery, ads and overhead are now separate columns, so the
+       line that is actually hurting is visible instead of averaged into a single red figure. */
+ const _monthNet={};
+ (function(){for(let k=0;k<(SH.rev||[]).length;k++){
+   const dd=DD[k];if(!dd)continue;const mm=dd.slice(0,7);
+   _monthNet[mm]=(_monthNet[mm]||0)+(((SH.rev||[])[k]||0)-((SH.ref||[])[k]||0))*1000;}})();
+ const _dimOf=mm=>new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0)).getUTCDate();
+ const webSpendAt=(i)=>{const ms=(A.mspend||[])[i]||0,gs=(A.gspend||[])[i]||0,ts=(A.tspend||[])[i]||0;
+   if(SCOPE==='both')return ms+gs+ts;
+   const io=(A.instoreMeta||[])[i]||0, ov=(A.metaOmniValue||[])[i]||0;
+   const wsh=ov>0?Math.max(0,Math.min(1,(ov-io)/ov)):1;
+   return ms*wsh+gs+ts;};
  const actD=[];
- for(let i=A.n-1;i>=0&&actD.length<10;i--){
+ const _actEnd=ST.e, _actFrom=addD(ST.e,-27);
+ for(let i=A.n-1;i>=0&&actD.length<14;i--){
   const ds=new Date(a0+i*864e5).toISOString().slice(0,10);
-  if(ds>ST.e||ds<ST.s)continue;
+  if(ds>_actEnd||ds<_actFrom)continue;
   const j=Math.round((Date.parse(ds+'T00:00:00Z')-f0)/864e5);
-  const sp=(A.spend||[])[i]||0;if(!sp)continue;
-  const web=(((SH.rev||[])[j]||0)-((SH.ref||[])[j]||0))*1000;
+  const spTot=(A.spend||[])[i]||0;if(!spTot)continue;
+  const sp=webSpendAt(i);
+  const grossS=((SH.rev||[])[j]||0)*1000, refs=((SH.ref||[])[j]||0)*1000;
+  const web=grossS-refs;
   const st=(SCOPE==='both')?brRev(ds):0;
-  const rev=web+st,gp=web*m+st*stMg,pf=gp-sp-FX;
-  actD.push({d:ds,sp:sp,rev:rev,gp:gp,pf:pf,mer:sp?rev/sp:null,be:(sp+FX)/mBlend});}
+  const rev=web+st;
+  const gpG=web*_gpG+st*stMg;              /* GROSS profit, before delivery */
+  const gp=web*m+st*stMg;                  /* DELIVERED, after courier + fees */
+  const mm=ds.slice(0,7);
+  const share=_monthNet[mm]>0?web/_monthNet[mm]:0;
+  const hq=FX*_dimOf(mm)*share;            /* the MONTH's overhead, by this day's share of it */
+  actD.push({d:ds,sp:sp,spTot:spTot,gross:grossS,ref:refs,rev:rev,net:web,
+    gpG:gpG,gp:gp,hq:hq,pfAds:gp-sp,pf:gp-sp-hq,mer:sp?rev/sp:null,be:(sp+hq)/mBlend});}
  actD.reverse();
  let ab='';
- actD.forEach(r=>{const hit=r.rev>=r.be;
+ const _T=(k)=>actD.reduce((a,x)=>a+(x[k]||0),0);
+ actD.forEach(r=>{
   ab+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+'</td>'
-   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
-   +'<td style="'+TD+'">'+M(r.rev)+'</td>'
-   +'<td style="'+TD+'">'+M(r.be)+'</td>'
-   +'<td style="'+TD+';font-weight:800;color:'+(hit?'#0f6e56':'#a3271a')+'">'+(hit?'cleared by '+M(r.rev-r.be):'short by '+M(r.be-r.rev))+'</td>'
+   +'<td style="'+TD+'">'+M(r.gross)+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.ref)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(r.net)+'</td>'
+   +'<td style="'+TD+'">'+M(r.gpG)+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.gpG-r.gp)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+M(r.gp)+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.sp)+'</td>'
+   +'<td style="'+TD+';color:'+(r.pfAds>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+SM(r.pfAds)+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.hq)+'</td>'
    +'<td style="'+TD+';color:'+(r.pf>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+SM(r.pf)+'</td></tr>';});
+ ab+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">'+actD.length+' days</td>'
+   +'<td style="'+TD+'">'+M(_T('gross'))+'</td><td style="'+TD+';color:#a3271a">&minus;'+M(_T('ref'))+'</td>'
+   +'<td style="'+TD+'">'+M(_T('net'))+'</td><td style="'+TD+'">'+M(_T('gpG'))+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(_T('gpG')-_T('gp'))+'</td><td style="'+TD+'">'+M(_T('gp'))+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(_T('sp'))+'</td>'
+   +'<td style="'+TD+';color:'+(_T('pfAds')>=0?'#0f6e56':'#a3271a')+'">'+SM(_T('pfAds'))+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(_T('hq'))+'</td>'
+   +'<td style="'+TD+';color:'+(_T('pf')>=0?'#0f6e56':'#a3271a')+'">'+SM(_T('pf'))+'</td></tr>';
  const actTbl=actD.length?('<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse">'
-  +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend you set</th><th style="'+TH+'">Sales</th>'
-  +'<th style="'+TH+'">Break-even sales</th><th style="'+TH+'">Against it</th><th style="'+TH+'">Profit</th></tr>'
+  +'<tr><th style="'+TH+';text-align:left">Day</th>'
+  +'<th style="'+TH+'">GROSS sales</th>'
+  +'<th style="'+TH+'">Refunds</th>'
+  +'<th style="'+TH+'">NET revenue</th>'
+  +'<th style="'+TH+'">Gross profit<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">at '+(_gpG*100).toFixed(1)+'%</div></th>'
+  +'<th style="'+TH+'">Delivery<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">courier + COD fees</div></th>'
+  +'<th style="'+TH+'">Delivered GP<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">at '+(m*100).toFixed(1)+'%</div></th>'
+  +'<th style="'+TH+'">Ads<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">'+(SCOPE==='both'?'whole budget':'webstore&rsquo;s share')+'</div></th>'
+  +'<th style="'+TH+'">AFTER ADS</th>'
+  +'<th style="'+TH+'">Overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">month &divide; day&rsquo;s share</div></th>'
+  +'<th style="'+TH+'">NET</th></tr>'
   +ab+'</table></div>'):'';
  const tog='<a href="javascript:void(0)" onclick="beScope()" style="color:#5a5bf0;font-weight:800">'
   +(SCOPE==='both'?'☑ branches included':'☐ include the branches')+'</a>';
@@ -16371,7 +16436,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260921-233940';
+const BUILD='20260923-195319';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
