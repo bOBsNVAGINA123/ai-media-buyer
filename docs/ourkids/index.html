@@ -5009,7 +5009,8 @@ function beScen(g){
   ab+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+'</td>'
    +'<td style="'+TD+'">'+M(r.gross)+'</td>'
    +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.ref)
-     +(Math.abs(r.refPosted-r.ref)>1?'<div style="font-size:8.5px;color:#8a93a6;font-weight:600">posted that day: '+M(r.refPosted)+'</div>':'')+'</td>'
+     +(Math.abs(r.refPosted-r.ref)>1?'<div style="font-size:8.5px;color:#8a93a6;font-weight:600">posted that day: '+M(r.refPosted)+'</div>':'')
+     +((refOrderDated()&&O.today&&(Date.parse(O.today)-Date.parse(r.d))/864e5<10)?'<div style="font-size:8.5px;color:#b8621b;font-weight:700" title="Orders from the last ~10 days have not finished coming back yet (median return lag 7 days), so this figure will still GROW as their credit notes post.">tail still filling</div>':'')+'</td>'
    +'<td style="'+TD+';font-weight:700">'+M(r.net)+'</td>'
    +'<td style="'+TD+'">'+M(r.gpG)+'</td>'
    +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.gpG-r.gp)+'</td>'
@@ -13818,7 +13819,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    null,
    {hdr:'2 &middot; REVENUE &mdash; what was actually billed and kept'},
    {n:'Gross sales',f:m=>SH[m]&&SH[m].g?SH[m].g:null,fmt:POS,sh:1,b:1,tt:'Odoo Shopify sales team, confirmed orders only. Equals the two demand rows above, subtracted.'},
-   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,mk:m=>refOrderDated()?'':' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="These credit notes are dated when accounting POSTED them, which is batched. The order-dated series arrives on the next sync.">POSTED</span>',tt:'Credit notes tagged to the Shopify team, re-dated onto the ORDER they belong to (invoice_origin joins to sale.order 100% of the time, median lag 7 days -- the Bosta return cycle). Posting is batched; returns are not, so a posting-date basis makes one day read 67% refunds and the next 0%.'},
+   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,mk:m=>refOrderDated()?(m===CURM?' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="Refunds are dated to the ORDER now, and orders from the last ~10 days have not finished coming back (median return lag 7 days). This month&#39;s refunds will still GROW.">STILL FILLING</span>':''):' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="These credit notes are dated when accounting POSTED them, which is batched. The order-dated series arrives on the next sync.">POSTED</span>',tt:'Credit notes tagged to the Shopify team, re-dated onto the ORDER they belong to (invoice_origin joins to sale.order 100% of the time, median lag 7 days -- the Bosta return cycle). Posting is batched; returns are not, so a posting-date basis makes one day read 67% refunds and the next 0%.'},
    {n:'Net revenue',f:m=>SH[m]&&SH[m].g?SH[m].g-SH[m].r:null,fmt:POS,sh:1,b:1},
    {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1,ind:1},
    {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,ind:1},
@@ -16455,7 +16456,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260923-203901';
+const BUILD='20260923-205111';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
