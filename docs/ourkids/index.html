@@ -153,7 +153,15 @@ function rng(s,e){if(O.partial&&e>=O.partial)e=addD(O.partial,-1);const i0=idxOf
    scaling as O.fin, so this is a straight swap, not a re-derivation.
    fSumAll() keeps the old all-marketplace behaviour for the few places that genuinely
    want the network total (marketplace comparison, network share). */
+/* v11.6 REFUNDS BY ORDER DATE. Credit notes post in batches, so on a posting-date basis one
+   day reads 67% refunds and the next reads 0% -- neither happened. Every credit note carries
+   the Shopify order name and joins back 100% of the time, median lag 7 days (the Bosta return
+   cycle). O.shop.refO is that same money moved onto the day the order was placed, which is the
+   only basis on which a DAILY refund figure means anything. Falls back to the posting-date
+   series until a sync ships refO, so nothing breaks in between. */
+function _refKey(){return (window.O&&O.shop&&O.shop.refO&&O.shop.refO.length)?'refO':'ref';}
 const SHOPMAP={rev:'rev',gp:'gp',refund:'ref',orders:'ord'};
+Object.defineProperty(SHOPMAP,'refund',{get:function(){return _refKey();},enumerable:true});
 function fSumAll(k,s,e){const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.fin[k][i]||0;return t*(SC[k]||1);}
 /* v11.1 fSum IS THE ACCESSOR THE WHOLE OVERVIEW RUNS ON -- and its 'gp' branch read
    O.shop.gp raw. That is why the Overview said "margin narrowed to 28.3%" while the same
@@ -4973,7 +4981,9 @@ function beScen(g){
   const j=Math.round((Date.parse(ds+'T00:00:00Z')-f0)/864e5);
   const spTot=(A.spend||[])[i]||0;if(!spTot)continue;
   const sp=webSpendAt(i);
-  const grossS=((SH.rev||[])[j]||0)*1000, refs=((SH.ref||[])[j]||0)*1000;
+  const grossS=((SH.rev||[])[j]||0)*1000;
+  const refPosted=((SH.ref||[])[j]||0)*1000;
+  const refs=(((SH.refO&&SH.refO.length)?SH.refO:SH.ref)||[])[j]*1000||0;
   const web=grossS-refs;
   const st=(SCOPE==='both')?brRev(ds):0;
   const rev=web+st;
@@ -4982,7 +4992,7 @@ function beScen(g){
   const mm=ds.slice(0,7);
   const share=_monthNet[mm]>0?web/_monthNet[mm]:0;
   const hq=FX*_dimOf(mm)*share;            /* the MONTH's overhead, by this day's share of it */
-  actD.push({d:ds,sp:sp,spTot:spTot,gross:grossS,ref:refs,rev:rev,net:web,
+  actD.push({d:ds,sp:sp,spTot:spTot,gross:grossS,ref:refs,refPosted:refPosted,rev:rev,net:web,
     gpG:gpG,gp:gp,hq:hq,pfAds:gp-sp,pf:gp-sp-hq,mer:sp?rev/sp:null,be:(sp+hq)/mBlend});}
  actD.reverse();
  let ab='';
@@ -4990,7 +5000,8 @@ function beScen(g){
  actD.forEach(r=>{
   ab+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+'</td>'
    +'<td style="'+TD+'">'+M(r.gross)+'</td>'
-   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.ref)+'</td>'
+   +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.ref)
+     +(Math.abs(r.refPosted-r.ref)>1?'<div style="font-size:8.5px;color:#8a93a6;font-weight:600">posted that day: '+M(r.refPosted)+'</div>':'')+'</td>'
    +'<td style="'+TD+';font-weight:700">'+M(r.net)+'</td>'
    +'<td style="'+TD+'">'+M(r.gpG)+'</td>'
    +'<td style="'+TD+';color:#a3271a">&minus;'+M(r.gpG-r.gp)+'</td>'
@@ -5010,7 +5021,7 @@ function beScen(g){
  const actTbl=actD.length?('<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th>'
   +'<th style="'+TH+'">GROSS sales</th>'
-  +'<th style="'+TH+'">Refunds</th>'
+  +'<th style="'+TH+'">Refunds<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">'+((SH.refO&&SH.refO.length)?'matched to the order':'AS POSTED &mdash; batched, not daily')+'</div></th>'
   +'<th style="'+TH+'">NET revenue</th>'
   +'<th style="'+TH+'">Gross profit<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">at '+(_gpG*100).toFixed(1)+'%</div></th>'
   +'<th style="'+TH+'">Delivery<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">courier + COD fees</div></th>'
@@ -16436,7 +16447,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260923-195319';
+const BUILD='20260923-202522';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
