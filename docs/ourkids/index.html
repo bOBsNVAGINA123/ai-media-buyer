@@ -3721,6 +3721,112 @@ function rGL(){if(TAB!=='gl')return;dCh();
   'Retention and LTV:CAC live here, deliberately apart from the run-rate model above.',ch);
 }
 
+/* ===================== v11.9 THE WHOLE COMPANY P&L =====================
+   One table, one month: every branch in its own column, ONLINE beside them, TOTAL at the end.
+   Rows are the same economics the per-branch cards use -- POS revenue and gpAdj margin, the
+   analytic salary and rent postings (Excel/AVG fallbacks marked, never silent), utilities and
+   Meta in-store allocated exactly as the Branches P&L allocates them -- so this page never
+   disagrees with the cards it summarises. Online pays its own costs: e-com payroll, delivery
+   net of what customers paid, and the REST of the ad budget after the branch allocation, so
+   the ads row sums to the real total spend. Below the line: the HQ book nobody's column owns,
+   and what the company kept. */
+window.auMon=function(v){ST.auM=v;rAU();};
+function rAU(){if(TAB!=='au')return;dCh();
+ const g=document.getElementById('g_au');if(!g)return;g.innerHTML='';
+ const POSD=O.pos||{},BC=O.bcost||{},RB=O.rentB||{},FB=(FF&&FF.branches)||[];
+ const names=Object.keys(POSD);if(!names.length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v<0?'−':'+')+M(v);
+ const nowM=(O.today||'').slice(0,7);
+ const allM=[...new Set(names.flatMap(n=>Object.keys(POSD[n]||{})))].sort();
+ const mons=allM.filter(m=>m>='2026-01');
+ const mSel=(ST.auM&&mons.indexOf(ST.auM)>=0)?ST.auM:mons.filter(m=>m!==nowM).slice(-1)[0];
+ const mtd=mSel===nowM;
+ document.getElementById('bn_au').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. The whole company for one month, side by side: seven branches, the webstore, the total. Same sources as the Branches P&amp;L and the Shopify P&amp;L &mdash; this page is an arrangement of those numbers, not a third opinion.';
+ /* ---- online month (order-dated refunds, 4% basis) ---- */
+ const on={g:0,r:0,gp:0,o:0};
+ for(let i=0;i<O.fin.n;i++){if(DD[i].slice(0,7)!==mSel)continue;
+  on.g+=(O.shop.rev[i]||0)*1000;on.r+=SREF(i)*1000;
+  on.gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);on.o+=O.shop.ord[i]||0;}
+ const onNet=on.g-on.r, onGp=on.gp*(on.g?1-on.r/on.g:1);
+ /* ---- ads month ---- */
+ const AD={s:0,ms:0,io:0,ov:0};
+ if(O.ad&&adFull(mSel)){const t0=Date.parse(O.ad.start+'T00:00:00Z');
+  for(let i=0;i<O.ad.n;i++){const d=new Date(t0+i*864e5).toISOString().slice(0,7);
+   if(d!==mSel)continue;AD.s+=(O.ad.spend||[])[i]||0;AD.ms+=(O.ad.mspend||[])[i]||0;
+   AD.io+=(O.ad.instoreMeta||[])[i]||0;AD.ov+=(O.ad.metaOmniValue||[])[i]||0;}}
+ const adsOK=AD.s>0;
+ /* ---- per-branch pieces, identical formulas to the Branches P&L ---- */
+ const totPos=names.reduce((a,n)=>a+(((POSD[n]||{})[mSel]||[0])[0]||0),0);
+ const rAvg={};names.forEach(n=>{let t=0,c=0;allM.slice(-13,-1).forEach(m=>{const v=((BC[n]||{})[m]||{}).rent||((RB[n]||{})[m]||0);if(v>0){t+=v;c++;}});rAvg[n]=c?t/c:0;});
+ const E=(O.exp||{})[mSel]||{};
+ const utilPool=(E['Utilities (elec/water/gas)']||0)+(E['Maintenance']||0);
+ const cols=names.map(n=>{
+  const P=(POSD[n]||{})[mSel]||null;
+  const rev=P?P[0]:0, gp=P?gpAdj(P[0],P[1]):0, ord=P?P[2]:0;
+  const bc=(BC[n]||{})[mSel]||{};
+  const salP=bc.sal>0?bc.sal:null;
+  const sal=salP!=null?salP:((FB.find(b=>b.name===n)||{}).payroll||0);
+  const rentP=bc.rent>0?bc.rent:((RB[n]||{})[mSel]>0?RB[n][mSel]:null);
+  const rent=rentP!=null?rentP:(n==='Dokki'?0:rAvg[n]);
+  const share=totPos?rev/totPos:0;
+  const util=utilPool*share;
+  const ads=adsOK?AD.ms*(AD.ov?AD.io/AD.ov:0)*share:0;
+  return {n:n,rev:rev,gp:gp,ord:ord,sal:sal,salEst:salP==null,rent:rent,rentEst:rentP==null&&n!=='Dokki',
+    util:util,ads:ads,contrib:gp-sal-rent-util-ads};});
+ cols.sort((a,b)=>b.contrib-a.contrib);
+ const brAds=cols.reduce((a,c)=>a+c.ads,0);
+ const onAds=adsOK?Math.max(0,AD.s-brAds):0;
+ const shipNet=s2h(mSel)?(s2('col',mSel)-s2('cost',mSel)):0;
+ const EP=372076;
+ const onCol={n:'ONLINE',rev:onNet,gp:onGp,ord:on.o,sal:EP,salEst:true,rent:0,rentEst:false,
+   util:0,ads:onAds,ship:shipNet,contrib:onGp+shipNet-EP-onAds};
+ const T={n:'TOTAL',rev:cols.reduce((a,c)=>a+c.rev,0)+onNet,gp:cols.reduce((a,c)=>a+c.gp,0)+onGp,
+   ord:cols.reduce((a,c)=>a+c.ord,0)+on.o,sal:cols.reduce((a,c)=>a+c.sal,0)+EP,
+   rent:cols.reduce((a,c)=>a+c.rent,0),util:cols.reduce((a,c)=>a+c.util,0),
+   ads:brAds+onAds,ship:shipNet,contrib:cols.reduce((a,c)=>a+c.contrib,0)+onCol.contrib};
+ const ALL=cols.concat([onCol,T]);
+ /* ---- HQ block below the line ---- */
+ const brSal=cols.reduce((a,c)=>a+((BC[c.n]||{})[mSel]||{}).sal||0,0);
+ const hq=(E['Rent — HQ / warehouses / flats']||0)+(E['Comms & internet']||0)+(E['Other OpEx']||0)
+   +(E['Packing & bags']||0)+(E['Cargo & transport']||0)
+   +Math.max(0,(E['Payroll & benefits']||0)-brSal-EP)
+   +(E['Payment & collection fees']||0)+(E['Card fees — branches']||0);
+ const net=T.contrib-hq;
+ /* ---- render ---- */
+ const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+ const est=t=>' <span style="font-size:8px;color:#b8621b;font-weight:800" title="'+t+'">'+(t.indexOf('Excel')>=0?'EXCEL':'AVG')+'</span>';
+ const row=(label,f,opt)=>{opt=opt||{};
+  return '<tr'+(opt.b?' style="font-weight:800;background:#f7f8fc"':'')+'><td style="'+TD+';text-align:left;font-weight:700'+(opt.ind?';padding-left:20px;color:#5a6577':'')+'">'+label+'</td>'
+   +ALL.map(c=>{const v=f(c);return '<td style="'+TD+(c.n==='TOTAL'?';font-weight:800;background:#f7f8fc':'')+(c.n==='ONLINE'?';border-left:2px solid #dfe4ee':'')+'">'+(v==null?'&mdash;':v)+'</td>';}).join('')+'</tr>';};
+ let b='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TH+';text-align:left">'+mSel+(mtd?' <span style="color:#5a5bf0">MTD</span>':'')+'</th>'
+  +ALL.map(c=>'<th style="'+TH+(c.n==='ONLINE'?';border-left:2px solid #dfe4ee':'')+'">'+c.n+'</th>').join('')+'</tr>'
+  +row('Revenue',c=>M(c.rev),{b:1})
+  +row('Gross profit (4% basis)',c=>M(c.gp),{b:1})
+  +row('GP margin',c=>c.rev?(c.gp/c.rev*100).toFixed(1)+'%':null,{ind:1})
+  +row('Orders',c=>Math.round(c.ord).toLocaleString(),{ind:1})
+  +row('Salaries',c=>'&minus;'+M(c.sal)+(c.salEst?(c.n==='ONLINE'?est('E-com payroll: the June-2026 Excel figure, not a monthly posting'):est('No analytic salary posting this month — June-2026 Excel payroll shown')):''))
+  +row('Rent',c=>c.n==='ONLINE'?'&mdash;':('&minus;'+M(c.rent)+(c.rentEst?est('No rent posting — quarterly cheques; 12-month average charged'):'')+(c.n==='Dokki'&&!c.rent?'<div style="font-size:8.5px;color:#8a93a6">owned</div>':'')))
+  +row('Utilities + maintenance (alloc)',c=>c.n==='ONLINE'?'&mdash;':'&minus;'+M(c.util))
+  +row('Delivery, net of shipping collected',c=>c.n==='ONLINE'||c.n==='TOTAL'?((c.ship||0)<0?'&minus;'+M(c.ship):'+'+M(c.ship||0)):'&mdash;')
+  +row('Ads'+(adsOK?'':' (feed gap)'),c=>adsOK?'&minus;'+M(c.ads):null)
+  +row('CONTRIBUTION',c=>SG(c.contrib),{b:1})
+  +row('Contribution margin',c=>c.rev?(c.contrib/c.rev*100).toFixed(1)+'%':null,{ind:1})
+  +'</table></div>'
+  +'<div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#f7f8fc;border:1px solid #e2e6ef">'
+  +'<table style="border-collapse:collapse"><tr><td style="'+TD+';text-align:left;font-weight:700">All columns, contribution</td><td style="'+TD+';font-weight:800">'+SG(T.contrib)+'</td></tr>'
+  +'<tr><td style="'+TD+';text-align:left">HQ book nobody&rsquo;s column owns &mdash; HQ/warehouse rent, comms, other OpEx, packing, cargo, non-branch payroll, payment &amp; card fees</td><td style="'+TD+'">&minus;'+M(hq)+'</td></tr>'
+  +'<tr style="font-weight:800"><td style="'+TD+';text-align:left">COMPANY, after everything the ledger holds'+(mtd?' (MTD revenue vs full-month fixed costs)':'')+'</td><td style="'+TD+';color:'+(net>=0?'#0f6e56':'#a3271a')+'">'+SG(net)+'</td></tr></table></div>';
+ const sel='<div class="bar" style="margin:0 0 10px;border:0;background:transparent;padding:2px 0"><label>Month</label><select onchange="auMon(this.value)">'
+  +mons.map(m=>'<option'+(m===mSel?' selected':'')+'>'+m+'</option>').join('')+'</select>'
+  +(mtd?'<span class="cs" style="color:#b8621b;font-weight:700">Running month: revenue is '+(+((O.today||'').slice(8,10)))+' days, salaries and rent are the FULL month&rsquo;s bills — contribution reads low by construction.</span>':'')+'</div>';
+ pnlCard(g,'odoo','The whole company — every branch, the webstore, one month'
+  +INFO('Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
+  'Columns ranked by contribution. The HQ block sits below the line because no column owns it.',sel+b);
+}
+
 function rBE(){if(TAB!=='be')return;dCh();const g=document.getElementById('g_be');g.innerHTML='';
  const bn=document.getElementById('bn_be');
  if(bn)bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. What the webstore and the shops each have to SELL before they make money — and the cash number that also refills the shelves. The webstore card follows your date box for today’s spend level; the shop and cash cards read the last complete accounting month, because rent, payroll and purchase orders only exist as monthly postings.';
@@ -12599,8 +12705,8 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {n:'Unregistered revenue',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
        if(!b||!P[m])return null;return Math.max(0,(P[m][0]||0)-(b.nrev||0)-(b.rrev||0));},
      fmt:POS,sh:1,tt:'Revenue on receipts with no customer attached: POS revenue minus new-customer revenue minus returning revenue. Real money, attributable to nobody.'},
-    {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,tt:'Salary ledger lines carrying this branch&rsquo;s analytic account; months without a posting fall back to the Excel payroll'},
-    {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,tt:'RENT Branches lines by analytic distribution; missing months use the branch average / unlabelled pool'},
+    {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,mk:m=>(BCn[m]&&BCn[m].sal>0)?'':' <span style="font-size:8px;color:#b8621b;font-weight:800" title="No salary posting carries this branch&#39;s analytic tag for this month, so this is the June-2026 Excel payroll figure, not a posting.">EXCEL</span>',tt:'Salary ledger lines carrying this branch&rsquo;s analytic account. A cell marked EXCEL has no posting for that month and shows the baked June-2026 Excel payroll instead.'},
+    {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,mk:m=>((BCn[m]&&BCn[m].rent>0)||((RB[n]||{})[m]>0))?'':' <span style="font-size:8px;color:#b8621b;font-weight:800" title="No rent posting for this month — landlords here are paid by quarterly cheque, so the branch&#39;s 12-month average is charged instead of a fake zero.">AVG</span>',tt:'RENT Branches lines by analytic distribution. Cheques post quarterly, so a month with no posting is charged the branch&rsquo;s 12-month average and marked AVG — a zero would flatter every third month.'},
     {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:1,tt:'Actual accounting, allocated by revenue share'},
     {n:'Alloc. Meta in-store spend',f:m=>mkt(m)!=null?-mkt(m):null,fmt:NEG,sh:1,tt:'Meta spend &times; in-store share of omni value &times; branch revenue share'},
     {n:'Contribution',f:m=>contrib(m),fmt:POS,sh:1,b:1},
@@ -16456,7 +16562,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260923-205111';
+const BUILD='20260923-213438';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
