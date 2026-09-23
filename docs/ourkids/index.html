@@ -160,6 +160,14 @@ function rng(s,e){if(O.partial&&e>=O.partial)e=addD(O.partial,-1);const i0=idxOf
    only basis on which a DAILY refund figure means anything. Falls back to the posting-date
    series until a sync ships refO, so nothing breaks in between. */
 function _refKey(){return (window.O&&O.shop&&O.shop.refO&&O.shop.refO.length)?'refO':'ref';}
+/* Every refund read in the tool goes through these two. SREF = Shopify channel, FREF = all
+   channels. Each prefers the order-dated series and falls back to the posted one, so a payload
+   that predates v11.6 still renders -- it just renders on the old basis and says so. */
+function SREF(i){const S=window.O&&O.shop;if(!S)return 0;
+ const a2=(S.refO&&S.refO.length)?S.refO:S.ref;return (a2&&a2[i])||0;}
+function FREF(i){const F=window.O&&O.fin;if(!F)return 0;
+ const a2=(F.refundO&&F.refundO.length)?F.refundO:F.refund;return (a2&&a2[i])||0;}
+function refOrderDated(){try{return !!((O.shop&&O.shop.refO&&O.shop.refO.length)||(O.fin&&O.fin.refundO&&O.fin.refundO.length));}catch(e){return false;}}
 const SHOPMAP={rev:'rev',gp:'gp',refund:'ref',orders:'ord'};
 Object.defineProperty(SHOPMAP,'refund',{get:function(){return _refKey();},enumerable:true});
 function fSumAll(k,s,e){const r=rng(s,e);if(!r)return 0;let t=0;for(let i=r[0];i<=r[1];i++)t+=O.fin[k][i]||0;return t*(SC[k]||1);}
@@ -1778,7 +1786,7 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   +'troas totRoas cpp sess instore offv').split(' ').forEach(function(k){if(!o[k])o[k]=[null,null];});
  return o;}
 function fSeriesR(k,s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const m=SHOPMAP[k],A=(m&&O.shop&&O.shop[m])?O.shop[m]:O.fin[k];const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push((A[i]||0)*(SC[k]||1));}return{L,d};}
-function fNetR(s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push(((O.fin.rev[i]||0)-(O.fin.refund[i]||0))*1000);}return{L,d};}
+function fNetR(s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push(((O.fin.rev[i]||0)-(FREF(i)||0))*1000);}return{L,d};}
 function aSeriesR(k,m,s,e){if(!O.ad[k])return null;const r=aRange(s,e);if(!r)return null;const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(aD(i).slice(5));d.push((O.ad[k][i]||0)*(m||1));}return{L,d};}
 function gcN(N){const e2=O.aw[1],s2=addD(e2,-(N-1));const gp2=fSum('gp',s2,e2),or2=fSum('orders',s2,e2);const r2=aRange(s2,e2);if(!r2||!or2)return null;let sp2=0,nc2=0;for(let i=r2[0];i<=r2[1];i++){sp2+=O.ad.spend[i]||0;nc2+=O.ad.newcust[i]||0;}const cac2=nc2?sp2/nc2:0;return cac2?(gp2/or2)/cac2:null;}
 function origIdxFin(decIdx,ixArr){const r=rng(ST.s,ST.e);return r?r[0]+ixArr[Math.min(decIdx,ixArr.length-1)]:0;}
@@ -1866,7 +1874,7 @@ function cards(){CARDS=[
  {id:'ins',full:1,a:'ins',t:'Insights — auto-read from the data',src:'ins',cs:'Computed live from Odoo sales, refunds, margin, channels and the ads feed for this range.',k:o=>[],ins:1},
  {id:'rev',full:1,a:'odoo',t:'Total Revenue — Gross / Returns / Net',src:'netrev',cs:'Odoo confirmed sale.order. Net = gross − posted credit notes. Hover a day for the channel breakdown. Triangles = auto-annotations.',
   k:o=>[['Gross',o.gross[0],o.gross[1],'cur',1],['Returns',o.ref[0],o.ref[1],'cur',0],['Net',o.net[0],o.net[1],'cur',1],['Orders',o.ord[0],o.ord[1],'n',1]],
-  c:o=>({fin:[{l:'Net',k:'_net',c:C.indigo,f:1},{l:'Gross',k:'rev',c:C.grey}],tip:'cur',ann:1,bd:oi=>{const out=[];Object.keys(O.fin.chD).forEach(cn=>{const v=(O.fin.chD[cn][oi]||0)*1000;if(v)out.push(cn+': '+fC(v));});const rf2=(O.fin.refund[oi]||0)*1000;if(rf2)out.push('Refunds: '+fC(rf2));return out;}})},
+  c:o=>({fin:[{l:'Net',k:'_net',c:C.indigo,f:1},{l:'Gross',k:'rev',c:C.grey}],tip:'cur',ann:1,bd:oi=>{const out=[];Object.keys(O.fin.chD).forEach(cn=>{const v=(O.fin.chD[cn][oi]||0)*1000;if(v)out.push(cn+': '+fC(v));});const rf2=(FREF(oi)||0)*1000;if(rf2)out.push('Refunds: '+fC(rf2));return out;}})},
  {id:'gp',a:'odoo',t:'Gross Profit & Margin',src:'gp',cs:'Odoo margin (revenue − cost).',k:o=>[['Gross profit',o.gp[0],o.gp[1],'cur',1],['GP %',o.gpct[0],o.gpct[1],'pct',1]],c:o=>({fin:[{l:'GP',k:'gp',c:C.grn,f:1}],tip:'cur'})},
  {id:'gpp',a:'odoo',t:'Gross Profit per Order',src:'gpp',cs:'Odoo margin ÷ orders.',k:o=>[['GP / order',o.gpp[0],o.gpp[1],'cur',1],['Orders',o.ord[0],o.ord[1],'n',1]],c:o=>({fin:[{l:'GP',k:'gp',c:C.teal,f:1}],tip:'cur'})},
  {id:'cx',a:'odoo',t:'Cancelled Orders — never counted as revenue',src:'cancel',
@@ -1992,7 +2000,7 @@ function insHTML(o){const rows=[];
  rows.push([o.gpct[0]>=o.gpct[1]?C.grn:C.red,`Margin ${o.gpct[0].toFixed(1)}% vs ${o.gpct[1].toFixed(1)}% previous — ${(o.gpct[0]-o.gpct[1]>=0?'up':'down')} ${Math.abs(o.gpct[0]-o.gpct[1]).toFixed(1)} points. GP per order E£ ${fI(o.gpp[0])}.`]);
  const rr=o.gross[0]?o.ref[0]/o.gross[0]*100:0,rrp=o.gross[1]?o.ref[1]/o.gross[1]*100:0;
  rows.push([rr<=rrp?C.grn:C.red,`Returns are ${rr.toFixed(1)}% of gross (${rrp.toFixed(1)}% previous) — E£ ${fI(o.ref[0])} in credit notes.`]);
- const r=rng(ST.s,ST.e);if(r){let bi=r[0],wi=r[0],bv=-1,wv=1e15;for(let i=r[0];i<=r[1];i++){const nv=(O.fin.rev[i]-O.fin.refund[i])*1000;if(nv>bv){bv=nv;bi=i;}if(nv<wv){wv=nv;wi=i;}}
+ const r=rng(ST.s,ST.e);if(r){let bi=r[0],wi=r[0],bv=-1,wv=1e15;for(let i=r[0];i<=r[1];i++){const nv=(O.fin.rev[i]-FREF(i))*1000;if(nv>bv){bv=nv;bi=i;}if(nv<wv){wv=nv;wi=i;}}
   rows.push([C.grn,`Best day ${DD[bi]}: E£ ${fI(bv)} net. Worst ${DD[wi]}: E£ ${fI(wv)}.`]);}
  const tot=Object.values(o.ch).reduce((a,b)=>a+b,0)||1,totP=Object.values(o.chP).reduce((a,b)=>a+b,0)||1;
  let mvName='',mvv=0;Object.keys(o.ch).forEach(cn=>{const d=(o.ch[cn]/tot-o.chP[cn]/totP)*100;if(Math.abs(d)>Math.abs(mvv)){mvv=d;mvName=cn;}});
@@ -3479,7 +3487,7 @@ function glBase(){
   ncrev+=(A.ncrev||[])[i]||0;rcrev+=(A.rcrev||[])[i]||0;}
  let gross=0,ref=0,ord=0,cxv=0,cxn=0;
  for(let i=0;i<F.n;i++){const d=DD[i];if(d.slice(0,7)!==bm)continue;
-  gross+=((SH.rev||[])[i]||0)*1000;ref+=((SH.ref||[])[i]||0)*1000;ord+=(SH.ord||[])[i]||0;
+  gross+=((SH.rev||[])[i]||0)*1000;ref+=SREF(i)*1000;ord+=(SH.ord||[])[i]||0;
   cxv+=((F.cxsv||[])[i]||0)*1000;cxn+=((F.cxsn||[])[i]||0);}
  let brRev=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[bm];if(v)brRev+=v[0]||0;});
  const q=GPQ();
@@ -3974,7 +3982,7 @@ function rOn(){if(TAB!=='on')return;dCh();const o=calc(),O0=o,g=document.getElem
   }catch(e){o2.merAll=[null,null];o2.amerAll=[null,null];}})();
   const A=O.ad||{};const NRm=O.nr||{};
   // monthly aggregates: finance (full history), ad panel (from A.start), customers (NR)
-  const FMo={};if(O.fin&&DD.length){for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const f=FMo[m]||(FMo[m]={rev:0,ref:0,gp:0,ord:0});f.rev+=(O.fin.rev[i]||0)*1000;f.ref+=(O.fin.refund[i]||0)*1000;f.gp+=(O.fin.gp[i]||0)*1000;f.ord+=(O.fin.orders?(O.fin.orders[i]||0):0);}}
+  const FMo={};if(O.fin&&DD.length){for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const f=FMo[m]||(FMo[m]={rev:0,ref:0,gp:0,ord:0});f.rev+=(O.fin.rev[i]||0)*1000;f.ref+=(FREF(i)||0)*1000;f.gp+=(O.fin.gp[i]||0)*1000;f.ord+=(O.fin.orders?(O.fin.orders[i]||0):0);}}
   const AMo={};if(A.start){const t0=new Date(A.start+'T00:00:00Z').getTime();for(let i=0;i<A.n;i++){const m=new Date(t0+i*864e5).toISOString().slice(0,7);const x=AMo[m]||(AMo[m]={sp:0,ncrev:0,rcrev:0,sess:0});x.sp+=(A.spend||[])[i]||0;x.ncrev+=(A.ncrev||[])[i]||0;x.rcrev+=(A.rcrev||[])[i]||0;x.sess+=(A.sessions||[])[i]||0;}}
   /* This was hardcoded to '2025-09' and blocked the whole ad block from comparing against
      last year -- Ad spend, MER, aMER and nCAC all printed a bare dash for the MONTH column
@@ -4855,7 +4863,7 @@ function beScen(g){
   const ds=new Date(a0+i*864e5).toISOString().slice(0,10);
   const j=Math.round((Date.parse(ds+'T00:00:00Z')-f0)/864e5);
   const sp=(A.spend||[])[i]||0;if(sp<5000)continue;
-  const web=(((SH.rev||[])[j]||0)-((SH.ref||[])[j]||0))*1000;if(web<=0)continue;
+  const web=((SH.rev||[])[j]||0)*1000-SREF(j)*1000;if(web<=0)continue;
   const st=(SCOPE==='both')?brRev(ds):0;
   const rev=web+st;
   rows.push({d:ds,sp:sp,rev:rev,web:web,st:st,mer:rev/sp,gp:web*m+st*stMg});}
@@ -4966,7 +4974,7 @@ function beScen(g){
  const _monthNet={};
  (function(){for(let k=0;k<(SH.rev||[]).length;k++){
    const dd=DD[k];if(!dd)continue;const mm=dd.slice(0,7);
-   _monthNet[mm]=(_monthNet[mm]||0)+(((SH.rev||[])[k]||0)-((SH.ref||[])[k]||0))*1000;}})();
+   _monthNet[mm]=(_monthNet[mm]||0)+((SH.rev||[])[k]||0)*1000-SREF(k)*1000;}})();
  const _dimOf=mm=>new Date(Date.UTC(+mm.slice(0,4),+mm.slice(5,7),0)).getUTCDate();
  const webSpendAt=(i)=>{const ms=(A.mspend||[])[i]||0,gs=(A.gspend||[])[i]||0,ts=(A.tspend||[])[i]||0;
    if(SCOPE==='both')return ms+gs+ts;
@@ -5179,7 +5187,7 @@ function dailyBE(g){
   const ai=aix(d),fi=fix(d);
   if(ai<0||ai>=A.n||fi<0||fi>=F.n)continue;
   const sp=(A.spend||[])[ai]||0;
-  const rev=((F.rev[fi]||0)-(F.refund[fi]||0))*1000;
+  const rev=((F.rev[fi]||0)-FREF(fi))*1000;
   const gp2=(F.gp[fi]||0)*1000-rev*_drag;
   const nc=(A.ncrev||[])[ai]||0;
   let br=null;const bi=bix(d);
@@ -5254,7 +5262,7 @@ function dailyBE(g){
    let rev=0,gp=0,spd=0,brv=0,dys=0;
    for(let i=0;i<F.n;i++){const dd=new Date(f0+i*864e5).toISOString().slice(0,10);
     if(dd.slice(0,7)!==m||dd>today)continue;dys++;
-    const rv=((F.rev[i]||0)-(F.refund[i]||0))*1000;rev+=rv;gp+=(F.gp[i]||0)*1000-rv*_drag;}
+    const rv=((F.rev[i]||0)-FREF(i))*1000;rev+=rv;gp+=(F.gp[i]||0)*1000-rv*_drag;}
    for(let i=0;i<A.n;i++){const dd=new Date(t0+i*864e5).toISOString().slice(0,10);
     if(dd.slice(0,7)===m&&dd<=today)spd+=(A.spend||[])[i]||0;}
    if(O.bl)for(let i=0;i<O.bl.n;i++){const dd=new Date(b0+i*864e5).toISOString().slice(0,10);
@@ -8109,7 +8117,7 @@ function rPACE(){
    +'</div>');
   return;}
  const finIdx={};for(let i=0;i<F.n;i++)finIdx[DD[i]]=i;
- const sumFin=(m,d1)=>{let r=0,gp=0,o=0;for(let d=1;d<=d1;d++){const key=m+'-'+String(d).padStart(2,'0');const i=finIdx[key];if(i==null)return null;r+=(F.rev[i]-F.refund[i])*1000;gp+=F.gp[i]*1000;o+=F.orders[i];}return {r,gp,o};};
+ const sumFin=(m,d1)=>{let r=0,gp=0,o=0;for(let d=1;d<=d1;d++){const key=m+'-'+String(d).padStart(2,'0');const i=finIdx[key];if(i==null)return null;r+=(F.rev[i]-FREF(i))*1000;gp+=F.gp[i]*1000;o+=F.orders[i];}return {r,gp,o};};
  const BLB=(O.bl&&O.bl.b)||{};
  const blIdx=d=>O.bl?Math.round((Date.parse(d)-Date.parse(O.bl.start))/864e5):-1;
  const sumBl=(m,d1)=>{if(!O.bl)return null;let t=0,any=false;
@@ -8126,7 +8134,7 @@ function rPACE(){
  try{(function(){
   const mPrev=mShift(nowM,-1), mLy=mShift(nowM,-12);
   const dayVal=(m,d2)=>{const key=m+'-'+String(d2).padStart(2,'0');const i=finIdx[key];
-   if(i==null)return null;let t=(F.rev[i]-F.refund[i])*1000;
+   if(i==null)return null;let t=(F.rev[i]-FREF(i))*1000;
    if(O.bl){const j=blIdx(key);if(j>=0&&j<O.bl.n)Object.keys(BLB).forEach(b=>{t+=BLB[b][j]||0;});}
    return t;};
   const series=m=>{const out=[];let run=0;
@@ -10438,7 +10446,7 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
   +'<div class="row"><span class="dot" style="background:'+C.indigo+'"></span><span>Best cohort: '+bc.m+' ('+bc.l30.toFixed(2)+'x, nCAC E&pound; '+bc.ncac.toFixed(0)+'). Weakest: '+wc.m+' ('+wc.l30.toFixed(2)+'x, nCAC E&pound; '+wc.ncac.toFixed(0)+'). Pull the media mix that ran in '+bc.m+'.</span></div></div>';}
  pnlCard(g,'blend','Media Efficiency &mdash; Cohort LTGP : nCAC (real, from Odoo)','New customers, spend split incl. TikTok, nCAC, and cumulative LTGP:nCAC at 30/90/180/365 days. Cohorts before Aug-2025 show no nCAC because platform spend history starts 2025-07-25.',h);applyHeat(g);blendCacCard(g);
  // ALL customers: total GP vs media spend
- const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SHM[m].net+=((O.shop.rev[i]||0)-(O.shop.ref[i]||0))*1000;}
+ const AM2=adMonthly();const SHM={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SHM[m]=SHM[m]||{gp:0,net:0}).gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SHM[m].net+=((O.shop.rev[i]||0)-(SREF(i)||0))*1000;}
  const amons=Object.keys(AM2).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1&&AM2[m].s>0&&SHM[m]);
  if(amons.length){
   let h5='<div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr><th style="text-align:left">Month</th><th>Shopify GP (actual, ALL customers)</th><th>Media spend</th><th>GP : Spend</th><th>Net rev : Spend (MER)</th></tr>';
@@ -11336,7 +11344,7 @@ function rIns(){if(TAB!=='iq')return;dCh();const g=document.getElementById('g9')
  document.getElementById('bn9').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. The whole business read in one place: what changed (ledger findings), what is structurally true, and where the next pound goes. Recomputed every sync.';
  // 1) ledger findings (what changed)
  const {M,A,names}=pnlAgg();
- const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=(O.shop.ref[i]||0)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
+ const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=SREF(i)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
  const A2={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A2[m]=A2[m]||{s:0,ms:0,gs:0,ts:0,nc:0,rc:0,io:0,ov:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;}
  rFind(g,M,SH,A2,names);
  // 2) structural truths
@@ -11428,7 +11436,7 @@ function SIGX(){
   return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
  /* company monthly net profit -- the yardstick every finding is measured against */
  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const o=(M3[m]=M3[m]||{g:0,r:0,gp:0,o:0});
-  o.g+=O.fin.rev[i]*1000;o.r+=O.fin.refund[i]*1000;o.gp+=O.fin.gp[i]*1000;o.o+=O.fin.orders[i]||0;}
+  o.g+=O.fin.rev[i]*1000;o.r+=FREF(i)*1000;o.gp+=O.fin.gp[i]*1000;o.o+=O.fin.orders[i]||0;}
  const AD={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);AD[m]=(AD[m]||0)+(O.ad.spend[i]||0);}
  const opex=m=>EX[m]?Object.keys(EX[m]).reduce((a,k)=>a+EX[m][k],0):null;
  const rtGp=m=>{const v=names.map(n=>gpf(n,m)).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0):0;};
@@ -11555,7 +11563,7 @@ function SIGX(){
 
  /* ---- 8. Shopify refund rate ---- */
  (function(){if(!O.shop||!O.shop.ref)return;let r=0,g2=0;
-  for(let i=0;i<O.shop.ref.length;i++){r+=(O.shop.ref[i]||0)*1000;g2+=(O.shop.rev[i]||0)*1000;}
+  for(let i=0;i<O.shop.rev.length;i++){r+=SREF(i)*1000;g2+=(O.shop.rev[i]||0)*1000;}
   if(!g2)return;const p=r/g2*100;if(p<10)return;
   add({imp:r/Math.max(1,AM.length),sev:p>=20?'critical':'watch',grp:'Shopify',tab:'pn',chart:'refund',
    t:'Shopify refunds are running at '+p.toFixed(1)+'% of gross',num:sg(r)+' refunded, whole window',
@@ -12213,7 +12221,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    Lf.map(m=>m.slice(2)),sm,v=>v.toFixed(0)+'%',{cmt:cmt});})();
  // ===== 5d · NET PROFIT PER BRANCH AND FOR SHOPIFY =====
  (function(){const Lf=L.filter(m=>m<=CURM);if(Lf.length<2)return;
-  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M3[m]=M3[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M3[m].r+=O.fin.refund[i]*1000;M3[m].gp+=O.fin.gp[i]*1000;}
+  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M3[m]=M3[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M3[m].r+=FREF(i)*1000;M3[m].gp+=O.fin.gp[i]*1000;}
   const A5={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A5[m]=(A5[m]||0)+(O.ad.spend[i]||0);}
   const epay=(FF.company&&FF.company.ecomPayroll)||372076;
   const onNP=m=>{if(!M3[m])return null;const gpn=M3[m].gp*(M3[m].g?1-M3[m].r/M3[m].g:1);return gpn-(A5[m]||0)-epay;};
@@ -12311,7 +12319,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
           : 'POSITIVE and '+rverd(r)+' (r='+r.toFixed(2)+'): branches pulling the MOST new faces also produce the MOST valuable customers &mdash; the opposite of a churn problem. These are young, growing catchments where acquisition still compounds, so funding them is buying durable customers, not a leaky bucket. Watch for the day this flips negative: that is when growth turns into churn.'))
       +' <b>How to read r:</b> it runs &minus;1 to +1. SIGN = direction (+ move together, &minus; move opposite). SIZE = how tightly. |r|&ge;0.7 strong &middot; 0.4&ndash;0.7 moderate &middot; &lt;0.4 weak. r is not proof of cause &mdash; with '+pts.length+' branches one outlier can swing it. Dashed line = least-squares trend.']]});}})();
  // ===== 7 · COMPANY =====
- (function(){const M2={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M2[m]=M2[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M2[m].r+=O.fin.refund[i]*1000;M2[m].gp+=O.fin.gp[i]*1000;}
+ (function(){const M2={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M2[m]=M2[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M2[m].r+=FREF(i)*1000;M2[m].gp+=O.fin.gp[i]*1000;}
   const A3={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A3[m]=(A3[m]||0)+(O.ad.spend[i]||0);}
   const onGp=m=>M2[m]?M2[m].gp*(M2[m].g?1-M2[m].r/M2[m].g:1):0;
   const rtGp=m=>names.reduce((a,n)=>a+(PS[n][m]?gpAdj(PS[n][m][0],PS[n][m][1]):0),0);
@@ -12458,7 +12466,7 @@ function vzOrder(g){
   g.appendChild(o.c);});}
 window.vzOrder=vzOrder;
 
-function pnlAgg(){const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=O.fin.refund[i]*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
+function pnlAgg(){const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=FREF(i)*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
  const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,io:0,ov:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;}
  const BM={},BD={},names=(O.pos&&Object.keys(O.pos).length)?Object.keys(O.pos):((O.bl&&O.bl.b)?Object.keys(O.bl.b):[]);
  if(O.bl)for(let i=0;i<O.bl.n;i++){const m=bD(i).slice(0,7);BD[m]=(BD[m]||0)+1;BM[m]=BM[m]||{};Object.keys(O.bl.b).forEach(n=>{BM[m][n]=(BM[m][n]||0)+(O.bl.b[n][i]||0);});}
@@ -13105,7 +13113,7 @@ function rCost(){if(TAB!=='cs')return;const g=document.getElementById('g14');g.i
  if(!O.fin||!O.fin.n){g.innerHTML='<div class="card full"><div class="chead"><div><div class="ct">No data loaded</div></div></div></div>';return;}
  const money=v=>Math.round(v).toLocaleString();
  const M={};for(let i=0;i<O.fin.n;i++)M[DD[i].slice(0,7)]=1;
- const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=(O.shop.ref[i]||0)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
+ const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=SREF(i)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
  const allM=Object.keys(M).sort();
  if(!ST.pm0||allM.indexOf(ST.pm0)<0)ST.pm0=allM[Math.max(0,allM.length-13)];
  if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
@@ -13594,7 +13602,7 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   const d=DD[i];if(d===O.partial)continue; // today is partial -- do not judge it
   const ai=Math.round((Date.parse(d)-Date.parse(O.ad.start))/864e5);
   if(ai<0||ai>=O.ad.n)continue;
-  const gRev=(O.shop.rev[i]||0)*1000,ref=(O.shop.ref[i]||0)*1000,gp=gpAdj(gRev,(O.shop.gp[i]||0)*1000),ord=O.shop.ord[i]||0;
+  const gRev=(O.shop.rev[i]||0)*1000,ref=SREF(i)*1000,gp=gpAdj(gRev,(O.shop.gp[i]||0)*1000),ord=O.shop.ord[i]||0;
   const sp=((O.ad.mspend||[])[ai]||0)+((O.ad.gspend||[])[ai]||0)+((O.ad.tspend||[])[ai]||0);
   if(gRev<=0&&sp<=0)continue;
   const mPct=gRev>0?gp/gRev:0;
@@ -13738,8 +13746,8 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
   }})();}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  const EP=372076,RM=0.219,CO=(FF.company||{});
- const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=O.fin.refund[i]*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
- const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=(O.shop.ref[i]||0)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
+ const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=FREF(i)*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
+ const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=SREF(i)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
  const CX={};if(O.fin.cxsv)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const c=(CX[m]=CX[m]||{v:0,n:0});c.v+=(O.fin.cxsv[i]||0)*1000;c.n+=(O.fin.cxsn&&O.fin.cxsn[i])||0;}
  const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,gs:0,ts:0,nc:0,rc:0,io:0,ov:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.gs+=(O.ad.gspend||[])[i]||0;a.ts+=(O.ad.tspend||[])[i]||0;a.nc+=(O.ad.ncrev||[])[i]||0;a.rc+=(O.ad.rcrev||[])[i]||0;a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;}
  const BM={},BD={},names=(O.bl&&O.bl.b)?Object.keys(O.bl.b):[];
@@ -13810,7 +13818,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    null,
    {hdr:'2 &middot; REVENUE &mdash; what was actually billed and kept'},
    {n:'Gross sales',f:m=>SH[m]&&SH[m].g?SH[m].g:null,fmt:POS,sh:1,b:1,tt:'Odoo Shopify sales team, confirmed orders only. Equals the two demand rows above, subtracted.'},
-   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,tt:'Posted credit notes tagged to the Shopify team. Real postings, not a rate.'},
+   {n:'Less: refunds (actual)',f:m=>SH[m]&&SH[m].g?-SH[m].r:null,fmt:NEG,sh:1,gd:-1,mk:m=>refOrderDated()?'':' <span style="font-size:8.5px;color:#b8621b;font-weight:800" title="These credit notes are dated when accounting POSTED them, which is batched. The order-dated series arrives on the next sync.">POSTED</span>',tt:'Credit notes tagged to the Shopify team, re-dated onto the ORDER they belong to (invoice_origin joins to sale.order 100% of the time, median lag 7 days -- the Bosta return cycle). Posting is batched; returns are not, so a posting-date basis makes one day read 67% refunds and the next 0%.'},
    {n:'Net revenue',f:m=>SH[m]&&SH[m].g?SH[m].g-SH[m].r:null,fmt:POS,sh:1,b:1},
    {n:'Refunds, %',f:m=>SH[m]&&SH[m].g?SH[m].r/SH[m].g*100:null,fmt:PCT,sh:1,gd:-1,ind:1},
    {n:'Orders',f:m=>SH[m]&&SH[m].o?SH[m].o:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,ind:1},
@@ -16447,7 +16455,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260923-202522';
+const BUILD='20260923-203901';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
