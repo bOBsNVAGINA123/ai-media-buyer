@@ -100,6 +100,45 @@ def dkey(s):
     return datetime.datetime.strptime(s, "%d %b %Y").date().isoformat()
 
 GOVT_RATE = 0.04
+def _refund_by_order(since, extra=None):
+    """Credit-note value keyed by the ORDER's date, not the day accounting posted it.
+
+    Refunds here are the accounting trail of Bosta returns, which happen on a daily delivery
+    cycle. The credit notes are POSTED in batches, so by posting date one day reads 67% refunds
+    and the next reads 0%. Every note carries invoice_origin = the Shopify order name and joins
+    back 100% of the time (2,290 of 2,290 tested), median lag 7 days. Anything that cannot be
+    matched stays on its posting date so no money is lost.
+    """
+    dom = [["move_type", "=", "out_refund"], ["state", "=", "posted"], ["invoice_date", ">=", since]]
+    if extra: dom += extra
+    out, cns, off = {}, [], 0
+    try:
+        while True:
+            page = oexec("account.move", "search_read", [dom],
+                         {"fields": ["invoice_date", "invoice_origin", "amount_total"],
+                          "limit": 5000, "offset": off, "order": "id"})
+            if not page: break
+            cns += page; off += len(page)
+            if len(page) < 5000: break
+        names = sorted({c["invoice_origin"] for c in cns if c.get("invoice_origin")})
+        odate = {}
+        for i in range(0, len(names), 500):
+            for o in oexec("sale.order", "search_read", [[["name", "in", names[i:i + 500]]]],
+                           {"fields": ["name", "date_order"], "limit": 5000}):
+                odate[o["name"]] = str(o["date_order"])[:10]
+        hit = miss = 0
+        for c in cns:
+            amt = c.get("amount_total") or 0
+            d = odate.get(c.get("invoice_origin"))
+            if d: hit += 1
+            else: miss += 1; d = str(c.get("invoice_date"))[:10]
+            out[d] = out.get(d, 0) + amt
+        for d in list(out): out[d] = round(out[d])
+        log("refunds re-dated to order", hit, "unmatched", miss)
+    except Exception as e:
+        log("refund-by-order fail", str(e)[:150])
+    return out
+
 # v10.3 BASIS STAMP. The 4% correction landed in the daily online feed on the first sync after
 # it shipped, but every figure that comes out of the HEAVY crawl -- O.pos branch margins, vmon,
 # pmon, the journey LTGPs, the deciles -- kept the old basis for as long as the crawl had no
@@ -165,6 +204,7 @@ def pull_odoo():
     for r in rf:
         try: refund[dkey(r["invoice_date:day"])] = r.get("amount_total") or 0
         except Exception: continue
+    refundO = _refund_by_order(FIN_START)
     chD = {}
     for name in ["Shopify", "Noon", "Amazon", "Homzmart"]:
         mr = ogroup("sale.order",
@@ -197,6 +237,7 @@ def pull_odoo():
            "rev": [k(daily.get(d, {}).get("rev", 0)) for d in ds],
            "gp": [k(daily.get(d, {}).get("gp", 0)) for d in ds],
            "refund": [k(refund.get(d, 0)) for d in ds],
+           "refundO": [k(refundO.get(d, 0)) for d in ds],
            "orders": [int(daily.get(d, {}).get("orders", 0)) for d in ds],
            "qty": [int(round(daily.get(d, {}).get("qty", 0))) for d in ds],
            "chD": {c: [k(chD[c].get(d, 0)) for d in ds] for c in chD},
@@ -1569,48 +1610,9 @@ def pull_shop_channel(fin_win):
         for r in g:
             d = _gday(r.get("invoice_date:day"))
             if d: out["sref"][d] = round(r["amount_total"])
-        # v11.6 REFUNDS BELONG TO THE ORDER, NOT TO THE DAY ACCOUNTING POSTED THEM.
-        # The credit notes are posted in batches, so by posting date a Friday reads 67% refunds
-        # and the Monday after reads 0%. Neither happened. Every credit note carries
-        # invoice_origin = the Shopify order name, and that joins to sale.order 100% of the time
-        # (2,290 of 2,290 tested), with a median lag of 7 days -- the Bosta return cycle, not an
-        # accounting lag. Attributing each credit note to its ORDER's date turns a 32.8% posted
-        # "refund rate" over the last fortnight into the real 11.7%.
-        # Shipped as a SECOND series so both bases stay visible and nothing silently changes.
-        try:
-            cns = []
-            off = 0
-            while True:
-                page = oexec("account.move", "search_read",
-                             [[["move_type", "=", "out_refund"], ["state", "=", "posted"],
-                               ["team_id.name", "=", "Shopify"], ["invoice_date", ">=", fin_win[0]]]],
-                             {"fields": ["invoice_date", "invoice_origin", "amount_total"],
-                              "limit": 5000, "offset": off, "order": "id"})
-                if not page: break
-                cns += page; off += len(page)
-                if len(page) < 5000: break
-            names = sorted({c["invoice_origin"] for c in cns if c.get("invoice_origin")})
-            odate = {}
-            for i in range(0, len(names), 500):
-                for o in oexec("sale.order", "search_read", [[["name", "in", names[i:i + 500]]]],
-                               {"fields": ["name", "date_order"], "limit": 5000}):
-                    odate[o["name"]] = str(o["date_order"])[:10]
-            hit = miss = 0
-            for c in cns:
-                d = odate.get(c.get("invoice_origin"))
-                amt = c.get("amount_total") or 0
-                if d:
-                    hit += 1
-                    out["srefO"][d] = out["srefO"].get(d, 0) + amt
-                else:
-                    # unmatched: leave it on its posting date so no money disappears
-                    miss += 1
-                    d2 = str(c.get("invoice_date"))[:10]
-                    out["srefO"][d2] = out["srefO"].get(d2, 0) + amt
-            for d in list(out["srefO"]): out["srefO"][d] = round(out["srefO"][d])
-            log("refunds matched to order date", hit, "unmatched", miss)
-        except Exception as e:
-            log("refund-by-order fail", str(e)[:150])
+        # v11.6 Refunds belong to the ORDER, not to the day accounting posted them.
+        # Same treatment as the all-channel feed; see _refund_by_order().
+        out["srefO"] = _refund_by_order(fin_win[0], [["team_id.name", "=", "Shopify"]])
         log("shop-channel days", len(out["srev"]))
     except Exception as e:
         log("shop-channel fail", str(e)[:150])
@@ -5189,6 +5191,7 @@ ATTR = {"order": ["default", "7dc", "1dc", "incr"],
         "tt": {"default": 1.0, "7dc": 0.336, "1dc": 0.207, "incr": 0.124}}
 SRC = {"revenue": "Odoo sale.order (state sale/done), amount_total, all 4 online channels, by date_order. GROSS.",
        "refund": "Odoo account.move out_refund, posted, by invoice_date. Returns/credit notes.",
+       "refundO": "The same credit notes re-dated onto the ORDER they belong to (invoice_origin -> sale.order). Posting is batched; returns are not. Use this for any DAILY refund figure.",
        "netrev": "Gross Odoo revenue minus posted credit notes.",
        "gp": "Odoo sale.order margin (revenue minus cost).",
        "orders": "Odoo confirmed-order count.", "sessions": "Shopify online store sessions (ShopifyQL).",
