@@ -100,6 +100,30 @@ def dkey(s):
     return datetime.datetime.strptime(s, "%d %b %Y").date().isoformat()
 
 GOVT_RATE = 0.04
+AR_MONTH = {"يناير": 1, "فبراير": 2, "مارس": 3, "ابريل": 4, "أبريل": 4, "مايو": 5,
+            "يونيو": 6, "يونيه": 6, "يوليو": 7, "يوليه": 7, "اغسطس": 8, "أغسطس": 8,
+            "سبتمبر": 9, "اكتوبر": 10, "أكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12}
+def _sal_month(date_str, memo):
+    """Salaries are PAID on the ~5th for the PREVIOUS month's work -- the memos say so
+    outright ("مرتبات شهر اغسطس 2026" posted 2026-09-06). Attribute each salary line to the
+    month it pays FOR: the Arabic month named in the memo when present, else posted day <= 10
+    means the previous month, else the posting month."""
+    import re as _re
+    d = str(date_str)[:10]; y, m, day = int(d[:4]), int(d[5:7]), int(d[8:10])
+    nm = memo or ""
+    for k, mm in AR_MONTH.items():
+        if k in nm:
+            yr = None
+            g = _re.search(r"20\d\d", nm)
+            if g: yr = int(g.group(0))
+            if yr is None:
+                yr = y if mm <= m or (mm == 12 and m == 1) is False else y - 1
+                if mm > m: yr = y - 1
+            return "%04d-%02d" % (yr, mm)
+    if day <= 10:
+        return "%04d-%02d" % ((y - 1, 12) if m == 1 else (y, m - 1))
+    return d[:7]
+
 def _refund_by_order(since, extra=None):
     """Credit-note value keyed by the ORDER's date, not the day accounting posted it.
 
@@ -1790,6 +1814,23 @@ def pull_expenses():
             for name, prefixes in EXPG:
                 if any(code.startswith(px) for px in prefixes): grp = name; break
             exp.setdefault(mon, {})[grp] = exp.setdefault(mon, {}).get(grp, 0) + round(r["balance"])
+        # v11.9: the payroll bucket, re-dated to the month the salaries pay FOR. The
+        # read_group above filed each line under its POSTING month, and payroll posts on
+        # the ~5th for the previous month -- so every month's payroll landed one month
+        # late. Strip the bucket and rebuild it line-level via _sal_month().
+        try:
+            pay_ids = [a["id"] for a in acc if a["code"].startswith("31.01.01.") or a["code"].startswith("31.01.09.")]
+            for mon in exp: exp[mon].pop("Payroll & benefits", None)
+            pls = oexec("account.move.line", "search_read",
+                        [[["account_id", "in", pay_ids], ["parent_state", "=", "posted"],
+                          ["date", ">=", "2024-08-01"], ["date", "<=", END.isoformat()]]],
+                        {"fields": ["date", "name", "balance"], "limit": 20000})
+            for l in pls:
+                mon = _sal_month(l["date"], l.get("name"))
+                exp.setdefault(mon, {})["Payroll & benefits"] = exp.setdefault(mon, {}).get("Payroll & benefits", 0) + round(l["balance"])
+            log("payroll re-dated lines", len(pls))
+        except Exception as e:
+            log("payroll re-date fail", str(e)[:120])
         rb = [a["id"] for a in acc if "RENT Branches" in a["name"]]
         lines = oexec("account.move.line", "search_read",
                       [[["account_id", "in", rb], ["parent_state", "=", "posted"], ["date", ">=", "2025-01-01"], ["date", "<=", END.isoformat()]]],
@@ -2540,11 +2581,13 @@ def pull_branch_costs():
         sal_ids = [a["id"] for a in acc if a["code"].startswith("31.01.01")]
         lines = oexec("account.move.line", "search_read",
                       [[["account_id", "in", rent_ids + sal_ids], ["parent_state", "=", "posted"], ["date", ">=", "2024-08-01"]]],
-                      {"fields": ["account_id", "balance", "date", "analytic_distribution"], "limit": 20000})
+                      {"fields": ["account_id", "balance", "date", "name", "analytic_distribution"], "limit": 20000})
         endi = END.isoformat(); fwd = {}
         for l in lines:
             ad2 = l.get("analytic_distribution") or {}
-            mon = l["date"][:7]; kind = "rent" if l["account_id"][0] in rent_ids else "sal"
+            kind = "rent" if l["account_id"][0] in rent_ids else "sal"
+            # v11.9: salaries paid ~5th belong to the PREVIOUS month (memo-confirmed)
+            mon = l["date"][:7] if kind == "rent" else _sal_month(l["date"], l.get("name"))
             future = l["date"] > endi
             for aid, pct in ad2.items():
                 br = ANA_BR.get(str(aid))
