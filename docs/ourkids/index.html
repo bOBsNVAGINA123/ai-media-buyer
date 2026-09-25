@@ -2566,25 +2566,35 @@ function glance(g,o){
    'before returns · E£'+Math.round(o.ref[0]).toLocaleString()+' came back ('+(o.gross[0]?(o.ref[0]/o.gross[0]*100).toFixed(1):'0')+'%)','web','grossr'],
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web','net'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web','gp'],
-  /* v12.0 NET PROFIT on the scoreboard. Delivered GP minus the webstore's OWN ad share
-     (Google and TikTok whole, Meta split by its reported web-vs-store value) — the same
-     stack as the After-ads column on Break-even & buying, so the two never disagree.
-     Before HQ overhead, and says so. pc() on signed values is meaningless, so the prior
-     window is printed instead of a fake percentage. */
+  /* v12.1 NET PROFIT, the real one. Delivered GP minus the webstore's OWN ad share minus
+     the webstore's overhead share (packing in full + revenue-weighted slice of HQ rent,
+     comms, other OpEx and non-branch payroll, from the last posted book) — the after-
+     EVERYTHING number, per window. After-ads and the prior window ride in the subtitle. */
   (function(){try{
     const gpOnW=GPQ().gpOn, tA=Date.parse(O.ad.start+'T00:00:00Z'), tF=Date.parse(O.fin.start+'T00:00:00Z');
     const np=(a,b)=>{let t=0;for(let d=Date.parse(a+'T00:00:00Z');d<=Date.parse(b+'T00:00:00Z');d+=864e5){
-      const i=Math.round((d-tF)/864e5),j=Math.round((d-tA)/864e5);
-      if(i<0||i>=O.fin.n)continue;
-      const net=((O.shop.rev[i]||0)-SREF(i))*1000;
-      let ads=0;if(j>=0&&j<O.ad.n){const ms=(O.ad.mspend||[])[j]||0,gs=(O.ad.gspend||[])[j]||0,ts=(O.ad.tspend||[])[j]||0;
-        const io2=(O.ad.instoreMeta||[])[j]||0,ov2=(O.ad.metaOmniValue||[])[j]||0;
+      const i2=Math.round((d-tF)/864e5),j2=Math.round((d-tA)/864e5);
+      if(i2<0||i2>=O.fin.n)continue;
+      const net=((O.shop.rev[i2]||0)-SREF(i2))*1000;
+      let ads=0;if(j2>=0&&j2<O.ad.n){const ms=(O.ad.mspend||[])[j2]||0,gs=(O.ad.gspend||[])[j2]||0,ts=(O.ad.tspend||[])[j2]||0;
+        const io2=(O.ad.instoreMeta||[])[j2]||0,ov2=(O.ad.metaOmniValue||[])[j2]||0;
         ads=ms*(ov2>0?Math.max(0,Math.min(1,(ov2-io2)/ov2)):1)+gs+ts;}
       t+=net*gpOnW-ads;}return t;};
-    const n0=np(ST.s,ST.e), n1=(o.cs&&o.ce)?np(o.cs,o.ce):null;
+    const ovD=(function(){try{const AM=_allM(),nm=(O.today||'').slice(0,7);
+      const dn=AM.filter(x=>x!==nm&&O.exp&&O.exp[x]&&expTot(x)>0);const bm=dn[dn.length-1];if(!bm)return 0;
+      const E2=O.exp[bm],dim=new Date(Date.UTC(+bm.slice(0,4),+bm.slice(5,7),0)).getUTCDate();
+      const brSal=Object.keys(O.bcost||{}).reduce((a2,b2)=>a2+(((O.bcost[b2]||{})[bm]||{}).sal||0),0);
+      const shared=(E2['Rent — HQ / warehouses / flats']||0)+(E2['Comms & internet']||0)+(E2['Other OpEx']||0)
+        +Math.max(0,(E2['Payroll & benefits']||0)-brSal);
+      const PA2=pnlAgg().M[bm]||{};const onR=(PA2.g||0)-(PA2.r||0);
+      let br2=0;Object.keys(O.pos||{}).forEach(b2=>{const v=(O.pos[b2]||{})[bm];if(v)br2+=v[0]||0;});
+      const wOn=(onR+br2)>0?onR/(onR+br2):0.2;
+      return ((E2['Packing & bags']||0)+shared*wOn)/dim;}catch(e){return 0;}})();
+    const d0=span(ST.s,ST.e), n0=np(ST.s,ST.e), a0=n0, net0=n0-ovD*d0;
+    let net1=null;if(o.cs&&o.ce){const n1=np(o.cs,o.ce);net1=n1-ovD*span(o.cs,o.ce);}
     const SM2=v=>(v<0?'−':'+')+'E£ '+Math.round(Math.abs(v)).toLocaleString();
-    return [['NET PROFIT · after ads',SM2(n0),null,true,
-      'delivered GP − the webstore&rsquo;s ad share'+(n1!=null?' · prev '+SM2(n1):'')+' · before HQ overhead (that view: Break-even & buying)','web']];
+    return [['NET PROFIT',SM2(net0),null,true,
+      'after delivery, its ad share AND its overhead share ('+Math.round(ovD).toLocaleString()+'/day) · after ads only '+SM2(a0)+(net1!=null?' · prev net '+SM2(net1):''),'web']];
    }catch(e){return [];}})()[0]||['NET PROFIT','—',null,true,'','web'],
   ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co','sp'],
   ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'NET revenue ÷ ALL spend · breakeven '+BEBOTH(1)+'','web','mer'],
@@ -3098,8 +3108,35 @@ function glance(g,o){
  const _band=(label,col2,bg2,list)=>list.length?('<div style="border:1px solid '+col2+'22;border-left:4px solid '+col2+';border-radius:12px;background:'+bg2+';padding:9px 11px 11px;margin-bottom:9px">'
   +'<div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:'+col2+';margin:0 1px 7px">'+label+'</div>'
   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+list.map(_tile).join('')+'</div></div>'):'';
- const tileH=_band('The webstore \u2014 Shopify only','#3a3bd0','#f7f8ff',tiles.filter(t=>t[5]==='web'))
-            +_band('The whole company \u2014 webstore + branches, one ad budget','#0f6e56','#f4fbf7',tiles.filter(t=>t[5]==='co'));
+ /* v12.1 A WALL OF 30 IDENTICAL CARDS HAS NO STORY. The webstore band now reads in rows:
+    the MONEY first and bigger (net profit coloured by its sign), then funnel, customers,
+    media — each with its own micro-label, so the eye lands on what was made before it
+    lands on how. */
+ const _tileHero=t=>{const neg=String(t[1]).trim().indexOf('−')===0;
+  const vc=/^NET PROFIT/.test(String(t[0]))?(neg?'#a3271a':'#0f6e56'):'#161d2e';
+  return '<div '+(t[6]?'onclick="okTileGo(\''+t[6]+'\')" ':'')+'style="border:1px solid #d9def0;border-radius:12px;padding:12px 14px;background:#fff;box-shadow:0 2px 8px -6px rgba(58,59,208,.35)">'
+  +'<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748B">'+t[0]+'</div>'
+  +'<div style="font-size:26px;font-weight:800;color:'+vc+';line-height:1.12;margin:3px 0 2px;font-variant-numeric:tabular-nums">'+t[1]+'</div>'
+  +'<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'+dl(t[2],t[3])
+  +'<span style="font-size:10.5px;color:#8a93a6">'+t[4]+'</span></div></div>';};
+ const WEBG=[['THE MONEY',/^(GROSS |NET )?(REVENUE|PROFIT)/,1],
+   ['FUNNEL — sessions to orders',/^(SESSIONS|ATC|ICO|CVR|ORDERS)/,0],
+   ['CUSTOMERS — new vs returning',/^(NEW CUSTOMERS|RETURNING|NC |RC )/,0],
+   ['MEDIA — spend and what it claims',/^(AD SPEND|META|GOOGLE|TIKTOK|BLENDED|MER|AMER|SPEND)/,0]];
+ const _bandG=(label,col2,bg2,list)=>{if(!list.length)return '';
+  const used=new Set();let inner='';
+  WEBG.forEach(G=>{const gs=[];
+   list.forEach((t,i2)=>{if(!used.has(i2)&&G[1].test(String(t[0]).toUpperCase())){used.add(i2);gs.push(t);}});
+   if(gs.length)inner+='<div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:'+col2+'aa;margin:9px 1px 5px">'+G[0]+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax('+(G[2]?'195px':'150px')+',1fr));gap:9px">'
+    +gs.map(t=>G[2]?_tileHero(t):_tile(t)).join('')+'</div>';});
+  const rest=list.filter((t,i2)=>!used.has(i2));
+  if(rest.length)inner+='<div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:'+col2+'aa;margin:9px 1px 5px">MORE</div>'
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+rest.map(_tile).join('')+'</div>';
+  return '<div style="border:1px solid '+col2+'22;border-left:4px solid '+col2+';border-radius:12px;background:'+bg2+';padding:9px 11px 11px;margin-bottom:9px">'
+   +'<div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:'+col2+'">'+label+'</div>'+inner+'</div>';};
+ const tileH=_bandG('The webstore — Shopify only','#3a3bd0','#f7f8ff',tiles.filter(t=>t[5]==='web'))
+            +_band('The whole company — webstore + branches, one ad budget','#0f6e56','#f4fbf7',tiles.filter(t=>t[5]==='co'));
 
  /* ---- 2. WHAT MOVED IT --------------------------------------------------- */
  /* Ranked by money, not by how interesting the metric is. A driver only earns a line if it moved
@@ -16655,7 +16692,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260925-205921';
+const BUILD='20260925-210758';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
