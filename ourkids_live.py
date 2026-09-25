@@ -5640,7 +5640,12 @@ def pull_shipping():
 #     kept       = state sale/done AND NOT is_return_total
 # CAVEAT CARRIED IN THE DATA: before Jun 2025 the house convention booked a return as a
 # cancellation, so "returned" reads ~0 until then. retFrom marks where the flag became real.
-SHIP2_TEAMS = ["Shopify", "Noon", "Amazon", "Homzmart"]
+# v12.3 SHOPIFY ONLY. Noon/Amazon/Homzmart orders carry no shipping line BY NATURE -- the
+# marketplace delivers them, not Bosta -- and including them branded ~40% of September as
+# "shipped FREE" when the operator ran no free delivery at all, and dragged parcels-per-order
+# to a fake 0.70 (the "3,000 August orders that never became a parcel" were simply the
+# marketplace's). Every consumer of ship2 treats it as the WEBSTORE delivery picture.
+SHIP2_TEAMS = ["Shopify"]
 SHIP2_MEMO = "\u0628\u0648\u0633\u0637\u0647"   # "Bosta" as accounting spells it in the memo.
 # Returns booked as cancellations before this month (house convention change).
 SHIP2_RETFROM = "2025-06"
