@@ -5458,6 +5458,11 @@ function dailyBE(g){
   if(!out.length)return '';
   return '<div style="border:1px solid #cfe3f5;background:#f5fafe;border-radius:10px;padding:11px 12px;margin-bottom:12px">'
    +'<div style="font-size:12px;font-weight:800;color:#1d3f63;margin-bottom:3px">Where each month actually stands &mdash; whole company, on its own ledger</div>'
+   +(function(){try{ /* v12.1 name the flat bar in the reader's own units, so a 600k branch
+       day printing red cannot be misread as a losing day. */
+      const aW=rows.length?rows.reduce((x,r)=>x+(r.pas||0),0)/rows.length:0;
+      const bar=(_ovhAny.all-aW)/(stMg*BLXv);
+      return '<div style="font-size:11px;font-weight:700;color:#1d3f63;margin-bottom:5px">The flat bar: <b>'+M(_ovhAny.all)+' of fixed cost is charged to EVERY day</b> &mdash; at this window&rsquo;s margins that takes roughly <b>'+M(bar)+' of branch takings</b> (on an ordinary webstore day) to cover. A day under it prints red <b>while still banking money</b>; the green &ldquo;after ads only&rdquo; column is what the day actually made. Weekdays under the bar and weekends far over it is the normal shape of this business.</div>';}catch(e){return '';}})()
    +'<div style="font-size:11px;color:#4a5a70;line-height:1.5;margin-bottom:7px">A red day below is a day that did not cover its <b>1/'+(_ovhAny?_ovhAny.dim:30)+'th slice of that month&rsquo;s fixed costs</b>. Rent and payroll do not arrive daily, so a quiet Tuesday always prints red. <b>This block is the number that decides whether money was made</b> &mdash; the grid underneath only says which days pulled their weight. Gross profit here is on the <b>4% basis</b>: revenue &times; 0.96 &minus; cost, the charge this business actually remits, not the 14% that was being subtracted by pairing an ex-VAT margin with a VAT-inclusive revenue.</div>'
    +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
    +'<tr style="font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase">'
@@ -5500,7 +5505,7 @@ function dailyBE(g){
   +'<th style="'+TH+'">Branch revenue<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">tills, net of VAT</div></th>'
   +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">(webstore + branches) &divide; spend</div></th>'
   +'<th style="'+TH+'">After ADS only<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · no overhead</div></th>'
-  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · own month&rsquo;s book ÷ its days</div></th></tr>'
+  +'<th style="'+TH+'">After ads AND overhead<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">incl. branches · own month&rsquo;s book ÷ its days — a FLAT slice, not a cost the day caused</div></th></tr>'
   +b+'</table></div>'+_beCalc);
 }
 /* v9.57 ONE ORDER, TOP TO BOTTOM. Platform ROAS, then the break-even it has to clear, then
@@ -16650,7 +16655,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260925-204821';
+const BUILD='20260925-205921';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
