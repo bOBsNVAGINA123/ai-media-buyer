@@ -2566,6 +2566,26 @@ function glance(g,o){
    'before returns · E£'+Math.round(o.ref[0]).toLocaleString()+' came back ('+(o.gross[0]?(o.ref[0]/o.gross[0]*100).toFixed(1):'0')+'%)','web','grossr'],
   ['Net revenue',   M(o.net[0]),   pc(o.net[0],o.net[1]),   true,  'after returns','web','net'],
   ['Gross profit',  M(o.gp[0]),    pc(o.gp[0],o.gp[1]),     true,  (o.gpct[0]||0).toFixed(1)+'% margin','web','gp'],
+  /* v12.0 NET PROFIT on the scoreboard. Delivered GP minus the webstore's OWN ad share
+     (Google and TikTok whole, Meta split by its reported web-vs-store value) — the same
+     stack as the After-ads column on Break-even & buying, so the two never disagree.
+     Before HQ overhead, and says so. pc() on signed values is meaningless, so the prior
+     window is printed instead of a fake percentage. */
+  (function(){try{
+    const gpOnW=GPQ().gpOn, tA=Date.parse(O.ad.start+'T00:00:00Z'), tF=Date.parse(O.fin.start+'T00:00:00Z');
+    const np=(a,b)=>{let t=0;for(let d=Date.parse(a+'T00:00:00Z');d<=Date.parse(b+'T00:00:00Z');d+=864e5){
+      const i=Math.round((d-tF)/864e5),j=Math.round((d-tA)/864e5);
+      if(i<0||i>=O.fin.n)continue;
+      const net=((O.shop.rev[i]||0)-SREF(i))*1000;
+      let ads=0;if(j>=0&&j<O.ad.n){const ms=(O.ad.mspend||[])[j]||0,gs=(O.ad.gspend||[])[j]||0,ts=(O.ad.tspend||[])[j]||0;
+        const io2=(O.ad.instoreMeta||[])[j]||0,ov2=(O.ad.metaOmniValue||[])[j]||0;
+        ads=ms*(ov2>0?Math.max(0,Math.min(1,(ov2-io2)/ov2)):1)+gs+ts;}
+      t+=net*gpOnW-ads;}return t;};
+    const n0=np(ST.s,ST.e), n1=(o.cs&&o.ce)?np(o.cs,o.ce):null;
+    const SM2=v=>(v<0?'−':'+')+'E£ '+Math.round(Math.abs(v)).toLocaleString();
+    return [['NET PROFIT · after ads',SM2(n0),null,true,
+      'delivered GP − the webstore&rsquo;s ad share'+(n1!=null?' · prev '+SM2(n1):'')+' · before HQ overhead (that view: Break-even & buying)','web']];
+   }catch(e){return [];}})()[0]||['NET PROFIT','—',null,true,'','web'],
   ['Ad spend',      M(o.sp[0]),    pc(o.sp[0],o.sp[1]),     false, 'one budget, works for both businesses','co','sp'],
   ['MER',           (o.mer[0]||0).toFixed(2)+'×', pc(o.mer[0],o.mer[1]), true, 'NET revenue ÷ ALL spend · breakeven '+BEBOTH(1)+'','web','mer'],
   /* v9.90: the same two ratios on GROSS, because a platform is paid on what it sold, not on
@@ -3822,6 +3842,55 @@ function rAU(){if(TAB!=='au')return;dCh();
  const sel='<div class="bar" style="margin:0 0 10px;border:0;background:transparent;padding:2px 0"><label>Month</label><select onchange="auMon(this.value)">'
   +mons.map(m=>'<option'+(m===mSel?' selected':'')+'>'+m+'</option>').join('')+'</select>'
   +(mtd?'<span class="cs" style="color:#b8621b;font-weight:700">Running month: revenue is '+(+((O.today||'').slice(8,10)))+' days, salaries and rent are the FULL month&rsquo;s bills — contribution reads low by construction.</span>':'')+'</div>';
+ /* ---- v12.0 the same P&L across the months, TOTAL company, so the one-month table above
+    has a trend behind it. Same building blocks; salaries re-dated by the collector. ---- */
+ (function(){try{
+  const showM=allM.filter(m=>m>='2026-01');
+  const perM=showM.map(m=>{
+   let bRev=0,bGp=0,bSal=0,bRent=0;
+   names.forEach(n=>{const P=(POSD[n]||{})[m];if(P){bRev+=P[0]||0;bGp+=gpAdj(P[0],P[1]);}
+    const bc=(BC[n]||{})[m]||{};
+    bSal+=bc.sal>0?bc.sal:((FB.find(x=>x.name===n)||{}).payroll||0);
+    bRent+=bc.rent>0?bc.rent:((RB[n]||{})[m]>0?RB[n][m]:(n==='Dokki'?0:rAvg[n]));});
+   let og=0,orf=0,ogp=0;
+   for(let i=0;i<O.fin.n;i++){if(DD[i].slice(0,7)!==m)continue;
+    og+=(O.shop.rev[i]||0)*1000;orf+=SREF(i)*1000;
+    ogp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);}
+   const onNet2=og-orf, onGp2=ogp*(og?1-orf/og:1);
+   const Em=(O.exp||{})[m]||{};
+   const um=(Em['Utilities (elec/water/gas)']||0)+(Em['Maintenance']||0);
+   const AM3=adMonthly()[m];const ads=(adFull(m)&&AM3)?AM3.s:null;
+   const shp=s2h(m)?(s2('col',m)-s2('cost',m)):0;
+   const brSal2=names.reduce((x,n)=>x+(((BC[n]||{})[m]||{}).sal||0),0);
+   const hq2=(Em['Rent — HQ / warehouses / flats']||0)+(Em['Comms & internet']||0)+(Em['Other OpEx']||0)
+     +(Em['Packing & bags']||0)+(Em['Cargo & transport']||0)
+     +Math.max(0,(Em['Payroll & benefits']||0)-brSal2-EP)
+     +(Em['Payment & collection fees']||0)+(Em['Card fees — branches']||0);
+   const contrib2=bGp+onGp2+shp-bSal-EP-bRent-um-(ads||0);
+   return {m:m,rev:bRev+onNet2,gp:bGp+onGp2,sal:bSal+EP,rent:bRent,util:um,ship:shp,ads:ads,
+     contrib:contrib2,hq:hq2,net:ads==null?null:contrib2-hq2};});
+  const TDm='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
+  const THm='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
+  const Mv=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const SGv=v=>(v<0?'−':'+')+Mv(v);
+  const rw=(lb,f,o2)=>{o2=o2||{};return '<tr'+(o2.b?' style="font-weight:800;background:#f7f8fc"':'')+'><td style="'+TDm+';text-align:left;font-weight:700">'+lb+'</td>'
+   +perM.map(x=>{const v=f(x);return '<td style="'+TDm+(x.m===nowM?';color:#5a5bf0':'')+'">'+(v==null?'&mdash;':v)+'</td>';}).join('')+'</tr>';};
+  let h2='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+   +'<tr><th style="'+THm+';text-align:left">Company total</th>'+perM.map(x=>'<th style="'+THm+'">'+x.m+(x.m===nowM?' MTD':'')+'</th>').join('')+'</tr>'
+   +rw('Revenue (branches VAT-in + online net)',x=>Mv(x.rev),{b:1})
+   +rw('Gross profit (4% basis)',x=>Mv(x.gp),{b:1})
+   +rw('Salaries — branches + e-com (re-dated to work month)',x=>'&minus;'+Mv(x.sal))
+   +rw('Rent — branches',x=>'&minus;'+Mv(x.rent))
+   +rw('Utilities + maintenance',x=>'&minus;'+Mv(x.util))
+   +rw('Delivery, net of shipping collected',x=>(x.ship<0?'&minus;':'+')+Mv(x.ship))
+   +rw('Ads — whole budget',x=>x.ads==null?null:'&minus;'+Mv(x.ads))
+   +rw('CONTRIBUTION',x=>SGv(x.contrib),{b:1})
+   +rw('HQ book (rent, comms, other, packing, cargo, HQ payroll, fees)',x=>'&minus;'+Mv(x.hq))
+   +rw('COMPANY NET',x=>x.net==null?null:SGv(x.net),{b:1})
+   +'</table></div>';
+  pnlCard(g,'odoo','Company total, month by month — the whole business on one line of sight'
+   +INFO('Branches: POS revenue and gpAdj margin, analytic salaries (re-dated to the month they pay for) and rent with the same fallbacks as above. Online: net revenue with order-dated refunds, its GP, its delivery net, its e-com payroll. Ads: the whole platform budget. HQ book charged below contribution. Running month is MTD revenue against full-month fixed costs.'),
+   'The single-month table above answers who; this answers when.',h2);}catch(e){}})();
  pnlCard(g,'odoo','The whole company — every branch, the webstore, one month'
   +INFO('Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
   'Columns ranked by contribution. The HQ block sits below the line because no column owns it.',sel+b);
@@ -5135,7 +5204,7 @@ function beScen(g){
    +'<td style="'+TD+';color:'+(_T('pf')>=0?'#0f6e56':'#a3271a')+'">'+SM(_T('pf'))+'</td></tr>';
  const actTbl=actD.length?('<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th>'
-  +'<th style="'+TH+'">GROSS sales</th>'
+  +'<th style="'+TH+'">GROSS sales<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">confirmed Odoo orders &mdash; cancelled never enter</div></th>'
   +'<th style="'+TH+'">Refunds<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">'+((SH.refO&&SH.refO.length)?'matched to the order':'AS POSTED &mdash; batched, not daily')+'</div></th>'
   +'<th style="'+TH+'">NET revenue</th>'
   +'<th style="'+TH+'">Gross profit<div style="font-weight:600;font-size:8.5px;text-transform:none;color:#8a93a6">at '+(_gpG*100).toFixed(1)+'%</div></th>'
@@ -12964,8 +13033,8 @@ function cbCard(g){const DB=O.decB;if(!DB||!DB.win)return;
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
  document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. MATURITY: deciles are LIFETIME sums, so recently-acquired customers sit in low deciles until their cohort matures &mdash; that is age, not weakness; the age-fair view is <b>Branch cohort quality (SAME-AGE)</b> on the Retail P&amp;L tab. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
  try{cbCard(g);}catch(e){}
+ if(ST.decScB===undefined)ST.decScB='Shopify';
  rDec(g,ST.decSc||'ALL STORES','decSc');
- rDec(g,ST.decScB||'Shopify','decScB');
  qsweep('g15');}
 function decIns(D,tt,money){
  if(!D||D.length<10)return '';
@@ -13077,17 +13146,25 @@ function decMatrix(g,ks){
   decSel('__ALL__')+h+(ins?'<div class="ins" style="margin-top:10px">'+ins+'</div>':''));}
 function rDec(g,sc,withSel){
  const money=v=>Math.round(v).toLocaleString(),E='E&pound; ';
- const DD2=O.dec||{};let sel='';
+ const DD2=O.dec||{};let sel='';let scB=null,DB=null;
  if(withSel){const ks=Object.keys(DD2).filter(k=>k!=='Shopify').sort();
   if(typeof withSel==='string'){  // compare mode: a scope-state key -> full scope picker (Shopify + any branch)
    if(sc==='__ALL__'&&withSel==='decSc'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
    if(!sc||!DD2[sc])sc=DD2['Shopify']?'Shopify':(ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0]);
    sel=decSelAny(sc,withSel);
+   if(withSel==='decSc'){scB=(ST.decScB&&DD2[ST.decScB]&&ST.decScB!==sc)?ST.decScB:null;
+    const opts=['(none)'].concat(Object.keys(DD2).sort());
+     sel+=' <label style="font-size:10.5px;font-weight:800;color:#64748b;margin-left:12px">VS <select onchange="ST.decScB=this.value===\'(none)\'?null:this.value;rCP&&rCP();" style="font-size:12px;padding:4px 7px">'
+      +opts.map(k=>'<option'+(k===(ST.decScB||'(none)')?' selected':'')+'>'+k+'</option>').join('')+'</select></label>'
+      +(scB?' <span style="font-size:10px;color:#8a93a6">grey line under each value = '+scB+'</span>':'');}
   }else{
    if(sc==='__ALL__'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
    if(ks.length&&(!sc||!DD2[sc]))sc=ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0];
    sel=decSel(sc);
   }}
+ /* v12.0 the VS lives INSIDE the table: pick scope B and every cell prints B's value in
+    grey beneath A's, same row, same decile -- no second table to eyeball across. */
+ DB=scB?DD2[scB]:null;
  const D=DD2[sc]||[];
  if(!D.length){pnlCard(g,'odoo','Customer portfolio by decile &mdash; awaiting first v6.5 sync','The per-customer decile crawl ships with this version and lands automatically on the next heavy sync. Nothing to do on your side.','');return;}
  const tt=D.reduce((a,d)=>({c:a.c+d.c,o:a.o+d.o,r:a.r+d.r,g:a.g+d.g,q:a.q+d.q,ng:a.ng+d.ng,gr:a.gr+d.gr,dc:a.dc+d.dc,rep:a.rep+d.rep}),{c:0,o:0,r:0,g:0,q:0,ng:0,gr:0,dc:0,rep:0});
@@ -13114,7 +13191,16 @@ function rDec(g,sc,withSel){
   null,
   ['ACL, yrs',d=>d.ls/365,v=>v.toFixed(2),1,'Average Customer Lifespan so far: days between first and latest purchase, averaged, in years. Right-censored — living customers keep extending it.'],
   ['APF, x',d=>d.c?d.o/d.c:null,v=>v.toFixed(2),1,'Average Purchase Frequency = orders ÷ customers, lifetime.'],
-  ['LTCM, E£',d=>d.c?d.g/d.c:null,v=>v.toFixed(0),1,'Lifetime Contribution Margin per customer = actual lifetime GM ÷ customers. Measured, not the ACV×APF×ACL approximation — the real thing is better.']
+  
+  null,
+  /* v12.0 TENURE-NEUTRAL. Lifetime figures reward whoever has simply been around longest --
+     D1's ACL of ~1yr against D10's 11 days makes every lifetime row a foregone conclusion.
+     These rows divide by each decile's own observed lifetime (floored at 90 days, because
+     annualising an 11-day customer would invent a rate no one has earned), so a decile is
+     judged on what a customer-year of it is WORTH, not on how long it has existed. */
+  ['/yr · Revenue / cust',d=>d.c?(d.r/d.c)/Math.max(d.ls||0,90)*365:null,v=>v.toFixed(0),1,'Net revenue per customer per YEAR of their own observed lifetime (floored at 90 days). Tenure-neutral: this is the run-rate a customer of this decile earns, however long they have been with you.'],
+  ['/yr · GM / cust',d=>d.c?(d.g/d.c)/Math.max(d.ls||0,90)*365:null,v=>v.toFixed(0),1,'Gross margin per customer per year of observed lifetime, 90-day floor. The tenure-neutral version of LTCM — the row to judge deciles and channels on.'],
+  ['/yr · Orders / cust',d=>d.c?(d.o/d.c)/Math.max(d.ls||0,90)*365:null,v=>v.toFixed(2),1,'Orders per customer per year of observed lifetime, 90-day floor. The tenure-neutral APF.'],['LTCM, E£',d=>d.c?d.g/d.c:null,v=>v.toFixed(0),1,'Lifetime Contribution Margin per customer = actual lifetime GM ÷ customers. Measured, not the ACV×APF×ACL approximation — the real thing is better.']
  ].filter(Boolean);
  let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:1100px"><tr><th style="text-align:left">Metric</th>'+D.map((d,i)=>'<th>D'+(i+1)+'<div style="font-weight:600;color:#8a93a6;font-size:9px">'+(tt.r?(d.r/tt.r*100).toFixed(0):0)+'% of rev</div></th>').join('')+'<th>ALL</th></tr>';
  RWS.forEach(R=>{if(R===null){h+='<tr><td colspan="'+(D.length+2)+'" style="padding:2px;border:0"></td></tr>';return;}
@@ -13122,12 +13208,14 @@ function rDec(g,sc,withSel){
   const mn=nums.length?Math.min(...nums):0,mx=nums.length?Math.max(...nums):0;
   const tot2=R[1](tt);
   h+='<tr><td style="text-align:left" title="'+R[4].replace(/"/g,'&quot;')+'">'+R[0]+Q('decile')+'</td>'
-   +vals.map(v=>'<td'+shade(v,mn,mx,R[3])+'>'+(v==null||!isFinite(v)?'&mdash;':R[2](v))+'</td>').join('')
+   +vals.map((v,vi)=>{const bv=DB&&DB[vi]?R[1](DB[vi]):null;
+     return '<td'+shade(v,mn,mx,R[3])+'>'+(v==null||!isFinite(v)?'&mdash;':R[2](v))
+      +(DB?'<div style="font-size:9px;color:#8a93a6;font-weight:600">'+(bv==null||!isFinite(bv)?'&mdash;':R[2](bv))+'</div>':'')+'</td>';}).join('')
    +'<td style="font-weight:800">'+(tot2==null||!isFinite(tot2)?'&mdash;':R[2](tot2))+'</td></tr>';});
  h+='</table></div>';
  const d1=D[0];
  pnlCard(g,'odoo','Customer portfolio by decile &mdash; '+sc+' (D1 = top spenders)',
-  'Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals. <b>This card carries no date window on purpose:</b> a decile IS a lifetime rank, so filtering it by a date range would silently change what D1 means. The windowed views live on the vendor league table, the P&amp;L and every daily card.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
+  '<span style="display:inline-block;background:#fff3e2;border:1px solid #f0cf9a;color:#8a5a1a;font-size:9.5px;font-weight:800;border-radius:6px;padding:2px 7px;margin-right:7px">LIFETIME CRAWL &mdash; does not follow the date box</span>Every registered customer of '+sc+' since Aug 2024, ranked by lifetime net revenue and cut into ten equal groups. D1&rsquo;s '+money(d1.c)+' customers ('+(tt.c?(d1.c/tt.c*100).toFixed(0):0)+'% of people) generate '+(tt.r?(d1.r/tt.r*100).toFixed(0):0)+'% of revenue. Shipping-collected/paid and transaction fees are not booked per order in Odoo, so they are not fabricated per decile &mdash; the P&amp;L carries the actuals. <b>This card carries no date window on purpose:</b> a decile IS a lifetime rank, so filtering it by a date range would silently change what D1 means. The windowed views live on the vendor league table, the P&amp;L and every daily card.'+(hasGR?'':' Gross Retail and DR% need line-level discounts, which POS receipts do not carry &mdash; they show on the Shopify scope.'),
   sel+h+decIns(D,tt,money));
  decAttr(D,tt,sc,money);}
 
@@ -16562,7 +16650,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260923-213438';
+const BUILD='20260925-204821';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
