@@ -350,7 +350,7 @@ function gpStale(){return GPADJ()>0;}
    2.94 side by side -- so the number a card fell back to depended on which card it was, and
    the 4% correction had to be chased through every one of them. GPQ() is the only safe
    accessor; GPFB is the only fallback, and it is the measured basis, not a memory of one. */
-var GPFB={gpOn:0.2468,gpSt:0.367,gpOnGross:0.3513,drag:0.1045,dragShip:0.0259,dragPay:0.0786,dragCost:0.061,dragCol:0.0351};
+var GPFB={gpOn:0.2604,gpSt:0.367,gpOnGross:0.3513,drag:0.0916,dragShip:0.071,dragPay:0.0206,dragCost:0.071,dragCol:0.0351};
 function GPQ(){try{const q=_gpPct();return (q&&q.gpOn>0)?q:GPFB;}catch(e){return GPFB;}}
 function GPBE(){const q=GPQ();return q.gpOn>0?1/q.gpOn:1/GPFB.gpOn;}
 /* v11.0 BOTH BREAK-EVENS, EVERY TIME. One number was being printed and called "break-even"
@@ -3610,7 +3610,11 @@ function glRun(V){
  const gp=net*V.mg/100;                           /* 4% basis */
  const courier=orders*V.ppo*V.perParcel;          /* only confirmed orders ship */
  const shipIn=orders*V.shipPerOrder;
- const gpDel=gp+shipIn-courier;                   /* delivered GP */
+ /* v12.5 mg is the GROSS margin, which already contains the shipping customers paid. Only
+    the CHANGE you make with the slider is new money; the baseline is already in gp. */
+ const _sB=((GLS||{})._b||{}).shipPerOrder;
+ const shipDelta=orders*(V.shipPerOrder-(_sB!=null?_sB:V.shipPerOrder));
+ const gpDel=gp+shipDelta-courier;                /* delivered GP */
  const brGP=V.brRev*V.brMg/100;
  const afterAds=gpDel+brGP-V.spend;
  const afterAll=afterAds-V.ovh;
@@ -3854,7 +3858,7 @@ function rAU(){if(TAB!=='au')return;dCh();
  cols.sort((a,b)=>b.contrib-a.contrib);
  const brAds=cols.reduce((a,c)=>a+c.ads,0);
  const onAds=adsOK?Math.max(0,AD.s-brAds):0;
- const shipNet=s2h(mSel)?(s2('col',mSel)-s2('cost',mSel)):0;
+ const shipNet=s2h(mSel)?-(s2('cost',mSel)||0):0;   /* v12.5 collected shipping already in GP */
  const EP=372076;
  const onCol={n:'ONLINE',rev:onNet,gp:onGp,ord:on.o,sal:EP,salEst:true,rent:0,rentEst:false,
    util:0,ads:onAds,ship:shipNet,contrib:onGp+shipNet-EP-onAds};
@@ -3887,7 +3891,7 @@ function rAU(){if(TAB!=='au')return;dCh();
   +row('Salaries',c=>'&minus;'+M(c.sal)+(c.salEst?(c.n==='ONLINE'?est('E-com payroll: the June-2026 Excel figure, not a monthly posting'):est('No analytic salary posting this month — June-2026 Excel payroll shown')):''))
   +row('Rent',c=>c.n==='ONLINE'?'&mdash;':('&minus;'+M(c.rent)+(c.rentEst?est('No rent posting — quarterly cheques; 12-month average charged'):'')+(c.n==='Dokki'&&!c.rent?'<div style="font-size:8.5px;color:#8a93a6">owned</div>':'')))
   +row('Utilities + maintenance (alloc)',c=>c.n==='ONLINE'?'&mdash;':'&minus;'+M(c.util))
-  +row('Delivery, net of shipping collected',c=>c.n==='ONLINE'||c.n==='TOTAL'?((c.ship||0)<0?'&minus;'+M(c.ship):'+'+M(c.ship||0)):'&mdash;')
+  +row('Courier bill paid to Bosta',c=>c.n==='ONLINE'||c.n==='TOTAL'?((c.ship||0)<0?'&minus;'+M(c.ship):'+'+M(c.ship||0)):'&mdash;')
   +row('Ads'+(adsOK?'':' (feed gap)'),c=>adsOK?'&minus;'+M(c.ads):null)
   +row('CONTRIBUTION',c=>SG(c.contrib),{b:1})
   +row('Contribution margin',c=>c.rev?(c.contrib/c.rev*100).toFixed(1)+'%':null,{ind:1})
@@ -3917,7 +3921,7 @@ function rAU(){if(TAB!=='au')return;dCh();
    const Em=(O.exp||{})[m]||{};
    const um=(Em['Utilities (elec/water/gas)']||0)+(Em['Maintenance']||0);
    const AM3=adMonthly()[m];const ads=(adFull(m)&&AM3)?AM3.s:null;
-   const shp=s2h(m)?(s2('col',m)-s2('cost',m)):0;
+   const shp=s2h(m)?-(s2('cost',m)||0):0;             /* v12.5 collected shipping already in GP */
    const brSal2=names.reduce((x,n)=>x+(((BC[n]||{})[m]||{}).sal||0),0);
    const hq2=(Em['Rent — HQ / warehouses / flats']||0)+(Em['Comms & internet']||0)+(Em['Other OpEx']||0)
      +(Em['Packing & bags']||0)+(Em['Cargo & transport']||0)
@@ -3939,7 +3943,7 @@ function rAU(){if(TAB!=='au')return;dCh();
    +rw('Salaries — branches + e-com (re-dated to work month)',x=>'&minus;'+Mv(x.sal))
    +rw('Rent — branches',x=>'&minus;'+Mv(x.rent))
    +rw('Utilities + maintenance',x=>'&minus;'+Mv(x.util))
-   +rw('Delivery, net of shipping collected',x=>(x.ship<0?'&minus;':'+')+Mv(x.ship))
+   +rw('Courier bill paid to Bosta',x=>(x.ship<0?'&minus;':'+')+Mv(x.ship))
    +rw('Ads — whole budget',x=>x.ads==null?null:'&minus;'+Mv(x.ads))
    +rw('CONTRIBUTION',x=>SGv(x.contrib),{b:1})
    +rw('HQ book (rent, comms, other, packing, cargo, HQ payroll, fees)',x=>'&minus;'+Mv(x.hq))
@@ -3949,7 +3953,8 @@ function rAU(){if(TAB!=='au')return;dCh();
    +INFO('Branches: POS revenue and gpAdj margin, analytic salaries (re-dated to the month they pay for) and rent with the same fallbacks as above. Online: net revenue with order-dated refunds, its GP, its delivery net, its e-com payroll. Ads: the whole platform budget. HQ book charged below contribution. Running month is MTD revenue against full-month fixed costs.'),
    'The single-month table above answers who; this answers when.',h2);}catch(e){}})();
  pnlCard(g,'odoo','The whole company — every branch, the webstore, one month'
-  +INFO('Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
+  +INFO('<b>Known limit &mdash; consignment stock.</b> 13 product categories are costed <i>standard / periodic</i>, which means Odoo does NOT post their cost on each sale; their margin leans on a manually maintained standard cost. Two consequences, both real: this branch margin is only as good as that manual cost, and the GL cost-of-sales will never reconcile line-for-line to the margin field &mdash; that gap is the costing method, not a missing entry. Their exact revenue share is not derivable from the read-only connection, so it is not quoted here rather than guessed. '
+  +'Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
   'Columns ranked by contribution. The HQ block sits below the line because no column owns it.',sel+b);
 }
 
@@ -5785,7 +5790,7 @@ function ovCard(g){
   ['aMER — whole business','amerAll',X,1,'FIRST-TIME customer revenue (Shopify + shops) divided by total ad spend. The rate you are buying growth at.'],
   ['  aMER — Shopify only','amerOn',X,1,'First-time customer revenue from Shopify only, over the same total spend.'],
   ['h','DELIVERY (SHOPIFY) — MONEY OUT IS NEGATIVE'],
-  ['Delivery, net','delNet',M,1,'Shipping money COLLECTED from customers minus the courier bill PAID to Bosta. Negative means delivery costs more than customers pay for it, and product margin covers the difference.'],
+  ['Delivery, net','delNet',M,1,'A LEDGER, NOT A PROFIT LINE: the money collected is already inside revenue and gross profit above, so it is never added twice. Shown here only so you can see the two sides. Negative means delivery costs more than customers pay for it, and product margin covers the difference.'],
   ['  Shipping collected from customers','delCol',M,1,'Money IN. What customers were charged for delivery.'],
   ['  Courier bill paid to Bosta','delCost',M,0,'Money OUT. What Bosta invoiced you to carry the parcels. Posted to Odoo where it exists; modelled at the settled cost per order where it does not.'],
   ['  Shipping paid on failed + returned','retCost',M,0,'What Bosta charged to move parcels that came back \u2014 refused at the door (never paid for) and customer refunds. Shipping charges only; the refunded sale itself is a separate line in the Shopify P&L.'],
@@ -14617,9 +14622,23 @@ function _gpPct(){
       collector's split lands, the old combined bucket is scaled by the measured online share. */
    pay+=(_ex['Card fees \u2014 branches']!=null)?(_ex['Payment & collection fees']||0)
        :((_ex['Payment & collection fees']||0)*0.655);});
-  if(net>0){_dragShip=Math.max(0,(cost-col)/net);_dragPay=Math.max(0,pay/net);
+  /* v12.5 THE COLLECTED SHIPPING IS ALREADY IN GP. Odoo books the Shopify shipping line
+     (pid 24) with margin == subtotal -- measured 183,170/183,170 Jun, 186,521 Jul, 506,312
+     Aug -- so it enters O.shop.gp as 100% profit. Netting it against the courier bill here
+     credited it a SECOND time and flattered the delivered margin. The drag is the courier
+     bill, full stop; the money customers paid is already counted upstream. */
+  /* v12.5b AND THE COURIER BILL WAS INSIDE THE FEE BUCKET. ship2's "cost" reads account
+     31.01.08.34.00 -- which is literally named "Bosta collection fees" -- while the
+     "Payment & collection fees" bucket spans .31-.37 and therefore contains that SAME
+     account. Measured Jun-Aug 2026: bucket E£1,962,669 = Bosta E£1,521,791 (already
+     charged as the courier bill) + PayMob E£440,879 (the only genuine extra). Charging
+     the bucket whole double-billed Bosta. Noon/Amazon collect on their own platforms and
+     post nothing here, so what remains after removing the courier bill is webstore money. */
+  if(net>0){_dragShip=Math.max(0,cost/net);_dragPay=Math.max(0,(pay-cost)/net);
    _dragCost=Math.max(0,cost/net);_dragCol=Math.max(0,col/net);
-   drag=Math.max(0,Math.min(0.15,_dragShip+_dragPay));}
+   /* ceiling is a guard against a broken month, not a target: at 9.2% measured it has huge
+      headroom. It used to sit at 0.15 and silently truncated a real 16.3% reading. */
+   drag=Math.max(0,Math.min(0.25,_dragShip+_dragPay));}
  }catch(e){}
  return {gpOn:Math.max(0.05,gpOnGross-drag),gpSt,gpOnGross,drag,dragShip:_dragShip,dragPay:_dragPay,dragCost:_dragCost,dragCol:_dragCol};}
 // account-name -> act id, for deep links straight into Ads Manager with the object pre-selected
@@ -16723,7 +16742,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260926-181539';
+const BUILD='20260926-184103';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
