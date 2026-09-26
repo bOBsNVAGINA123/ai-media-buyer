@@ -419,6 +419,15 @@ function BETXT(){const b=BEPAIR();
    0.236). posMg() is the margin; BLX() is the bridge, MEASURED month by month on the months
    where the daily feed covers every day rather than assumed at 1.14; brGPn() takes a net-of-tax
    till figure and returns gross profit. Nothing else should touch O.pos[..][1]. */
+/* v12.6 CHARGE DELIVERY EXACTLY ONCE. The "Payment & collection fees" bucket spans GL
+   .31-.37 and therefore CONTAINS the courier bill -- account .34 is literally named "Bosta
+   collection fees" and is the very number ship2 reports as `cost`. So:
+     feeAll(m)  full bucket        -- correct ONLY with a GROSS gp and no separate courier line
+     feeNet(m)  bucket minus courier -- correct when the courier bill is charged separately
+     (nothing)                     -- correct when gp is already DELIVERED; the drag took both
+   Measured Jun-Aug 2026: bucket E£1,962,669 = Bosta E£1,521,791 + PayMob E£440,879. */
+function feeAll(m){return ((window.O&&O.exp&&O.exp[m])||{})['Payment & collection fees']||0;}
+function feeNet(m){try{return Math.max(0,feeAll(m)-(s2h(m)?(s2('cost',m)||0):0));}catch(e){return feeAll(m);}}
 var _POSMGC=null;
 function posMg(){if(_POSMGC!==null)return _POSMGC;
  try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
@@ -3872,7 +3881,7 @@ function rAU(){if(TAB!=='au')return;dCh();
  const hq=(E['Rent — HQ / warehouses / flats']||0)+(E['Comms & internet']||0)+(E['Other OpEx']||0)
    +(E['Packing & bags']||0)+(E['Cargo & transport']||0)
    +Math.max(0,(E['Payroll & benefits']||0)-brSal-EP)
-   +(E['Payment & collection fees']||0)+(E['Card fees — branches']||0);
+   +feeNet(mSel)+(E['Card fees — branches']||0);   /* v12.6 courier is in ONLINE's own column */
  const net=T.contrib-hq;
  /* ---- render ---- */
  const TH='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right;white-space:nowrap';
@@ -3926,7 +3935,7 @@ function rAU(){if(TAB!=='au')return;dCh();
    const hq2=(Em['Rent — HQ / warehouses / flats']||0)+(Em['Comms & internet']||0)+(Em['Other OpEx']||0)
      +(Em['Packing & bags']||0)+(Em['Cargo & transport']||0)
      +Math.max(0,(Em['Payroll & benefits']||0)-brSal2-EP)
-     +(Em['Payment & collection fees']||0)+(Em['Card fees — branches']||0);
+     +feeNet(m)+(Em['Card fees — branches']||0);   /* v12.6 courier is in ONLINE's own column */
    const contrib2=bGp+onGp2+shp-bSal-EP-bRent-um-(ads||0);
    return {m:m,rev:bRev+onNet2,gp:bGp+onGp2,sal:bSal+EP,rent:bRent,util:um,ship:shp,ads:ads,
      contrib:contrib2,hq:hq2,net:ads==null?null:contrib2-hq2};});
@@ -5655,7 +5664,9 @@ function netSplitCard(g){
  // --- gross profit, exact, per channel ---
  const onGP=sum(m=>{const p=PA[m];return p&&p.g?p.gp*(1-p.r/p.g):0;});
  const onRev=sum(m=>{const p=PA[m];return p?p.g-p.r:0;});
- const stGP=sum(m=>brs.reduce((a,b)=>a+(((PS[b]||{})[m]||[0,0])[1]||0),0));
+ /* v12.6 was the RAW Odoo margin -- the one basis-corrected number the earlier sweep's
+    regex could not see through the ||-guards, so branch GP here sat on the old basis. */
+ const stGP=sum(m=>brs.reduce((a,b)=>{const v=(PS[b]||{})[m];return a+(v?gpAdj(v[0],v[1]):0);},0));
  const stRev=sum(m=>brs.reduce((a,b)=>a+(((PS[b]||{})[m]||[0])[0]||0),0));
  const rev=onRev+stRev, wOn=rev?onRev/rev:0.5;
 
@@ -5686,7 +5697,8 @@ function netSplitCard(g){
  const stDirect=sum(m=>acc(m,'Rent — branches')+acc(m,'Utilities (elec/water/gas)')
                        +acc(m,'Maintenance')+acc(m,'Offline advertising & gifts')
                        +acc(m,'Card fees — branches'))+brSal;
- const onDirect=sum(m=>acc(m,'Packing & bags')+acc(m,'Payment & collection fees')+acc(m,'Cargo & transport'));
+ /* v12.6 the courier half of the fee bucket is charged below as shipN -- see feeNet. */
+ const onDirect=sum(m=>acc(m,'Packing & bags')+feeNet(m)+acc(m,'Cargo & transport'));
  const payAll=sum(m=>acc(m,'Payroll & benefits'));
  const shared=sum(m=>acc(m,'Rent — HQ / warehouses / flats')+acc(m,'Comms & internet')+acc(m,'Other OpEx'))
               +Math.max(0,payAll-brSal);
@@ -5694,8 +5706,10 @@ function netSplitCard(g){
  if(EST)opxAll=Math.max(opxAll,expTot(lastFull)*scl);
  const opxOn=onDirect+shared*wOn, opxSt=stDirect+shared*(1-wOn);
 
- let shipN=sum(m=>s2h(m)?((s2('cost',m)||0)-(s2('col',m)||0)):0);
- if(EST&&Math.abs(shipN)<1&&s2h(lastFull))shipN=((s2('cost',lastFull)||0)-(s2('col',lastFull)||0))*scl;
+ /* v12.6 no -col: the shipping customers paid is already inside onGP (Odoo books that SKU
+    with margin == subtotal), so crediting it here counted it a second time. */
+ let shipN=sum(m=>s2h(m)?(s2('cost',m)||0):0);
+ if(EST&&Math.abs(shipN)<1&&s2h(lastFull))shipN=(s2('cost',lastFull)||0)*scl;
  const netOn=onGP-adsOn-opxOn-shipN, netSt=stGP-adsSt-opxSt, netAll=netOn+netSt;
  const per=(v,r2)=>r2?(v/r2*100):null;
 
@@ -13710,7 +13724,9 @@ function trueROAS(g){
  let b='';
  ms.forEach(m=>{
   const net=(PAm[m].g-PAm[m].r), gp2=PAm[m].gp*(PAm[m].g?1-PAm[m].r/PAm[m].g:1);
-  const sp=ADm[m].s, col=s2('col',m)||0, cost=s2('cost',m)||0, shipNet=col-cost;
+  /* v12.6 shipNet is the courier bill alone -- `net` and `gp2` already contain the shipping
+     customers paid, so crediting it here inflated both trueMer and trueGp. */
+  const sp=ADm[m].s, col=s2('col',m)||0, cost=s2('cost',m)||0, shipNet=-cost;
   const ret=s2ret(m), free=s2free(m);
   const conf=s2('conf',m)||0;
   const perDel=conf?cost/conf:null;
@@ -13867,7 +13883,8 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
          payShare:d0.conf?d0.paid/d0.conf:0};};
  const dim=m=>new Date(+m.slice(0,4),+m.slice(5,7),0).getDate();
  const opexDay=m=>{const e=O.exp&&O.exp[m];if(!e)return null;
-  const v=((e['Packing & bags']||0)+(e['Payment & collection fees']||0))/dim(m);return v>0?v:null;};
+  /* v12.6 feeNet: `del` below already charges the courier bill per order. */
+  const v=((e['Packing & bags']||0)+feeNet(m))/dim(m);return v>0?v:null;};
  let lastOp=0;Object.keys(O.exp||{}).sort().forEach(m=>{const v=opexDay(m);if(v)lastOp=v;});
  const FIX=+(ST.peFix)||0;
  const days=[];
@@ -13881,7 +13898,9 @@ const S2=O.ship2,SM={};(S2.m||[]).forEach((m,j)=>{SM[m]={conf:S2.conf[j]||0,kept
   const mPct=gRev>0?gp/gRev:0;
   const net=gRev-ref,gpN=net*mPct,cogs=net-gpN;
   const m=d.slice(0,7),D=cpdOf(m),op=(opexDay(m)||lastOp)+FIX;
-  const del=ord*D.cpdN;
+  /* v12.6 cpd, not cpdN: cpdN nets off the shipping customers paid, which is already inside
+     the margin above (Odoo books that SKU with margin == subtotal). */
+  const del=ord*D.cpd;
   days.push({d,net,cogs,ord,sp,del,cpd:D.cpd,dr:D.dr,opx:op,prof:net-cogs-sp-del-op,mer:sp>0?net/sp:null});}
  if(days.length<5){pnlCard(g,'blend','Daily Profit Engine','Fewer than 5 overlapping revenue+spend days in this window &mdash; widen the date filter.','');return;}
  const sum=k=>days.reduce((t,x)=>t+(x[k]||0),0);
@@ -14041,7 +14060,10 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  const SIG=v=>v<0?'&minus;'+money(-v):money(v);
  const SP=(O.ship&&O.ship.grp)||null,SG=(k,m)=>(SP&&SP[k]&&SP[k][m])||0;
  const shipHas=m=>s2h(m)?1:(SP?(SG('rev',m)||SG('paid',m)||SG('coll',m)||SG('hand',m)||SG('gain',m)):0);
- const shipNet=m=>s2h(m)?(s2('col',m)-s2('cost',m)):(shipHas(m)?SG('rev',m)-SG('paid',m)-SG('coll',m)-SG('hand',m):0);
+ /* v12.6 NO +collected. Odoo books the shipping SKU with margin == subtotal, so the money
+    customers paid for delivery is already inside the gross profit this is added to; adding
+    it again counted it twice in GP-after-shipping, contribution and the EBITDA line. */
+ const shipNet=m=>s2h(m)?-(s2('cost',m)||0):(shipHas(m)?-(SG('paid',m)+SG('coll',m)+SG('hand',m)):0);
  const GPF=m=>SH[m]&&SH[m].g?SH[m].gp*(1-SH[m].r/SH[m].g):null;   /* SH[m].gp is already bridged at the builder */
  // ---- 1 · SHOPIFY P&L — ACTUALS ----
  if(O.shop){
@@ -14108,7 +14130,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {hdr:'4 &middot; DELIVERY &mdash; what it costs to hand the order over'},
    {n:'Shipping collected from customers (ACTUAL)',f:m=>s2h(m)?(s2('col',m)||null):(SG('rev',m)||null),fmt:POS,sh:1,q:'ship2',tt:'What customers actually paid us for delivery: the sale-order lines on the three shipping SKUs, price above zero, in the month the order was placed.'},
    {n:'Less: courier paid to Bosta (ACTUAL)',f:m=>s2h(m)?(s2('cost',m)?-s2('cost',m):null):(SG('paid',m)?-SG('paid',m):null),fmt:NEG,sh:1,gd:-1,q:'ship2',mk:COSTEST,tt:'The real courier bill. Account 31.01.08.34.00 from Jan 2026, plus the identical postings coded to 31.01.08.17.00 Credit Card Expenses before that. A month marked EST has no postings yet and is priced at the trailing settled rate per confirmed order.'},
-   {n:'NET shipping (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'Collected minus the courier bill. Negative means delivery is a subsidy funded out of product margin.'},
+   {n:'Less: delivery (folded into this P&L)',f:m=>shipHas(m)?shipNet(m):null,fmt:SIG,sh:1,b:1,q:'ship2',tt:'The courier bill ONLY. What customers paid for delivery is already in the revenue and gross profit above (Odoo books that SKU with margin == subtotal), so it is never added a second time here. Negative means delivery is a subsidy funded out of product margin.'},
    {n:'of which: RETURN LEGS (Bosta mix &times; ledger total)',ind:1,f:m=>s2ret(m)?-s2ret(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'Return to Origin + Customer Return Pickup + Exchange. Bosta’s per-delivery pull prices these at 16.5% of the courier bill; that share is applied to the month’s posted ledger total. The cost of free RETURNS — a measured share of a measured total, not an allocation.'},
    {n:'of which: OUTBOUND SENDS (Bosta mix &times; ledger total)',ind:1,f:m=>s2send(m)?-s2send(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The other 83.5% of the courier bill: Send legs.'},
    {n:'of which: COURIER ON ORDERS THAT COLLECTED NO SHIPPING (allocated)',ind:1,f:m=>s2h(m)&&s2free(m)?-s2free(m):null,fmt:NEG,sh:1,gd:-1,q:'ship2',tt:'The month’s courier bill × the share of confirmed orders with no paid shipping line. NOT a free-delivery offer — none was running; largely exchanges, replacement sends and waived fees.'},
@@ -16742,7 +16764,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260926-184103';
+const BUILD='20260926-191105';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
