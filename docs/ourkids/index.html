@@ -1806,7 +1806,7 @@ function calc(){const s=ST.s,e=ST.e,w=cmpW(),cs=w[0],ce=w[1];
   +'troas totRoas cpp sess instore offv').split(' ').forEach(function(k){if(!o[k])o[k]=[null,null];});
  return o;}
 function fSeriesR(k,s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const m=SHOPMAP[k],A=(m&&O.shop&&O.shop[m])?O.shop[m]:O.fin[k];const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push((A[i]||0)*(SC[k]||1));}return{L,d};}
-function fNetR(s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push(((O.fin.rev[i]||0)-(FREF(i)||0))*1000);}return{L,d};}
+function fNetR(s,e){const r=rng(s,e);if(!r)return{L:[],d:[]};const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(DD[i].slice(5));d.push((((O.shop.rev||[])[i]||0)-SREF(i))*1000);}return{L,d};}
 function aSeriesR(k,m,s,e){if(!O.ad[k])return null;const r=aRange(s,e);if(!r)return null;const L=[],d=[];for(let i=r[0];i<=r[1];i++){L.push(aD(i).slice(5));d.push((O.ad[k][i]||0)*(m||1));}return{L,d};}
 function gcN(N){const e2=O.aw[1],s2=addD(e2,-(N-1));const gp2=fSum('gp',s2,e2),or2=fSum('orders',s2,e2);const r2=aRange(s2,e2);if(!r2||!or2)return null;let sp2=0,nc2=0;for(let i=r2[0];i<=r2[1];i++){sp2+=O.ad.spend[i]||0;nc2+=O.ad.newcust[i]||0;}const cac2=nc2?sp2/nc2:0;return cac2?(gp2/or2)/cac2:null;}
 function origIdxFin(decIdx,ixArr){const r=rng(ST.s,ST.e);return r?r[0]+ixArr[Math.min(decIdx,ixArr.length-1)]:0;}
@@ -2020,7 +2020,7 @@ function insHTML(o){const rows=[];
  rows.push([o.gpct[0]>=o.gpct[1]?C.grn:C.red,`Margin ${o.gpct[0].toFixed(1)}% vs ${o.gpct[1].toFixed(1)}% previous — ${(o.gpct[0]-o.gpct[1]>=0?'up':'down')} ${Math.abs(o.gpct[0]-o.gpct[1]).toFixed(1)} points. GP per order E£ ${fI(o.gpp[0])}.`]);
  const rr=o.gross[0]?o.ref[0]/o.gross[0]*100:0,rrp=o.gross[1]?o.ref[1]/o.gross[1]*100:0;
  rows.push([rr<=rrp?C.grn:C.red,`Returns are ${rr.toFixed(1)}% of gross (${rrp.toFixed(1)}% previous) — E£ ${fI(o.ref[0])} in credit notes.`]);
- const r=rng(ST.s,ST.e);if(r){let bi=r[0],wi=r[0],bv=-1,wv=1e15;for(let i=r[0];i<=r[1];i++){const nv=(O.fin.rev[i]-FREF(i))*1000;if(nv>bv){bv=nv;bi=i;}if(nv<wv){wv=nv;wi=i;}}
+ const r=rng(ST.s,ST.e);if(r){let bi=r[0],wi=r[0],bv=-1,wv=1e15;for(let i=r[0];i<=r[1];i++){const nv=(((O.shop.rev||[])[i]||0)-SREF(i))*1000;if(nv>bv){bv=nv;bi=i;}if(nv<wv){wv=nv;wi=i;}}
   rows.push([C.grn,`Best day ${DD[bi]}: E£ ${fI(bv)} net. Worst ${DD[wi]}: E£ ${fI(wv)}.`]);}
  const tot=Object.values(o.ch).reduce((a,b)=>a+b,0)||1,totP=Object.values(o.chP).reduce((a,b)=>a+b,0)||1;
  let mvName='',mvv=0;Object.keys(o.ch).forEach(cn=>{const d=(o.ch[cn]/tot-o.chP[cn]/totP)*100;if(Math.abs(d)>Math.abs(mvv)){mvv=d;mvName=cn;}});
@@ -4970,7 +4970,8 @@ function merHeat(g){
  const dayRow=(ms)=>{const i=ai(ms),j=fi(ms);
   if(i<0||i>=A.n||j<0||j>=F.n)return null;
   const sp=(A.spend||[])[i]||0;
-  const net=(((F.rev||[])[j]||0)-((F.refund||[])[j]||0))*1000;
+  const _gg=((O.shop.rev||[])[j]||0)*1000;             /* v12.4 SHOPIFY only, refunds order-dated */
+  const net=_gg-SREF(j)*1000;
   const canc=((F.cxv||[])[j]||0)*1000;
   const gross=net+canc;
   const nc=(A.ncrev||[])[i]||0;
@@ -5420,8 +5421,9 @@ function dailyBE(g){
   const ai=aix(d),fi=fix(d);
   if(ai<0||ai>=A.n||fi<0||fi>=F.n)continue;
   const sp=(A.spend||[])[ai]||0;
-  const rev=((F.rev[fi]||0)-FREF(fi))*1000;
-  const gp2=(F.gp[fi]||0)*1000-rev*_drag;
+  const _g=((O.shop.rev||[])[fi]||0)*1000;              /* v12.4 SHOPIFY only */
+  const rev=_g-SREF(fi)*1000;
+  const gp2=gpAdj(_g,((O.shop.gp||[])[fi]||0)*1000)*(_g?rev/_g:1)-rev*_drag;
   const nc=(A.ncrev||[])[ai]||0;
   let br=null;const bi=bix(d);
   if(O.bl&&bi>=0&&bi<O.bl.n){br=0;Object.keys(O.bl.b).forEach(b=>{br+=O.bl.b[b][bi]||0;});}
@@ -5495,7 +5497,8 @@ function dailyBE(g){
    let rev=0,gp=0,spd=0,brv=0,dys=0;
    for(let i=0;i<F.n;i++){const dd=new Date(f0+i*864e5).toISOString().slice(0,10);
     if(dd.slice(0,7)!==m||dd>today)continue;dys++;
-    const rv=((F.rev[i]||0)-FREF(i))*1000;rev+=rv;gp+=(F.gp[i]||0)*1000-rv*_drag;}
+    const _g2=((O.shop.rev||[])[i]||0)*1000;const rv=_g2-SREF(i)*1000;rev+=rv;
+    gp+=gpAdj(_g2,((O.shop.gp||[])[i]||0)*1000)*(_g2?rv/_g2:1)-rv*_drag;}
    for(let i=0;i<A.n;i++){const dd=new Date(t0+i*864e5).toISOString().slice(0,10);
     if(dd.slice(0,7)===m&&dd<=today)spd+=(A.spend||[])[i]||0;}
    if(O.bl)for(let i=0;i<O.bl.n;i++){const dd=new Date(b0+i*864e5).toISOString().slice(0,10);
@@ -8108,7 +8111,7 @@ function bfDefaults(){
    codS:0.65,preS:0.25,bnplS:0.10,codFee:0.015,gwFee:0.025,bnplFee:0.06,
    rtoCOD:0.15,retPre:0.03,disc:0.20,gift:0,tgt:0.10};
  try{
-  const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
+  const PAm=pnlAggShop().M;/* v12.4 SHOPIFY only -- marketplace was polluting this */const nowM=(O.today||'').slice(0,7);
   const bm=Object.keys(PAm).sort().filter(m=>m!==nowM&&PAm[m]&&PAm[m].g).slice(-1)[0];
   if(bm){const p=PAm[bm];
    d.aov=Math.round((p.g-p.r)/(p.o||1));
@@ -12459,7 +12462,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    Lf.map(m=>m.slice(2)),sm,v=>v.toFixed(0)+'%',{cmt:cmt});})();
  // ===== 5d · NET PROFIT PER BRANCH AND FOR SHOPIFY =====
  (function(){const Lf=L.filter(m=>m<=CURM);if(Lf.length<2)return;
-  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M3[m]=M3[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M3[m].r+=FREF(i)*1000;M3[m].gp+=O.fin.gp[i]*1000;}
+  const M3={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const _g3=((O.shop.rev||[])[i]||0)*1000;(M3[m]=M3[m]||{g:0,r:0,gp:0}).g+=_g3;M3[m].r+=SREF(i)*1000;M3[m].gp+=gpAdj(_g3,((O.shop.gp||[])[i]||0)*1000);}
   const A5={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A5[m]=(A5[m]||0)+(O.ad.spend[i]||0);}
   const epay=(FF.company&&FF.company.ecomPayroll)||372076;
   const onNP=m=>{if(!M3[m])return null;const gpn=M3[m].gp*(M3[m].g?1-M3[m].r/M3[m].g:1);return gpn-(A5[m]||0)-epay;};
@@ -12569,7 +12572,7 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    const c3=[];
    if(lm3&&pm3){const a=onGp(pm3)+rtGp(pm3),b=onGp(lm3)+rtGp(lm3);
     c3.push([b>=a?C.grn:C.red,'<b>Gross profit = revenue minus what the goods cost.</b> It is the money left before ANY salary, rent, advertising or overhead is paid. '+lm3+': E&pound; '+money(b)+' (Shopify E&pound; '+money(onGp(lm3))+' + retail E&pound; '+money(rtGp(lm3))+'), versus E&pound; '+money(a)+' in '+pm3+' &mdash; '+(b>=a?'up ':'down ')+Math.abs(a?(b/a-1)*100:0).toFixed(0)+'%.']);}
-   vzCard(g,'Gross profit over time &mdash; Shopify + retail, stacked'+INFO('Gross profit = revenue minus cost of goods sold. Shopify is Odoo sale.order margin net of refunds; retail is the POS journal margin per branch. It is stacked so the top of the bars is total company gross profit.'),
+   vzCard(g,'Gross profit over time &mdash; online (ALL channels incl. Noon/Amazon) + retail, stacked'+INFO('Gross profit = revenue minus cost of goods sold. Shopify is Odoo sale.order margin net of refunds; retail is the POS journal margin per branch. It is stacked so the top of the bars is total company gross profit.'),
     'The money left after paying for the product, before every other cost. Stacked: Shopify sits on top of retail, so the full bar is the company total.',
     Lg.map(m=>m.slice(2)),[{l:'Retail (stores) GP',c:'#12a06e',d:Lg.map(rtGp)},{l:'Shopify GP (net of refunds)',c:'#3a9bff',d:Lg.map(onGp)}],null,
     {type:'bar',stacked:true,cmt:c3});
@@ -12704,6 +12707,14 @@ function vzOrder(g){
   g.appendChild(o.c);});}
 window.vzOrder=vzOrder;
 
+/* v12.4 O.fin is ALL sales channels -- Shopify AND Noon/Amazon/Homzmart. Fine for company
+   views; poison for anything labelled webstore/online-vs-ads, where marketplace revenue
+   flatters MER and understates the delivery drag. pnlAggShop() is the Shopify-only twin
+   (order-dated refunds, 4%-basis GP); every webstore-labelled consumer reads THIS. */
+function pnlAggShop(){const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);
+ const g=((O.shop.rev||[])[i]||0)*1000;
+ (M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=g;M[m].r+=SREF(i)*1000;
+ M[m].gp+=gpAdj(g,((O.shop.gp||[])[i]||0)*1000);M[m].o+=(O.shop.ord||[])[i]||0;}return {M:M};}
 function pnlAgg(){const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=FREF(i)*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
  const A={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);const a=(A[m]=A[m]||{s:0,ms:0,io:0,ov:0});a.s+=O.ad.spend[i]||0;a.ms+=(O.ad.mspend||[])[i]||0;a.io+=(O.ad.instoreMeta||[])[i]||0;a.ov+=(O.ad.metaOmniValue||[])[i]||0;}
  const BM={},BD={},names=(O.pos&&Object.keys(O.pos).length)?Object.keys(O.pos):((O.bl&&O.bl.b)?Object.keys(O.bl.b):[]);
@@ -13684,7 +13695,7 @@ function s2est(m){const r=shipRate();if(!r)return bostaCost(m);
 function trueROAS(g){
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  if(!S2f())return;
- const PAm=pnlAgg().M, ADm=adMonthly();
+ const PAm=pnlAggShop().M, ADm=adMonthly();
  const nowM=(O.today||'').slice(0,7);
  const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&adFull(m)&&ADm[m]&&ADm[m].s).slice(-6);
  if(ms.length<2)return;
@@ -13985,7 +13996,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
     profit, what is left after ads, what is left after everything -- month by month, with
     vzCard's own window and compare controls. */
  try{(function(){
-  const PAm=pnlAgg().M, ADm=adMonthly();
+  const PAm=pnlAggShop().M, ADm=adMonthly();
   const ms=Object.keys(PAm).sort().filter(m=>PAm[m]&&PAm[m].g);
   if(ms.length>=4){
    const net=ms.map(m=>PAm[m].g-PAm[m].r);
@@ -14595,7 +14606,7 @@ function _gpPct(){
  const gpSt=sr>0?sg/sr:GPFB.gpSt;
  let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
-  const PAm=pnlAgg().M;const nowM=(O.today||'').slice(0,7);
+  const PAm=pnlAggShop().M;/* v12.4 SHOPIFY only -- marketplace was polluting this */const nowM=(O.today||'').slice(0,7);
   const ms=Object.keys(PAm).sort().filter(m=>m!==nowM&&s2h(m)&&PAm[m]&&PAm[m].g).slice(-3);
   let net=0,cost=0,col=0,pay=0;
   ms.forEach(m=>{net+=PAm[m].g-PAm[m].r;cost+=s2('cost',m)||0;col+=s2('col',m)||0;
@@ -16712,7 +16723,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260925-211822';
+const BUILD='20260926-181539';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -16923,7 +16934,7 @@ function rWHY(){if(TAB!=='why')return;dCh();const g=document.getElementById('g27
  const sumF=(arr,a,b)=>{if(!tF||!arr)return 0;let t=0;for(let i=ixF(a);i<=ixF(b);i++)t+=(arr[i]||0);return t*1000;};
  // POS receipts carry no credit-note series of their own, so in-store "net" IS the receipt total.
  // Showing a zero returns line there would read as "nothing came back", which is not what it means.
- const retC=OFFM?0:sumF(F.refund,W.s,W.e),retP=OFFM?0:sumF(F.refund,W.ps,W.pe);
+ const _RA=(F.refundO&&F.refundO.length)?F.refundO:F.refund;const retC=OFFM?0:sumF(_RA,W.s,W.e),retP=OFFM?0:sumF(_RA,W.ps,W.pe);
  const netC=C.rev-retC,netP=P.rev-retP;
  // new / returning from the daily ad panel
  const A=O.ad||{};const tA=A.start?new Date(A.start+'T00:00:00Z').getTime():null;const ixA=d=>Math.round((new Date(d+'T00:00:00Z')-tA)/864e5);
