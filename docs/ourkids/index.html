@@ -426,6 +426,21 @@ function BETXT(){const b=BEPAIR();
      feeNet(m)  bucket minus courier -- correct when the courier bill is charged separately
      (nothing)                     -- correct when gp is already DELIVERED; the drag took both
    Measured Jun-Aug 2026: bucket E£1,962,669 = Bosta E£1,521,791 + PayMob E£440,879. */
+/* v12.7 E-COM PAYROLL WAS FROZEN AT 2025. EP sat hardcoded at E£372,076 in two cards --
+   ONLINE's salary line, which feeds contribution, company net and the EBITDA estimate. It
+   was part of a configured payrollTotal of E£2,906,175 that the ledger has since outgrown
+   by 43% (Aug 2026 posted E£4,151,559, branch salaries alone E£1,969,085 vs a configured
+   E£1,277,393). Hold the MEASURED SHARE rather than the frozen amount: e-com was 22.8% of
+   non-branch payroll when the config was written, so apply that share to each month's own
+   posted non-branch payroll. Falls back to the old constant only if a month is unposted. */
+function ecomPay(m){try{
+ const C=(window.FF&&FF.company)||{},base=372076;
+ const shr=(C.payrollTotal&&C.branchPayroll&&C.ecomPayroll)
+   ?C.ecomPayroll/Math.max(1,C.payrollTotal-C.branchPayroll):0.2284;
+ const E=(window.O&&O.exp&&O.exp[m])||{};
+ const brSal=Object.keys((window.O&&O.bcost)||{}).reduce((a,b)=>a+(((O.bcost[b]||{})[m]||{}).sal||0),0);
+ const nb=Math.max(0,(E['Payroll & benefits']||0)-brSal);
+ return nb>0?nb*shr:base;}catch(e){return 372076;}}
 function feeAll(m){return ((window.O&&O.exp&&O.exp[m])||{})['Payment & collection fees']||0;}
 function feeNet(m){try{return Math.max(0,feeAll(m)-(s2h(m)?(s2('cost',m)||0):0));}catch(e){return feeAll(m);}}
 var _POSMGC=null;
@@ -3868,7 +3883,7 @@ function rAU(){if(TAB!=='au')return;dCh();
  const brAds=cols.reduce((a,c)=>a+c.ads,0);
  const onAds=adsOK?Math.max(0,AD.s-brAds):0;
  const shipNet=s2h(mSel)?-(s2('cost',mSel)||0):0;   /* v12.5 collected shipping already in GP */
- const EP=372076;
+ const EP=ecomPay(mSel);   /* v12.7 tracks the month's own posted payroll */
  const onCol={n:'ONLINE',rev:onNet,gp:onGp,ord:on.o,sal:EP,salEst:true,rent:0,rentEst:false,
    util:0,ads:onAds,ship:shipNet,contrib:onGp+shipNet-EP-onAds};
  const T={n:'TOTAL',rev:cols.reduce((a,c)=>a+c.rev,0)+onNet,gp:cols.reduce((a,c)=>a+c.gp,0)+onGp,
@@ -3897,7 +3912,7 @@ function rAU(){if(TAB!=='au')return;dCh();
   +row('Gross profit (4% basis)',c=>M(c.gp),{b:1})
   +row('GP margin',c=>c.rev?(c.gp/c.rev*100).toFixed(1)+'%':null,{ind:1})
   +row('Orders',c=>Math.round(c.ord).toLocaleString(),{ind:1})
-  +row('Salaries',c=>'&minus;'+M(c.sal)+(c.salEst?(c.n==='ONLINE'?est('E-com payroll: the June-2026 Excel figure, not a monthly posting'):est('No analytic salary posting this month — June-2026 Excel payroll shown')):''))
+  +row('Salaries',c=>'&minus;'+M(c.sal)+(c.salEst?(c.n==='ONLINE'?est('E-com payroll: this month&rsquo;s OWN posted non-branch payroll &times; the e-com share of it (22.8%, from the June-2026 Excel split). No longer the frozen E&pound;372,076 &mdash; that figure sat inside a company payroll the ledger has since outgrown by 43%.'):est('No analytic salary posting this month — June-2026 Excel payroll shown')):''))
   +row('Rent',c=>c.n==='ONLINE'?'&mdash;':('&minus;'+M(c.rent)+(c.rentEst?est('No rent posting — quarterly cheques; 12-month average charged'):'')+(c.n==='Dokki'&&!c.rent?'<div style="font-size:8.5px;color:#8a93a6">owned</div>':'')))
   +row('Utilities + maintenance (alloc)',c=>c.n==='ONLINE'?'&mdash;':'&minus;'+M(c.util))
   +row('Courier bill paid to Bosta',c=>c.n==='ONLINE'||c.n==='TOTAL'?((c.ship||0)<0?'&minus;'+M(c.ship):'+'+M(c.ship||0)):'&mdash;')
@@ -3932,12 +3947,13 @@ function rAU(){if(TAB!=='au')return;dCh();
    const AM3=adMonthly()[m];const ads=(adFull(m)&&AM3)?AM3.s:null;
    const shp=s2h(m)?-(s2('cost',m)||0):0;             /* v12.5 collected shipping already in GP */
    const brSal2=names.reduce((x,n)=>x+(((BC[n]||{})[m]||{}).sal||0),0);
+   const EPm=ecomPay(m);   /* v12.7 per-month, not the selected month's figure */
    const hq2=(Em['Rent — HQ / warehouses / flats']||0)+(Em['Comms & internet']||0)+(Em['Other OpEx']||0)
      +(Em['Packing & bags']||0)+(Em['Cargo & transport']||0)
-     +Math.max(0,(Em['Payroll & benefits']||0)-brSal2-EP)
+     +Math.max(0,(Em['Payroll & benefits']||0)-brSal2-EPm)
      +feeNet(m)+(Em['Card fees — branches']||0);   /* v12.6 courier is in ONLINE's own column */
-   const contrib2=bGp+onGp2+shp-bSal-EP-bRent-um-(ads||0);
-   return {m:m,rev:bRev+onNet2,gp:bGp+onGp2,sal:bSal+EP,rent:bRent,util:um,ship:shp,ads:ads,
+   const contrib2=bGp+onGp2+shp-bSal-EPm-bRent-um-(ads||0);
+   return {m:m,rev:bRev+onNet2,gp:bGp+onGp2,sal:bSal+EPm,rent:bRent,util:um,ship:shp,ads:ads,
      contrib:contrib2,hq:hq2,net:ads==null?null:contrib2-hq2};});
   const TDm='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px';
   const THm='padding:6px 8px;border-bottom:2px solid #e2e6ef;font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;text-align:right';
@@ -8377,7 +8393,13 @@ function rPACE(){
    +'</div>');
   return;}
  const finIdx={};for(let i=0;i<F.n;i++)finIdx[DD[i]]=i;
- const sumFin=(m,d1)=>{let r=0,gp=0,o=0;for(let d=1;d<=d1;d++){const key=m+'-'+String(d).padStart(2,'0');const i=finIdx[key];if(i==null)return null;r+=(F.rev[i]-FREF(i))*1000;gp+=F.gp[i]*1000;o+=F.orders[i];}return {r,gp,o};};
+ /* v12.7 the tile below is labelled "ONLINE - Shopify" but this read O.fin, which carries
+    Noon/Amazon/Homzmart too -- the same marketplace pollution fixed elsewhere in v12.4.
+    sumFin is now Shopify-only; sumFinAll keeps every channel for the WHOLE COMPANY tile,
+    which would otherwise silently lose the marketplaces. */
+ const sumFin=(m,d1)=>{let r=0,gp=0,o=0;for(let d=1;d<=d1;d++){const key=m+'-'+String(d).padStart(2,'0');const i=finIdx[key];if(i==null)return null;
+   const g=((O.shop&&O.shop.rev||[])[i]||0)*1000;r+=g-SREF(i)*1000;gp+=gpAdj(g,((O.shop&&O.shop.gp||[])[i]||0)*1000);o+=(O.shop&&O.shop.ord||[])[i]||0;}return {r,gp,o};};
+ const sumFinAll=(m,d1)=>{let r=0,gp=0,o=0;for(let d=1;d<=d1;d++){const key=m+'-'+String(d).padStart(2,'0');const i=finIdx[key];if(i==null)return null;r+=(F.rev[i]-FREF(i))*1000;gp+=F.gp[i]*1000;o+=F.orders[i];}return {r,gp,o};};
  const BLB=(O.bl&&O.bl.b)||{};
  const blIdx=d=>O.bl?Math.round((Date.parse(d)-Date.parse(O.bl.start))/864e5):-1;
  const sumBl=(m,d1)=>{if(!O.bl)return null;let t=0,any=false;
@@ -8411,9 +8433,9 @@ function rPACE(){
          {l:mLy,d:series(mLy),c:'#ff8b42',w:1.8,dash:1}],fC,{});
  })();}catch(e){}
  const scopes=[
-  ['ONLINE — Shopify',m=>sumFin(m,Math.min(upto,dim(m)))],
+  ['ONLINE — Shopify only',m=>sumFin(m,Math.min(upto,dim(m)))],
   ['BRANCHES — all seven, at the till',m=>sumBl(m,Math.min(upto,dim(m)))],
-  ['WHOLE COMPANY',m=>{const a=sumFin(m,Math.min(upto,dim(m))),b=sumBl(m,Math.min(upto,dim(m)));return (a&&b)?{r:a.r+b.r}:null;}]];
+  ['WHOLE COMPANY — incl. Noon &amp; Amazon',m=>{const a=sumFinAll(m,Math.min(upto,dim(m))),b=sumBl(m,Math.min(upto,dim(m)));return (a&&b)?{r:a.r+b.r}:null;}]];
 
  let tiles='<div style="display:flex;gap:12px;flex-wrap:wrap">';
  scopes.forEach(sc=>{
@@ -10591,7 +10613,14 @@ function rOff(){if(TAB!=='off')return;dCh();const g=document.getElementById('g2'
   ${oh?'':`<tr><td title="HQ ${co.hqPayroll.toLocaleString()} + warehouses ${co.warehousePayroll.toLocaleString()} + envelope ${co.envelope.toLocaleString()} — not yet allocated (tick load overhead to push into branches)">HQ + warehouses + envelope payroll</td><td style="color:#e23a63">−${hqw.toLocaleString()}</td></tr>`}
   <tr style="font-weight:800"><td>Company net (est) — excludes HQ rent, utilities and finance costs I cannot read</td><td style="color:${net>=0?'#12a06e':'#e23a63'}">${Math.round(net).toLocaleString()}</td></tr></table>`;
   g.appendChild(t6);})();
- const co=FF.company,pt=co.payrollTotal,pr=[['Branches',co.branchPayroll,C.indigo],['Warehouses',co.warehousePayroll,C.blue],['E-com & Marketplaces',co.ecomPayroll,C.teal],['HQ',co.hqPayroll,C.violet],['Envelope',co.envelope,C.orange]];
+ /* v12.7 the configured payroll split is a 2025 snapshot (total E£2,906,175). Scale it to
+    the last POSTED month so the card stops showing last year's company. */
+ const co=FF.company;
+ const _pm=(function(){try{const nm=(O.today||'').slice(0,7);
+   const ks=Object.keys(O.exp||{}).sort().filter(x=>x!==nm&&(O.exp[x]||{})['Payroll & benefits']>0);
+   const lm=ks[ks.length-1];return lm?{m:lm,v:(O.exp[lm]||{})['Payroll & benefits']||0}:null;}catch(e){return null;}})();
+ const _k=(_pm&&co.payrollTotal)?_pm.v/co.payrollTotal:1;
+ const pt=(_pm?_pm.v:co.payrollTotal),pr=[['Branches',co.branchPayroll*_k,C.indigo],['Warehouses',co.warehousePayroll*_k,C.blue],['E-com & Marketplaces',co.ecomPayroll*_k,C.teal],['HQ',co.hqPayroll,C.violet],['Envelope',co.envelope,C.orange]];
  const t5=document.createElement('div');t5.className='card full';t5.innerHTML=`<div class="chead" style="padding-left:0;padding-right:0"><div><div class="ct">Company Payroll — ${fC(pt)}${Q('bprofit')}/mo</div><div class="cs">Exact from payroll by function, June 2026 · 230 people.</div></div></div><div class="chan">${pr.map(p=>`<div class="r"><div class="n" style="width:150px">${p[0]}</div><div class="t"><div class="f" style="width:${(p[1]/pt*100).toFixed(1)}%;background:${p[2]}"></div></div><div class="vl">E£ ${p[1].toLocaleString()} · ${(p[1]/pt*100).toFixed(1)}%</div></div>`).join('')}</div>`;
  g.appendChild(t5);
  g.querySelectorAll('input[data-k]').forEach(i=>{i.oninput=()=>{const v=+i.value;if(isFinite(v))offI()[i.dataset.k]=v;clearTimeout(window._t);window._t=setTimeout(rOff,500);};});}
@@ -12811,7 +12840,9 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
  pnlBar(g,'<button class="btn g" onclick="coWater()">Company waterfall</button>');
  const CURM=O.aw[1].slice(0,7);const T=MKT(CURM);
  const NEG=v=>'&minus;'+money(-v),POS=v=>money(v),PCT=v=>v.toFixed(1)+'%',X=v=>v.toFixed(2)+'x';
- const RM=0.219;
+ /* v12.7 was a frozen 0.219 retail margin -- the pre-4%-basis number. Only ever used when a
+    branch has no POS row for a month, but a stale fallback silently rewrites those months. */
+ const RM=(function(){try{return posMg()||0.219;}catch(e){return 0.219;}})();
   if(O.bl&&O.bl.n&&names.length){
   const bm=Object.keys(BM).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
   if(bm.length){
@@ -14037,7 +14068,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
         {l:'After ads + webstore OpEx share',d:ebit,c:'#e23a63',w:2,f:'zero'}],fC,{});
   }})();}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
- const EP=372076,RM=0.219,CO=(FF.company||{});
+ const EP=372076,RM=0.219,CO=(FF.company||{});   /* v12.7 EP superseded by ecomPay(m) below */
  const M={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M[m]=M[m]||{g:0,r:0,gp:0,o:0}).g+=O.fin.rev[i]*1000;M[m].r+=FREF(i)*1000;M[m].gp+=O.fin.gp[i]*1000;M[m].o+=O.fin.orders[i];}
  const SH={};if(O.shop)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(SH[m]=SH[m]||{g:0,r:0,gp:0,o:0}).g+=(O.shop.rev[i]||0)*1000;SH[m].r+=SREF(i)*1000;SH[m].gp+=gpAdj((O.shop.rev[i]||0)*1000,(O.shop.gp[i]||0)*1000);SH[m].o+=O.shop.ord[i]||0;}
  const CX={};if(O.fin.cxsv)for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);const c=(CX[m]=CX[m]||{v:0,n:0});c.v+=(O.fin.cxsv[i]||0)*1000;c.n+=(O.fin.cxsn&&O.fin.cxsn[i])||0;}
@@ -14157,7 +14188,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {hdr:'6 &middot; BOTTOM LINE'},
    {n:'Profit contribution (after shipping &amp; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s:null,fmt:SIG,sh:1,b:1,q:'sh_pc',tt:'Gross profit AFTER shipping &minus; all platform ad spend. Nothing hidden: the lines you can see subtract to this one.'},
    {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026. A FIXED figure, the same in every column — it is not read per month from the ledger.'},
-   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s-EP:null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Carries the shipping subsidy too. It does NOT carry rent, HQ payroll or utilities — those are company lines, and the webstore’s share of them is on the Blended tab.'},
+   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s-ecomPay(m):null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Carries the shipping subsidy too. It does NOT carry rent, HQ payroll or utilities — those are company lines, and the webstore’s share of them is on the Blended tab.'},
    null,
    {hdr:'MEMO &mdash; information only, charged in no line above'},
    {n:'Cancelled orders, count',f:m=>CX[m]&&CX[m].n?CX[m].n:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,tt:'Shopify-team sale orders sitting in state = cancel, counted in the month they were placed. They never appear in any revenue line — the P&L only ever counted confirmed orders.'},
@@ -16764,7 +16795,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260926-191105';
+const BUILD='20260926-192134';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
