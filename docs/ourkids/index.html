@@ -299,6 +299,22 @@ let RT_DELRATE={"2024-08":1.0,"2024-09":1.0,"2024-10":1.0,"2024-11":1.0,"2024-12
    branches, walk-in partner excluded), RETURNS EXCLUDED (pure-refund orders and
    0/negative sale orders dropped). Pulled READ-ONLY 2026-08-02. Static like RT_INV.
    RT_COH = per cohort month [new customers, back within 30d] for the cohort table. */
+/* v12.8 rep30Of() MEASURES the 30-day repurchase rate off the live cohort pack (RT_COH,
+   refreshed by the collector) instead of reading the frozen RT_REP30 table pulled once on
+   2026-08-02 -- and instead of substituting a hand-typed 20% for any scope missing from it,
+   which put an invented rate into the retention model looking exactly like a measured one.
+   Only cohorts old enough to have had a full 30 days count. Falls back to the frozen table,
+   then to BLENDED, and returns null rather than inventing a number. */
+function rep30Of(sc){
+ try{const C=(typeof RT_COH!=='undefined'&&RT_COH)?RT_COH[sc]:null;
+  if(C){const cut=(function(){const d=new Date(Date.parse((window.O&&O.today)||'')||Date.now());
+     d.setUTCDate(d.getUTCDate()-30);return d.toISOString().slice(0,7);})();
+   let n=0,b=0;Object.keys(C).forEach(m=>{if(m<cut&&C[m]){n+=C[m][0]||0;b+=C[m][1]||0;}});
+   if(n>=200)return b/n*100;}
+ }catch(e){}
+ if(typeof RT_REP30!=='undefined'&&RT_REP30[sc]!=null)return RT_REP30[sc];
+ try{if(RT_REP30&&RT_REP30.BLENDED!=null)return RT_REP30.BLENDED;}catch(e){}
+ return null;}
 const RT_REP30={"SHOPIFY":11.8,"ALL STORES":12.5,"BLENDED":13.3,"Dokki":10.8,"New Cairo":10.2,"October":10.3,"Zayed":10.1,"Nasr City":9.6,"Smouha":15.5,"Mall of Arabia":12.7};
 let RT_COH={"SHOPIFY":{"2024-08":[1853,191],"2024-09":[1802,178],"2024-10":[1728,197],"2024-11":[2047,224],"2024-12":[1686,165],"2025-01":[1168,79],"2025-02":[1231,74],"2025-03":[1359,83],"2025-04":[1967,184],"2025-05":[2348,246],"2025-06":[2219,235],"2025-07":[2962,322],"2025-08":[3845,459],"2025-09":[3018,339],"2025-10":[3306,482],"2025-11":[3744,578],"2025-12":[4922,588],"2026-01":[2457,265],"2026-02":[3446,377],"2026-03":[4396,418],"2026-04":[3115,360],"2026-05":[3842,438],"2026-06":[3795,436],"2026-07":[2574,236],"2026-08":[182,0]},"ALL STORES":{"2024-08":[10909,2055],"2024-09":[12064,1893],"2024-10":[9727,1761],"2024-11":[8193,1415],"2024-12":[7524,1030],"2025-01":[5283,645],"2025-02":[5470,699],"2025-03":[9395,1484],"2025-04":[6042,768],"2025-05":[7483,1052],"2025-06":[7069,868],"2025-07":[6769,786],"2025-08":[8914,1025],"2025-09":[8852,925],"2025-10":[7586,909],"2025-11":[8143,1207],"2025-12":[9409,1284],"2026-01":[6468,776],"2026-02":[5660,751],"2026-03":[9177,1116],"2026-04":[6396,782],"2026-05":[8340,1108],"2026-06":[6470,814],"2026-07":[6296,521],"2026-08":[372,2]},"BLENDED":{"2024-08":[12762,2262],"2024-09":[13788,2121],"2024-10":[11328,2001],"2024-11":[10094,1691],"2024-12":[9044,1214],"2025-01":[6336,733],"2025-02":[6572,788],"2025-03":[10528,1579],"2025-04":[7792,975],"2025-05":[9575,1333],"2025-06":[9042,1136],"2025-07":[9407,1157],"2025-08":[12292,1537],"2025-09":[11436,1293],"2025-10":[10392,1447],"2025-11":[11316,1872],"2025-12":[13510,1965],"2026-01":[8482,1062],"2026-02":[8704,1170],"2026-03":[12875,1609],"2026-04":[9042,1170],"2026-05":[11486,1552],"2026-06":[9744,1274],"2026-07":[8381,776],"2026-08":[520,2]},"Dokki":{"2024-08":[2202,418],"2024-09":[2601,390],"2024-10":[1804,290],"2024-11":[1478,201],"2024-12":[1370,164],"2025-01":[1027,121],"2025-02":[968,111],"2025-03":[1437,216],"2025-04":[1019,106],"2025-05":[1134,122],"2025-06":[1125,136],"2025-07":[1252,134],"2025-08":[1382,141],"2025-09":[1585,170],"2025-10":[1195,120],"2025-11":[1156,135],"2025-12":[1203,124],"2026-01":[895,101],"2026-02":[789,96],"2026-03":[1230,118],"2026-04":[931,99],"2026-05":[1067,128],"2026-06":[986,111],"2026-07":[938,72],"2026-08":[42,0]},"New Cairo":{"2024-08":[2666,413],"2024-09":[3011,412],"2024-10":[2682,456],"2024-11":[2350,405],"2024-12":[2123,266],"2025-01":[1434,158],"2025-02":[1522,173],"2025-03":[2001,261],"2025-04":[1570,179],"2025-05":[1787,205],"2025-06":[1735,175],"2025-07":[1679,163],"2025-08":[2208,187],"2025-09":[2112,178],"2025-10":[2102,215],"2025-11":[1949,229],"2025-12":[2326,246],"2026-01":[1453,136],"2026-02":[1370,148],"2026-03":[1837,202],"2026-04":[1448,154],"2026-05":[1828,225],"2026-06":[1382,130],"2026-07":[1257,99],"2026-08":[96,0]},"October":{"2024-08":[1645,299],"2024-09":[1849,279],"2024-10":[1365,240],"2024-11":[1162,184],"2024-12":[1170,168],"2025-01":[786,76],"2025-02":[794,92],"2025-03":[1058,140],"2025-04":[680,66],"2025-05":[803,116],"2025-06":[850,79],"2025-07":[820,75],"2025-08":[1120,122],"2025-09":[1119,129],"2025-10":[902,92],"2025-11":[720,87],"2025-12":[801,81],"2026-01":[537,54],"2026-02":[467,43],"2026-03":[781,72],"2026-04":[552,42],"2026-05":[672,72],"2026-06":[625,68],"2026-07":[526,29],"2026-08":[40,0]},"Zayed":{"2024-08":[1935,389],"2024-09":[2158,363],"2024-10":[2088,367],"2024-11":[1783,293],"2024-12":[1618,216],"2025-01":[1119,112],"2025-02":[1054,119],"2025-03":[2008,240],"2025-04":[1076,107],"2025-05":[1424,162],"2025-06":[1331,121],"2025-07":[1120,91],"2025-08":[1350,142],"2025-09":[1247,103],"2025-10":[1296,147],"2025-11":[1036,130],"2025-12":[1224,132],"2026-01":[877,89],"2026-02":[796,96],"2026-03":[1451,140],"2026-04":[813,82],"2026-05":[1206,117],"2026-06":[897,75],"2026-07":[811,47],"2026-08":[42,0]},"Nasr City":{"2024-08":[2598,367],"2024-09":[2762,327],"2024-10":[2175,335],"2024-11":[1931,312],"2024-12":[1713,199],"2025-01":[1274,141],"2025-02":[1341,144],"2025-03":[1953,222],"2025-04":[1310,146],"2025-05":[1698,190],"2025-06":[1511,130],"2025-07":[1492,143],"2025-08":[2095,191],"2025-09":[1994,146],"2025-10":[1871,164],"2025-11":[1677,184],"2025-12":[1882,209],"2026-01":[1249,99],"2026-02":[1198,114],"2026-03":[1858,190],"2026-04":[1205,121],"2026-05":[1581,163],"2026-06":[1164,131],"2026-07":[1208,84],"2026-08":[62,0]},"Smouha":{"2025-02":[143,36],"2025-03":[1583,399],"2025-04":[854,159],"2025-05":[1127,242],"2025-06":[1113,213],"2025-07":[944,142],"2025-08":[1451,235],"2025-09":[1480,185],"2025-10":[966,161],"2025-11":[874,146],"2025-12":[933,155],"2026-01":[624,111],"2026-02":[651,117],"2026-03":[1089,148],"2026-04":[672,85],"2026-05":[1117,181],"2026-06":[735,124],"2026-07":[773,84],"2026-08":[45,2]},"Mall of Arabia":{"2025-11":[2522,477],"2025-12":[3402,499],"2026-01":[2285,245],"2026-02":[1545,184],"2026-03":[2839,300],"2026-04":[2121,268],"2026-05":[2695,294],"2026-06":[1957,191],"2026-07":[1970,128],"2026-08":[115,0]}};
 /* LTGP curves: per scope, cumulative real gross profit per acquired customer at
@@ -491,6 +507,14 @@ function sharedOvhM(){if(_SHOVC!==null)return _SHOVC;
 function expTot(m){const E=O.exp[m]||{};let t=0;for(const k in E)if(k.indexOf('(memo)')<0)t+=E[k];return t;}
 function rtExpTot(m){return expTot(m);}
 function rtStock(m){let t=0,n=0;for(let k=0;k<3;k++){const v=RT_INV[rtAddM(m,-k)];if(v!=null){t+=v;n++;}}return n?t/n:0;}
+/* v12.8 RT_INV is a static purchase table. When the selected month is newer than anything in
+   it, rtStock silently returns a one- or two-month-old average that reads as this month's
+   buying. Say which months actually backed the number. */
+function rtStockSrc(m){const got=[];for(let k=0;k<3;k++){const mm=rtAddM(m,-k);if(RT_INV[mm]!=null)got.push(mm);}
+ if(!got.length)return 'no purchase data for this month or the two before it';
+ const stale=got.indexOf(m)<0;
+ return (stale?'STALE — ':'')+'average of '+got.slice().reverse().join(', ')
+   +(stale?' (the purchase table stops before '+m+')':'');}
 function rtBase(m){
  const nr=O.nr[m]||{};
  /* v11.2: O.nr (cohorts pack) still ships raw Odoo margin on VAT-inclusive revenue. */
@@ -571,7 +595,8 @@ function rRT(){if(TAB!=='rt')return;dCh();
  const m=RT.m,sc=RT.sc;
  const partial=(O.today||'').slice(0,7)===m;
  const D=rtScopeD(sc,m);
- const rep30=RT_REP30[sc]!=null?RT_REP30[sc]:20;
+ const _r30=rep30Of(sc), rep30=(_r30!=null)?_r30:0;
+ const _r30src=(_r30==null)?' <b style="color:#b8621b">no cohort large enough to measure this scope &mdash; set it yourself</b>':'';
  document.getElementById('bn20').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>RETENTION ECONOMICS</b> \u2014 theartofecomm\u2019s RCM/OCAS model on OurKids\u2019 real numbers. <b>RCM</b> = Net Revenue \u2212 COGS \u2212 CAC (what a month really leaves behind). <b>OCAS</b> = OpEx + next month\u2019s CAC + 3 months of stock (what a month must cover). Everything is prefilled from Odoo / Shopify / the ad accounts for the month &amp; scope you pick, and every field stays editable so you can war-game it. Inventory bought = real Odoo purchase orders (pulled read-only '+RT_PULL+').';
  const scopes=['BLENDED','SHOPIFY','ALL STORES'].concat(Object.keys(O.pos||{}));
  const chips=scopes.map(function(x){return '<span class="chip" style="'+(x===sc?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="rtSel(\''+x.replace(/'/g,"\\'")+'\')">'+x+'</span>';}).join(' ');
@@ -585,7 +610,7 @@ function rRT(){if(TAB!=='rt')return;dCh();
  +row('COGS','rtCogs',D.cogs,'net revenue \u2212 gross profit, real Odoo margins')
  +row('CAC / ad spend','rtCac',D.cac,D.srcC)
  +row('Operating expenses','rtOpex',D.opex,D.srcO)
- +row('Inventory / month','rtStock',D.stock,'Odoo purchase orders, 3-month trailing avg ending '+m+', \u00D7 '+Math.round(D.share*100)+'% revenue share \u00B7 OCAS counts 3\u00D7 this')
+ +row('Inventory / month','rtStock',D.stock,'Odoo purchase orders \u2014 '+rtStockSrc(m)+' \u00D7 '+Math.round(D.share*100)+'% revenue share \u00B7 OCAS counts 3\u00D7 this')
  +'</table>'
  +'<div class="rtLaw">The Law of Retention Economics: <b>if RCM \u2265 OCAS, compound, self-funded growth is inevitable.</b> Fall short, and the difference comes from debt, dilution, or founder stress.</div></div>'
  +'<div class="card" data-a="blend"><div class="chead"><div><div class="ct">The verdict</div><div class="cs">Where '+sc.toLowerCase()+' sits on the RCM pyramid for '+m+'</div></div>'
@@ -597,7 +622,7 @@ function rRT(){if(TAB!=='rt')return;dCh();
  +'<div class="rtDbG" style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;padding-left:12px;margin-top:8px">'
  +'<div><div class="lbl9">NEW CUSTOMERS / MONTH</div><input id="rtNc" value="'+Math.round(D.nc).toLocaleString('en-US')+'" oninput="rtCalc()" style="width:100%"><div class="rtNote">'+(sc==='SHOPIFY'?'first-order customers on Shopify in '+m:'first-visit customers in '+m+' (cohort size)')+'</div></div>'
  +'<div><div class="lbl9">AOV</div><input id="rtAov" value="'+Math.round(D.aov).toLocaleString('en-US')+'" oninput="rtCalc()" style="width:100%"><div class="rtNote">net revenue \u00F7 orders for '+m+'</div></div>'
- +'<div><div class="lbl9">30-DAY REPURCHASE RATE <span id="rtRepV" style="color:var(--indigo)">'+Math.round(rep30)+'%</span></div><input type="range" id="rtRep" min="0" max="100" step="1" value="'+Math.round(rep30)+'" oninput="rtCalc()"><div class="rtNote">% of first-time buyers who order again within 30 days \u2014 <b>measured from real Odoo order history, returns excluded</b> (read-only pull '+RT_PULL+', last 12 mature cohort months weighted): '+sc.toLowerCase()+' sits at <b>'+rep30+'%</b>. Full cohort table below. Drag to war-game.'+(D.repRef!=null?' For reference, the <b>lifetime</b> repeat rate for '+sc.toLowerCase()+' is <b>'+D.repRef+'%</b>.':'')+' Benchmark: <b>below 60% is a problem, 70%+ compounds</b>.</div></div>'
+ +'<div><div class="lbl9">30-DAY REPURCHASE RATE <span id="rtRepV" style="color:var(--indigo)">'+Math.round(rep30)+'%</span></div><input type="range" id="rtRep" min="0" max="100" step="1" value="'+Math.round(rep30)+'" oninput="rtCalc()"><div class="rtNote">% of first-time buyers who order again within 30 days \u2014 <b>measured from real Odoo order history, returns excluded</b> (cohort pack refreshed '+RT_PULL+', every mature cohort weighted): '+sc.toLowerCase()+' sits at <b>'+(_r30!=null?_r30.toFixed(1):'&mdash;')+'%</b>.'+_r30src+' Full cohort table below. Drag to war-game.'+(D.repRef!=null?' For reference, the <b>lifetime</b> repeat rate for '+sc.toLowerCase()+' is <b>'+D.repRef+'%</b>.':'')+' Benchmark: <b>below 60% is a problem, 70%+ compounds</b>.</div></div>'
  +'</div><div class="rtNote" id="rtDebtX" style="padding-left:12px;margin-top:10px"></div></div>'
  +(function(){const _cohT=function(sc2){const C=RT_COH[sc2];if(!C)return '';
   const ms=Object.keys(C).sort().reverse();
@@ -4993,7 +5018,7 @@ function ovRange(a,b){
 function merHeat(g){
  const A=O.ad,F=O.fin;if(!A||!F||!F.rev)return;
  const q=GPQ();
- const be=q.gpOn>0?1/q.gpOn:5.4;
+ const be=q.gpOn>0?1/q.gpOn:GPBE();   /* v12.8 was a hand-typed 5.4 */
  const mf=af('meta'),gf=af('google'),tf=af('tt');
  const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
  const ai=d=>Math.round((d-a0)/864e5), fi=d=>Math.round((d-f0)/864e5);
@@ -5396,7 +5421,7 @@ function dailyBE(g){
  const A=O.ad,F=O.fin;if(!A||!F)return;
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const {gpOn,gpSt}=GPQ();
- const be=gpOn>0?1/gpOn:3.76;
+ const be=gpOn>0?1/gpOn:GPBE();       /* v12.8 was a hand-typed 3.76 */
  /* branch margin for the daily leg: last complete POS month (rent-free gross margin) */
  const nowM=(O.today||'').slice(0,7);
  const pm=Object.keys((O.pos||{})[Object.keys(O.pos||{})[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
@@ -7829,7 +7854,7 @@ function merDaily(g){
  const tSp=TS(spend), tNc=TS(nc), tRc=TS(rc), tOff=TS(off), tSh=TS(shop);
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const _gpo=GPQ().gpOn;
- const _be=_gpo>0?1/_gpo:3.76, _merW=tSp?tSh/tSp:0;
+ const _be=_gpo>0?1/_gpo:GPBE(),      /* v12.8 was a hand-typed 3.76 */ _merW=tSp?tSh/tSp:0;
  const _gpAfter=tSh*_gpo-tSp;
  const _verd=!tSp?'' :
   '<div style="margin:2px 0 10px;padding:10px 13px;border-radius:11px;background:'+(_gpAfter>=0?'#f0fdf6':'#fff6f9')+';border:1px solid '+(_gpAfter>=0?'#cdeede':'#fbe0e8')+';font-size:13px;color:#1e2b3a;line-height:1.55">'
@@ -15769,7 +15794,7 @@ function rMETA(){
  /* ---------- 0. the decisions, priced (prepended above everything) ---------- */
  try{
   const GPo=GPQ().gpOn;
-  const BE=GPo>0?(1/GPo):3.76;
+  const BE=GPo>0?(1/GPo):GPBE();       /* v12.8 was a hand-typed 3.76 */
   const mo=30/Math.max(1,PW.n);                     /* range -> per month */
   const slice=(a,i0,i1)=>{let sp=0,val=0,pur=0,im=0,clk=0;const d=a.d;
    for(let k=i0;k<=i1;k++){sp+=(d.sp&&d.sp[k])||0;
@@ -16175,7 +16200,7 @@ function rGOOG(){
 
  /* ---- 3. campaigns on their own money ---- */
  const {gpOn}=GPQ();
- const be=gpOn>0?1/gpOn:3.76;
+ const be=gpOn>0?1/gpOn:GPBE();       /* v12.8 was a hand-typed 3.76 */
  const cr=ads.map(a=>{const c=agg(PW.a,PW.b,[a]),p=PW.ok?agg(PW.pa,PW.pb,[a]):agg(0,-1,[a]);
    return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
  let cb='';
@@ -16795,7 +16820,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260926-192134';
+const BUILD='20260926-193133';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
