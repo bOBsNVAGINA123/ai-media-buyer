@@ -4063,8 +4063,11 @@ def pull_cohorts_pack():
             out.extend(rows); off += 10000
             if len(rows) < 10000: break
         return out
+    # v12.9 team_id pulled so ONLINE can mean what the dashboard's scope chip says it means.
+    # Without it this scan swept Noon/Amazon/Homzmart customers into the "SHOPIFY" cohort --
+    # and that cohort now drives the measured 30-day repurchase rate on the Retention tab.
     ev = _scan("sale.order", [["state", "in", ["sale", "done"]]],
-               ["partner_id", "date_order", "is_return_total"], "date_order asc")
+               ["partner_id", "date_order", "is_return_total", "team_id"], "date_order asc")
     sv = _scan("report.pos.order", [["partner_id", "!=", 1654], ["partner_id", "!=", False]],
                ["partner_id", "date", "config_id"], "date asc")
     def coh_run(events):
@@ -4081,7 +4084,15 @@ def pull_cohorts_pack():
                 if 1 <= dd <= 30:
                     f[1] = True; out[f[0][:7]][1] += 1
         return out
-    on = [((r.get("date_order") or "")[:10], r["partner_id"][0]) for r in ev if r.get("partner_id") and r.get("date_order")]
+    def _team(r):
+        t = r.get("team_id")
+        return (t[1] if isinstance(t, (list, tuple)) and len(t) > 1 else "") or ""
+    # ONLINE is the webstore. onAll keeps every online channel so BLENDED stays the whole
+    # company rather than quietly dropping the marketplaces.
+    on = [((r.get("date_order") or "")[:10], r["partner_id"][0]) for r in ev
+          if r.get("partner_id") and r.get("date_order") and _team(r) == "Shopify"]
+    onAll = [((r.get("date_order") or "")[:10], r["partner_id"][0]) for r in ev
+             if r.get("partner_id") and r.get("date_order")]
     br = {}; stall = []
     for r in sv:
         d = (r.get("date") or "")[:10]
@@ -4090,11 +4101,13 @@ def pull_cohorts_pack():
         b = _norm(cfg[1].split("(")[0].replace("Retail", "").strip()) if cfg else "?"
         br.setdefault(b, []).append((d, r["partner_id"][0]))
         stall.append((d, r["partner_id"][0]))
-    coh = {"ONLINE": coh_run(on), "ALL STORES": coh_run(sorted(stall)), "BLENDED": coh_run(sorted(on + stall))}
+    coh = {"ONLINE": coh_run(on), "ALL STORES": coh_run(sorted(stall)),
+           "BLENDED": coh_run(sorted(onAll + stall))}
     for b, evs in br.items(): coh[b] = coh_run(evs)
     firstK = {}
     for r in ev:
         p = r.get("partner_id"); d = (r.get("date_order") or "")[:10]
+        if _team(r) != "Shopify": continue      # v12.9 delivery rate is a WEBSTORE measure
         if not p or not d or p[0] in firstK: continue
         firstK[p[0]] = (d[:7], not r.get("is_return_total"))
     dr = {}
