@@ -8584,18 +8584,47 @@ function rFOCUS(){
  const prev=A.slice(Math.max(0,i0-cur.length),i0);
  const wRev=(r,ms)=>ms.reduce((a,m)=>a+(((r.mon||{})[m]||[0,0])[0]||0),0);
  const wGp =(r,ms)=>ms.reduce((a,m)=>a+(((r.mon||{})[m]||[0,0])[1]||0),0);
+ /* v13.1 DAILY. The collector now ships a dense per-day [rev,gp] pair for the top vendors and
+    products, so an arbitrary date range is answerable exactly instead of being rounded up to
+    whole months. Falls back to the monthly series for anything outside the daily window or
+    below the top-N cut, and the card says which basis it used. */
+ const _dS=(O.vend&&O.vend.dayStart)||null, _pS=(O.prodv&&O.prodv.dayStart)||null;
+ const _dIx=(st,d)=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(st+'T00:00:00Z'))/864e5);
+ const dSum=(r,st,a,b)=>{const D=r&&r.d;if(!D||!st)return null;
+  let i0=_dIx(st,a),i1=_dIx(st,b);const n=D[0].length;
+  if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
+  let rv=0,gp=0;for(let i=i0;i<=i1;i++){rv+=D[0][i]||0;gp+=D[1][i]||0;}return [rv,gp];};
+ const _shiftD=(d,n)=>{const t=new Date(Date.parse(d+'T00:00:00Z'));t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10);};
+ const _shiftY=d=>(+d.slice(0,4)-1)+d.slice(4);
+ const selA=ST.s, selB=ST.e;
+ const _spanD=Math.max(1,Math.round((Date.parse(selB)-Date.parse(selA))/864e5)+1);
+ const pA=_shiftD(selA,-_spanD), pB=_shiftD(selA,-1);
 
  const lyOf=m=>(+m.slice(0,4)-1)+m.slice(4);
  const curLY=cur.map(lyOf);
- const build=list=>list.map(r=>{
-   const rev=wRev(r,cur), gp=wGp(r,cur), pRev=wRev(r,prev), pGp=wGp(r,prev);
-   const lyRev=wRev(r,curLY), lyGp=wGp(r,curLY);
+ /* v13.1b ONE BASIS PER TABLE. Mixing them ranks a 7-day row against a whole-month row and
+    the monthly row wins every time -- which is worse than not offering days at all. A list
+    uses days only when the daily window actually covers the pick, and then it keeps ONLY the
+    rows that have a daily series, with the coverage stated on the card. */
+ const _dayOK=(st)=>{try{return !!st&&_dIx(st,selA)>=-3;}catch(e){return false;}};
+ const build=(list,st)=>{
+  const useDay=_dayOK(st)&&list.some(r=>r.d);
+  const src=useDay?list.filter(r=>r.d):list;
+  const out=src.map(r=>{
+   const dC=useDay?dSum(r,st,selA,selB):null;
+   const dP=useDay?dSum(r,st,pA,pB):null, dL=useDay?dSum(r,st,_shiftY(selA),_shiftY(selB)):null;
+   const rev=useDay?(dC?dC[0]:0):wRev(r,cur), gp=useDay?(dC?dC[1]:0):wGp(r,cur);
+   const pRev=useDay?(dP?dP[0]:0):wRev(r,prev), pGp=useDay?(dP?dP[1]:0):wGp(r,prev);
+   const lyRev=useDay?(dL?dL[0]:0):wRev(r,curLY), lyGp=useDay?(dL?dL[1]:0):wGp(r,curLY);
    return {r:r,n:r.n,rev:rev,gp:gp,pRev:pRev,pGp:pGp,lyRev:lyRev,lyGp:lyGp,
            yoy:lyGp>0?(gp/lyGp-1)*100:null,
            mg:rev?gp/rev*100:0, d:rev-pRev, dp:pRev>0?(rev/pRev-1)*100:null,
            url:r.url||null, st:r.st||null, vn:r.vn||null, cat:r.cat||null};
   }).filter(x=>x.rev>0||x.pRev>0);
- const Praw=build(PV), Vraw=build(VD);
+  out._day=useDay; return out;};
+ const Praw=build(PV,_pS), Vraw=build(VD,_dS);   /* each series has its OWN start date */
+ const _dayN=(Vraw._day?1:0)+(Praw._day?1:0);
+ const _vCov=(O.vend&&O.vend.dayCov), _pCov=(O.prodv&&O.prodv.dayCov);
  if(!Praw.length&&!Vraw.length){bn.innerHTML='No product or vendor revenue inside '+cur[0]+' → '+cur[cur.length-1]+'. Widen the range.';return;}
 
  const _selD2=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
@@ -8604,7 +8633,17 @@ function rFOCUS(){
     is the incomplete one, and the tab falls back to the last COMPLETE month -- so the cards
     show a full month of money while the date box overhead still says "7 days". Every card on
     this tab now carries the window it actually read. */
- const _foStamp=()=>{const rd='READING '+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'');
+ /* v13.1 the stamp reports the basis that actually answered the question: exact days where a
+    daily series covers the pick, whole months where it does not. */
+ const _foStamp=()=>{
+  if(_dayN>0){
+   const cov=[];
+   if(Vraw._day&&_vCov!=null)cov.push('vendors '+_vCov+'% of revenue');
+   if(Praw._day&&_pCov!=null)cov.push('products '+_pCov+'%');
+   return '<span class="tg" style="background:#eaf7f0;color:#0f6e56;font-weight:800">EXACT DAYS '+selA+' → '+selB+' ('+_spanD+'d) · vs '+pA+' → '+pB+'</span> '
+    +(cov.length?'<span class="tg" style="background:#f4f6fb;color:#5a6577">daily coverage: '+cov.join(' · ')+' — rows without a daily series are not ranked at this grain</span> ':'')
+    +(!Praw._day?'<span class="tg" style="background:#fff3e6;color:#b8621b;font-weight:800">PRODUCTS still on whole months</span> ':'');}
+  const rd='READING '+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'');
   const why=_foFell?' · your pick fell inside '+nowMF+', which is barely posted, so this is the last COMPLETE month'
     :((_selD2&&_selD2<28)?' · your date box asks for '+_selD2+' days, but this feed only exists at MONTH grain':'');
   return '<span class="tg" style="background:#fff3e6;color:#b8621b;font-weight:800">'+rd+why+'</span> ';};
@@ -16848,7 +16887,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260927-134236';
+const BUILD='20260927-145956';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
