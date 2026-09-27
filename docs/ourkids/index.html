@@ -8557,6 +8557,13 @@ function rPACE(){
 }
 function rFOCUS(){
  if(TAB!=='fo')return; dCh();
+ /* v13.2 this tab gets its OWN window. The per-card window machinery (CWIN/withCW/cwBar)
+    already existed but was wired to exactly one card in the whole tool -- so "give me a
+    different timeframe here" was buildable everywhere and offered nowhere. Now that the
+    vendor/product feed answers exact days, a window of its own is worth having: set it and
+    this tab ignores the global date box until you clear it. */
+ return withCW('fo_win',function(){_rFOCUS();});}
+function _rFOCUS(){
  const g=document.getElementById('g_fo'); g.innerHTML='';
  const bn=document.getElementById('bn_fo');
  const PV=(O.prodv&&O.prodv.rows)||[], VD=(O.vend&&O.vend.rows)||[];
@@ -8627,6 +8634,7 @@ function rFOCUS(){
  const _vCov=(O.vend&&O.vend.dayCov), _pCov=(O.prodv&&O.prodv.dayCov);
  if(!Praw.length&&!Vraw.length){bn.innerHTML='No product or vendor revenue inside '+cur[0]+' → '+cur[cur.length-1]+'. Widen the range.';return;}
 
+ try{const _cw=document.createElement('div');_cw.innerHTML=cwBar('fo_win');g.appendChild(_cw);}catch(e){}
  const _selD2=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
  /* v13.0 THE WARNING WAS ONLY IN THE TAB BANNER, which is scrolled off by the time you are
     reading a card. A 7-day pick inside the running month collapses to one month, that month
@@ -16887,7 +16895,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260927-145956';
+const BUILD='20260927-171436';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
