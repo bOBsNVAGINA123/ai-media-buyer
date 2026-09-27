@@ -100,15 +100,113 @@ table.bt td,table.bt th{padding-top:6px;padding-bottom:6px}
 }
 .stickyfirst table tr:nth-child(even) td:first-child{background:#fcfcfe}
 .stickyfirst table th:first-child{z-index:3; background:#fff}
+
+/* ============================================================================
+   v15 · DESIGN SYSTEM — "precision instrument, warm"
+   The old canvas was a cold blue-grey gradient (#e7ecf6 -> #eef1f7). Cold greys
+   on white read as unfinished corporate software; every surface fought the data
+   for attention and nothing felt touchable. This layer keeps the light admin the
+   brief pins, and spends its craft on: a warm neutral ground so the numbers are
+   the only cold thing on screen, one real elevation scale instead of flat boxes,
+   and motion on every affordance so the tool answers when you touch it.
+   ==========================================================================*/
+:root{
+  --canvas:#FBFBF9; --canvas-2:#F4F4F1;
+  --surface:#FFFFFF; --surface-2:#FAFAF8;
+  --ink:#12151A; --ink-2:#5A6272; --ink-3:#8A909E;
+  --line:#E8E7E3; --line-2:#DEDDD8;
+  --brand:#5B4BF5; --brand-ink:#4438D4; --brand-wash:#F1EFFE; --brand-line:#DDD8FC;
+  --pos:#0B7A55; --pos-wash:#E9F6F0; --neg:#C4203F; --neg-wash:#FDECEF;
+  --warn:#A4561A; --warn-wash:#FDF2E6;
+  --sh-1:0 1px 2px rgba(18,21,26,.04), 0 1px 1px rgba(18,21,26,.03);
+  --sh-2:0 2px 4px rgba(18,21,26,.04), 0 4px 12px rgba(18,21,26,.05);
+  --sh-3:0 8px 20px rgba(18,21,26,.07), 0 2px 6px rgba(18,21,26,.04);
+  --ease:cubic-bezier(.2,.8,.2,1); --fast:140ms; --med:220ms;
+  --r-s:8px; --r-m:12px; --r-l:16px;
+}
+body{background:var(--canvas)!important;color:var(--ink)}
+.wrap{max-width:1560px}
+
+/* ---- surfaces ---- */
+.card{
+  background:var(--surface); border:1px solid var(--line); border-top:1px solid var(--line);
+  border-radius:var(--r-l); box-shadow:var(--sh-1);
+  transition:box-shadow var(--med) var(--ease), transform var(--med) var(--ease), border-color var(--med) var(--ease);
+}
+.card:hover{box-shadow:var(--sh-2); border-color:var(--line-2)}
+/* the coloured top rule carried the source; keep the signal, lose the heaviness */
+.card::before{content:'';position:absolute;inset:0 0 auto 0;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;
+  background:linear-gradient(90deg,var(--brand),transparent 60%);opacity:0;transition:opacity var(--med) var(--ease)}
+.card:hover::before{opacity:.5}
+.card .ct{letter-spacing:-.15px;color:var(--ink)}
+.card .cs{color:var(--ink-2)}
+
+/* ---- controls: everything clickable must answer ---- */
+.chip{
+  background:var(--surface); color:var(--ink-2); border:1px solid var(--line);
+  border-radius:var(--r-s); font-weight:650; letter-spacing:-.1px;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease),
+             border-color var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.chip:hover{background:var(--brand-wash);color:var(--brand-ink);border-color:var(--brand-line);transform:translateY(-1px);box-shadow:var(--sh-1)}
+.chip:active{transform:translateY(0) scale(.98)}
+.btn{background:var(--brand);border-color:var(--brand);border-radius:var(--r-s);font-weight:650;
+  transition:filter var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease)}
+.btn:hover{filter:brightness(1.07);transform:translateY(-1px);box-shadow:var(--sh-2)}
+.btn:active{transform:translateY(0) scale(.985)}
+.btn.g{background:var(--brand-wash);color:var(--brand-ink);border-color:var(--brand-line)}
+select,input{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);color:var(--ink);
+  transition:border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease)}
+select:hover,input:hover{border-color:var(--line-2)}
+select:focus,input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-wash)}
+:is(button,select,input,.chip,[onclick]):focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:var(--r-s)}
+
+/* ---- navigation ---- */
+.tgroups{background:var(--canvas);padding:8px 0 6px}
+.tgrp{border-radius:var(--r-s);font-weight:650;transition:all var(--fast) var(--ease);border:1px solid transparent}
+.tgrp:hover{background:var(--surface);border-color:var(--line)}
+.bar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--sh-1)}
+.pill{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);color:var(--ink-2)}
+.pill b{color:var(--brand-ink)}
+
+/* ---- tables: the data is the design ---- */
+table.bt th{color:var(--ink-3);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  border-bottom:1px solid var(--line-2)}
+table.bt td{border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+table.bt tbody tr{transition:background var(--fast) var(--ease)}
+table.bt tbody tr:hover{background:var(--surface-2)}
+
+/* ---- motion, honestly scoped ---- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}
+  .card:hover,.chip:hover,.btn:hover{transform:none}
+}
+
+/* ---- v15.1 the masthead was six lines of prose before a single number.
+   Keep the words (they are load-bearing for a new reader) and collapse them. ---- */
+.sub .whatcovers{display:none}
+.sub.open .whatcovers{display:block}
+.sub .whatbtn{display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:11.5px;
+  font-weight:700;color:var(--brand-ink);background:var(--brand-wash);border:1px solid var(--brand-line);
+  border-radius:var(--r-s);padding:3px 9px;cursor:pointer;transition:all var(--fast) var(--ease)}
+.sub .whatbtn:hover{filter:brightness(.97);transform:translateY(-1px)}
+
+/* ---- v15.1 cards below the fold cost 1.25s on the heaviest tab. Reserve their space,
+   paint them when they are close. Content is untouched; only the paint is deferred. ---- */
+/* content-visibility was tried here and REMOVED: it collapses the subtree, so the canvases
+   inside report no geometry and the IntersectionObserver that defers chart construction never
+   fires -- the two optimisations cancelled and the charts tab rendered 101 empty boxes. The
+   chart deferral is the one that matters (404ms of a 466ms render); paint was never the cost. */
 </style>
 </head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
 <input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
 <div class="wrap hide" id="app">
-<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<div style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE BRANCHES</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Overview &rarr; Branches</b>, <b>P&amp;L &rarr; Branches P&amp;L</b>, and <b>Advertising &rarr; Ads &rarr; branches</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the branches.</div></div></div></div>
+<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<button type="button" class="whatbtn" onclick="this.parentNode.classList.toggle('open')">What this covers</button><div class="whatcovers" style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE BRANCHES</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Overview &rarr; Branches</b>, <b>P&amp;L &rarr; Branches P&amp;L</b>, and <b>Advertising &rarr; Ads &rarr; branches</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the branches.</div></div></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
 <div class="tgroups" id="tgroups"></div><div class="tabs" id="tabrow"></div>
 <div id="stale"></div>
+<div id="tdC" class="hide"></div>
 <div id="onC"><div class="bar"><label>PERIOD</label><span id="pre"></span><label class="xtl" title="the running day is always incomplete — keep it out so today never reads as a crash"><input type="checkbox" id="xt" checked onchange="setEXT(this.checked)" style="width:auto;margin-right:3px">excl. today</label><label style="margin-left:6px">From</label><input type="date" id="d0"/><label>To</label><input type="date" id="d1"/><div class="sp"></div>
 <label>COMPARE TO</label><select id="cm" onchange="cmpSel(this.value)"><option value="off">Off</option><option value="prev" selected>Previous period</option><option value="wk">Previous week (-7d)</option><option value="mo">Previous month (-30d)</option><option value="yoy">Same period last year</option><option value="custom">Custom range…</option></select><span id="cmpuse" style="font-size:10.5px;margin-left:8px"></span><span id="cmpst" style="font-size:10.5px;font-weight:700;margin-left:7px"></span>
 <label id="cl0" class="hide">Vs from</label><input type="date" id="c0" class="hide"/><label id="cl1" class="hide">to</label><input type="date" id="c1" class="hide"/><label>Attr · Meta</label><select id="am"></select><label>Google</label><select id="ag"></select><label>TikTok</label><select id="ax"></select><label>Sort</label><select id="so" onchange="rOn()"><option value="def">Manual (drag)</option><option value="gain">Biggest gain</option><option value="drop">Biggest drop</option></select></div>
@@ -132,6 +230,72 @@ const HASH="9f97837eb237a58b0b15c0b0962b450c131d5ddbade4ac2ca88b34b451600745";
 async function unlock(){const v=document.getElementById('pw').value;const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));const x=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('');if(x===HASH){document.getElementById('gate').classList.add('hide');document.getElementById('app').classList.remove('hide');boot();}else document.getElementById('er').textContent='Wrong password';}
 document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});
 const C={teal:'#1fc3b6',blue:'#3a9bff',indigo:'#4a4bd8',violet:'#9d6bff',orange:'#ff8b42',pink:'#ff5da2',grn:'#12b886',red:'#c4203f',grey:'#5f6a7d'};
+/* ============================================================================
+   v15.1 · DEFER CHART CONSTRUCTION UNTIL THE CANVAS IS NEAR THE VIEWPORT.
+   Measured: the charts tab builds 101 Chart.js instances and 404ms of its 466ms
+   render is those constructors. You can see maybe four of them. content-visibility
+   defers paint but not JS, so the only real fix is not to construct what nobody is
+   looking at. Wrapping the constructor once catches all 25 call sites instead of
+   patching each, and the stand-in keeps destroy()/update() so the existing
+   teardown on tab change still works. Charts within 400px of the viewport build
+   immediately, so nothing visible is ever late.
+   ==========================================================================*/
+(function(){
+ if(!window.Chart||window.__lazyChartReal)return;
+ const Real=window.Chart;
+ function Lazy(cv,cfg){
+  const self=this; self._real=null; self._dead=false; self._io=null;
+  const make=function(){ if(self._dead||self._real)return;
+    try{ self._real=new Real(cv,cfg); }catch(e){} };
+  /* FAIL OPEN. If the viewport cannot be measured (hidden pane, zero-height window, a
+     canvas with no box yet) the honest answer is "I do not know where this is", and the
+     only safe response is to build it. An optimisation that cannot see must never decide
+     to render nothing -- that turns a speed-up into 101 empty boxes. */
+  let near=true;
+  try{ const vh=window.innerHeight||0;
+       const r=cv&&cv.getBoundingClientRect&&cv.getBoundingClientRect();
+       near = !r || vh<=0 || (r.width===0&&r.height===0) ||
+              (r.top<vh*1.4 && r.bottom>-vh*0.4); }catch(e){ near=true; }
+  if(near||typeof IntersectionObserver==='undefined'){ make(); }
+  else{
+   try{
+    self._io=new IntersectionObserver(function(es){
+      if(es.some(function(e){return e.isIntersecting;})){ if(self._io)self._io.disconnect(); self._io=null; make(); }
+    },{rootMargin:'400px 0px'});
+    self._io.observe(cv);
+   }catch(e){ make(); }
+  }
+  /* Backstop: if no observer has fired by the time the user could plausibly have scrolled,
+     build it anyway. Deferral is allowed to be wrong about timing, never about existence. */
+  try{ setTimeout(function(){ if(!self._dead&&!self._real){ try{ const r=cv.getBoundingClientRect();
+        if(r.top<(window.innerHeight||0)*2.5) make(); }catch(e){ make(); } } }, 2500); }catch(e){}
+  self.destroy=function(){ self._dead=true;
+    if(self._io){try{self._io.disconnect();}catch(e){} self._io=null;}
+    if(self._real){try{self._real.destroy();}catch(e){} self._real=null;} };
+  self.update=function(){ if(self._real){try{self._real.update.apply(self._real,arguments);}catch(e){}} };
+  self.resize=function(){ if(self._real){try{self._real.resize.apply(self._real,arguments);}catch(e){}} };
+  /* Callers mutate options on the instance (splitPanel aligns two charts by writing
+     options.layout). Proxy the config object so those writes land on the config the
+     deferred constructor will use, and on the live chart once it exists. */
+  cfg=cfg||{}; cfg.options=cfg.options||{}; cfg.data=cfg.data||{};
+  Object.defineProperty(self,'options',{get:function(){return self._real?self._real.options:cfg.options;},configurable:true});
+  Object.defineProperty(self,'data',{get:function(){return self._real?self._real.data:cfg.data;},configurable:true});
+  Object.defineProperty(self,'canvas',{get:function(){return cv;},configurable:true});
+  Object.defineProperty(self,'ctx',{get:function(){return self._real?self._real.ctx:null;},configurable:true});
+  /* Anything that needs a RENDERED chart (splitPanel aligns two panels by reading
+     chartArea.right) forces construction on access. Deferral is an optimisation, never
+     a behaviour change: if you ask for geometry, you get a real chart. */
+  ['chartArea','scales','legend','tooltip','width','height'].forEach(function(k){
+    Object.defineProperty(self,k,{get:function(){ make(); return self._real?self._real[k]:undefined; },configurable:true});
+  });
+  self.getDatasetMeta=function(){ make(); return self._real?self._real.getDatasetMeta.apply(self._real,arguments):undefined; };
+ }
+ try{ Lazy.prototype=Object.create(Real.prototype); Lazy.prototype.constructor=Lazy; }catch(e){}
+ ['register','unregister','getChart','defaults','helpers','registry','Chart','version'].forEach(function(k){
+   try{ Lazy[k]=typeof Real[k]==='function'?Real[k].bind(Real):Real[k]; }catch(e){}
+ });
+ window.__lazyChartReal=Real; window.Chart=Lazy;
+})();
 if(window.Chart){const D=Chart.defaults;D.font.family='Inter,system-ui,-apple-system,sans-serif';D.font.size=10;D.color='#5a637a';D.plugins.legend.labels.usePointStyle=true;D.plugins.legend.labels.pointStyle='circle';D.plugins.legend.labels.boxWidth=6;D.plugins.legend.labels.padding=12;D.plugins.tooltip.backgroundColor='#0f172a';D.plugins.tooltip.padding=8;D.plugins.tooltip.cornerRadius=8;D.plugins.tooltip.titleFont={weight:'800',size:11};D.elements.line.tension=.3;D.elements.line.borderWidth=2;D.elements.point.radius=0;D.elements.point.hoverRadius=4;D.scale.grid.color='#eef0f5';D.scale.grid.drawBorder=false;D.scale.ticks.font={size:9.5};}
 document.addEventListener('click',e=>{const c=e.target.closest('.cs');if(c&&!e.target.closest('a,select,input,button,.chip'))c.classList.toggle('open');});;
 const CHC={Shopify:C.indigo,Noon:C.blue,Amazon:C.violet,Homzmart:C.teal};
@@ -422,6 +586,16 @@ function BEBOTH(short){const b=BEPAIR();
    taller than the first card, which is a second navigation problem, not a solution to the
    first. Clone the title, strip the ornaments, dedupe, and keep it to one quiet line that
    opens on demand. */
+/* v15.1 PAINT WHAT IS ON SCREEN. Measured before this: the charts tab took 1,255ms to
+   render and the Overview 657ms, because every card in a 37-card pane is laid out and
+   painted whether or not you will ever scroll to it. content-visibility defers the paint
+   of anything below the fold while reserving its height, so scroll position and anchors
+   still work and nothing about the content changes. */
+function lazyCards(t){try{
+  const p=document.getElementById(t+'C');if(!p)return;
+  const cards=p.querySelectorAll('.card');
+  cards.forEach((c,i)=>{c.classList.toggle('lazy',i>=3);});
+}catch(e){}}
 function cardNav(t){try{
   const p=document.getElementById(t+'C');if(!p)return;
   const old=p.querySelector('[data-cardnav]');if(old)old.remove();
@@ -1339,6 +1513,7 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
    it stops competing for the eye. Ids are unchanged, so every deep link and the audit harness
    keep working. */
 const TABGROUPS=[
+ ['Today',[['td','What needs you']]],
  ['Overview',[['on','Online store'],['hm','Daily heat map'],['off','Branches'],['tm','Pace & timeframes'],['rm','How every number is built']]],
  ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
@@ -1712,15 +1887,272 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}return;}if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');var _td=document.getElementById('tdC');if(_td)_td.classList.toggle('hide',t!=='td');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}return;}if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='cl')return rCL(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ab')return rAB(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB();else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
+
+
+/* ============================================================================
+   v15 · TODAY — the tool's first screen.
+   The instrument measures beautifully and decides almost nothing: 243 cards
+   produced about 24 recommendations, none ranked against each other. This layer
+   does the synthesis the operator was doing by hand. Two parts:
+     THE STANDING  one line, seven numbers, never scrolls away.
+     THE QUEUE     what is costing money, largest first, each with an action.
+   A rule earns a slot only if it can price itself in pounds AND name a next
+   step. If nothing qualifies the page says so and stays empty -- a dashboard
+   that always finds five problems is noise with a ranking.
+   ==========================================================================*/
+const TD_DISMISS_KEY='ok_td_dismissed';
+function tdDismissed(){try{return JSON.parse(localStorage.getItem(TD_DISMISS_KEY)||'{}');}catch(e){return {};}}
+function tdDismiss(id){try{const d=tdDismissed();d[id]=Date.now();localStorage.setItem(TD_DISMISS_KEY,JSON.stringify(d));}catch(e){}rTD();}
+function tdRestore(){try{localStorage.removeItem(TD_DISMISS_KEY);}catch(e){}rTD();}
+window.tdDismiss=tdDismiss;window.tdRestore=tdRestore;
+
+const _tdM=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+const _tdSM=v=>(v<0?'−':'+')+'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+
+/* --- the rules. Each returns null or {id,money,sev,title,line,action,tab,why} --- */
+function tdRules(){
+ const R=[];
+ const D=(O.today||'').slice(0,10);
+ const add=x=>{if(x&&isFinite(x.money))R.push(x);};
+
+ /* 1 · revenue lost to shelves that are already empty -- recoverable, so it leads */
+ try{
+  const W=(O.why&&O.why.win&&(O.why.win['7']||Object.values(O.why.win)[0]))||{};
+  const fell=(W.prods||[]).filter(x=>x.r<x.pr);
+  const oos=fell.filter(x=>x.st!=null&&x.st<=3);
+  const lost=oos.reduce((a,x)=>a+(x.pr-x.r),0);
+  if(oos.length&&lost>2000)add({id:'stockout',money:lost,sev:'act',
+   title:oos.length+' products fell while nearly out of stock',
+   line:_tdM(lost)+' of sales you already had, lost to empty shelves in 7 days — about '+_tdM(lost*52)+' a year at this rate.',
+   action:'Reorder these '+oos.length+'.',tab:'fo',
+   why:oos.slice(0,5).map(x=>({n:String(x.n).replace(/^\[[^\]]*\]\s*/,'').slice(0,40),v:'−'+_tdM(x.pr-x.r),note:x.st+' left'}))});
+ }catch(e){}
+
+ /* 2 · ads against the delivered break-even. Money at stake = spend x how far under. */
+ try{
+  const be=GPBE(), A=O.ad, F=O.fin;
+  const i1=A.n-1,i0=Math.max(0,A.n-7);
+  let sp=0;for(let i=i0;i<=i1;i++)sp+=A.spend[i]||0;
+  let rev=0;const f1=F.n-1,f0=Math.max(0,F.n-7);
+  for(let i=f0;i<=f1;i++)rev+=(((O.shop.rev||[])[i]||0)-SREF(i))*1000;
+  const mer=sp?rev/sp:0;
+  if(sp>1000){
+   const under=Math.max(0,(be-mer)/be);
+   if(under>0.02)add({id:'ads_under',money:sp*under,sev:'act',
+     title:'Ad spend is under the break-even bar',
+     line:'MER '+mer.toFixed(2)+'× against '+be.toFixed(2)+'× delivered break-even. '+_tdM(sp)+' spent, '+_tdM(rev)+' back.',
+     action:'Cut or fix the campaigns below the bar.',tab:'mt',
+     why:[{n:'Spend, 7 days',v:_tdM(sp)},{n:'Net revenue',v:_tdM(rev)},{n:'Break-even',v:be.toFixed(2)+'×'}]});
+   else add({id:'ads_ok',money:0,sev:'ok',
+     title:'Ads are clearing the bar',
+     line:'MER '+mer.toFixed(2)+'× against a '+be.toFixed(2)+'× delivered break-even. '+_tdM(sp)+' spent, '+_tdM(rev)+' back.',
+     action:'No action — said out loud so you do not go looking.',tab:'mt',
+     why:[{n:'Spend, 7 days',v:_tdM(sp)},{n:'Net revenue',v:_tdM(rev)},{n:'Headroom',v:(mer-be).toFixed(2)+'×'}]});
+  }
+ }catch(e){}
+
+ /* 3 · a feed that has gone dark makes every blended number wrong by an unknown amount */
+ try{
+  const A=O.ad;const dark=[];
+  const last=(k)=>{for(let i=A.n-1;i>=0;i--){if(((A[k]||[])[i]||0)>0)return aD(i);}return null;};
+  [['tspend','TikTok'],['gspend','Google'],['mspend','Meta']].forEach(([k,nm])=>{
+   const L=last(k);if(!L)return;
+   const days=Math.round((Date.parse(D)-Date.parse(L))/864e5);
+   if(days>=3)dark.push({nm,L,days});});
+  if(dark.length)add({id:'dark',money:0,sev:'blind',
+   title:dark.map(d=>d.nm+' dark '+d.days+' days').join(' · '),
+   line:'No spend recorded since '+dark[0].L+'. Every blended MER and channel comparison since then is wrong by an amount nobody can size.',
+   action:'Restore the feed before trusting any cross-channel number.',tab:'mi',
+   why:dark.map(d=>({n:d.nm,v:d.days+' days',note:'last '+d.L}))});
+ }catch(e){}
+
+ /* 4 · a branch that did not cover its own fixed costs last complete month */
+ try{
+  const PA=pnlAgg().M, nowM=D.slice(0,7);
+  const ms=Object.keys(O.exp||{}).sort().filter(m=>m<nowM&&expTot(m)>0);
+  const bm=ms[ms.length-1];
+  if(bm){
+   const rows=[];
+   Object.keys(O.pos||{}).forEach(b=>{
+    const v=(O.pos[b]||{})[bm];if(!v)return;
+    const c=((O.bcost[b]||{})[bm])||{};
+    const gp=gpAdj(v[0],v[1]), fixed=(c.sal||0)+(c.rent||0);
+    if(fixed>0)rows.push({b,net:gp-fixed,gp,fixed});});
+   const bad=rows.filter(r=>r.net<0).sort((a,b)=>a.net-b.net);
+   if(bad.length)add({id:'branch_neg',money:Math.abs(bad.reduce((a,r)=>a+r.net,0)),sev:'act',
+    title:bad.length+' branch'+(bad.length>1?'es':'')+' did not cover salaries and rent in '+bm,
+    line:bad.map(r=>r.b+' '+_tdSM(r.net)).join(' · ')+'. Gross profit minus that branch’s own posted salaries and rent.',
+    action:'Rent, hours or range — pick one per branch.',tab:'rp',
+    why:bad.slice(0,5).map(r=>({n:r.b,v:_tdSM(r.net),note:_tdM(r.gp)+' GP vs '+_tdM(r.fixed)+' fixed'}))});
+  }
+ }catch(e){}
+
+ /* 5 · the vendors leaking the most gross profit against their own prior window */
+ try{
+  const V=(O.vend&&O.vend.rows)||[];
+  const st=(O.vend&&O.vend.dayStart)||null;
+  if(st&&V.length){
+   const span=Math.max(1,Math.round((Date.parse(ST.e)-Date.parse(ST.s))/864e5)+1);
+   const sh=(d,n)=>{const t=new Date(Date.parse(d+'T00:00:00Z'));t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10);};
+   const ix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(st+'T00:00:00Z'))/864e5);
+   const sum=(r,a,b)=>{if(!r.d)return null;let i0=ix(a),i1=ix(b);const n=r.d[0].length;
+     if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
+     let g=0;for(let i=i0;i<=i1;i++)g+=r.d[1][i]||0;return g;};
+   /* v15.2 SAY WHY, DO NOT SAY "GO CHECK". A gross-profit fall is arithmetic: it is either
+      fewer sales at the same margin, or the same sales at a worse margin, or both. Split it
+      exactly -- volume effect = revenue change x the OLD margin rate; rate effect = new
+      revenue x the margin-rate change. Whichever term is larger is the reason, and it is
+      measured, not guessed. Then availability is checked against it: if the supplier's own
+      products are sitting at <=3 units, the volume loss was not demand refusing to buy. */
+   const rsum=(r,a2,b2)=>{if(!r.d)return null;let i0=ix(a2),i1=ix(b2);const n=r.d[0].length;
+     if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
+     let rv=0,g=0;for(let i=i0;i<=i1;i++){rv+=r.d[0][i]||0;g+=r.d[1][i]||0;}return {rv,g};};
+   /* which suppliers have product sitting at the bottom of the bin right now */
+   const thinVendors={};
+   try{const W=(O.why&&O.why.win&&(O.why.win['7']||Object.values(O.why.win)[0]))||{};
+     (W.prods||[]).forEach(x=>{if(x.st!=null&&x.st<=3&&x.vn)thinVendors[x.vn]=(thinVendors[x.vn]||0)+1;});}catch(e){}
+   const drop=[];
+   V.forEach(r=>{
+     const C=rsum(r,ST.s,ST.e), P=rsum(r,sh(ST.s,-span),sh(ST.s,-1));
+     if(!C||!P||P.g<20000)return;
+     const d=C.g-P.g; if(d>=-15000)return;
+     const mNow=C.rv?C.g/C.rv:0, mPrev=P.rv?P.g/P.rv:0;
+     const volEff=(C.rv-P.rv)*mPrev;          /* sold less at the old margin */
+     const rateEff=C.rv*(mNow-mPrev);          /* sold the same at a new margin */
+     const nm=r.n||r.v;
+     const thin=thinVendors[nm]||0;
+     let cause,detail;
+     if(Math.abs(volEff)>=Math.abs(rateEff)*1.5){
+       cause = thin?'RAN OUT':'SOLD LESS';
+       detail = thin
+         ? 'Sold '+_tdM(Math.abs(C.rv-P.rv))+' less, and '+thin+' of its products are down to 3 units or fewer — this is availability, not demand.'
+         : 'Sold '+_tdM(Math.abs(C.rv-P.rv))+' less at an unchanged margin ('+(mPrev*100).toFixed(1)+'% → '+(mNow*100).toFixed(1)+'%). Stock is not the constraint, demand is.';
+     } else if(Math.abs(rateEff)>Math.abs(volEff)*1.5){
+       cause='MARGIN FELL';
+       detail='Revenue held ('+_tdM(P.rv)+' → '+_tdM(C.rv)+') but margin went '+(mPrev*100).toFixed(1)+'% → '+(mNow*100).toFixed(1)+'%. That is price or cost, not demand.';
+     } else {
+       cause='BOTH';
+       detail='Volume took '+_tdM(Math.abs(volEff))+' and margin took '+_tdM(Math.abs(rateEff))+'.';
+     }
+     drop.push({n:nm,d,cause,detail,volEff,rateEff,thin,mPrev,mNow,C,P});});
+   drop.sort((a,b)=>a.d-b.d);
+   if(drop.length){
+    const top=drop.slice(0,5);
+    const tally={};top.forEach(x=>{tally[x.cause]=(tally[x.cause]||0)+1;});
+    const lead=Object.keys(tally).sort((a,b)=>tally[b]-tally[a])[0];
+    const ACTION={'RAN OUT':'Reorder — these lost sales you had already won.',
+                  'SOLD LESS':'Demand, not supply. Put media or range behind them, or let them go.',
+                  'MARGIN FELL':'Price or cost moved. Check the discount and the last purchase order.',
+                  'BOTH':'Volume and margin both moved — fix the margin first, it is the faster lever.'};
+    add({id:'vendor_drop',money:Math.abs(top.reduce((a,x)=>a+x.d,0)),sev:'watch',
+     title:drop.length+' suppliers lost gross profit — mostly because they '+
+       ({'RAN OUT':'ran out','SOLD LESS':'sold less','MARGIN FELL':'sold at a worse margin','BOTH':'lost volume and margin'}[lead]),
+     line:top.slice(0,2).map(x=>'<b>'+x.n+'</b> '+_tdSM(x.d)+' — '+x.detail).join(' '),
+     action:ACTION[lead],tab:'fo',
+     why:top.map(x=>({n:String(x.n).slice(0,26)+' · '+x.cause,v:_tdSM(x.d),
+       note:_tdM(x.P.rv)+'→'+_tdM(x.C.rv)+' rev · '+(x.mPrev*100).toFixed(1)+'%→'+(x.mNow*100).toFixed(1)+'% margin'
+            +(x.thin?' · '+x.thin+' nearly out':'')}))});
+   }
+  }
+ }catch(e){}
+
+ return R;
+}
+
+function rTD(){
+ if(TAB!=='td')return;
+ const g=document.getElementById('tdC');if(!g)return;
+ let rules=[];try{rules=tdRules();}catch(e){rules=[];}
+ const dis=tdDismissed();
+ const live=rules.filter(r=>!dis[r.id]);
+ /* v15.1 severity tier first, money second. A watch item worth more than an act item is
+    still a watch item -- ranking on money alone told you to look at the thing you cannot
+    act on yet. */
+ const TIER={act:0,blind:1,watch:2};
+ const acts=live.filter(r=>r.sev!=='ok')
+   .sort((a,b)=>(TIER[a.sev]-TIER[b.sev])||(b.money-a.money));
+ const nAct=acts.filter(r=>r.sev==='act').length;
+ const oks=live.filter(r=>r.sev==='ok');
+ const hidden=rules.length-live.length;
+
+ /* ---- THE STANDING ---- */
+ let strip='';
+ try{
+  const A=O.ad,F=O.fin,be=GPBE(),q=_gpPct();
+  const i1=A.n-1,i0=Math.max(0,A.n-7);let sp=0;for(let i=i0;i<=i1;i++)sp+=A.spend[i]||0;
+  const f1=F.n-1,f0=Math.max(0,F.n-7);let rev=0,gp=0;
+  for(let i=f0;i<=f1;i++){const gr=((O.shop.rev||[])[i]||0)*1000;const nv=gr-SREF(i)*1000;rev+=nv;gp+=gpAdj(gr,((O.shop.gp||[])[i]||0)*1000)*(gr?nv/gr:1)-nv*(q.drag||0);}
+  let br=0;try{const B=O.bl;if(B){const n=B.n;for(let i=Math.max(0,n-7);i<n;i++)Object.keys(B.b||{}).forEach(k=>{br+=(B.b[k][i]||0);});}}catch(e){}
+  const net=gp-sp, mer=sp?rev/sp:0;
+  const cell=(l,v,sub,tone)=>'<div style="flex:1 1 130px;min-width:120px;padding:10px 14px;border-right:1px solid var(--line)">'
+   +'<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;color:var(--ink-3);text-transform:uppercase">'+l+'</div>'
+   +'<div style="font-size:21px;font-weight:800;letter-spacing:-.5px;color:'+(tone||'var(--ink)')+';font-variant-numeric:tabular-nums;margin-top:2px">'+v+'</div>'
+   +(sub?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:1px">'+sub+'</div>':'')+'</div>';
+  strip='<div style="display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden;margin-bottom:14px">'
+   +cell('Webstore rev',_tdM(rev),'7 days, net of returns')
+   +cell('Delivered GP',_tdM(gp),(rev?(gp/rev*100).toFixed(1):'0')+'% of revenue')
+   +cell('Ad spend',_tdM(sp),'all platforms')
+   +cell('After ads',_tdSM(net),'before overhead',net>=0?'var(--pos)':'var(--neg)')
+   +cell('MER',mer.toFixed(2)+'×','break-even '+be.toFixed(2)+'×',mer>=be?'var(--pos)':'var(--neg)')
+   +cell('Branches',_tdM(br),'tills, 7 days')
+   +'<div style="flex:1 1 130px;min-width:120px;padding:10px 14px"><div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;color:var(--ink-3);text-transform:uppercase">Data</div>'
+   +'<div style="font-size:21px;font-weight:800;color:'+(live.some(r=>r.sev==='blind')?'var(--warn)':'var(--pos)')+';margin-top:2px">'+(live.some(r=>r.sev==='blind')?'Partial':'Healthy')+'</div>'
+   +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:1px">'+(O.lastSync||'')+'</div></div></div>';
+ }catch(e){strip='';}
+
+ /* ---- THE QUEUE ---- */
+ const TONE={act:['var(--neg)','var(--neg-wash)'],watch:['var(--warn)','var(--warn-wash)'],
+             blind:['var(--warn)','var(--warn-wash)'],ok:['var(--pos)','var(--pos-wash)']};
+ const item=(r,i)=>{const[c,w]=TONE[r.sev]||TONE.act;
+  return '<div class="td-item" style="border:1px solid var(--line);border-left:3px solid '+c+';border-radius:var(--r-m);background:var(--surface);margin-bottom:10px;overflow:hidden;transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)">'
+  +'<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px;cursor:pointer" onclick="this.parentNode.querySelector(\'.td-why\').classList.toggle(\'hide\')">'
+   +'<div style="flex:0 0 auto;min-width:104px">'
+     +'<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;color:'+c+';text-transform:uppercase">'+(r.sev==='ok'?'clear':(r.sev==='blind'?'blind spot':(r.sev==='watch'?'watch':'act now')))+'</div>'
+     +'<div style="font-size:21px;font-weight:800;letter-spacing:-.5px;color:'+c+';font-variant-numeric:tabular-nums">'+(r.money>0?_tdM(r.money):'—')+'</div></div>'
+   +'<div style="flex:1 1 auto;min-width:0">'
+     +'<div style="font-size:14px;font-weight:700;letter-spacing:-.2px;color:var(--ink)">'+r.title+'</div>'
+     +'<div style="font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.5">'+r.line+'</div>'
+     +'<div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
+       +'<span style="background:'+w+';color:'+c+';font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:var(--r-s)">→ '+r.action+'</span>'
+       +'<button type="button" class="chip" style="font-size:10.5px" onclick="event.stopPropagation();tab(\''+r.tab+'\')">Open the evidence</button>'
+       +(r.sev==='ok'?'':'<button type="button" class="chip" style="font-size:10.5px" onclick="event.stopPropagation();tdDismiss(\''+r.id+'\')">Dismiss this week</button>')
+     +'</div></div></div>'
+  +'<div class="td-why hide" style="padding:0 16px 14px 134px;background:var(--surface-2);border-top:1px solid var(--line)">'
+     +'<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px">'
+     +(r.why||[]).map(x=>'<tr><td style="padding:4px 0;color:var(--ink)">'+x.n+'</td>'
+       +'<td style="padding:4px 0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:'+c+'">'+x.v+'</td>'
+       +'<td style="padding:4px 0 4px 14px;text-align:right;color:var(--ink-3)">'+(x.note||'')+'</td></tr>').join('')
+     +'</table></div></div>';};
+
+ const head='<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 10px">'
+  +'<div><div style="font-size:27px;font-weight:800;letter-spacing:-.8px;color:var(--ink)">What needs you</div>'
+  +'<div style="font-size:12.5px;color:var(--ink-2);margin-top:2px">Ranked by money. '
+  +(nAct?nAct+' to act on':'Nothing to act on')+(acts.length>nAct?' · '+(acts.length-nAct)+' to watch':'')
+  +' · window '+ST.s+' → '+ST.e+'</div></div>'
+  +(hidden?'<button type="button" class="chip" onclick="tdRestore()">Show '+hidden+' dismissed</button>':'')+'</div>';
+
+ const body = acts.length
+  ? acts.map(item).join('')
+  : '<div style="padding:34px 18px;text-align:center;border:1px dashed var(--line-2);border-radius:var(--r-l);background:var(--surface)">'
+    +'<div style="font-size:21px;font-weight:800;color:var(--pos);letter-spacing:-.4px">Nothing needs you</div>'
+    +'<div style="font-size:12.5px;color:var(--ink-2);margin-top:5px">No rule cleared its money threshold in this window. That is the honest answer, not an empty state to fill.</div></div>';
+
+ g.innerHTML=strip+head+body
+  +(oks.length?'<div style="margin-top:14px"><div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;color:var(--ink-3);text-transform:uppercase;margin-bottom:7px">Checked and clear</div>'+oks.map(item).join('')+'</div>':'')
+  +'<div style="margin-top:16px;font-size:11.5px;color:var(--ink-3);line-height:1.6">'
+  +'A rule appears only if it can price itself in pounds and name a next step. Everything else lives on the tabs above as evidence. '
+  +'Dismissals are per browser and clear when you press Show dismissed.</div>';
+}
+window.rTD=rTD;
 
 /* ===== v6.2 UNIVERSAL DATE + COMPARE CONTROL =====
    Every tab gets the same Range / From / To / Compare bar. They all drive the one
    global window (ST.s / ST.e / ST.cmp) so a range picked on one tab is the range
    everywhere -- change it on Charts and Retail P&L agrees with you. RDR() re-renders
    whichever tab you are looking at and re-syncs every bar so they never disagree. */
-const TBT=[['gl','glC'],['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['dc','dcC'],['fo','foC'],['cv','cvC'],['hm','hmC'],['mn','mnC'],['be','beC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
+const TBT=[['td','tdC'],['gl','glC'],['off','offC'],['ce','ceC'],['ic','icC'],['bg','bgC'],['tk','tkC'],['mt','mtC'],['gg','ggC'],['si','siC'],['why','whyC'],['pl','plC'],['pn','pnC'],['rp','rpC'],['me','meC'],['ao','aoC'],['vz','vzC'],['iq','iqC'],['mi','miC'],['vl','vlC'],['cp','cpC'],['cj','cjC'],['co','coC'],['mb','mbC'],['rt','rtC'],['lt','ltC'],['tr','trC'],['cs','csC'],['ab','abC'],['dc','dcC'],['fo','foC'],['cv','cvC'],['hm','hmC'],['mn','mnC'],['be','beC'],['au','auC'],['av','avC'],['ag','agC'],['aq','aqC']];
 // PER-PLATFORM attribution label: each platform shows ITS OWN model + measured factor, not Meta's.
 // Google's default is data-driven (DDA); Meta/TikTok default is 7d-click/1d-view. The % is that
 // platform's own attr factor (Meta 7dc=87%, Google 7dc=100%, TikTok 7dc=34% — all different).
@@ -11338,7 +11770,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}return;}if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='td'){try{rTD();}catch(e){const g=document.getElementById('tdC');if(g)g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}return;}if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}return;}if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge());if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -16964,7 +17396,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260927-213119';
+const BUILD='20260928-011557';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
