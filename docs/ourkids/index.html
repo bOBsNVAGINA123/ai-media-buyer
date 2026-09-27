@@ -8599,6 +8599,15 @@ function rFOCUS(){
  if(!Praw.length&&!Vraw.length){bn.innerHTML='No product or vendor revenue inside '+cur[0]+' → '+cur[cur.length-1]+'. Widen the range.';return;}
 
  const _selD2=(function(){try{return Math.max(1,span(ST.s,ST.e));}catch(e){return null;}})();
+ /* v13.0 THE WARNING WAS ONLY IN THE TAB BANNER, which is scrolled off by the time you are
+    reading a card. A 7-day pick inside the running month collapses to one month, that month
+    is the incomplete one, and the tab falls back to the last COMPLETE month -- so the cards
+    show a full month of money while the date box overhead still says "7 days". Every card on
+    this tab now carries the window it actually read. */
+ const _foStamp=()=>{const rd='READING '+cur[0]+(cur.length>1?' → '+cur[cur.length-1]:'');
+  const why=_foFell?' · your pick fell inside '+nowMF+', which is barely posted, so this is the last COMPLETE month'
+    :((_selD2&&_selD2<28)?' · your date box asks for '+_selD2+' days, but this feed only exists at MONTH grain':'');
+  return '<span class="tg" style="background:#fff3e6;color:#b8621b;font-weight:800">'+rd+why+'</span> ';};
  bn.innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. '
   +(_selD2&&_selD2<28?'<b style="color:#b8621b">Your date box asks for '+_selD2+' days — product and vendor money only exists at MONTH grain in this feed, so the tab reads the complete month(s) your range touches.</b> ':'')
   +(_foFell?'<b style="color:#b8621b">The running month has almost no ledger rows yet, so the tab reads the last COMPLETE month instead of a book of zeroes.</b> ':'')
@@ -8668,14 +8677,14 @@ function rFOCUS(){
    const lab2=RV2.map((x,i)=>String(i+1));
    vzCard(g,'The concentration curve \u2014 vendors ranked by gross profit'
      +INFO('Vendors sorted by the gross profit they made in the window; the line is the running share of the total. Where it crosses 80% is how many conversations actually run the business. A steep start and a long flat tail is high concentration.'),
-    'Hover any point for the vendor. The flat tail on the right is shelf space and buying attention returning almost nothing.',
+    _foStamp()+'Hover any point for the vendor. The flat tail on the right is shelf space and buying attention returning almost nothing.',
     lab2,[{l:'Cumulative share of gross profit \u2014 hover for the vendor at each rank',
       d:curve,c:'#5a5bf0',w:2.5,f:1,cl:RV2.map(x=>x.n.slice(0,34))}],
     v=>v.toFixed(0)+'%',{xt:'Vendors, best first',yt:'% of window gross profit'});
   }})();}catch(e){}
  pnlCard(g,'ins','Start here &mdash; how few lines actually carry the business'
    +INFO('Ranked on gross profit over the months your date box covers, cumulated until 80% of the total is reached. Products are Odoo templates; vendors are the supplier the template belongs to.'),
-  'Attention is the scarce input, not stock. This says how short the list of things worth attention actually is &mdash; and how much of the catalogue you can safely stop thinking about.',
+  _foStamp()+'Attention is the scarce input, not stock. This says how short the list of things worth attention actually is &mdash; and how much of the catalogue you can safely stop thinking about.',
   '<div style="display:flex;gap:12px;flex-wrap:wrap">'+pTile(pV)+pTile(pP)+'</div>'
   +'<div class="ins" style="margin-top:9px"><div class="row"><span class="dot" style="background:'+C.blue+'"></span><span><b>Use the vendor number for negotiation and the product number for the shelf.</b> A short vendor list means your buying leverage is concentrated in a handful of conversations; a short product list means most of your shelf space is earning nothing and could hold something else. They are different actions and the two counts are rarely similar.</span></div></div>');
 
@@ -8710,7 +8719,7 @@ function rFOCUS(){
   const most=L3.slice().sort((a,b)=>b.onSh-a.onSh)[0], least=L3.slice().sort((a,b)=>a.onSh-b.onSh)[0];
   pnlCard(g,'ins','The shape of the shop — category by category, online against the branches'
     +INFO('Vendors folded into their parent category (consignment merged in). Revenue and GP are the months your range touches, retail till money at real Odoo margin. Online share is that category&rsquo;s webstore revenue against its total since Aug 2024 — the split is not shipped at month grain, so it is a structural read, not a window one.'),
-   'Where the money actually sits. <b>'+esc(L3[0].c)+'</b> is '+ (L3[0].rev/tot3*100).toFixed(0)+'% of the window&rsquo;s retail revenue. '
+   _foStamp()+'Where the money actually sits. <b>'+esc(L3[0].c)+'</b> is '+ (L3[0].rev/tot3*100).toFixed(0)+'% of the window&rsquo;s retail revenue. '
    +'<b>'+esc(most.c)+'</b> is the most online-shifted category ('+most.onSh.toFixed(0)+'% webstore); <b>'+esc(least.c)+'</b> the least ('+least.onSh.toFixed(0)+'%) — the gap between those two is where the webstore&rsquo;s range work should start.',
    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
    +'<tr><th style="'+TH+';text-align:left">Category</th><th style="'+TH+'">Share of window revenue</th>'
@@ -8742,7 +8751,7 @@ function rFOCUS(){
   return '<td style="'+TD+'">'+N(st.u||0)+' u'+(st.oos?'<div style="font-size:9.5px;color:#a3271a;font-weight:700">'+st.oos+' out of stock</div>':'')+'</td>';};
  pnlCard(g,'ins','Best sellers &mdash; ranked on gross profit, not revenue'
    +INFO('Sorted by the gross profit each made over the selected months. Revenue rank and profit rank disagree constantly, and it is the profit rank that should drive reorders and shelf space.'),
-  'A line doing '+M(1000000)+' at 8% margin is beaten by one doing a quarter of that at 35%. These are sorted the way the money actually lands.',
+  _foStamp()+'A line doing '+M(1000000)+' at 8% margin is beaten by one doing a quarter of that at 35%. These are sorted the way the money actually lands.',
   '<div style="display:grid;gap:14px">'
    +'<div><div style="font-size:11px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Vendors</div>'+bestTable(Vraw,'Vendor')+'</div>'
    +'<div><div style="font-size:11px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Products</div>'+bestTable(Praw,'Product',stockCell)+'</div></div>');
@@ -8770,7 +8779,7 @@ function rFOCUS(){
  const gemV=gems(Vraw,'Vendors'), gemP=gems(Praw,'Products',stockCell);
  if(gemV||gemP)pnlCard(g,'ins','Hidden gems &mdash; small, high-margin and growing'
    +INFO('Below the median revenue of everything selling in this window, above the median margin, and not shrinking against the prior period. Ranked by gross profit weighted by growth.'),
-  'These never reach the top of a revenue sort, which is exactly why they are under-bought. Each one is already proving it earns more per pound than your average line and that demand for it is rising. <b>This is the buying list.</b>',
+  _foStamp()+'These never reach the top of a revenue sort, which is exactly why they are under-bought. Each one is already proving it earns more per pound than your average line and that demand for it is rising. <b>This is the buying list.</b>',
   gemV+gemP
   +'<div class="ins" style="margin-top:9px"><div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>Check depth before you celebrate.</b> A small line growing fast on almost no stock is a line you are losing sales on, not one that is performing well. Widen it and re-read this table next month &mdash; if the growth continues at the larger base, it was genuine demand; if it flattens, you had already served the whole of it.</span></div></div>');
 
@@ -8821,7 +8830,7 @@ function rFOCUS(){
    +altCell(x,Praw)+'</tr>';});
   pnlCard(g,'ins','Dead weight &mdash; what to stop buying'
     +INFO('Vendors whose revenue fell more than a quarter against the prior period on a base over E£100k, and products where at least a quarter of the variants are dead lines — sizes or colours carrying stock that nothing moves — ranked by units at risk.'),
-   'The opposite of the gems list. Nothing here needs an urgent decision this week, but every one of them is holding cash or shelf space that the top of this tab has a better use for.',
+   _foStamp()+'The opposite of the gems list. Nothing here needs an urgent decision this week, but every one of them is holding cash or shelf space that the top of this tab has a better use for.',
    (shrink.length?'<div style="font-size:11px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin:4px 0">Vendors falling hard</div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
     +'<tr><th style="'+TH+';text-align:left">Vendor</th><th style="'+TH+'">Prior</th><th style="'+TH+'">Now</th><th style="'+TH+'">Lost</th><th style="'+TH+'">Margin</th><th style="'+TH+';text-align:left">Back this instead</th></tr>'+b2+'</table></div>':'')
@@ -16839,7 +16848,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260927-131432';
+const BUILD='20260927-134236';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
