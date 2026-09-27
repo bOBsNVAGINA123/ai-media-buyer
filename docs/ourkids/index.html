@@ -4560,6 +4560,10 @@ function rMENU(){if(TAB!=='mn')return;dCh();
    Nothing here is an assumed elasticity. A slider moves an input; the arithmetic that carries
    it to revenue is the same arithmetic the P&L uses, and it is printed under each result. */
 var GLS=null;
+window._glBaseCache=null;
+function glBaseCached(){ if(window._glBaseCache)return window._glBaseCache;
+  window._glBaseCache=glBase(); return window._glBaseCache; }
+function glBaseInvalidate(){ window._glBaseCache=null; }
 function glBase(){
  if(GLS&&GLS._b)return GLS._b;
  const A=O.ad,SH=O.shop,F=O.fin;
@@ -4610,8 +4614,56 @@ function glBase(){
   rep:jn?jn.rep:0, oyr:jn?jn.oyr:0, ltgp:jn?jn.ltgp:0,
   cac: nc?spend/nc:0};
  (GLS=GLS||{})._b=b;return b;}
-function glV(k){const b=glBase();GLS=GLS||{};return (GLS[k]!=null)?GLS[k]:b[k];}
-window.glSet=function(k,v){GLS=GLS||{};GLS[k]=parseFloat(v);rGL();};
+function glV(k){const b=glBaseCached();GLS=GLS||{};return (GLS[k]!=null)?GLS[k]:b[k];}   /* v19 cached: this was re-deriving the whole baseline once per key, per frame */
+/* v19 SLIDERS. The old handler called rGL() on every oninput -- a full innerHTML rebuild
+   of the whole tab, sixty times a second, destroying and recreating the input being
+   dragged. The drag was being interrupted by its own re-render.
+   Now: dragging patches ONLY the readouts (pure arithmetic into textContent, no DOM
+   rebuild, throttled to one animation frame), and the full re-render happens once when
+   you let go. The slider element is never touched while you are holding it. */
+window._glRaf=0;window._glTo=0;
+window.glSet=function(k,v,commit){
+  GLS=GLS||{};GLS[k]=parseFloat(v);
+  if(commit){glFlush();glLive(true);return;}
+  if(window._glRaf||window._glTo)return;
+  /* rAF coalesces to one update per painted frame -- but a BACKGROUND tab never paints,
+     so an rAF scheduled there is stranded and the slider silently stops responding until
+     the tab is looked at again. A timeout runs regardless of paint, so whichever fires
+     first does the work and cancels the other. */
+  window._glRaf=requestAnimationFrame(function(){glFlush();glLive(false);});
+  window._glTo=setTimeout(function(){glFlush();glLive(false);},40);
+};
+window.glFlush=function(){
+  if(window._glRaf){cancelAnimationFrame(window._glRaf);window._glRaf=0;}
+  if(window._glTo){clearTimeout(window._glTo);window._glTo=0;}
+};
+/* patch the numbers in place; never rebuild while a drag is live */
+window.glLive=function(full){
+  try{
+    const b=glBaseCached();const V={};Object.keys(b).forEach(k=>{V[k]=glV(k);});
+    const R=glRun(V);
+    document.querySelectorAll('[data-glo]').forEach(function(el){
+      const k=el.getAttribute('data-glo');
+      if(R[k]==null&&V[k]==null)return;
+      const raw=(R[k]!=null)?R[k]:V[k];
+      const f=el.getAttribute('data-glf')||'money';
+      el.textContent = f==='x'   ? (raw).toFixed(2)+'×'
+                     : f==='pct' ? (raw).toFixed(1)+'%'
+                     : f==='n'   ? Math.round(raw).toLocaleString()
+                     : 'E£'+Math.round(raw).toLocaleString();
+    });
+    /* each slider's own readout and its distance from baseline */
+    document.querySelectorAll('[data-glk]').forEach(function(el){
+      const k=el.getAttribute('data-glk');const base=b[k],cur=V[k];
+      const out=el.querySelector('[data-glv]'), dev=el.querySelector('[data-gld]');
+      if(out&&window._glFmt&&window._glFmt[k])out.textContent=window._glFmt[k](cur);
+      if(dev){const d=base?((cur/base-1)*100):0;
+        dev.textContent=Math.abs(d)<0.05?'at baseline':((d>0?'+':'')+d.toFixed(1)+'%');
+        dev.style.color=Math.abs(d)<0.05?'var(--ink-3)':(d>0?'var(--pos)':'var(--neg)');}
+    });
+    if(full)rGL();
+  }catch(e){ if(full)try{rGL();}catch(_){} }
+};
 window.glReset=function(){const b=glBase();GLS={_b:b};rGL();};
 /* the run-rate cascade, run once on the baseline and once on the slider values */
 function glRun(V){
@@ -4633,7 +4685,7 @@ function glRun(V){
  const afterAll=afterAds-V.ovh;
  return {ordD,orders,demand,gross:grossS,net,gp,courier,shipIn,gpDel,brGP,afterAds,afterAll,
    revTot:net+V.brRev};}
-function rGL(){if(TAB!=='gl')return;dCh();
+function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  const g=document.getElementById('g_gl');if(!g)return;g.innerHTML='';
  const b=glBase();
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -4678,13 +4730,20 @@ function rGL(){if(TAB!=='gl')return;dCh();
  SL.forEach(sec=>{
   sh+='<div style="font-size:10.5px;font-weight:800;letter-spacing:.09em;color:#64748b;margin:14px 0 6px">'+sec[0]+'</div>';
   sec[1].forEach(x=>{
-   const k=x[0],lo=b[k]*x[1],hi=b[k]*x[2],cur=V[k],base=b[k];
+   /* v19 OFF-BY-ONE ON THE BOUNDS -- this is why the sliders were unusable. The row is
+      [key, label, loMult, hiMult, step, fmt, tip], so the multipliers are x[2] and x[3].
+      The code read x[1] (the LABEL) as the low multiplier: min became NaN and max became
+      the LOW multiple of the baseline, so every handle sat outside its own track and the
+      usable range was a fraction of the real one. Sessions rendered min="NaN" max="305,154"
+      on a baseline of 1,017,183. */
+   const k=x[0],lo=b[k]*x[2],hi=b[k]*x[3],cur=V[k],base=b[k];
    const d=base?((cur/base-1)*100):0;
-   sh+='<div style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
+   (window._glFmt=window._glFmt||{})[k]=x[5];
+   sh+='<div data-glk="'+k+'" style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
     +'<div style="font-size:11.5px;font-weight:700" title="'+String(x[6]).replace(/"/g,'&quot;')+'">'+x[1]
     +'<div style="font-size:10.5px;font-weight:600;color:#5f6a7d">was '+x[5](base)+'</div></div>'
-    +'<input type="range" min="'+lo+'" max="'+(hi||1)+'" step="'+x[4]+'" value="'+cur+'" oninput="glSet(\''+k+'\',this.value)" style="width:100%">'
-    +'<div style="text-align:right"><b style="font-size:12.5px;font-variant-numeric:tabular-nums">'+x[5](cur)+'</b>'
+    +'<input type="range" min="'+lo+'" max="'+(hi||1)+'" step="'+x[4]+'" value="'+cur+'" oninput="glSet(\''+k+'\',this.value)" onchange="glSet(\''+k+'\',this.value,1)" style="width:100%">'
+    +'<div style="text-align:right"><b data-glv style="font-size:12.5px;font-variant-numeric:tabular-nums">'+x[5](cur)+'</b>'
     +'<div style="font-size:10.5px;font-weight:700;color:'+(Math.abs(d)<0.05?'#5f6a7d':(d>0?'#0f6e56':'#a3271a'))+'">'+(Math.abs(d)<0.05?'at baseline':(d>0?'+':'')+d.toFixed(1)+'%')+'</div></div>'
     +'</div>';});});
  sh+='<div style="margin-top:12px"><button class="btn g" onclick="glReset()">Reset every slider to '+b.bm+'</button></div>';
@@ -4692,9 +4751,9 @@ function rGL(){if(TAB!=='gl')return;dCh();
  /* ---------- 3. the cascade, printed ---------- */
  const TD='padding:5px 9px;border-bottom:1px solid #eef0f5;text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px';
  const NM=v=>Math.round(v).toLocaleString();
- const rowc=(n,a2,b2,note,bold,cnt)=>{const F=cnt?NM:M,S2=cnt?(v=>(v>=0?'+':'−')+NM(Math.abs(v))):SG;
-  return '<tr'+(bold?' style="font-weight:800;background:#f7f8fc"':'')+'><td style="'+TD+';text-align:left">'+n+'</td>'
-  +'<td style="'+TD+'">'+F(a2)+'</td><td style="'+TD+'">'+F(b2)+'</td>'
+ const rowc=(n,a2,b2,note,bold,cnt,key)=>{const F=cnt?NM:M,S2=cnt?(v=>(v>=0?'+':'−')+NM(Math.abs(v))):SG;
+  return '<tr'+(bold?' style="font-weight:800;background:var(--surface-3)"':'')+'><td style="'+TD+';text-align:left">'+n+'</td>'
+  +'<td style="'+TD+'">'+F(a2)+'</td><td style="'+TD+'"'+(cnt?' data-glf="n"':'')+(key?' data-glo="'+key+'"':'')+'>'+F(b2)+'</td>'
   +'<td style="'+TD+';color:'+((b2-a2)>=0?'#0f6e56':'#a3271a')+';font-weight:800">'+S2(b2-a2)+'</td>'
   +'<td style="'+TD+';text-align:left;font-size:10.5px;color:#5f6a7d;white-space:normal">'+note+'</td></tr>';};
  let ct='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
@@ -4703,20 +4762,20 @@ function rGL(){if(TAB!=='gl')return;dCh();
   +'<th style="'+TD+';font-size:10.5px;color:#64748b;text-transform:uppercase">Scenario</th>'
   +'<th style="'+TD+';font-size:10.5px;color:#64748b;text-transform:uppercase">Change</th>'
   +'<th style="'+TD+';text-align:left;font-size:10.5px;color:#64748b;text-transform:uppercase">How it is computed</th></tr>'
-  +rowc('Orders placed',now.ordD,sc.ordD,'sessions &times; CVR &mdash; includes the ones later cancelled',0,1)
-  +rowc('Orders confirmed',now.orders,sc.orders,'orders placed &times; (1 &minus; cancellation rate)',0,1)
-  +rowc('Demand placed',now.demand,sc.demand,'orders placed &times; AOV')
-  +rowc('Confirmed gross sales',now.gross,sc.gross,'orders confirmed &times; AOV &mdash; reproduces the actual month exactly')
-  +rowc('Webstore net revenue',now.net,sc.net,'confirmed &times; (1 &minus; refund rate)',1)
-  +rowc('Webstore gross profit',now.gp,sc.gp,'net revenue &times; margin (4% basis)')
-  +rowc('Shipping collected',now.shipIn,sc.shipIn,'orders &times; shipping per order')
+  +rowc('Orders placed',now.ordD,sc.ordD,'sessions &times; CVR &mdash; includes the ones later cancelled',0,1,'ordD')
+  +rowc('Orders confirmed',now.orders,sc.orders,'orders placed &times; (1 &minus; cancellation rate)',0,1,'orders')
+  +rowc('Demand placed',now.demand,sc.demand,'orders placed &times; AOV',0,0,'demand')
+  +rowc('Confirmed gross sales',now.gross,sc.gross,'orders confirmed &times; AOV &mdash; reproduces the actual month exactly',0,0,'gross')
+  +rowc('Webstore net revenue',now.net,sc.net,'confirmed &times; (1 &minus; refund rate)',1,0,0,'net')
+  +rowc('Webstore gross profit',now.gp,sc.gp,'net revenue &times; margin (4% basis)',0,0,'gp')
+  +rowc('Shipping collected',now.shipIn,sc.shipIn,'orders &times; shipping per order',0,0,'shipIn')
   +rowc('Courier bill',-now.courier,-sc.courier,'orders &times; parcels per order &times; cost per parcel')
-  +rowc('Delivered webstore GP',now.gpDel,sc.gpDel,'GP + shipping collected &minus; courier',1)
-  +rowc('Branch gross profit',now.brGP,sc.brGP,'branch revenue &times; branch margin')
+  +rowc('Delivered webstore GP',now.gpDel,sc.gpDel,'GP + shipping collected &minus; courier',1,0,0,'gpDel')
+  +rowc('Branch gross profit',now.brGP,sc.brGP,'branch revenue &times; branch margin',0,0,'brGP')
   +rowc('Ad spend',-V.spend,-V.spend,'as set')
-  +rowc('Contribution after ads',now.afterAds,sc.afterAds,'delivered GP + branch GP &minus; ad spend',1)
+  +rowc('Contribution after ads',now.afterAds,sc.afterAds,'delivered GP + branch GP &minus; ad spend',1,0,0,'afterAds')
   +rowc('Overhead',-B.ovh,-V.ovh,'posted expense book, ad invoices excluded')
-  +rowc('After ads AND overhead',now.afterAll,sc.afterAll,'the bottom line of the month',1)
+  +rowc('After ads AND overhead',now.afterAll,sc.afterAll,'the bottom line of the month',1,0,0,'afterAll')
   +'</table></div>';
  pnlCard(g,'blend','The cascade &mdash; every line, both scenarios','Read left to right: what the month did, what the sliders make it do, and the arithmetic in between. No step is hidden.',ct);
  /* ---------- 4. WHICH LEVER FIRST: one at a time, same realistic step ---------- */
@@ -17910,7 +17969,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-021342';
+const BUILD='20260928-023131';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
