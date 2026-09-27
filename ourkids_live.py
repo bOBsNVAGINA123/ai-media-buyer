@@ -2413,6 +2413,58 @@ def pull_order_truth(days=30, prev=None):
     return out
 
 
+# v13.3 WHERE IS IT, NOT JUST HOW MANY. pull_stock reports qty_available, which is ONE total
+# across every location -- so "12 in stock" could be twelve sitting in one shut branch or two
+# in each of six. A faller with stock everywhere is a demand problem; a faller with stock in
+# one branch and none in the other six is a distribution problem, and they need opposite fixes.
+# stock.quant carries the location, and internal locations map cleanly onto the shops.
+BR_LOC = [("Dokki", "Dokki"), ("MOA", "Mall Of Arabia"), ("NasrA", "Nasr Al-Ahli"),
+          ("NewCa", "New Cairo"), ("Octob", "October"), ("Smouh", "Smouha"), ("Zayed", "Zayed"),
+          ("FULL", "Online (fulfilment)"), ("Main", "Main warehouse"), ("Stock", "Stock warehouse"),
+          ("SZN", "Season"), ("MP", "Market Place"), ("Hq", "HQ"), ("Event", "Events"),
+          ("PRtrn", "Procurement return")]
+
+def pull_branch_stock(pids):
+    """Per-BRANCH units for the product variants the dashboard ranks, plus each one's barcode.
+    Returns {pid: {"b": {branch: qty}, "c": barcode, "t": total}}. Transit is folded into the
+    branch it belongs to -- stock in transit to Dokki is not stock you can sell in Zayed, but it
+    is Dokki's, and hiding it makes a shop look emptier than it is."""
+    out = {}
+    pids = [int(p) for p in dict.fromkeys(pids) if p]
+    if not pids: return out
+    try:
+        for i in range(0, len(pids), 400):
+            chunk = pids[i:i + 400]
+            g = oexec("stock.quant", "read_group",
+                      [[["location_id.usage", "=", "internal"], ["quantity", "!=", 0],
+                        ["product_id", "in", chunk]],
+                       ["quantity"], ["product_id", "location_id"]], {"lazy": False})
+            for r in g:
+                pr = r.get("product_id"); lo = r.get("location_id")
+                if not pr or not lo: continue
+                nm = str(lo[1] or "")
+                br = next((lab for pre, lab in BR_LOC if nm.startswith(pre + "/")), None)
+                if not br: br = nm.split("/")[0] or "Other"
+                q = float(r.get("quantity") or 0)
+                if not q: continue
+                e = out.setdefault(pr[0], {"b": {}, "c": "", "t": 0.0})
+                e["b"][br] = e["b"].get(br, 0.0) + q
+                e["t"] += q
+        # the barcode is what a buyer actually searches the shelf by
+        for i in range(0, len(pids), 500):
+            for v in oexec("product.product", "search_read",
+                           [[["id", "in", pids[i:i + 500]]]],
+                           {"fields": ["id", "default_code"], "limit": 500}) or []:
+                if v["id"] in out: out[v["id"]]["c"] = (v.get("default_code") or "")[:40]
+        for e in out.values():
+            e["b"] = {k: round(v) for k, v in e["b"].items() if round(v)}
+            e["t"] = round(e["t"])
+        log("branch stock ::", len(out), "products across", len(pids), "asked")
+    except Exception as e:
+        log("branch stock fail", str(e)[:150])
+    return out
+
+
 def pull_stock(tmpl_ids):
     """Per-VARIANT stock for the products the dashboard ranks, plus what those variants used to sell.
 
@@ -6326,6 +6378,17 @@ def build():
             for _r in _lst:
                 _c = _BR(_r.get("n"))
                 if _c: _codes.append(_c.strip())
+        # v13.3 the same walk gives us the ids to ask for per-branch stock
+        _pids = []
+        for _lst in _srcs:
+            for _r in _lst:
+                if _r.get("id"): _pids.append(_r["id"])
+        _bstk = safe(lambda: pull_branch_stock(_pids)) or {}
+        if _bstk:
+            for _lst in _srcs:
+                for _r in _lst:
+                    _e = _bstk.get(_r.get("id"))
+                    if _e: _r["bs"] = _e["b"]; _r["bc"] = _e["c"]
         _urls = safe(lambda: pull_product_urls(_codes)) or {}
         log("product urls :: codes", len(set(_codes)), "resolved", len(_urls))
         if _urls:
