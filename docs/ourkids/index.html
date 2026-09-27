@@ -359,6 +359,54 @@ body.scrolled .top{display:none}
   .tabs,.bar{position:static}
   body.scrolled .top{display:flex}
 }
+
+/* ---- v20 STATES. The brief asks for stable skeletons that match the final layout,
+   plus honest empty / error / stale states. A spinner tells you nothing about what is
+   coming; a skeleton shaped like the answer tells you where to look when it lands. ---- */
+.skwrap{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);border-radius:var(--r-xl);
+  background:var(--surface);box-shadow:var(--sh-1);overflow:hidden;margin-bottom:16px}
+.skcell{flex:1 1 196px;min-width:176px;padding:15px 18px;border-right:1px solid var(--line)}
+.skline{height:10px;border-radius:5px;background:var(--surface-3);margin-bottom:8px}
+.skline.big{height:24px;width:72%;margin:6px 0 8px}
+.skline.sm{height:9px;width:54%}
+.skline.lbl{width:42%}
+.skshim{position:relative;overflow:hidden}
+.skshim::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);animation:skm 1.5s infinite}
+@keyframes skm{100%{transform:translateX(100%)}}
+.emptyState{padding:34px 22px;text-align:center;border:1px dashed var(--line-2);border-radius:var(--r-l);background:var(--surface)}
+.emptyState h4{margin:0;font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--ink)}
+.emptyState p{margin:6px auto 0;max-width:460px;font-size:12.5px;color:var(--ink-2);line-height:1.6}
+.errState{border-left:3px solid var(--neg);background:var(--neg-wash);border-radius:var(--r-m);padding:12px 14px;font-size:12.5px;color:var(--ink-2)}
+.staleState{border-left:3px solid var(--warn);background:var(--warn-wash);border-radius:var(--r-m);padding:10px 13px;font-size:12.5px;color:var(--ink-2)}
+/* ---- metric definitions: hover a term, get the formula ---- */
+.defn{border-bottom:1px dotted var(--ink-4);cursor:help}
+.defbox{position:fixed;z-index:120;max-width:330px;background:var(--ink);color:#fff;border-radius:var(--r-m);
+  padding:10px 12px;font-size:11.5px;line-height:1.55;box-shadow:var(--sh-pop);pointer-events:none;opacity:0;
+  transform:translateY(3px);transition:opacity var(--t-s) var(--ease),transform var(--t-s) var(--ease)}
+.defbox.on{opacity:1;transform:translateY(0)}
+.defbox code{display:block;margin-top:6px;padding:6px 8px;background:rgba(255,255,255,.12);border-radius:5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#fff}
+@media (prefers-reduced-motion:reduce){.skshim::after{animation:none}}
+
+/* ---- v21 DRILL-DOWN PANEL. The brief asks for detail that glides in while preserving
+   the underlying context, and an obvious way to clear the selection. A panel keeps the
+   overview on screen; a new page throws away the thing you were comparing against. ---- */
+.dpScrim{position:fixed;inset:0;background:rgba(22,24,29,.24);opacity:0;pointer-events:none;
+  transition:opacity var(--t-m) var(--ease);z-index:130;backdrop-filter:blur(1.5px)}
+.dpScrim.on{opacity:1;pointer-events:auto}
+.dpPanel{position:fixed;top:0;right:0;height:100%;width:min(520px,94vw);background:var(--surface);
+  border-left:1px solid var(--line);box-shadow:-18px 0 48px rgba(22,24,29,.13);
+  transform:translateX(100%);transition:transform var(--t-m) var(--ease);z-index:131;
+  display:flex;flex-direction:column;overflow:hidden}
+.dpPanel.on{transform:translateX(0)}
+.dpHead{padding:16px 20px 13px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.dpBody{padding:16px 20px 26px;overflow:auto;flex:1 1 auto}
+.dpClose{margin-left:auto;flex:0 0 auto}
+.dpRow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.dpRow b{font-variant-numeric:tabular-nums}
+tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--brand)}
+@media (prefers-reduced-motion:reduce){.dpPanel{transition:none}.dpScrim{transition:none}}
 </style>
 </head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
@@ -929,6 +977,173 @@ function winStamp(t){try{
  const first=pane.firstElementChild;
  if(first&&first.classList&&first.classList.contains('bar'))first.insertAdjacentElement('afterend',el);
  else pane.insertBefore(el,pane.firstChild);
+}catch(e){}}
+/* ============================================================================
+   v20 · SKELETONS, STATES, AND METRIC DEFINITIONS.
+   The tool showed a blank page for the ~650ms between load and first paint, then
+   everything at once. A skeleton shaped like the Standing tells the eye where the
+   numbers will be, so the layout does not jump when they arrive.
+   Definitions: every metric whose name is jargon now carries its formula on hover --
+   the number and the way it was derived should never be more than a pointer apart.
+   ==========================================================================*/
+function skStanding(){
+  let c='';for(let i=0;i<6;i++)c+='<div class="skcell skshim"><div class="skline lbl"></div>'
+    +'<div class="skline big"></div><div class="skline sm"></div></div>';
+  return '<div class="skwrap" aria-busy="true" aria-label="Loading the standing">'+c+'</div>';
+}
+const METRIC_DEFS={
+ 'MER':['Marketing Efficiency Ratio','Every pound of revenue divided by every pound of ad spend, across all platforms. It is a whole-business ratio, not a per-campaign one.','net revenue ÷ total ad spend'],
+ 'aMER':['Acquisition MER','The same ratio but counting only FIRST-TIME customer revenue, so it shows what you are paying to buy growth rather than to serve people who would have returned anyway.','first-time customer revenue ÷ total ad spend'],
+ 'ROAS':['Return on ad spend','What the platform says it caused, divided by what you paid it. This is the platform marking its own homework.','platform-reported conversion value ÷ spend'],
+ 'break-even':['Break-even ROAS','The multiple at which an extra pound of spend exactly pays for itself after product cost and delivery.','1 ÷ delivered gross margin'],
+ 'delivered':['Delivered margin','Gross margin after the courier bill, COD and payment-collection fees are taken out. This is the margin you actually bank.','gross margin − delivery drag'],
+ 'AOV':['Average order value','Revenue divided by orders, for the same set of orders.','revenue ÷ orders'],
+ 'LTGP':['Lifetime gross profit','Total gross profit a customer has produced since their first order.','Σ gross profit per customer, all time'],
+ 'CAC':['Customer acquisition cost','Ad spend divided by the number of genuinely new customers it bought.','ad spend ÷ new customers'],
+ 'GP':['Gross profit','Revenue minus cost of goods, on the 4% tax basis this business actually remits.','revenue × 0.96 − cost'],
+ 'contribution':['Contribution','What a branch or channel leaves after its OWN direct costs, before any share of head-office overhead.','gross profit − direct costs']
+};
+(function(){
+ let box=null;
+ const show=(el,d)=>{
+   if(!box){box=document.createElement('div');box.className='defbox';document.body.appendChild(box);}
+   box.innerHTML='<b>'+d[0]+'</b><br>'+d[1]+'<code>'+d[2]+'</code>';
+   const r=el.getBoundingClientRect();
+   box.style.left=Math.min(window.innerWidth-346,Math.max(8,r.left))+'px';
+   box.style.top=(r.bottom+8)+'px';
+   requestAnimationFrame(()=>box.classList.add('on')); setTimeout(()=>box.classList.add('on'),30);
+ };
+ const hide=()=>{if(box)box.classList.remove('on');};
+ document.addEventListener('mouseover',e=>{
+   const el=e.target&&e.target.closest?e.target.closest('.defn'):null;
+   if(!el)return;const k=el.getAttribute('data-def');const d=METRIC_DEFS[k];if(d)show(el,d);},true);
+ document.addEventListener('mouseout',e=>{if(e.target&&e.target.closest&&e.target.closest('.defn'))hide();},true);
+ document.addEventListener('scroll',hide,{passive:true,capture:true});
+})();
+/* mark the jargon wherever it appears in a label, once per render, without touching numbers */
+function markDefs(t){try{
+ const pane=document.getElementById(t+'C');if(!pane)return;
+ const keys=Object.keys(METRIC_DEFS).sort((a,b)=>b.length-a.length);
+ const walk=document.createTreeWalker(pane,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+   const p=n.parentNode;if(!p)return NodeFilter.FILTER_REJECT;
+   const tag=p.nodeName;
+   if(tag==='SCRIPT'||tag==='STYLE'||tag==='INPUT'||tag==='TEXTAREA')return NodeFilter.FILTER_REJECT;
+   if(p.closest&&p.closest('.defn'))return NodeFilter.FILTER_REJECT;
+   if(!n.nodeValue||n.nodeValue.length>90)return NodeFilter.FILTER_REJECT;
+   return NodeFilter.FILTER_ACCEPT;}});
+ const jobs=[];let node,count=0;
+ while((node=walk.nextNode())&&count<80){
+   const v=node.nodeValue;
+   for(const k of keys){
+     const i=v.indexOf(k);
+     if(i<0)continue;
+     const before=i===0?' ':v[i-1], after=v[i+k.length]||' ';
+     if(/[A-Za-z]/.test(before)||/[A-Za-z]/.test(after))continue;   /* whole word only */
+     jobs.push([node,i,k]);count++;break;
+   }
+ }
+ jobs.forEach(([node,i,k])=>{
+   try{
+     const after=node.splitText(i); after.splitText(k.length);
+     const span=document.createElement('span');
+     span.className='defn';span.setAttribute('data-def',k);span.textContent=k;
+     after.parentNode.replaceChild(span,after);
+   }catch(e){}
+ });
+}catch(e){}}
+/* v20 KEYBOARD. The brief asks for keyboard navigation and focus states; the tool had
+   neither beyond native tabbing. Left/right move between tabs in the current group,
+   1-9 jump to a group, / focuses the first filter on the page, Escape clears it. */
+(function(){
+ document.addEventListener('keydown',function(e){
+  const tag=(e.target&&e.target.nodeName)||'';
+  const typing=/INPUT|TEXTAREA|SELECT/.test(tag);
+  if(e.key==='/'&&!typing){
+    const q=document.querySelector('#'+TAB+'C input[type=search]');
+    if(q){e.preventDefault();q.focus();q.select();}return;}
+  if(e.key==='Escape'){
+    const q=document.querySelector('#'+TAB+'C input[type=search]');
+    if(q&&q.value){q.value='';q.dispatchEvent(new Event('input',{bubbles:true}));q.blur();}return;}
+  if(typing)return;
+  if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+    try{
+      const grp=TABGROUPS[TABGRP]&&TABGROUPS[TABGRP][1];if(!grp)return;
+      const ids=grp.map(x=>x[0]);const i=ids.indexOf(TAB);if(i<0)return;
+      const n=e.key==='ArrowRight'?(i+1)%ids.length:(i-1+ids.length)%ids.length;
+      e.preventDefault();tab(ids[n]);
+    }catch(x){}return;}
+  if(/^[1-9]$/.test(e.key)){
+    try{const gi=+e.key-1;if(TABGROUPS[gi]){e.preventDefault();selGroup(gi);}}catch(x){}
+  }
+ },false);
+})();
+/* ============================================================================
+   v21 · DRILL-DOWN. Click any row in a ranked table and the detail glides in beside
+   it -- the table stays on screen, the row stays highlighted, and Escape or the
+   scrim clears both. Going to a new page to see one row's detail throws away the
+   comparison you were reading it against, which is the whole point of a ranking.
+   ==========================================================================*/
+(function(){
+ let scrim,panel;
+ function build(){
+   if(panel)return;
+   scrim=document.createElement('div');scrim.className='dpScrim';
+   panel=document.createElement('div');panel.className='dpPanel';
+   panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Row detail');
+   document.body.appendChild(scrim);document.body.appendChild(panel);
+   scrim.addEventListener('click',close);
+   document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+ }
+ function close(){
+   if(!panel)return;
+   panel.classList.remove('on');scrim.classList.remove('on');
+   document.querySelectorAll('tr.dpSel').forEach(r=>r.classList.remove('dpSel'));
+ }
+ window.dpClose=close;
+ window.dpOpen=function(title,sub,rows,foot){
+   build();
+   panel.innerHTML='<div class="dpHead"><div style="min-width:0">'
+     +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-4);text-transform:uppercase">Detail</div>'
+     +'<h3 style="margin:3px 0 0;font-size:16px;font-weight:700;letter-spacing:-.018em;color:var(--ink);word-break:break-word">'+title+'</h3>'
+     +(sub?'<div style="font-size:11.5px;color:var(--ink-3);margin-top:3px">'+sub+'</div>':'')
+     +'</div><button type="button" class="chip dpClose" onclick="dpClose()">Close ✕</button></div>'
+     +'<div class="dpBody">'
+     +rows.map(r=>'<div class="dpRow"><span style="color:var(--ink-2)">'+r[0]+'</span><b style="color:'+(r[2]||'var(--ink)')+'">'+r[1]+'</b></div>').join('')
+     +(foot?'<div style="margin-top:14px;font-size:11.5px;color:var(--ink-3);line-height:1.6">'+foot+'</div>':'')
+     +'</div>';
+   /* reveal on the next frame so the transform transition has a start state -- but a
+      hidden tab never paints, so a timeout races it. Whichever lands first reveals. */
+   const reveal=function(){panel.classList.add('on');scrim.classList.add('on');};
+   requestAnimationFrame(reveal); setTimeout(reveal,30);
+ };
+ /* any table row in a ranked table becomes a drill target */
+ document.addEventListener('click',function(e){
+   const tr=e.target&&e.target.closest?e.target.closest('tr'):null;
+   if(!tr||e.target.closest('a,button,input,select,summary,th'))return;
+   const tbl=tr.closest('table.bt');if(!tbl||!tbl.dataset.drill)return;
+   const cells=[].slice.call(tr.cells);if(cells.length<2)return;
+   const hrow=[].slice.call(tbl.rows).find(r=>r.querySelector('th'));if(!hrow)return;
+   const heads=[].slice.call(hrow.cells).map(c=>(c.textContent||'').trim());
+   document.querySelectorAll('tr.dpSel').forEach(r=>r.classList.remove('dpSel'));
+   tr.classList.add('dpSel');
+   const title=(cells[0].textContent||'').trim();
+   const rows=cells.slice(1).map((c,i)=>{
+     const v=(c.textContent||'').trim();
+     const col=getComputedStyle(c).color;
+     return [heads[i+1]||('Column '+(i+2)), v||'—', /rgb\(1[19], 122, 85\)|rgb\(196, 32, 63\)/.test(col)?col:null];
+   }).filter(r=>r[1]&&r[1]!=='—');
+   window.dpOpen(title,'From this table, for the window shown on the tab',rows,
+     'Selection stays highlighted in the table behind this panel. Escape or the backdrop clears it.');
+ },false);
+})();
+/* mark the ranked tables that are worth drilling into */
+function markDrill(t){try{
+ const pane=document.getElementById(t+'C');if(!pane)return;
+ pane.querySelectorAll('table.bt').forEach(function(tbl){
+   const body=[].slice.call(tbl.rows).filter(r=>!r.querySelector('th'));
+   if(body.length>=5&&body[0].cells.length>=3){tbl.dataset.drill='1';
+     body.forEach(r=>{if(!r.style.cursor)r.style.cursor='pointer';});}
+ });
 }catch(e){}}
 function cardNav(t){try{
   const p=document.getElementById(t+'C');if(!p)return;
@@ -2225,7 +2440,7 @@ function grainNote(t){try{
  const d=document.createElement('div');d.className='card full grainN';
  d.style.cssText='background:#fffaf0;border:1px solid #f0e2c0;padding:9px 14px;font-size:11.5px;color:#7a5c1e';
  d.innerHTML=msg;gid.insertBefore(d,gid.firstChild);}catch(e){}}
-function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');var _td=document.getElementById('tdC');if(_td)_td.classList.toggle('hide',t!=='td');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}try{winStamp('au');}catch(e){}try{tblTools('au');}catch(e){}try{lazyCards('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}try{winStamp('av');}catch(e){}try{tblTools('av');}catch(e){}try{lazyCards('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}try{winStamp('ag');}catch(e){}try{tblTools('ag');}catch(e){}try{lazyCards('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}try{winStamp('aq');}catch(e){}try{tblTools('aq');}catch(e){}try{lazyCards('aq');}catch(e){}return;}if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='cl')return rCL(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ab')return rAB(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB(),void(winStamp(t),tblTools(t),lazyCards(t));else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{tblTools(t);}catch(e){}try{if(t!=='td')winStamp(t);}catch(e){}try{requestAnimationFrame(stickMeasure);}catch(e){}try{requestAnimationFrame(tabInk);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function tab(t){TAB=t;PREVLBL='';ppHdr();try{markPre();}catch(e){}try{setTimeout(atGate,0);}catch(e){}syncTabGroup(t);renderTabs();document.getElementById('onC').classList.toggle('hide',t!=='on');document.getElementById('offC').classList.toggle('hide',t!=='off');document.getElementById('plC').classList.toggle('hide',t!=='pl');document.getElementById('pnC').classList.toggle('hide',t!=='pn');document.getElementById('meC').classList.toggle('hide',t!=='me');document.getElementById('aoC').classList.toggle('hide',t!=='ao');document.getElementById('rpC').classList.toggle('hide',t!=='rp');document.getElementById('vzC').classList.toggle('hide',t!=='vz');document.getElementById('iqC').classList.toggle('hide',t!=='iq');document.getElementById('miC').classList.toggle('hide',t!=='mi');document.getElementById('rmC').classList.toggle('hide',t!=='rm');document.getElementById('vlC').classList.toggle('hide',t!=='vl');document.getElementById('aiC').classList.toggle('hide',t!=='ai');document.getElementById('csC').classList.toggle('hide',t!=='cs');document.getElementById('cpC').classList.toggle('hide',t!=='cp');document.getElementById('cjC').classList.toggle('hide',t!=='cj');document.getElementById('bgC').classList.toggle('hide',t!=='bg');document.getElementById('coC').classList.toggle('hide',t!=='co');document.getElementById('mbC').classList.toggle('hide',t!=='mb');document.getElementById('rtC').classList.toggle('hide',t!=='rt');document.getElementById('ltC').classList.toggle('hide',t!=='lt');document.getElementById('trC').classList.toggle('hide',t!=='tr');document.getElementById('tkC').classList.toggle('hide',t!=='tk');document.getElementById('mtC').classList.toggle('hide',t!=='mt');document.getElementById('ggC').classList.toggle('hide',t!=='gg');document.getElementById('abC').classList.toggle('hide',t!=='ab');document.getElementById('siC').classList.toggle('hide',t!=='si');document.getElementById('whyC').classList.toggle('hide',t!=='why');var _dc=document.getElementById('dcC');if(_dc)_dc.classList.toggle('hide',t!=='dc');var _fo=document.getElementById('foC');if(_fo)_fo.classList.toggle('hide',t!=='fo');var _tm=document.getElementById('tmC');if(_tm)_tm.classList.toggle('hide',t!=='tm');var _bf=document.getElementById('bfC');if(_bf)_bf.classList.toggle('hide',t!=='bf');var _cv=document.getElementById('cvC');if(_cv)_cv.classList.toggle('hide',t!=='cv');var _td=document.getElementById('tdC');if(_td)_td.classList.toggle('hide',t!=='td');/* v9.97: panels added after this hardcoded chain (heat map, menu map, break-even) stayed hidden — their cards built fine and nobody ever saw them. Reveal every registered panel from TBT so a new tab can never be invisible again. */TBT.forEach(function(x){var _p=document.getElementById(x[1]);if(_p)_p.classList.toggle('hide',t!==x[0]);});document.getElementById('ceC').classList.toggle('hide',t!=='ce');['au','av','ag','aq'].forEach(function(x){var e=document.getElementById(x+'C');if(e)e.classList.toggle('hide',t!==x);});if(['au','av','ag','aq'].indexOf(t)>=0)setTimeout(function(){try{flowSort(t);}catch(e){}},60);document.getElementById('icC').classList.toggle('hide',t!=='ic');document.getElementById('mdC').classList.toggle('hide',t!=='md');document.getElementById('clC').classList.toggle('hide',t!=='cl');if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}try{winStamp('au');}catch(e){}try{tblTools('au');}catch(e){}try{lazyCards('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}try{winStamp('av');}catch(e){}try{tblTools('av');}catch(e){}try{lazyCards('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}try{winStamp('ag');}catch(e){}try{tblTools('ag');}catch(e){}try{lazyCards('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}try{winStamp('aq');}catch(e){}try{tblTools('aq');}catch(e){}try{lazyCards('aq');}catch(e){}return;}if(t==='au')return rAU();if(t==='av')return rAV();if(t==='ag')return rAG();if(t==='aq')return rAQ();if(t==='md')return rMD(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='cl')return rCL(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='si')return rSI(),vSafe(vSI,'g26'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ab')return rAB(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='rm')rReadme();else if(t==='vl')rVend();else if(t==='cs')rCost();else if(t==='cp'){rCP();try{conclCard(document.getElementById('g15'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co'){rCO();try{rCOconcl();}catch(e){}}else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt'){rLT();try{conclCard(document.getElementById('g21'),'What this says',scopeVerdicts());}catch(e){}}else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='ab')return rAB(),void(winStamp(t),tblTools(t),lazyCards(t));else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{tblTools(t);}catch(e){}try{markDefs(t);}catch(e){}try{markDrill(t);}catch(e){}try{if(t!=='td')winStamp(t);}catch(e){}try{requestAnimationFrame(stickMeasure);}catch(e){}try{requestAnimationFrame(tabInk);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 
 
 
@@ -2490,6 +2705,12 @@ function tdDelta(cur,prev,goodUp,fmt){
 function rTD(){
  if(TAB!=='td')return;
  const g=document.getElementById('tdC');if(!g)return;
+ /* v20 if the payload is not in yet, paint a skeleton the exact shape of the answer so
+    the layout does not jump when it arrives. Never a spinner: a spinner says "wait",
+    a skeleton says "here is where to look". */
+ if(!window.O||!O.fin){g.innerHTML=skStanding()
+   +'<div class="skwrap" style="display:block;padding:16px 18px"><div class="skline lbl skshim"></div>'
+   +'<div class="skline skshim" style="width:86%"></div><div class="skline sm skshim"></div></div>';return;}
  const W=tdWindows();
  const M=_tdM, SM=_tdSM;
 
@@ -12343,7 +12564,7 @@ function qsweep(gid){try{var g=document.getElementById(gid);if(!g||!g.querySelec
   el.insertAdjacentHTML('beforeend',Q(k));n++;}
  return n;}catch(e){return 0;}}
 const QGRID={pl:'g3',pn:'g4',me:'g5',ao:'g6',rp:'g7',vz:'g8',iq:'g9',mi:'g10',vl:'g12',ai:'g13',cs:'g14',cp:'g15',cj:'g16',bg:'g17',co:'g18',mb:'g19',ab:'g23',md:'g25',cl:'g30'};
-function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='td'){try{rTD();}catch(e){const g=document.getElementById('tdC');if(g)g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}return;}if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}try{winStamp('au');}catch(e){}try{tblTools('au');}catch(e){}try{lazyCards('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}try{winStamp('av');}catch(e){}try{tblTools('av');}catch(e){}try{lazyCards('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}try{winStamp('ag');}catch(e){}try{tblTools('ag');}catch(e){}try{lazyCards('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}try{winStamp('aq');}catch(e){}try{tblTools('aq');}catch(e){}try{lazyCards('aq');}catch(e){}return;}if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{tblTools(t);}catch(e){}try{if(t!=='td')winStamp(t);}catch(e){}try{requestAnimationFrame(stickMeasure);}catch(e){}try{requestAnimationFrame(tabInk);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
+function rTab(){const t=TAB;PREVLBL='';ppHdr();try{setTimeout(atGate,0);}catch(e){}if(t==='td'){try{rTD();}catch(e){const g=document.getElementById('tdC');if(g)g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}return;}if(t==='au'){(typeof rAU==='function'?rAU():pnlMissing('auC'));try{beBanner('au');}catch(e){}try{cardNav('au');}catch(e){}try{winStamp('au');}catch(e){}try{tblTools('au');}catch(e){}try{lazyCards('au');}catch(e){}return;}if(t==='av'){(typeof rAV==='function'?rAV():pnlMissing('avC'));try{beBanner('av');}catch(e){}try{cardNav('av');}catch(e){}try{winStamp('av');}catch(e){}try{tblTools('av');}catch(e){}try{lazyCards('av');}catch(e){}return;}if(t==='ag'){(typeof rAG==='function'?rAG():pnlMissing('agC'));try{beBanner('ag');}catch(e){}try{cardNav('ag');}catch(e){}try{winStamp('ag');}catch(e){}try{tblTools('ag');}catch(e){}try{lazyCards('ag');}catch(e){}return;}if(t==='aq'){(typeof rAQ==='function'?rAQ():pnlMissing('aqC'));try{beBanner('aq');}catch(e){}try{cardNav('aq');}catch(e){}try{winStamp('aq');}catch(e){}try{tblTools('aq');}catch(e){}try{lazyCards('aq');}catch(e){}return;}if(t==='ce')return rCE(),vSafe(vCE,'g28'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ic')return rIC(),vSafe(vIC,'g29'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='why')return rWHY(),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='ai')return rAI(),qsweep('g13'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='rm')return rReadme();if(t==='vl')return rVend(),qsweep('g12'),void (grainNote(t),beBanner(t),flowSort(t),cmpBadge(),winStamp(t),tblTools(t),lazyCards(t));if(t==='on')rOn();else if(t==='off')rOff();else if(t==='pl'){rPlan();document.querySelectorAll('#plC details.insx').forEach((d,i)=>{d.open=i<2;});}else if(t==='pn')rPnl();else if(t==='rp')rRetail();else if(t==='me')rMedia();else if(t==='vz')rViz();else if(t==='iq')rIns();else if(t==='mi')rMeta();else if(t==='cj'){rCJ();try{vCJ(document.getElementById('g16'));}catch(e){}}else if(t==='bg')rBG();else if(t==='co')rCO();else if(t==='mb')rMB();else if(t==='rt'){rRT();try{vRT(document.getElementById('g20'));}catch(e){}}else if(t==='lt')rLT();else if(t==='tr'){rTR();try{vTR(document.getElementById('g22'));}catch(e){}}else if(t==='mt')rMETA();else if(t==='gg')rGOOG();else if(t==='tk'){rTK();try{vTK(document.getElementById('g24'));}catch(e){}}else if(t==='cp')rCP();else if(t==='cs')rCost();else if(t==='md')rMD();else if(t==='cl')rCL();else if(t==='ab')rAB();else if(t==='si'){rSI();try{vSI(document.getElementById('g26'));}catch(e){}}else if(t==='dc')rDC();else if(t==='fo')rFOCUS();else if(t==='tm')rPACE();else if(t==='bf')rBF();else if(t==='cv')rCV();else if(t==='hm')rHM();else if(t==='mn')rMENU();else if(t==='be')rBE();else if(t==='gl')rGL();else if(t==='td'){try{rTD();}catch(e){const _g=document.getElementById('tdC');if(_g)_g.innerHTML='<div class="card" style="padding:20px">Today could not build: '+e.message+'</div>';}}else rAds();if(QGRID[t])qsweep(QGRID[t]);try{grainNote(t);}catch(e){}if(t!=='td'){try{beBanner(t);}catch(e){}try{cardNav(t);}catch(e){}}try{lazyCards(t);}catch(e){}try{tblTools(t);}catch(e){}try{markDefs(t);}catch(e){}try{markDrill(t);}catch(e){}try{if(t!=='td')winStamp(t);}catch(e){}try{requestAnimationFrame(stickMeasure);}catch(e){}try{requestAnimationFrame(tabInk);}catch(e){}try{flowSort(t);}catch(e){}try{cmpBadge();}catch(e){}setTimeout(function(){try{fixCurrency(null);}catch(e){}},140);}
 window.attrSet=attrSet;
 function attrBar(){const SL={'default':'LIVE 7DC/1DV','7dc':'7d click','1dc':'1d click','incr':'Incremental'};
  return [['meta','Meta'],['google','Google'],['tt','TikTok']].map(p=>{
@@ -17969,7 +18190,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-023131';
+const BUILD='20260928-024039';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
