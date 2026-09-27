@@ -6414,7 +6414,12 @@ def build():
             if mm: pr["mon"] = {m: [round(x[0]), round(x[1])] for m, x in mm.items()}
         # products are 1,300+ rows, so this one IS capped -- and the page states the coverage
         # rather than silently ranking a covered row against an uncovered one.
-        _pk = [r.get("t") for r in sorted(prodv["rows"], key=lambda r: -(r.get("r") or 0))[:250] if r.get("t")]
+        # v13.4 the cap was 250, which measured out at only 58.5% of product revenue: a
+        # best-seller list on the daily basis was silently leaving 41% of the money out. 800
+        # reaches 90% and costs +0.23 MB gzipped (measured on the live payload, 0.42 KB per
+        # product compressed) against a 2.11 MB total. Cheap enough that the old cap was
+        # simply the wrong trade.
+        _pk = [r.get("t") for r in sorted(prodv["rows"], key=lambda r: -(r.get("r") or 0))[:800] if r.get("t")]
         _pp, _ps = _daypack(XTRA.get("pday", {}), _pk)
         if _pp:
             prodv["dayStart"] = _ps
