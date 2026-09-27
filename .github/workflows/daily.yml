@@ -62,12 +62,36 @@ jobs:
       # Keep the password-protected mirror in step with what we just built.
       # The whole docs/ tree is deployed, so all three apps (Growth Operator,
       # Strategic, OurKids) and their payloads stay in sync there.
-      - name: Publish to the private mirror
+      - name: Publish to the private mirror (fallback -- Git integration is primary)
         if: always()
+        continue-on-error: true
         env:
           VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          cd docs
-          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+          # v12.9 NO `cd docs`. The Vercel project's Root Directory is already `docs`, and
+          # Vercel applies it on top of whatever is uploaded -- so `cd docs` resolved to
+          # docs/docs and this step failed EVERY night from 18 Sep to 27 Sep 2026. The same
+          # bug was fixed in ourkids.yml/ourkids-heavy.yml back in v9.11 (5 Aug) and these
+          # two siblings were left behind, failing hard because they carry no
+          # continue-on-error. Hardened the same way: never mask the exit status behind a
+          # pipeline, and warn instead of failing the whole run -- the Git integration is
+          # the primary publisher, this is only the fallback.
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning title=Vercel mirror skipped::VERCEL_TOKEN is empty. The Git integration publishes the mirror."
+            exit 0
+          fi
+          set +e
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" > /tmp/v.log 2>&1
+          rc=$?
+          cat /tmp/v.log
+          if [ $rc -eq 0 ]; then
+            echo "mirror published"
+          else
+            if grep -q "not valid" /tmp/v.log; then
+              echo "::warning title=Vercel token expired::VERCEL_TOKEN is rejected. Mint a NO-EXPIRATION token."
+            else
+              echo "::warning title=Vercel mirror failed::See the log above. The Git integration still publishes the mirror."
+            fi
+          fi
