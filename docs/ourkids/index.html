@@ -12914,14 +12914,14 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
        move every per-customer number on this table, so it is stated rather than implied. */
     {n:'Unregistered receipts',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
        if(!b||!P[m])return null;return Math.max(0,(P[m][2]||0)-(b.nc||0)-(b.rc||0));},
-     fmt:v=>Math.round(v).toLocaleString(),sh:1,
-     tt:'Receipts with no customer attached: total orders minus new minus returning. They are in the revenue and in no customer count.'},
+     fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,
+     tt:'Receipts with no customer attached: total orders minus new minus returning. They are in the revenue and in no customer count. HIGH IS BAD \u2014 shaded red upward, because every one of these is a sale you cannot attribute, remarket to, or count in any retention number on this table.'},
     {n:'Unregistered, % of receipts',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
        if(!b||!P[m]||!P[m][2])return null;return Math.max(0,(P[m][2]-(b.nc||0)-(b.rc||0)))/P[m][2]*100;},
-     fmt:PCT,sh:1,tt:'Rising means the tills are capturing identity on fewer sales, which drags every customer number on this table down on its own.'},
+     fmt:PCT,sh:1,gd:-1,tt:'Rising means the tills are capturing identity on fewer sales, which drags every customer number on this table down on its own. HIGH IS BAD \u2014 shaded red upward.'},
     {n:'Unregistered revenue',f:m=>{const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
        if(!b||!P[m])return null;return Math.max(0,(P[m][0]||0)-(b.nrev||0)-(b.rrev||0));},
-     fmt:POS,sh:1,tt:'Revenue on receipts with no customer attached: POS revenue minus new-customer revenue minus returning revenue. Real money, attributable to nobody.'},
+     fmt:POS,sh:1,gd:-1,tt:'Revenue on receipts with no customer attached: POS revenue minus new-customer revenue minus returning revenue. Real money, attributable to nobody. HIGH IS BAD \u2014 shaded red upward.'},
     {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,mk:m=>(BCn[m]&&BCn[m].sal>0)?'':' <span style="font-size:8px;color:#b8621b;font-weight:800" title="No salary posting carries this branch&#39;s analytic tag for this month, so this is the June-2026 Excel payroll figure, not a posting.">EXCEL</span>',tt:'Salary ledger lines carrying this branch&rsquo;s analytic account. A cell marked EXCEL has no posting for that month and shows the baked June-2026 Excel payroll instead.'},
     {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,mk:m=>((BCn[m]&&BCn[m].rent>0)||((RB[n]||{})[m]>0))?'':' <span style="font-size:8px;color:#b8621b;font-weight:800" title="No rent posting for this month — landlords here are paid by quarterly cheque, so the branch&#39;s 12-month average is charged instead of a fake zero.">AVG</span>',tt:'RENT Branches lines by analytic distribution. Cheques post quarterly, so a month with no posting is charged the branch&rsquo;s 12-month average and marked AVG — a zero would flatter every third month.'},
     {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:1,tt:'Actual accounting, allocated by revenue share'},
@@ -13139,7 +13139,20 @@ function rFind(g,M,SH,A,names){try{
      gateway skim on collection, and what we claw back as a negotiated rebate.
    Free shipping is not free -- it is this table with the top line set to zero. */
 /* v6.5 ---------------------------------------------------------------- DECILES / REACH / LAG / SORT */
-function decCtl(k,v){ST[k]=v;if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
+function decCtl(k,v){ST[k]=(v==='(none)'?null:v);if(TAB==='rp')rRetail();else if(TAB==='pn')rPnl();else if(TAB==='cp')rCP();}
+/* v12.9 ONE VS control, rendered by EVERY decile table. It used to exist only on the
+   Customers tab (withSel==='decSc'); the Branches P&L copy got a bare scope picker and the
+   Shopify P&L copy got no control at all, so the comparison Shavi asked for was missing on
+   two of the three places the same table appears. Scope B is shared state, so picking a
+   comparison on one tab carries to the others. */
+function decVsSel(scA){
+ const DD=O.dec||{};
+ const opts=['(none)'].concat(Object.keys(DD).sort().filter(k=>k!==scA));
+ const cur=(ST.decScB&&DD[ST.decScB]&&ST.decScB!==scA)?ST.decScB:'(none)';
+ return ' <label style="font-size:10.5px;font-weight:800;color:#64748b;margin-left:12px">VS '
+  +'<select onchange="decCtl(&quot;decScB&quot;,this.value)" style="font-size:12px;padding:3px 6px">'
+  +opts.map(k=>'<option'+(k===cur?' selected':'')+'>'+k+'</option>').join('')+'</select></label>'
+  +(cur!=='(none)'?' <span style="font-size:10px;color:#8a93a6">grey line under each value = '+cur+'</span>':'');}
 
 /* ====== COMPARABLE BRACKETS: same absolute spend bands for every scope, window-aware ====== */
 window.CBA=window.CBA||'ALL STORES';window.CBB=window.CBB||'';
@@ -13300,16 +13313,22 @@ function rDec(g,sc,withSel){
    if(sc==='__ALL__'&&withSel==='decSc'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
    if(!sc||!DD2[sc])sc=DD2['Shopify']?'Shopify':(ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0]);
    sel=decSelAny(sc,withSel);
-   if(withSel==='decSc'){scB=(ST.decScB&&DD2[ST.decScB]&&ST.decScB!==sc)?ST.decScB:null;
-    const opts=['(none)'].concat(Object.keys(DD2).sort());
-     sel+=' <label style="font-size:10.5px;font-weight:800;color:#64748b;margin-left:12px">VS <select onchange="ST.decScB=this.value===\'(none)\'?null:this.value;rCP&&rCP();" style="font-size:12px;padding:4px 7px">'
-      +opts.map(k=>'<option'+(k===(ST.decScB||'(none)')?' selected':'')+'>'+k+'</option>').join('')+'</select></label>'
-      +(scB?' <span style="font-size:10px;color:#8a93a6">grey line under each value = '+scB+'</span>':'');}
+   scB=(ST.decScB&&DD2[ST.decScB]&&ST.decScB!==sc)?ST.decScB:null;
+   sel+=decVsSel(sc);
   }else{
    if(sc==='__ALL__'&&ks.length){decMatrix(g,ks);ks.forEach(k=>rDec(g,k,0));return;}
    if(ks.length&&(!sc||!DD2[sc]))sc=ks.indexOf('ALL STORES')>=0?'ALL STORES':ks[0];
    sel=decSel(sc);
+   /* v12.9 the Branches P&L copy had a scope picker and no VS. Same table, same control. */
+   scB=(ST.decScB&&DD2[ST.decScB]&&ST.decScB!==sc)?ST.decScB:null;
+   sel+=decVsSel(sc);
   }}
+ else if(DD2[sc]){
+  /* v12.9 the Shopify P&L copy is pinned to one scope and had NO control at all. It still
+     does not choose its own scope A, but it can now be compared against any other. */
+  scB=(ST.decScB&&DD2[ST.decScB]&&ST.decScB!==sc)?ST.decScB:null;
+  sel='<div style="margin:0 0 8px"><span style="font-size:10.5px;font-weight:800;color:#64748b">SCOPE</span> <b style="font-size:12px">'+sc+'</b>'+decVsSel(sc)+'</div>';
+ }
  /* v12.0 the VS lives INSIDE the table: pick scope B and every cell prints B's value in
     grey beneath A's, same row, same decile -- no second table to eyeball across. */
  DB=scB?DD2[scB]:null;
@@ -13510,7 +13529,7 @@ function rShip2(g,mons,T,F,SH){
   {n:'CUSTOMER RETURNED IT &mdash; refunded orders',f:m=>bRefN(m)||null,fmt:F.POS,sh:1,gd:-1,tt:'Bosta &ldquo;Customer Return Pickup&rdquo;. COD on these is NEGATIVE &mdash; money going back to the customer. They received it, paid, and sent it back.'},
   {n:'  what Bosta charged for it, both shipments',f:m=>bRefCost(m)?-bRefCost(m):null,fmt:SIG,sh:1,gd:-1,tt:'Genuinely two shipments: the order was delivered and charged for, then a SECOND shipment was booked to collect it back (its COD is negative \u2014 money going out). The refunded sale itself sits in the Refunds line, not here.'},
   {n:'COURIER COST OF FAILED + RETURNED',f:m=>{const v=bRetTotal(m);return v?-v:null;},fmt:SIG,sh:1,b:1,gd:-1,tt:'A BREAKDOWN of the courier bill above, not an extra charge on top of it \u2014 do not add the two together. This is the share of what you already paid Bosta that moved parcels which earned nothing.'},
-  {n:'  &hellip; as a share of the whole courier bill',f:m=>{const v=bRetTotal(m),c=s2('cost',m);return (v&&c)?v/c*100:null;},fmt:F.PCT,sh:1,gd:-1,tt:'How much of everything you pay the courier is spent moving parcels that came back.'},
+  {n:'  Failed + returned, as a share of the whole courier bill',f:m=>{const v=bRetTotal(m),c=s2('cost',m);return (v&&c)?v/c*100:null;},fmt:F.PCT,sh:1,gd:-1,tt:'How much of everything you pay the courier is spent moving parcels that came back.'},
   /* The per-event cost is the number that actually changes behaviour: it is what one more failed
      delivery costs, and it is knowable exactly because both legs are priced. The lost SALE on a
      refund is deliberately not added here -- it is already carried in the P&L, which scales gross
@@ -16820,7 +16839,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260926-193133';
+const BUILD='20260927-131432';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
