@@ -6215,6 +6215,12 @@ def build():
                 return "promo codeLTV missing"
             if pv.get("gpBasis") != GP_BASIS:
                 return "GP basis changed to %s (crawl figures still on the old one)" % GP_BASIS
+            # v13.1 a NEW payload field needs the crawl that fills it. The daily vendor and
+            # product series shipped with rows already present, so the bnrD staleness trigger
+            # saw a fresh window and ran light -- the field stayed empty and nothing said so.
+            # Gate on the data's own shape, not on remembering to dispatch a run by hand.
+            if (pv.get("vend") or {}).get("rows") and not (pv.get("vend") or {}).get("dayStart"):
+                return "vendor daily series missing (date box cannot drive Where-to-focus without it)"
         except Exception:
             pass
         return None
