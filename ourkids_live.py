@@ -2696,7 +2696,14 @@ def pull_pos_customers():
                         _cd0[_dk] = _cd0.get(_dk, 0.0) + rv
                     if _vn:
                         _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
-                        _vm[0] += rv; _vm[1] += gp_inc(rv, r.get("margin"))
+                        _gpv = gp_inc(rv, r.get("margin"))
+                        _vm[0] += rv; _vm[1] += _gpv
+                        # v13.1 DAILY too, so the date box can actually drive this tab.
+                        _vd = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(r["date"][:10], [0.0, 0.0])
+                        _vd[0] += rv; _vd[1] += _gpv
+                    if _tid:
+                        _pd0 = XTRA.setdefault("pday", {}).setdefault(_tid, {}).setdefault(r["date"][:10], [0.0, 0.0])
+                        _pd0[0] += rv; _pd0[1] += gp_inc(rv, r.get("margin"))
                     if _tid:
                         _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
                         _pm[0] += rv; _pm[1] += gp_inc(rv, r.get("margin"))
@@ -3165,9 +3172,13 @@ def pull_shop_lines():
             if _vn:
                 _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
                 _vm[0] += rv; _vm[1] += mg
+                _vd2 = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(d[:10], [0.0, 0.0])
+                _vd2[0] += rv; _vd2[1] += mg
             if _tid:
                 _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
                 _pm[0] += rv; _pm[1] += mg
+                _pd = XTRA.setdefault("pday", {}).setdefault(_tid, {}).setdefault(d[:10], [0.0, 0.0])
+                _pd[0] += rv; _pd[1] += mg
             a = agg.get(pid)
             if a is None: a = agg[pid] = [0.0, 0.0, 0.0, 0.0, d, d, 0.0, 0.0]
             a[0] += rv; a[1] += mg; a[2] += qy
@@ -6239,11 +6250,48 @@ def build():
     mreach = XTRA.get("mreach") or prev.get("reach", {})
     xchan = XTRA.get("xchan") or prev.get("xchan", {})
     treach = XTRA.get("treach") or prev.get("treach", {})
+    # v13.1 DAILY vendor/product money so the date box drives the Where-to-focus tab instead
+    # of collapsing every pick to a whole month. Dense int arrays from one shared start date:
+    # zeros gzip to almost nothing, and a dense array needs no key per day. Capped to the last
+    # DAY_WIN days and to the entities the tab can actually rank, so the payload stays sane.
+    DAY_WIN = 400
+    def _daypack(src, keep):
+        if not src: return {}, ""
+        d0 = (END - datetime.timedelta(days=DAY_WIN - 1)).isoformat()
+        out = {}
+        for k in keep:
+            days = src.get(k)
+            if not days: continue
+            r = [0] * DAY_WIN; g = [0] * DAY_WIN; hit = 0
+            for ds, v in days.items():
+                if ds < d0: continue
+                try:
+                    i = (datetime.date.fromisoformat(ds) - datetime.date.fromisoformat(d0)).days
+                except Exception:
+                    continue
+                if 0 <= i < DAY_WIN:
+                    r[i] += round(v[0]); g[i] += round(v[1]); hit = 1
+            if hit: out[k] = [r, g]
+        return out, d0
+
     vmon = XTRA.get("vmon", {})
     if vmon and vend.get("rows"):
         for vr in vend["rows"]:
             mm = vmon.get(vr["v"])
             if mm: vr["mon"] = {m: [round(x[0]), round(x[1])] for m, x in mm.items()}
+        # EVERY vendor, not a top-N slice: a ranked table must not put a 7-day row next to a
+        # whole-month row. ~160 rows x 400 days is small; products are the ones that need a cap.
+        _vk = [r["v"] for r in vend["rows"]]
+        _vp, _vs = _daypack(XTRA.get("vday", {}), _vk)
+        if _vp:
+            vend["dayStart"] = _vs
+            _cov = 0.0; _tot = 0.0
+            for vr in vend["rows"]:
+                _tot += (vr.get("r") or 0)
+                if vr["v"] in _vp:
+                    vr["d"] = _vp[vr["v"]]; _cov += (vr.get("r") or 0)
+            vend["dayCov"] = round(100.0 * _cov / _tot, 1) if _tot else 0.0
+            log("vendor daily", len(_vp), "of", len(vend["rows"]), "vendors,", vend["dayCov"], "% of revenue, from", _vs)
     elif vend.get("rows") and prev.get("vend", {}).get("rows"):
         pv = {r["v"]: r.get("mon") for r in prev["vend"]["rows"] if r.get("mon")}
         for vr in vend["rows"]:
@@ -6295,6 +6343,19 @@ def build():
         for pr in prodv["rows"]:
             mm = pmon.get(pr.get("t"))
             if mm: pr["mon"] = {m: [round(x[0]), round(x[1])] for m, x in mm.items()}
+        # products are 1,300+ rows, so this one IS capped -- and the page states the coverage
+        # rather than silently ranking a covered row against an uncovered one.
+        _pk = [r.get("t") for r in sorted(prodv["rows"], key=lambda r: -(r.get("r") or 0))[:250] if r.get("t")]
+        _pp, _ps = _daypack(XTRA.get("pday", {}), _pk)
+        if _pp:
+            prodv["dayStart"] = _ps
+            _cov = 0.0; _tot = 0.0
+            for pr in prodv["rows"]:
+                _tot += (pr.get("r") or 0)
+                if pr.get("t") in _pp:
+                    pr["d"] = _pp[pr["t"]]; _cov += (pr.get("r") or 0)
+            prodv["dayCov"] = round(100.0 * _cov / _tot, 1) if _tot else 0.0
+            log("product daily", len(_pp), "of", len(prodv["rows"]), "products,", prodv["dayCov"], "% of revenue, from", _ps)
     elif prodv.get("rows") and prev.get("prodv", {}).get("rows"):
         pv = {r["n"]: r.get("mon") for r in prev["prodv"]["rows"] if r.get("mon")}
         for pr in prodv["rows"]:
@@ -6502,7 +6563,7 @@ def build():
             mine, theirs = _wend(online), _wend(r0)
             if theirs and (not mine or theirs > mine):
                 keep = ["bnrD", "bnr", "bstat", "bcoh", "bun", "cube", "dec", "decB", "hookV",
-                        "xchan", "mcross", "rtCohPack", "vinv", "bunr", "vmon", "pmon"]
+                        "xchan", "mcross", "rtCohPack", "vinv", "bunr", "vmon", "pmon", "vday", "pday"]
                 took = [k for k in keep if r0.get(k)]
                 for k in took: online[k] = r0[k]
                 log("crawl rescue :: a newer heavy crawl landed mid-run (window", theirs.isoformat(),
