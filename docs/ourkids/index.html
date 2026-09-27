@@ -6101,6 +6101,35 @@ function okCsv(rows,name,win){
 window.__okCsvStore={};
 function okCsvGo(k){const e=window.__okCsvStore[k];if(e)okCsv(e.rows,e.name,e.win);}
 
+/* v13.3 A TOTAL HIDES THE ROOT CAUSE. "12 in stock" is twelve in one shut branch or two in
+   each of six, and those need opposite fixes: the first is a distribution problem, the second
+   is demand. The collector now ships per-branch units, so the row says WHERE the stock is and
+   names the shops that are empty. */
+function brStockRow(r){
+ try{
+  const B=r.bs;if(!B)return '';
+  const ks=Object.keys(B);if(!ks.length)return '';
+  const SHOPS=['Dokki','Mall Of Arabia','Nasr Al-Ahli','New Cairo','October','Smouha','Zayed'];
+  const shop=SHOPS.filter(k=>B[k]>0), empty=SHOPS.filter(k=>!B[k]);
+  const other=ks.filter(k=>SHOPS.indexOf(k)<0&&B[k]>0);
+  const chip=(k,v,col)=>'<span class="tg" style="background:'+col+';margin:0 4px 3px 0">'+k+' <b>'+v+'</b></span>';
+  let h='<tr><td colspan="3" style="padding:6px 0 0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#8a93a6;margin-bottom:3px">WHERE THE STOCK IS</div>'
+   +shop.map(k=>chip(k,B[k],'#eaf7f0')).join('')
+   +other.map(k=>chip(k,B[k],'#f4f6fb')).join('')
+   +(empty.length?'<span class="tg" style="background:#fff1f4;color:#a3271a;font-weight:800">EMPTY: '+empty.join(', ')+'</span>':'')
+   +'</div></td></tr>';
+  /* the read the buyer actually acts on */
+  const fell=(r.d||0)<0;
+  if(fell){
+   let why='';
+   if(!shop.length&&other.length)why='Not in a single shop — every unit is sitting in '+other.join(' / ')+'. This fell because it is not on a shelf, not because nobody wants it.';
+   else if(empty.length>=5&&shop.length)why='On the shelf in only '+shop.length+' of 7 shops. A fall here is distribution before it is demand.';
+   else if(!ks.length)why='';
+   else if(!empty.length)why='In stock in all 7 shops, so this fall is demand, not availability.';
+   if(why)h+='<tr><td colspan="3" style="padding:4px 0 0"><span style="color:#0F172A">'+why+'</span></td></tr>';
+  }
+  return h;
+ }catch(e){return '';}}
 function prodBars(rows,opt){
  opt=opt||{};
  if(!rows||!rows.length)return '<div style="font-size:12px;color:#8a93a6">Nothing moved materially in this window.</div>';
@@ -6168,6 +6197,8 @@ function prodBars(rows,opt){
      +'<td colspan="3" style="padding:2px 0">'+(r.vn?'<b>'+r.vn+'</b>':'')+(r.cat?' &middot; '+r.cat:'')+(r.id?' &middot; id '+r.id:'')+'</td>'
      +'</tr>'
      +(r.st!=null&&r.q?'<tr><td colspan="3" style="padding:4px 0 0">At the current rate that is about <b style="color:#0F172A">'+Math.round(r.st/Math.max(0.1,r.q/7))+' days</b> of stock left.</td></tr>':'')
+     +(r.bc?'<tr><td colspan="3" style="padding:4px 0 0">Barcode <b style="color:#0F172A;font-variant-numeric:tabular-nums">'+String(r.bc).replace(/</g,'&lt;')+'</b></td></tr>':'')
+     +brStockRow(r)
      +'</table>'
    +'</div></div>';}).join('')+'</div>';
 }
@@ -16895,7 +16926,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260927-171436';
+const BUILD='20260927-175648';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
