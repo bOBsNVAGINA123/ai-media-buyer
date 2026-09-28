@@ -5097,8 +5097,78 @@ function seasIdx(m){try{const t=seasTable();const v=t.idx[(m||'').slice(5)];
   return (v&&isFinite(v)&&v>0.25&&v<4)?v:1;}catch(e){return 1;}}
 /* annualise a month HONESTLY: strip its seasonal factor, then multiply by twelve */
 function annl(v,m){return v*12/seasIdx(m);}
+/* ============================================================================
+   v36 · GROWTH LAB SCOPES. One lab was a lab for the company; it could not answer
+   "what should THIS branch do", because a branch does not have sessions, a CVR or
+   a courier bill, and the company overhead line hides the fact that one shop pays
+   rent on a mall unit and another pays none.
+   Three scopes now share one engine:
+     BLENDED  webstore + tills, as before.
+     SHOPIFY  the webstore alone. Branch revenue and branch margin are removed from
+              the model rather than zeroed behind the scenes, and overhead becomes
+              the posted book MINUS every branch's rent and salary, so the online
+              scope is not charged for shop floors.
+     <branch> receipts x basket x that branch's OWN measured margin, less its rent,
+              its salaries, and its share of Meta spend. Rent and salary are TRAILING
+              12-MONTH AVERAGES on purpose: rent arrives on quarterly cheques and
+              payroll postings are lumpy (one branch posted E£58k in one month and
+              E£502k in another), so a single month is the wrong unit for either.
+   ========================================================================== */
+window.GLSCOPE=window.GLSCOPE||'BLENDED';
+window.glScope=function(sc){window.GLSCOPE=sc;GLS={};glBaseInvalidate();try{rGL();}catch(e){}
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
+function glBranches(){try{return Object.keys(O.pos||{}).filter(b=>O.pos[b]&&Object.keys(O.pos[b]).length);}catch(e){return [];}}
+/* trailing-12-month mean of a {month:value} book, ending at and including m */
+function gl12(book,m){ if(!book)return 0; const ks=Object.keys(book).filter(k=>k<=m).sort().slice(-12);
+  if(!ks.length)return 0; let t=0; ks.forEach(k=>{const v=book[k]; t+=(v&&typeof v==='object')?0:(v||0);});
+  return t/12; }
+function gl12sal(br,m){ const bk=(O.bcost||{})[br]; if(!bk)return 0;
+  const ks=Object.keys(bk).filter(k=>k<=m).sort().slice(-12); if(!ks.length)return 0;
+  let t=0; ks.forEach(k=>t+=((bk[k]||{}).sal)||0); return t/12; }
+function gl12rent(br,m){ const bk=(O.rentB||{})[br]; if(!bk)return 0;
+  const ks=Object.keys(bk).filter(k=>k<=m).sort().slice(-12); if(!ks.length)return 0;
+  let t=0; ks.forEach(k=>t+=(bk[k]||0)); return t/12; }
+/* Meta spend allocated to a branch by its share of Meta's in-store attributed value
+   in that month. Meta reports value per branch and never spend, so this is an
+   allocation and every surface that shows it says so. */
+function glBrSpend(br,m){ try{
+  const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z'); let ms=0;
+  for(let i=0;i<A.n;i++){const d=new Date(t0+i*864e5).toISOString().slice(0,10);
+    if(d.slice(0,7)===m)ms+=(A.mspend||[])[i]||0;}
+  const BM=O.bmeta||{}; let tot=0,mine=0;
+  Object.keys(BM).forEach(b=>{let v=0;for(let i=0;i<A.n;i++){const d=new Date(t0+i*864e5).toISOString().slice(0,10);
+    if(d.slice(0,7)===m)v+=((BM[b]||{}).v||[])[i]||0;}
+    tot+=v; if(b===br)mine=v;});
+  return tot>0?ms*(mine/tot):0;}catch(e){return 0;} }
+/* one branch's whole picture for a month -- used by the lab AND by the comparison */
+function glBrPack(br,m){ const P=((O.pos||{})[br]||{})[m]; if(!P)return null;
+  const rev=P[0]||0, gp=P[1]||0, rcp=P[2]||0;
+  const rent=gl12rent(br,m), sal=gl12sal(br,m), spend=glBrSpend(br,m);
+  /* first-time share of CLASSIFIED till revenue in the same month. Receipts with
+     nobody attached are excluded rather than guessed onto a side. */
+  let nc=0,rc=0,un=0,gv=0;
+  try{const D=((O.bnrD||{})[br])||{},W=(O.bnrD||{})._w||{};
+   if(W.start){const t0=Date.parse(W.start+'T00:00:00Z');
+    for(let i=0;i<(W.n||0);i++){const d=new Date(t0+i*864e5).toISOString().slice(0,10);
+     if(d.slice(0,7)!==m)continue;
+     nc+=(D.nrev||[])[i]||0; rc+=(D.rrev||[])[i]||0; un+=(D.unrev||[])[i]||0; gv+=(D.grev||[])[i]||0;}}}catch(e){}
+  return {br:br, bm:m, recp:rcp, basket:rcp?rev/rcp:0, rev:rev,
+    mg:rev?gp/rev*100:0, rent:rent, sal:sal, spend:spend,
+    occ:rev?(rent+sal)/rev*100:0,
+    ncShare:(nc+rc)?nc/(nc+rc)*100:null, unShare:gv?un/gv*100:null};}
+
 function glBase(){
  if(GLS&&GLS._b)return GLS._b;
+ /* branch scopes never touch the online cascade at all */
+ if(window.GLSCOPE&&GLSCOPE!=='BLENDED'&&GLSCOPE!=='SHOPIFY'){
+  const br=GLSCOPE, P=(O.pos||{})[br]||{};
+  const nowM2=(O.today||'').slice(0,7);
+  const mss=Object.keys(P).filter(m=>m!==nowM2).sort();
+  const bm2=mss[mss.length-1];
+  const pk=bm2?glBrPack(br,bm2):null;
+  const bb=pk?{bm:bm2,_br:br,recp:pk.recp,basket:pk.basket,mg:pk.mg,
+    rent:pk.rent,sal:pk.sal,spend:pk.spend}:{bm:bm2||'—',_br:br,recp:0,basket:0,mg:0,rent:0,sal:0,spend:0};
+  (GLS=GLS||{})._b=bb;return bb;}
  const A=O.ad,SH=O.shop,F=O.fin;
  const nowM=(O.today||'').slice(0,7);
  /* last COMPLETE month with an ad feed, a shop feed and a POS month */
@@ -5146,6 +5216,12 @@ function glBase(){
   brRev:brRev, brMg:posMg()*100, ovh:ovh,
   rep:jn?jn.rep:0, oyr:jn?jn.oyr:0, ltgp:jn?jn.ltgp:0,
   cac: nc?spend/nc:0};
+ if(window.GLSCOPE==='SHOPIFY'){
+  /* the online scope must not be charged for shop floors: take the posted book and
+     remove every branch's rent and salary for the same month. What is left is central
+     plus online overhead. */
+  let brFixed=0; glBranches().forEach(x=>{brFixed+=((((O.rentB||{})[x])||{})[bm]||0)+(((((O.bcost||{})[x])||{})[bm]||{}).sal||0);});
+  b.brRev=0; b.brMg=0; b.ovh=Math.max(0,b.ovh-brFixed); b._onlyOnline=1; b._brFixed=brFixed;}
  (GLS=GLS||{})._b=b;return b;}
 function glV(k){const b=glBaseCached();GLS=GLS||{};return (GLS[k]!=null)?GLS[k]:b[k];}   /* v19 cached: this was re-deriving the whole baseline once per key, per frame */
 /* v19 SLIDERS. The old handler called rGL() on every oninput -- a full innerHTML rebuild
@@ -5200,6 +5276,11 @@ window.glLive=function(full){
 window.glReset=function(){const b=glBase();GLS={_b:b};rGL();};
 /* the run-rate cascade, run once on the baseline and once on the slider values */
 function glRun(V){
+ if(V._br!==undefined||((GLS||{})._b||{})._br){
+  const rev=V.recp*V.basket, gp=rev*V.mg/100;
+  const afterAds=gp-V.spend, afterAll=afterAds-V.rent-V.sal;
+  return {rev:rev,revTot:rev,gp:gp,brGP:gp,afterAds:afterAds,afterAll:afterAll,
+    occ:rev?((V.rent+V.sal)/rev*100):0, fixed:V.rent+V.sal};}
  const ordD=V.sess*V.cvr/100;                     /* orders PLACED, cancellations included */
  const orders=ordD*(1-V.cx/100);                  /* confirmed orders */
  const demand=ordD*V.aov;                         /* everything placed, at basket value */
@@ -5218,13 +5299,162 @@ function glRun(V){
  const afterAll=afterAds-V.ovh;
  return {ordD,orders,demand,gross:grossS,net,gp,courier,shipIn,gpDel,brGP,afterAds,afterAll,
    revTot:net+V.brRev};}
+function glScopeBar(g){
+ const cur=window.GLSCOPE||'BLENDED';
+ const opts=[['BLENDED','Whole company','webstore + all seven tills'],
+             ['SHOPIFY','Shopify only','the webstore on its own, no shop floors charged to it']]
+   .concat(glBranches().map(b=>[b,b,'this shop alone: receipts, basket, its own margin, its own rent and payroll']));
+ const wrap=document.createElement('div');wrap.className='card full';wrap.dataset.a='blend';
+ wrap.innerHTML='<div style="font-size:10.5px;font-weight:800;letter-spacing:.09em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Model this scope</div>'
+  +'<div style="display:flex;flex-wrap:wrap;gap:7px">'
+  +opts.map(o=>'<button class="btn'+(o[0]===cur?' p':' g')+'" title="'+o[2]+'" onclick="glScope(\''+String(o[0]).replace(/'/g,"\\'")+'\')" style="font-size:11.5px">'+o[1]+'</button>').join('')
+  +'</div>'
+  +'<div style="font-size:11.5px;color:var(--ink-3);margin-top:8px;line-height:1.5">Each scope is a different model, not a filter on the same one. A branch has no sessions, no conversion rate and no courier bill; the webstore has no rent. Switching scope swaps the arithmetic, and every scope says which of its inputs is measured and which is allocated.</div>';
+ g.appendChild(wrap);}
+/* ---------------------------------------------------------------------------
+   BRANCH SCOPE. Same slider machinery, a four-line cascade, and advice built by
+   putting this branch beside the other six on every lever it actually has.
+   ------------------------------------------------------------------------- */
+function rGLBranch(g,b){
+ const br=b._br, M=v=>'E\u00a3'+Math.round(Math.abs(v)).toLocaleString();
+ const SG=v=>(v>=0?'+':'\u2212')+M(v);
+ if(!b.recp){pnlCard(g,'blend',br+' \u2014 no complete month',' ','<div style="padding:16px;color:var(--ink-3);font-size:12.5px">No finished POS month for this branch in the sync.</div>');return;}
+ document.getElementById('bn_gl').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Modelling <b>'+br+'</b> on <b>'+b.bm+'</b>. Receipts, basket and margin are that shop&rsquo;s own measured numbers; rent and payroll are its trailing 12-month averages; ad spend is an allocated share. <b>This tab does not follow the date box.</b>';
+ const KEYS=['recp','basket','mg','rent','sal','spend'];
+ const V={};KEYS.forEach(k=>V[k]=glV(k));
+ const B={};KEYS.forEach(k=>B[k]=b[k]);
+ const now=glRun(B), sc=glRun(V);
+ /* --- peers, for every comparison on this page --- */
+ const peers=glBranches().map(x=>glBrPack(x,b.bm)).filter(Boolean);
+ const med=k=>{const v=peers.map(r=>r[k]).filter(x=>x!=null&&isFinite(x)).sort((a,c)=>a-c);return v.length?v[Math.floor(v.length/2)]:0;};
+ const rk=(k,hiGood)=>{const v=peers.slice().sort((a,c)=>hiGood?c[k]-a[k]:a[k]-c[k]);return v.findIndex(r=>r.br===br)+1;};
+ const me=peers.find(r=>r.br===br)||{};
+ /* --- headline --- */
+ const kp=[['Monthly revenue',sc.rev,now.rev,'cur'],['Gross profit',sc.gp,now.gp,'cur'],
+   ['After allocated ads',sc.afterAds,now.afterAds,'cur'],['After rent and payroll',sc.afterAll,now.afterAll,'cur']];
+ const dM=sc.rev-now.rev, dA=sc.afterAll-now.afterAll;
+ let head='<div class="kpis">'+kH(kp,'gl')+'</div>'
+  +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);border:1px solid '+(dA>=0?'var(--pos-line)':'var(--neg-line)')+';background:'+(dA>=0?'var(--pos-wash)':'var(--neg-wash)')+'">'
+  +'<div style="font-size:12.5px;font-weight:800;color:'+(dA>=0?'var(--pos)':'var(--neg)')+'">Against '+b.bm+': '+SG(dM)+' a month of revenue &middot; '+SG(dA)+' a month after rent and payroll &middot; '+SG(annl(dA,b.bm))+' a year</div>'
+  +'<div style="font-size:11.5px;color:var(--ink-2);margin-top:4px;line-height:1.5">The annual figure is deseasonalised on '+b.bm+'&rsquo;s index of '+seasIdx(b.bm).toFixed(2)+'&times;, not multiplied by twelve.</div></div>';
+ pnlCard(g,'blend',br+' &mdash; what this shop&rsquo;s levers are worth'
+  +INFO('Revenue = receipts x basket. GP uses this branch\u2019s own measured margin, not the company average. Rent and payroll are trailing 12-month averages because rent arrives on quarterly cheques. Ad spend is Meta spend allocated by this branch\u2019s share of Meta in-store attributed value.'),
+  'Baseline is '+b.bm+' as this shop actually traded.',head);
+ /* --- sliders --- */
+ const SL=[['recp','Receipts per month',0.4,2,1,v=>Math.round(v).toLocaleString(),'Every till receipt this shop rang in '+b.bm+'. Footfall x the share who buy.'],
+  ['basket','Average basket',0.5,2,1,v=>'E\u00a3'+Math.round(v).toLocaleString(),'Revenue per receipt, VAT-inclusive. Units per basket x price per unit.'],
+  ['mg','Gross margin',0.5,1.6,0.1,v=>v.toFixed(1)+'%','This branch\u2019s OWN measured margin on the 4% basis, not the company figure.'],
+  ['rent','Rent per month',0,2,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'Trailing 12-month average of posted rent for this branch. A single month is the wrong unit: the cheques are quarterly.'],
+  ['sal','Payroll per month',0.3,2,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'Trailing 12-month average of posted salaries tagged to this branch.'],
+  ['spend','Allocated ad spend',0,3,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'ALLOCATED, not measured. Meta reports in-store attributed value per branch but never spend, so this is Meta spend split by that value share.']];
+ let sh='';
+ SL.forEach(x=>{const k=x[0],lo=b[k]*x[2],hi=(b[k]*x[3])||1,cur=V[k],base=b[k];
+  const d=base?((cur/base-1)*100):0;
+  (window._glFmt=window._glFmt||{})[k]=x[5];
+  sh+='<div data-glk="'+k+'" style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
+   +'<div style="font-size:11.5px;font-weight:700" title="'+String(x[6]).replace(/"/g,'&quot;')+'">'+x[1]
+   +'<div style="font-size:10.5px;font-weight:600;color:var(--ink-3)">was '+x[5](base)+'</div></div>'
+   +'<input type="range" min="'+lo+'" max="'+hi+'" step="'+x[4]+'" value="'+cur+'" oninput="glSet(\''+k+'\',this.value)" onchange="glSet(\''+k+'\',this.value,1)" style="width:100%">'
+   +'<div style="text-align:right"><b data-glv style="font-size:12.5px;font-variant-numeric:tabular-nums">'+x[5](cur)+'</b>'
+   +'<div data-gld style="font-size:10.5px;font-weight:700;color:'+(Math.abs(d)<0.05?'var(--ink-3)':(d>0?'var(--pos)':'var(--neg)'))+'">'+(Math.abs(d)<0.05?'at baseline':(d>0?'+':'')+d.toFixed(1)+'%')+'</div></div></div>';});
+ sh+='<div style="margin-top:12px"><button class="btn g" onclick="glReset()">Reset to '+b.bm+'</button></div>';
+ pnlCard(g,'blend','The levers this shop actually has','No sessions, no conversion rate, no courier bill &mdash; a shop does not have them. What it has is how many people pay, how much they pay, what margin sits in it, and what the floor costs to keep open.',sh);
+ /* --- cascade --- */
+ const TD='padding:5px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px';
+ const row=(n,a,c,note,bold,key)=>'<tr'+(bold?' style="font-weight:800;background:var(--surface-3)"':'')+'><td style="'+TD+';text-align:left">'+n+'</td>'
+   +'<td style="'+TD+'">'+M(a)+'</td><td style="'+TD+'"'+(key?' data-glo="'+key+'"':'')+'>'+M(c)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+((c-a)>=0?'var(--pos)':'var(--neg)')+'">'+SG(c-a)+'</td>'
+   +'<td style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);white-space:normal">'+note+'</td></tr>';
+ let ct='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Line</th>'
+  +'<th style="'+TD+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">'+b.bm+' actual</th>'
+  +'<th style="'+TD+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Scenario</th>'
+  +'<th style="'+TD+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Change</th>'
+  +'<th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">How it is computed</th></tr>'
+  +row('Till revenue',now.rev,sc.rev,'receipts &times; basket',1,'rev')
+  +row('Gross profit',now.gp,sc.gp,'revenue &times; this branch&rsquo;s margin (4% basis)',0,'gp')
+  +row('Allocated ad spend',-V.spend,-V.spend,'allocated, not measured &mdash; see the note under the table')
+  +row('After ads',now.afterAds,sc.afterAds,'GP &minus; allocated ad spend',1,'afterAds')
+  +row('Rent',-B.rent,-V.rent,'trailing 12-month average')
+  +row('Payroll',-B.sal,-V.sal,'trailing 12-month average')
+  +row('After rent and payroll',now.afterAll,sc.afterAll,'what this floor actually contributes',1,'afterAll')
+  +'</table></div>'
+  +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.55;color:var(--ink-2)">'
+  +'<b style="color:var(--warn)">This is contribution, not net profit.</b> It charges the shop for its own floor and its own people and nothing else &mdash; no share of head office, no central logistics, no finance costs. Two lines are not measurements: ad spend is allocated from Meta&rsquo;s in-store attributed value, and rent and payroll are twelve-month averages rather than what posted in '+b.bm+'.</div>';
+ pnlCard(g,'blend','The cascade &mdash; every line, both scenarios','Read left to right. No step is hidden.',ct);
+ /* --- lever ranking, one at a time, same 10% --- */
+ const LV=[['recp','Receipts',1],['basket','Average basket',1],['mg','Gross margin',1],
+   ['rent','Rent',-1],['sal','Payroll',-1],['spend','Allocated ad spend',-1]];
+ const fmtL=(k,v)=>k==='mg'?v.toFixed(1)+'%':(k==='recp'?Math.round(v).toLocaleString()+' receipts':'E\u00a3'+Math.round(v).toLocaleString());
+ const rankR=LV.map(l=>{const W=Object.assign({},B);W[l[0]]=B[l[0]]*(1+l[2]*0.10);const r=glRun(W);
+   return {k:l[0],n:l[1],gp:annl(r.afterAll-now.afterAll,b.bm),rev:annl(r.rev-now.rev,b.bm),from:B[l[0]],to:W[l[0]]};})
+  .filter(x=>isFinite(x.gp)).sort((a,c)=>c.gp-a.gp);
+ const mxg=Math.max.apply(null,rankR.map(x=>Math.abs(x.gp)).concat([1]));
+ let rkH='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  +'<tr><th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Lever</th>'
+  +'<th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">A 10% move means</th>'
+  +'<th style="'+TD+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Annual revenue</th>'
+  +'<th style="'+TD+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Annual contribution</th>'
+  +'<th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Weight</th></tr>';
+ rankR.forEach((x,i)=>{const w=Math.abs(x.gp)/mxg*100;
+  rkH+='<tr><td style="'+TD+';text-align:left;font-weight:800">'+(i+1)+'. '+x.n+'</td>'
+   +'<td style="'+TD+';text-align:left;font-size:11.5px;color:var(--ink-2)">'+fmtL(x.k,x.from)+' &rarr; <b>'+fmtL(x.k,x.to)+'</b></td>'
+   +'<td style="'+TD+';font-weight:700">'+SG(x.rev)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'var(--pos)':'var(--neg)')+'">'+SG(x.gp)+'</td>'
+   +'<td style="'+TD+';text-align:left"><div style="background:var(--surface-3);border-radius:5px;height:13px"><div style="width:'+w.toFixed(1)+'%;background:'+(x.gp>=0?'var(--pos)':'var(--neg)')+';height:13px;border-radius:5px"></div></div></td></tr>';});
+ rkH+='</table></div>';
+ pnlCard(g,'blend','Which lever first, for '+br,'Each row moves one lever 10% of its own value in the helpful direction, everything else held at '+b.bm+'. Ranked by annual contribution after rent and payroll. '
+  +'<b>The top three tying is arithmetic, not a bug:</b> gross profit is receipts &times; basket &times; margin, so a tenth added to any one of them adds exactly the same tenth of profit. Which one to chase is decided entirely by the comparison table below, never by this ranking.'
+  +(b.rent?'':' <b>Rent reads zero for '+br+'</b> &mdash; no rent is posted against this branch&rsquo;s analytic tag, so either the site is owned or the charge sits somewhere central. Its contribution below is therefore flattered against shops that pay rent.'),rkH);
+ /* --- how this branch differs from the other six, lever by lever --- */
+ const cmp=[['basket','Average basket',1,v=>'E\u00a3'+Math.round(v).toLocaleString()],
+   ['mg','Gross margin',1,v=>v.toFixed(1)+'%'],
+   ['recp','Receipts per month',1,v=>Math.round(v).toLocaleString()],
+   ['occ','Rent + payroll as % of revenue',0,v=>v.toFixed(1)+'%'],
+   ['ncShare','First-time share of revenue',1,v=>(v==null?'—':v.toFixed(1)+'%')],
+   ['rev','Monthly revenue',1,v=>'E\u00a3'+Math.round(v).toLocaleString()]];
+ let cH='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:12px">'
+  +'<tr><th style="text-align:left">Lever</th><th style="text-align:right">'+br+'</th><th style="text-align:right">Network median</th><th style="text-align:right">Gap</th><th style="text-align:right">Rank of '+peers.length+'</th><th style="text-align:left">What it means here</th></tr>';
+ const said=[];
+ cmp.forEach(c=>{const mine=(me[c[0]]==null?null:me[c[0]]), m2=med(c[0]), gap=(m2&&mine!=null)?(mine/m2-1)*100:0, r=rk(c[0],!!c[2]);
+  const good=c[2]?mine>=m2:mine<=m2;
+  let say='';
+  if(c[0]==='basket')say=good?'people who come here spend more than the network typically does \u2014 price and mix are not the problem on this floor.':'the shop rings smaller baskets than the network. Attachment and bundling move this without needing one extra person through the door.';
+  if(c[0]==='mg')say=good?'it sells a richer mix than the network \u2014 protect it before chasing volume.':'the mix here is thinner than the network. Same revenue, less profit: this is a range and vendor problem, not a footfall one.';
+  if(c[0]==='recp')say=good?'footfall is not this shop\u2019s constraint.':'fewer paying visits than the network typical \u2014 the constraint here is people through the door, which is the one lever media can actually move.';
+  if(c[0]==='occ')say=good?'a light floor: rent and payroll take less of the revenue than the network typical, so volume here drops through to contribution faster than anywhere else.':'a heavy floor: rent and payroll eat more of every pound than the network typical, so this shop needs more revenue than its peers to reach the same contribution.';
+  if(c[0]==='ncShare')say=good?'more of its takings come from people buying here for the first time than at the network typical — media aimed at this catchment buys new customers rather than repeat trips.':'it runs on people who already know it. Acquisition spend here works against the grain; the money is better spent on basket and repeat frequency than on reach.';
+  if(c[0]==='rev')say=good?'one of the bigger shops by takings.':'one of the smaller shops by takings \u2014 read every other row on this table before concluding anything from it.';
+  const cap=say?say.charAt(0).toUpperCase()+say.slice(1):'';
+  if(mine!=null&&m2&&Math.abs(gap)>=8)said.push([good?'pos':'neg','<b>'+c[1]+'</b> is '+(gap>0?'+':'')+gap.toFixed(0)+'% against the network median ('+c[3](mine)+' vs '+c[3](m2)+'). '+cap]);
+  cH+='<tr><td style="text-align:left;font-weight:620">'+c[1]+'</td>'
+   +'<td class="num" style="text-align:right;font-weight:700">'+(mine==null?'—':c[3](mine))+'</td>'
+   +'<td class="num" style="text-align:right;color:var(--ink-2)">'+(m2?c[3](m2):'—')+'</td>'
+   +'<td class="num" style="text-align:right;font-weight:700;color:'+(good?'var(--pos)':'var(--neg)')+'">'+(mine==null||!m2?'—':(gap>0?'+':'')+gap.toFixed(0)+'%')+'</td>'
+   +'<td class="num" style="text-align:right">'+r+'</td>'
+   +'<td style="text-align:left;font-size:11.5px;color:var(--ink-2);white-space:normal">'+say+'</td></tr>';});
+ cH+='</table></div>';
+ if(!said.length)said.push(['','On every lever measured here this branch sits within 8% of the network median. There is nothing branch-specific to act on \u2014 whatever you do for the network applies to it unchanged.']);
+ const top=rankR[0];
+ cH+='<div style="margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface);border:1px solid var(--line)">'
+  +'<div style="font-size:12.5px;font-weight:800;color:var(--ink);margin-bottom:6px">What to do about '+br+'</div>'
+  +said.map(x=>'<div style="font-size:11.5px;line-height:1.6;color:var(--ink-2);margin-bottom:4px">'
+    +(x[0]==='pos'?'<span style="color:var(--pos);font-weight:700">\u25b2 </span>':x[0]==='neg'?'<span style="color:var(--neg);font-weight:700">\u25bc </span>':'')+x[1]+'</div>').join('')
+  +'<div style="font-size:11.5px;line-height:1.6;color:var(--ink-2);margin-top:6px"><b>Steepest arithmetic:</b> '+(top?top.n.toLowerCase()+' \u2014 a 10% move is worth '+SG(top.gp)+' of annual contribution here':'\u2014')+'. '
+  +'That is where the maths is steepest, not where the effort is cheapest; read it against the gaps above before choosing.</div></div>';
+ pnlCard(g,'blend',br+' against the other six &mdash; lever by lever',
+  'Every branch is modelled on the same month and the same arithmetic, so the gaps are comparable. Rank 1 is best on that lever.',cH);
+}
 function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  const g=document.getElementById('g_gl');if(!g)return;g.innerHTML='';
+ glScopeBar(g);
  const b=glBase();
+ if(b._br){try{rGLBranch(g,b);}catch(e){pnlCard(g,'blend','Branch model failed',' ','<div style="padding:14px;color:var(--neg);font-size:12px">'+String(e&&e.message||e)+'</div>');}return;}
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const SG=v=>(v>=0?'+':'−')+M(v);
- document.getElementById('bn_gl').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Every slider starts at what <b>'+b.bm+'</b> actually did &mdash; the last complete month with a full ad feed. Drag one and every number below recomputes through the same arithmetic the P&amp;L uses. <b>This tab does not follow the date box</b>: it is a model of a month, not a report of one.';
- const KEYS=['sess','cvr','aov','cx','rf','mg','perParcel','ppo','shipPerOrder','spend','brRev','brMg','ovh'];
+ const ONLY=(window.GLSCOPE==='SHOPIFY');
+ document.getElementById('bn_gl').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. '+(ONLY?'<b>Shopify only</b> &mdash; branch revenue and branch margin are out of the model entirely, and overhead here is the posted book minus every branch&rsquo;s rent and payroll ('+('E\u00a3'+Math.round(b._brFixed||0).toLocaleString())+' removed), so the webstore is not charged for shop floors. ':'')+'Every slider starts at what <b>'+b.bm+'</b> actually did &mdash; the last complete month with a full ad feed. Drag one and every number below recomputes through the same arithmetic the P&amp;L uses. <b>This tab does not follow the date box</b>: it is a model of a month, not a report of one.';
+ const KEYS=['sess','cvr','aov','cx','rf','mg','perParcel','ppo','shipPerOrder','spend','ovh'].concat(ONLY?[]:['brRev','brMg']);
  const V={};KEYS.forEach(k=>V[k]=glV(k));
  const B={};KEYS.forEach(k=>B[k]=b[k]);
  const now=glRun(B), sc=glRun(V);
@@ -5260,6 +5490,7 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
    ['spend','Ad spend per month',0,3,1000,v=>'E£'+Math.round(v).toLocaleString(),'Meta + Google + TikTok. Raising it does NOT raise sessions on this slider — move sessions yourself, so the two effects stay separable.'],
    ['ovh','Monthly overhead',0.5,1.6,1000,v=>'E£'+Math.round(v).toLocaleString(),'The whole posted expense book for '+b.bm+', ad invoices excluded (they are in Ad spend).']]]];
  let sh='';
+ if(ONLY)SL.forEach(sec=>{sec[1]=sec[1].filter(x=>x[0]!=='brRev'&&x[0]!=='brMg');});
  SL.forEach(sec=>{
   sh+='<div style="font-size:10.5px;font-weight:800;letter-spacing:.09em;color:#64748b;margin:14px 0 6px">'+sec[0]+'</div>';
   sec[1].forEach(x=>{
@@ -5304,9 +5535,9 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   +rowc('Shipping collected',now.shipIn,sc.shipIn,'orders &times; shipping per order',0,0,'shipIn')
   +rowc('Courier bill',-now.courier,-sc.courier,'orders &times; parcels per order &times; cost per parcel')
   +rowc('Delivered webstore GP',now.gpDel,sc.gpDel,'GP + shipping collected &minus; courier',1,0,0,'gpDel')
-  +rowc('Branch gross profit',now.brGP,sc.brGP,'branch revenue &times; branch margin',0,0,'brGP')
+  +(ONLY?'':rowc('Branch gross profit',now.brGP,sc.brGP,'branch revenue &times; branch margin',0,0,'brGP'))
   +rowc('Ad spend',-V.spend,-V.spend,'as set')
-  +rowc('Contribution after ads',now.afterAds,sc.afterAds,'delivered GP + branch GP &minus; ad spend',1,0,0,'afterAds')
+  +rowc('Contribution after ads',now.afterAds,sc.afterAds,ONLY?'delivered webstore GP &minus; ad spend':'delivered GP + branch GP &minus; ad spend',1,0,0,'afterAds')
   +rowc('Overhead',-B.ovh,-V.ovh,'posted expense book, ad invoices excluded')
   +rowc('After ads AND overhead',now.afterAll,sc.afterAll,'the bottom line of the month',1,0,0,'afterAll')
   +'</table></div>';
@@ -5318,10 +5549,10 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
     ranks the sliders you dragged, not the levers that matter. */
  const STEP=0.10;
  const LV=[['cvr','Conversion rate',1],['aov','Average order value',1],['sess','Sessions',1],
-   ['mg','Online gross margin',1],['brRev','Branch revenue',1],['brMg','Branch margin',1],
+   ['mg','Online gross margin',1]].concat(ONLY?[]:[['brRev','Branch revenue',1],['brMg','Branch margin',1]]).concat([
    ['cx','Cancellation rate',-1],['rf','Refund rate',-1],['perParcel','Courier per parcel',-1],
    ['ppo','Parcels per order',-1],['shipPerOrder','Shipping collected per order',1],
-   ['ovh','Overhead',-1]];
+   ['ovh','Overhead',-1]]);
  const rank=LV.map(l=>{const W=Object.assign({},B);
    W[l[0]]=B[l[0]]*(1+l[2]*STEP);
    const r=glRun(W);
@@ -18925,7 +19156,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-150634';
+const BUILD='20260928-151339';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
