@@ -5474,7 +5474,7 @@ def pull_vendors():
     def V(code):
         return ven.setdefault(code, {"v": code, "n": NM.get(code, code), "r": 0.0, "g": 0.0, "q": 0.0,
                                      "orev": 0.0, "ogp": 0.0, "oq": 0.0, "br": {}, "r90": 0.0, "p90": 0.0,
-                                     "cash": 0.0, "cons": 0.0, "cat": {}})
+                                     "cash": 0.0, "cons": 0.0, "consG": 0.0, "cashG": 0.0, "cat": {}})
     def T(tid):
         vt = TV.get(tid, ("", "", ""))
         return tmpl.setdefault(tid, {"t": tid, "n": "", "v": vt[0], "cat": vt[1], "ct": vt[2],
@@ -5502,8 +5502,14 @@ def pull_vendors():
             d["r"] += rv; d["g"] += gp; d["q"] += qt
             b = d["br"].setdefault(br, [0.0, 0.0]); b[0] += rv; b[1] += gp
             ct = TV[t[0]][2]
-            if ct == "Consignment": d["cons"] += rv
-            else: d["cash"] += rv
+            # v50: GROSS PROFIT by buying model, not just revenue. Only `cons` existed, so the
+            # tool could say what share of revenue was consignment and nothing at all about
+            # what that half EARNS -- which is the only question worth asking about terms.
+            # Verified 2026-09-28 against combined.retail.sales.report: the product-level
+            # x_studio_category_type and the vendor-level res.partner.vendor_type agree on
+            # 100% of 6,000 sampled lines, so this split is the vendor's terms.
+            if ct == "Consignment": d["cons"] += rv; d["consG"] += gp
+            else: d["cash"] += rv; d["cashG"] += gp
             cg = TV[t[0]][1]
             if cg: d["cat"][cg] = d["cat"].get(cg, 0.0) + rv
         log("vendor retail", br, len(g), "templates")
@@ -6331,6 +6337,15 @@ def build():
                     r[i] += round(v[0]); g[i] += round(v[1]); hit = 1
             if hit: out[k] = [r, g]
         return out, d0
+
+    # v50: stamp each vendor with its buying model so the monthly series below can be split
+    # cash vs consignment. Terms are a property of the VENDOR, not of a product category --
+    # a vendor whose revenue is overwhelmingly one model IS that model; anything genuinely
+    # mixed is left unlabelled rather than forced to a side.
+    for vr in (vend.get("rows") or []):
+        _c, _k = float(vr.get("cons") or 0), float(vr.get("cash") or 0)
+        _t = _c + _k
+        vr["ct"] = "cons" if (_t and _c / _t >= 0.85) else ("cash" if (_t and _k / _t >= 0.85) else "mixed")
 
     vmon = XTRA.get("vmon", {})
     if vmon and vend.get("rows"):
