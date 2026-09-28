@@ -12154,6 +12154,110 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
     +'<td>'+M(r.c.rrev)+'</td><td>'+D2(r.c.rrev,r.p.rrev)+'</td>';})()
   +'<td style="border-left:1px solid #e6e9f0">'+aov(r.c.nrev,r.c.nc)+'</td><td>'+aov(r.c.rrev,r.c.rc)+'</td>'
   +'<td style="border-left:1px solid #e6e9f0">'+NUM(r.c.wk)+'</td></tr>';};
+
+ /* ============================================================================
+    v34 · aMER BY BRANCH — and an honest account of what a branch aMER can be.
+    aMER is first-time revenue over ad spend. Both halves are awkward in a shop:
+      NUMERATOR. A till receipt is new, returning, or attached to nobody. The
+      unregistered ones cannot be either, so they are excluded from the split and
+      their share is printed -- 1.2% to 9.0% of revenue by branch, small enough to
+      work with and too big to hide.
+      DENOMINATOR. Meta does not split SPEND by branch; it only attributes VALUE.
+      So per-branch spend is ALLOCATED by each branch's share of Meta's in-store
+      attributed value. That is an allocation, not a measurement, and the aMER
+      column is marked as derived for exactly that reason. The measured columns
+      beside it are not.
+    ========================================================================== */
+ try{(function(){
+  const B=O.bnrD||{}, W=B._w||{};
+  if(!W.start||!O.bmeta)return;
+  const M=v=>'E\u00a3 '+Math.round(v||0).toLocaleString();
+  const names=Object.keys(B).filter(k=>k!=='_w');
+  if(!names.length)return;
+  const bi=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(W.start+'T00:00:00Z'))/864e5);
+  const ai=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(O.ad.start+'T00:00:00Z'))/864e5);
+  const b0=Math.max(0,bi(ST.s)), b1=Math.min((W.n||0)-1,bi(ST.e));
+  const a0=Math.max(0,ai(ST.s)), a1=Math.min(O.ad.n-1,ai(ST.e));
+  if(b1<b0)return;
+  let spTot=0,spAll=0,onNc=0; for(let i=a0;i<=a1;i++){spTot+=(O.ad.mspend||[])[i]||0;
+    spAll+=(O.ad.spend||[])[i]||0; onNc+=(O.ad.ncrev||[])[i]||0;}
+  const rows=names.map(nm=>{
+    const d=B[nm]||{}, S=k=>{let t=0;for(let i=b0;i<=b1;i++)t+=((d[k]||[])[i]||0);return t;};
+    const M=O.bmeta[nm]||{}, SM=k=>{let t=0;for(let i=a0;i<=a1;i++)t+=((M[k]||[])[i]||0);return t;};
+    const nrev=S('nrev'), rrev=S('rrev'), unrev=S('unrev'), grev=S('grev');
+    const nord=S('nord'), rord=S('rord');
+    const cls=nrev+rrev;
+    return {nm, grev, nrev, rrev, unrev, nord, rord,
+      ncShare:cls?nrev/cls:0, unShare:grev?unrev/grev:0,
+      mv:SM('v'), mnc:SM('nc'), aovN:nord?nrev/nord:0};});
+  const mvTot=rows.reduce((a2,r)=>a2+r.mv,0)||1;
+  rows.forEach(r=>{ r.alloc=spTot*(r.mv/mvTot); r.amer=r.alloc>0?r.nrev/r.alloc:null;
+                    r.cac=r.mnc>0?r.alloc/r.mnc:null; });
+  rows.sort((a2,b2)=>b2.grev-a2.grev);
+  const med=k=>{const v=rows.map(r=>r[k]).filter(x=>x!=null&&isFinite(x)).sort((a2,b2)=>a2-b2);
+    return v.length?v[Math.floor(v.length/2)]:0;};
+  const mNc=med('ncShare'), mAmer=med('amer'), mAov=med('aovN');
+  let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:11.5px">'
+   +'<tr><th style="text-align:left">Branch</th><th style="text-align:right">Till revenue</th>'
+   +'<th style="text-align:right">First-time rev</th><th style="text-align:right">First-time share</th>'
+   +'<th style="text-align:right">AOV first-time</th><th style="text-align:right">Meta in-store value</th>'
+   +'<th style="text-align:right">Meta new cust</th><th style="text-align:right">Spend (allocated)</th>'
+   +'<th style="text-align:right">aMER (derived)</th><th style="text-align:right">Unattached</th></tr>';
+  rows.forEach(r=>{
+    const good=x=>x?'var(--pos)':'var(--neg)';
+    h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink)">'+r.nm+'</td>'
+     +'<td class="num" style="text-align:right">'+M(r.grev)+'</td>'
+     +'<td class="num" style="text-align:right">'+M(r.nrev)+'</td>'
+     +'<td class="num" style="text-align:right;font-weight:700;color:'+good(r.ncShare>=mNc)+'">'+(r.ncShare*100).toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right">'+M(r.aovN)+'</td>'
+     +'<td class="num" style="text-align:right;color:var(--ink-2)">'+M(r.mv)+'</td>'
+     +'<td class="num" style="text-align:right;color:var(--ink-2)">'+Math.round(r.mnc).toLocaleString()+'</td>'
+     +'<td class="num" style="text-align:right;color:var(--ink-3)">'+M(r.alloc)+'</td>'
+     +'<td class="num" style="text-align:right;font-weight:700;color:'+good(r.amer>=mAmer)+'">'+(r.amer?r.amer.toFixed(2)+'×':'—')+'</td>'
+     +'<td class="num" style="text-align:right;color:'+(r.unShare>0.06?'var(--warn)':'var(--ink-3)')+'">'+(r.unShare*100).toFixed(1)+'%</td></tr>';});
+  h+='</table></div>';
+  /* per-branch verdict: what makes THIS branch different from the others */
+  const verd=rows.map(r=>{
+    const bits=[];
+    if(r.ncShare>=mNc*1.12)bits.push(['pos','an acquisition engine — '+(r.ncShare*100).toFixed(0)+'% of its classified revenue is first-time against a '+(mNc*100).toFixed(0)+'% network median. Media aimed here buys new people.']);
+    else if(r.ncShare<=mNc*0.88)bits.push(['neg','runs on its regulars — only '+(r.ncShare*100).toFixed(0)+'% first-time against a '+(mNc*100).toFixed(0)+'% median. Spending to acquire here is working against the grain; retention and basket are the levers.']);
+    if(r.amer&&mAmer&&r.amer>=mAmer*1.15)bits.push(['pos','returns '+r.amer.toFixed(2)+'× of first-time revenue on its allocated spend against a '+mAmer.toFixed(2)+'× median.']);
+    else if(r.amer&&mAmer&&r.amer<=mAmer*0.85)bits.push(['neg','returns only '+r.amer.toFixed(2)+'× against a '+mAmer.toFixed(2)+'× median on the same allocation basis.']);
+    if(r.aovN>=mAov*1.12)bits.push(['pos','its first-time basket is '+M(r.aovN)+' against '+M(mAov)+' — the customers it wins start bigger.']);
+    else if(r.aovN<=mAov*0.88)bits.push(['neg','first-time basket only '+M(r.aovN)+' against '+M(mAov)+'.']);
+    if(r.unShare>0.06)bits.push(['warn',(r.unShare*100).toFixed(1)+'% of its takings are on receipts with nobody attached, so its split is the least reliable on this table.']);
+    if(!bits.length)bits.push(['','sits at the network median on every measure here — nothing to act on from this card.']);
+    return {nm:r.nm,bits};});
+  const vHTML='<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px">'
+   +verd.map(v=>'<div style="border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface);padding:11px 13px">'
+     +'<div style="font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:5px">'+v.nm+'</div>'
+     +v.bits.map(b=>'<div style="font-size:11.5px;line-height:1.55;color:var(--ink-2);margin-bottom:3px">'
+       +(b[0]==='pos'?'<span style="color:var(--pos);font-weight:700">▲ </span>':b[0]==='neg'?'<span style="color:var(--neg);font-weight:700">▼ </span>':b[0]==='warn'?'<span style="color:var(--warn);font-weight:700">! </span>':'')
+       +b[1]+'</div>').join('')+'</div>').join('')+'</div>';
+  const brNc=rows.reduce((a2,r)=>a2+r.nrev,0);
+  const netA=spAll>0?(brNc+onNc)/spAll:0, brA=spAll>0?brNc/spAll:0, onA=spAll>0?onNc/spAll:0;
+  const cell=(lab,val,sub)=>'<div style="flex:1;min-width:170px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+   +'<div style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:700">'+lab+'</div>'
+   +'<div style="font-size:21px;font-weight:700;color:var(--ink);margin-top:3px;font-variant-numeric:tabular-nums">'+val+'</div>'
+   +'<div style="font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45">'+sub+'</div></div>';
+  const strip='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+   +cell('Network aMER',netA.toFixed(2)+'×','All first-time revenue &mdash; '+M(brNc)+' at the tills plus '+M(onNc)+' online &mdash; over every pound of ad spend, '+M(spAll)+'. This is the only one of the three that is additive.')
+   +cell('Branch half',brA.toFixed(2)+'×',M(brNc)+' of first-time till revenue over the SAME total spend. Not a branch-only return &mdash; the money also bought the website.')
+   +cell('Online half',onA.toFixed(2)+'×',M(onNc)+' of first-time webstore revenue over that same total spend.')
+   +'</div>';
+  const note='<div style="margin-top:11px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">How this is measured, and where it stops being a measurement.</b> '
+   +'Till revenue, the first-time and returning split, baskets, Meta&rsquo;s in-store attributed value and its in-store new customers are MEASURED, per branch and per day. '
+   +'<b>The two derived things are the spend split and therefore aMER.</b> Meta reports attributed VALUE per branch but never spend, so each branch here is charged a share of Meta spend equal to its share of Meta&rsquo;s in-store attributed value. '
+   +'That makes the aMER column fair for RANKING branches against each other on a single consistent rule; it is not a measurement of what any one branch actually cost, and it inherits whatever bias sits inside Meta&rsquo;s own in-store attribution. '
+   +'The branch half and the online half above are each charged the FULL network spend, because the same pound bought both &mdash; so they answer &ldquo;what did all the money return at the tills&rdquo; and &ldquo;what did it return online&rdquo;, and adding them would double-count. Only the Network figure is additive. '
+   +'<b>Unattached</b> is the share of takings on receipts with no customer on them &mdash; 1.2% to 11.2% by branch here. They can be neither new nor returning, so they are left out of the split rather than guessed into a side; the branch with the biggest Unattached share has the least reliable split on the table.</div>';
+  pnlCard(g,'odoo','aMER by branch &mdash; who buys new customers and who lives off the old ones'
+   +INFO('aMER = first-time revenue ÷ ad spend. Spend is allocated to branches by their share of Meta in-store attributed value, because Meta reports value per branch but not spend.'),
+   'First-time against returning at the till, with each branch judged against the network median rather than against zero.',
+   strip+h+vHTML+note);
+ })();}catch(e){}
+
  pnlCard(g,'odoo','Branch scoreboard &mdash; period '+ST.s+' → '+ST.e+' vs '+pw[0]+' → '+pw[1],
   'PERIOD block (daily feeds) follows the filter and the attribution selector: POS revenue and Meta-attributed value. CUSTOMER block is MONTHLY — per-branch new/returning come from the monthly POS customer crawl, so they cannot follow a 7-day window: it shows '+m+(isMTD?' month-to-date (day '+elapsed+' of '+dimM+', % = PACE)':'')+' vs prior month '+pm+' and vs '+lyM+'. AOV = that month&rsquo;s revenue ÷ its customers.',
   (function(){
@@ -18821,7 +18925,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-145824';
+const BUILD='20260928-150634';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
