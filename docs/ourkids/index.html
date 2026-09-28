@@ -5459,6 +5459,95 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
    h+verdict);
  })();}catch(e){}
 
+
+ /* ============================================================================
+    v31 · CATEGORY HEAT MAP — where the revenue is, and where the margin is not.
+    Built for a commercial plan, so it is month by month and it answers one
+    question: which POS categories take a big share of revenue and give back a
+    smaller share of gross profit. That gap is the whole point -- a category at
+    11% of revenue and 9.9% of GP is quietly paying for itself with volume.
+    Cell colour is MARGIN against the company's own margin, not against zero, so
+    "red" means worse than the business average rather than merely low.
+    Every row opens into the vendors inside it, ranked by the same gap, because
+    a category is never uniformly bad -- it usually has two or three vendors
+    dragging it.
+    ========================================================================== */
+ try{(function(){
+  const V=(O.vend&&O.vend.rows)||[]; if(V.length<5)return;
+  const nowM=(O.today||'').slice(0,7);
+  const CAT={};
+  V.forEach(r=>{const c=r.cat||'(uncategorised)';
+    const e=CAT[c]||(CAT[c]={cat:c,mon:{},vend:[],r:0,g:0});
+    e.vend.push(r);
+    Object.entries(r.mon||{}).forEach(([m,v])=>{ if(m>=nowM)return;
+      const x=e.mon[m]||(e.mon[m]=[0,0]); x[0]+=v[0]||0; x[1]+=v[1]||0;
+      e.r+=v[0]||0; e.g+=v[1]||0; });});
+  const cats=Object.values(CAT).filter(c=>c.r>0);
+  if(!cats.length)return;
+  const totR=cats.reduce((a,c)=>a+c.r,0), totG=cats.reduce((a,c)=>a+c.g,0);
+  const coMg=totG/totR;
+  /* last 13 complete months, most recent last */
+  const allM=[...new Set(cats.flatMap(c=>Object.keys(c.mon)))].sort().filter(m=>m<nowM).slice(-13);
+  cats.forEach(c=>{c.mg=c.g/c.r; c.rs=c.r/totR; c.gs=c.g/totG; c.gap=c.rs-c.gs;});
+  cats.sort((a,b)=>b.rs-a.rs);
+  /* colour a cell by how far its margin sits from the company margin */
+  const cell=(mg,rev)=>{
+    if(rev<=0)return '<td style="padding:5px 4px;text-align:center;color:var(--ink-4)">·</td>';
+    const dev=(mg-coMg)/Math.max(0.05,coMg);       /* -1 .. +1-ish */
+    const k=Math.max(-1,Math.min(1,dev*2.2));
+    const col=k>=0?'11,122,85':'196,32,63';
+    const a2=Math.min(.42,Math.abs(k)*.42);
+    return '<td title="'+(mg*100).toFixed(1)+'% margin on '+M(rev)+'" style="padding:5px 4px;text-align:center;'
+      +'background:rgba('+col+','+a2.toFixed(2)+');font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink)">'
+      +(mg*100).toFixed(0)+'</td>';};
+  let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:11.5px">'
+   +'<tr><th style="text-align:left">POS category</th>'
+   +'<th style="text-align:right">Rev share</th><th style="text-align:right">GP share</th>'
+   +'<th style="text-align:right">Gap</th><th style="text-align:right">Margin</th>'
+   +allM.map(m=>'<th style="text-align:center">'+m.slice(2)+'</th>').join('')+'</tr>';
+  cats.forEach((c,ci)=>{
+    const id='cat'+ci;
+    const bad=c.gap>0.004;
+    h+='<tr style="cursor:pointer" onclick="(function(){var e=document.getElementById(\''+id+'\');e.style.display=e.style.display===\'table-row\'?\'none\':\'table-row\';})()">'
+     +'<td style="text-align:left;font-weight:620;color:var(--ink)">'
+       +(bad?'<span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--neg);margin-right:6px;vertical-align:middle"></span>':'')
+       +c.cat+' <span style="color:var(--ink-4);font-weight:400">'+c.vend.length+'</span></td>'
+     +'<td class="num" style="text-align:right">'+(c.rs*100).toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right">'+(c.gs*100).toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right;font-weight:700;color:'+(bad?'var(--neg)':'var(--ink-3)')+'">'
+       +(c.gap>=0?'+':'−')+Math.abs(c.gap*100).toFixed(1)+'</td>'
+     +'<td class="num" style="text-align:right;font-weight:700;color:'+(c.mg>=coMg?'var(--pos)':'var(--neg)')+'">'+(c.mg*100).toFixed(1)+'%</td>'
+     +allM.map(m=>{const v=c.mon[m];return v?cell(v[0]?v[1]/v[0]:0,v[0]):cell(0,0);}).join('')
+     +'</tr>';
+    /* the vendors inside, ranked by the same gap */
+    const vs=c.vend.map(r=>({n:r.n||r.v,r:r.r||0,g:r.g||0,mg:r.r?r.g/r.r:0}))
+      .filter(x=>x.r>0).sort((a,b)=>b.r-a.r).slice(0,8);
+    h+='<tr id="'+id+'" style="display:none;background:var(--surface-2)"><td colspan="'+(5+allM.length)+'" style="padding:9px 14px">'
+     +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase;margin-bottom:6px">Vendors inside '+c.cat+'</div>'
+     +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+     +vs.map(x=>'<tr><td style="padding:3px 0;color:var(--ink)">'+String(x.n).slice(0,34)+'</td>'
+       +'<td class="num" style="text-align:right;color:var(--ink-2)">'+M(x.r)+'</td>'
+       +'<td class="num" style="text-align:right;width:70px;font-weight:700;color:'+(x.mg>=coMg?'var(--pos)':'var(--neg)')+'">'+(x.mg*100).toFixed(1)+'%</td>'
+       +'<td style="width:96px;padding-left:10px"><div style="height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden">'
+         +'<div style="height:100%;width:'+Math.min(100,(x.mg/Math.max(0.01,coMg))*50).toFixed(0)+'%;background:'+(x.mg>=coMg?'var(--pos)':'var(--neg)')+';opacity:.8"></div></div></td></tr>').join('')
+     +'</table></td></tr>';
+  });
+  h+='</table></div>';
+  const worst=cats.filter(c=>c.gap>0).sort((a,b)=>b.gap-a.gap).slice(0,3);
+  const note='<div style="margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12.5px;line-height:1.65;color:var(--ink-2)">'
+   +'<b style="color:var(--ink)">Read the Gap column.</b> It is revenue share minus gross-profit share. A positive number means the category takes more of the revenue than it gives back in profit'
+   +(worst.length?(' — largest right now: '+worst.map(c=>'<b>'+c.cat+'</b> +'+(c.gap*100).toFixed(1)).join(', ')+'.'):'.')
+   +' Cell colour is each month&rsquo;s margin against the company&rsquo;s own '+(coMg*100).toFixed(1)+'%, so red means worse than the business average, not merely low. '
+   +'Click any category to see the vendors inside it — a weak category is almost never uniformly weak.</div>'
+   +'<div style="margin-top:9px;padding:10px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">Grain.</b> Vendor money posts per MONTH, so this table is monthly and ignores the date box; the running month is excluded because its ledger is incomplete. '
+   +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
+  pnlCard(g,'odoo','Category heat map &mdash; where the revenue is and where the margin is not'
+   +INFO('Rows are POS categories built from the vendor ledger. Cell = that month’s gross margin, coloured against the company average. Gap = revenue share minus GP share.'),
+   'For the commercial plan: which categories carry the revenue, which carry the profit, and where those two disagree.',
+   h+note);
+ })();}catch(e){}
+
  pnlCard(g,'blend','Cohort engine &mdash; what a year of acquisition is worth'
   +INFO('New customers and CAC measured in '+b.bm+'. Orders per customer per year and lifetime gross profit come from the Odoo customer crawl over the whole history, not this window.'),
   'Retention and LTV:CAC live here, deliberately apart from the run-rate model above.',ch);
@@ -18609,7 +18698,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-141352';
+const BUILD='20260928-141659';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
