@@ -2689,6 +2689,25 @@ function tdSeries(key){            /* daily arrays, all indexed off O.fin.start 
   return out;
  }catch(e){return [];}
 }
+/* v29 · the daily series behind the new Today panels. All indexed off O.ad.start. */
+function tdAd(k){try{const A=O.ad;const out=[];for(let i=0;i<A.n;i++)out.push((A[k]&&A[k][i])||0);return out;}catch(e){return [];}}
+/* aMER: FIRST-TIME customer revenue over ALL ad spend. Not "new customer ROAS" -- the
+   denominator is the whole budget, because you cannot ring-fence the spend that bought a
+   first order. It is the rate you are buying growth at, and it is always below MER. */
+function tdAmer(a,b){try{
+  const as=O.ad.start;
+  const nc=tdSum(tdAd('ncrev'),as,a,b), sp=tdSum(tdAdSeries(),as,a,b);
+  if(!nc||!sp||!sp.v)return null;
+  return {amer:nc.v/sp.v, ncrev:nc.v, spend:sp.v};
+}catch(e){return null;}}
+/* NC / RC order counts exist only per MONTH (O.nr), so an AOV split is honest at month
+   grain and a guess at day grain. The panel says which months it read rather than
+   pro-rating them into a daily number that would look more precise than it is. */
+function tdNcRcMonths(a,b){try{
+  const out=[];const m0=a.slice(0,7), m1=b.slice(0,7);
+  Object.keys(O.nr||{}).sort().forEach(m=>{ if(m>=m0&&m<=m1&&O.nr[m]) out.push({m,...O.nr[m]}); });
+  return out;
+}catch(e){return [];}}
 function tdAdSeries(){try{const A=O.ad;const out=[];for(let i=0;i<A.n;i++)out.push(A.spend[i]||0);return out;}catch(e){return [];}}
 function tdBranchSeries(){try{const B=O.bl;if(!B)return [];const out=new Array(B.n).fill(0);
   Object.keys(B.b||{}).forEach(k=>{for(let i=0;i<B.n;i++)out[i]+=(B.b[k][i]||0);});return out;}catch(e){return [];}}
@@ -2789,6 +2808,9 @@ function rTD(){
    +hero('Ad spend',M(ad?ad.v:0),'all platforms',ad?ad.v:0,adP?adP.v:null,false,M,shAd,'var(--ink-4)')
    +hero('After ads',SM(net),'before overhead',net,netP,true,M,null)
    +hero('MER',mer!=null?mer.toFixed(2)+'×':'—','break-even '+be.toFixed(2)+'× delivered',mer,merP,true,v=>v.toFixed(2)+'×',null)
+   +(function(){const A=tdAmer(W.s,W.e),P=tdAmer(W.ps,W.pe);
+      return hero('aMER',A?A.amer.toFixed(2)+'×':'—','first-time revenue ÷ ALL spend',
+        A?A.amer:null,P?P.amer:null,true,v=>v.toFixed(2)+'×',null);})()
    +hero('Branch tills',br?M(br.v):'—','seven shops',br?br.v:null,brP?brP.v:null,true,M,shBr,'var(--brand)')
    +'</div>'
    +'<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:9px 20px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
@@ -2855,6 +2877,104 @@ function rTD(){
    }
   }
  }catch(e){fall='';}
+
+ /* ---------- 1c · PLATFORMS, CUSTOMER MIX, AND THE FUNNEL ----------
+   Three panels the first screen was missing. Each is drawn as inline SVG so it costs
+   nothing and never waits on a chart library, and each states its own grain: platform
+   and funnel series are day-exact; the AOV split is month-grain because NC/RC ORDER
+   counts only exist per month (O.nr) -- pro-rating them to days would look more precise
+   than the data is. */
+ let panels='';
+ try{
+  const as=O.ad.start, fs=O.fin.start;
+  const win=(ser,st)=>{const w=tdSum(ser,st,W.s,W.e);return w?w:{v:0,slice:[]};};
+  const winP=(ser,st)=>{const w=tdSum(ser,st,W.ps,W.pe);return w?w:{v:0,slice:[]};};
+  const PLAT=[['Meta','mspend','mecomrev','var(--brand)'],
+              ['Google','gspend','gecomrev','var(--pos)'],
+              ['TikTok','tspend','ttValue','var(--warn)']];
+  const prow=PLAT.map(([nm,sk,vk,col])=>{
+    const sp=win(tdAd(sk),as), vl=win(tdAd(vk),as);
+    const spP=winP(tdAd(sk),as), vlP=winP(tdAd(vk),as);
+    const roas=sp.v?vl.v/sp.v:null, roasP=spP.v?vlP.v/spP.v:null;
+    const dead=sp.v<=0&&spP.v>0;
+    return {nm,col,sp:sp.v,roas,roasP,spSlice:sp.slice,dead,
+            roasSlice:sp.slice.map((x,i)=>x>0?((vl.slice[i]||0)/x):0)};});
+  const totSp=prow.reduce((a2,x)=>a2+x.sp,0)||1;
+  const be=GPBE();
+  const platHTML='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
+   +prow.map((r,i)=>'<div style="display:flex;align-items:center;gap:14px;padding:12px 16px'+(i?';border-top:1px solid var(--line)':'')+'">'
+     +'<div style="flex:0 0 74px;font-size:12.5px;font-weight:650;color:var(--ink)">'+r.nm+'</div>'
+     +'<div style="flex:0 0 86px">'+tdSpark(r.spSlice,r.col)+'<div style="font-size:10px;color:var(--ink-4);text-align:center;margin-top:1px">spend</div></div>'
+     +'<div style="flex:0 0 86px">'+tdSpark(r.roasSlice,r.col)+'<div style="font-size:10px;color:var(--ink-4);text-align:center;margin-top:1px">ROAS</div></div>'
+     +'<div style="flex:1 1 auto;display:flex;align-items:center;gap:8px">'
+       +'<div style="flex:1 1 auto;height:7px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
+       +'<div style="height:100%;width:'+((r.sp/totSp)*100).toFixed(1)+'%;background:'+r.col+';opacity:.85;border-radius:4px"></div></div>'
+       +'<span style="flex:0 0 42px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+((r.sp/totSp)*100).toFixed(0)+'%</span></div>'
+     +'<div class="num" style="flex:0 0 106px;text-align:right;font-size:12.5px;font-weight:700;color:var(--ink)">'+M(r.sp)+'</div>'
+     +'<div class="num" style="flex:0 0 118px;text-align:right;font-size:12.5px;font-weight:700;color:'
+       +(r.dead?'var(--warn)':(r.roas==null?'var(--ink-4)':(r.roas>=be?'var(--pos)':'var(--neg)')))+'">'
+       +(r.dead?'feed dark':(r.roas==null?'—':r.roas.toFixed(2)+'×'))
+       +(r.roasP&&r.roas?'<div style="font-size:10.5px;font-weight:400;color:var(--ink-3)">was '+r.roasP.toFixed(2)+'×</div>':'')+'</div>'
+   +'</div>').join('')
+   +'<div style="padding:9px 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
+   +'ROAS here is what each platform CLAIMS it caused, over what you paid it — their own marking, not the ledger. Break-even '+be.toFixed(2)+'× delivered.</div></div>';
+
+  /* customer mix: revenue is day-exact, the AOV split is month-grain */
+  const ncW=win(tdAd('ncrev'),as), rcW=win(tdAd('rcrev'),as);
+  const ncP=winP(tdAd('ncrev'),as), rcP=winP(tdAd('rcrev'),as);
+  const mons=tdNcRcMonths(W.s,W.e);
+  const nord=mons.reduce((a2,x)=>a2+(x.nord||0),0), rord=mons.reduce((a2,x)=>a2+(x.rord||0),0);
+  const nrev=mons.reduce((a2,x)=>a2+(x.nrev||0),0), rrev=mons.reduce((a2,x)=>a2+(x.rrev||0),0);
+  const aovN=nord?nrev/nord:null, aovR=rord?rrev/rord:null, aovB=(nord+rord)?(nrev+rrev)/(nord+rord):null;
+  const totNR=(ncW.v+rcW.v)||1;
+  const mixBar=(lab,v,prev,col,share)=>'<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
+    +'<div style="flex:0 0 118px;font-size:12.5px;font-weight:650;color:var(--ink)">'+lab+'</div>'
+    +'<div style="flex:1 1 auto;height:7px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
+      +'<div style="height:100%;width:'+share.toFixed(1)+'%;background:'+col+';opacity:.85;border-radius:4px"></div></div>'
+    +'<span style="flex:0 0 40px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+share.toFixed(0)+'%</span>'
+    +'<div class="num" style="flex:0 0 116px;text-align:right;font-size:12.5px;font-weight:700">'+M(v)+'</div>'
+    +'<div style="flex:0 0 96px;text-align:right">'+tdDelta(v,prev,true,M)+'</div></div>';
+  const mixHTML='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
+   +mixBar('First-time',ncW.v,ncP.v,'var(--brand)',(ncW.v/totNR)*100)
+   +mixBar('Returning',rcW.v,rcP.v,'var(--pos)',(rcW.v/totNR)*100)
+   +'<div style="display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--line-2)">'
+     +[['AOV first-time',aovN],['AOV returning',aovR],['AOV both',aovB]].map((x,i)=>
+       '<div style="flex:1 1 150px;padding:12px 16px'+(i?';border-left:1px solid var(--line)':'')+'">'
+       +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase">'+x[0]+'</div>'
+       +'<div class="num" style="font-size:19px;font-weight:700;color:var(--ink);margin-top:3px">'+(x[1]?M(x[1]):'—')+'</div></div>').join('')
+   +'</div>'
+   +'<div style="padding:9px 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
+   +'Revenue is day-exact for '+W.s+' → '+W.e+'. <b>The AOV split is MONTH grain</b> — first-time and returning ORDER counts only exist per month, so these read '
+   +(mons.length?('the whole of '+mons.map(x=>x.m).join(', ')):'no complete month in range')
+   +', not your date box. Pro-rating them to days would look more precise than the data is.</div></div>';
+
+  /* the funnel: sessions and CVR, day-exact */
+  const se=win(tdAd('sessions'),as), seP=winP(tdAd('sessions'),as);
+  const cv=win(tdAd('cvr'),as);
+  const cvAvg=cv.slice.length?cv.slice.reduce((a2,b2)=>a2+b2,0)/cv.slice.filter(x=>x>0).length:null;
+  const cvPs=winP(tdAd('cvr'),as);
+  const cvPa=cvPs.slice.length?cvPs.slice.reduce((a2,b2)=>a2+b2,0)/(cvPs.slice.filter(x=>x>0).length||1):null;
+  const funHTML='<div style="display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
+   +[['Sessions',se.v.toLocaleString(),se.v,seP.v,se.slice,'var(--brand)',v=>Math.round(v).toLocaleString()],
+     ['Conversion rate',cvAvg!=null?cvAvg.toFixed(2)+'%':'—',cvAvg,cvPa,cv.slice,'var(--pos)',v=>v.toFixed(2)+'%']]
+     .map((x,i)=>'<div style="flex:1 1 220px;padding:14px 18px'+(i?';border-left:1px solid var(--line)':'')+'">'
+       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;height:20px">'
+       +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase">'+x[0]+'</div>'
+       +'<div style="width:74px">'+tdSpark(x[4],x[5])+'</div></div>'
+       +'<div class="num" style="font-size:24px;font-weight:720;letter-spacing:-.026em;color:var(--ink);margin:4px 0 2px">'+x[1]+'</div>'
+       +tdDelta(x[2],x[3],true,x[6])+'</div>').join('')
+   +'</div>';
+
+  panels='<section style="margin-bottom:16px">'
+   +'<div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px"><h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">Where the money went</h2>'
+   +'<span style="font-size:11.5px;color:var(--ink-3)">spend and claimed return by platform · '+W.s+' → '+W.e+'</span></div>'+platHTML+'</section>'
+   +'<section style="margin-bottom:16px">'
+   +'<div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px"><h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">Who bought</h2>'
+   +'<span style="font-size:11.5px;color:var(--ink-3)">first-time against returning</span></div>'+mixHTML+'</section>'
+   +'<section style="margin-bottom:16px">'
+   +'<div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px"><h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">The funnel</h2>'
+   +'<span style="font-size:11.5px;color:var(--ink-3)">real sessions, bots excluded</span></div>'+funHTML+'</section>';
+ }catch(e){panels='';}
 
  /* ---------- 2 · BIGGEST MOVERS ---------- */
  let movers='';
@@ -2953,7 +3073,7 @@ function rTD(){
     while every other tab had one. */
  let host=g.querySelector('#tdBody');
  if(!host){host=document.createElement('div');host.id='tdBody';g.appendChild(host);}
- host.innerHTML=standing+fall+movers+head+body
+ host.innerHTML=standing+fall+panels+movers+head+body
   +(oks.length?'<section style="margin-top:16px"><div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-4);text-transform:uppercase;margin-bottom:8px">Checked and clear</div>'+oks.map(item).join('')+'</section>':'')
   +'<footer style="margin-top:18px;font-size:11.5px;color:var(--ink-3);line-height:1.65;max-width:760px">'
   +'A finding appears only if it can price itself in pounds and name a next step. Numbers are observed; the sentence under each headline is the reading, not a proven cause; the accent pill is the recommendation. Everything else lives on the tabs above as evidence.</footer>';
@@ -18465,7 +18585,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-135820';
+const BUILD='20260928-140603';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
