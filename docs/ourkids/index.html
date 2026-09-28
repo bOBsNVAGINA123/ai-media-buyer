@@ -5486,18 +5486,28 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   if(!cats.length)return;
   const totR=cats.reduce((a,c)=>a+c.r,0), totG=cats.reduce((a,c)=>a+c.g,0);
   const coMg=totG/totR;
+  /* v31b NORMALISE PER MONTH. Colouring against a 25-month average was wrong: that average
+     is 37.3% while the business now runs near 32.5%, so every recent month read red for no
+     reason other than the passage of time. Each cell is now compared with the COMPANY's own
+     margin in the SAME month, which removes the trend completely and leaves only the thing
+     the card is for -- is this category better or worse than the business was that month. */
+  const coMon={};
+  cats.forEach(c=>Object.entries(c.mon).forEach(([m,v])=>{
+    const x=coMon[m]||(coMon[m]=[0,0]); x[0]+=v[0]; x[1]+=v[1];}));
+  const coMgOf=m=>{const x=coMon[m];return (x&&x[0])?x[1]/x[0]:coMg;};
   /* last 13 complete months, most recent last */
   const allM=[...new Set(cats.flatMap(c=>Object.keys(c.mon)))].sort().filter(m=>m<nowM).slice(-13);
   cats.forEach(c=>{c.mg=c.g/c.r; c.rs=c.r/totR; c.gs=c.g/totG; c.gap=c.rs-c.gs;});
   cats.sort((a,b)=>b.rs-a.rs);
   /* colour a cell by how far its margin sits from the company margin */
-  const cell=(mg,rev)=>{
+  const cell=(mg,rev,m)=>{
     if(rev<=0)return '<td style="padding:5px 4px;text-align:center;color:var(--ink-4)">·</td>';
-    const dev=(mg-coMg)/Math.max(0.05,coMg);       /* -1 .. +1-ish */
+    const bar=coMgOf(m);
+    const dev=(mg-bar)/Math.max(0.05,bar);         /* against THAT month's company margin */
     const k=Math.max(-1,Math.min(1,dev*2.2));
     const col=k>=0?'11,122,85':'196,32,63';
     const a2=Math.min(.42,Math.abs(k)*.42);
-    return '<td title="'+(mg*100).toFixed(1)+'% margin on '+M(rev)+'" style="padding:5px 4px;text-align:center;'
+    return '<td title="'+m+': '+(mg*100).toFixed(1)+'% margin on '+M(rev)+' — company that month '+(bar*100).toFixed(1)+'%, so '+(mg>=bar?'+':'−')+Math.abs((mg-bar)*100).toFixed(1)+' against it" style="padding:5px 4px;text-align:center;'
       +'background:rgba('+col+','+a2.toFixed(2)+');font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink)">'
       +(mg*100).toFixed(0)+'</td>';};
   let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:11.5px">'
@@ -5517,19 +5527,31 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
      +'<td class="num" style="text-align:right;font-weight:700;color:'+(bad?'var(--neg)':'var(--ink-3)')+'">'
        +(c.gap>=0?'+':'−')+Math.abs(c.gap*100).toFixed(1)+'</td>'
      +'<td class="num" style="text-align:right;font-weight:700;color:'+(c.mg>=coMg?'var(--pos)':'var(--neg)')+'">'+(c.mg*100).toFixed(1)+'%</td>'
-     +allM.map(m=>{const v=c.mon[m];return v?cell(v[0]?v[1]/v[0]:0,v[0]):cell(0,0);}).join('')
+     +allM.map(m=>{const v=c.mon[m];return v?cell(v[0]?v[1]/v[0]:0,v[0],m):cell(0,0,m);}).join('')
      +'</tr>';
     /* the vendors inside, ranked by the same gap */
-    const vs=c.vend.map(r=>({n:r.n||r.v,r:r.r||0,g:r.g||0,mg:r.r?r.g/r.r:0}))
-      .filter(x=>x.r>0).sort((a,b)=>b.r-a.r).slice(0,8);
+    /* NORMALISED so vendors inside a category are comparable to each other: share of the
+       category's revenue, share of its GP, the gap between those two, and margin against
+       the CATEGORY's own margin rather than the company's -- a 28% vendor is fine in a 28%
+       category and a disaster in a 42% one. */
+    const vAll=c.vend.map(r=>({n:r.n||r.v,r:r.r||0,g:r.g||0,mg:r.r?r.g/r.r:0}))
+      .filter(x=>x.r>0);
+    const vR=vAll.reduce((a,x)=>a+x.r,0)||1, vG=vAll.reduce((a,x)=>a+x.g,0)||1;
+    const vs=vAll.map(x=>({...x, rs:x.r/vR, gs:x.g/vG, gap:(x.r/vR)-(x.g/vG), vsCat:x.mg-c.mg}))
+      .sort((a,b)=>b.gap-a.gap).slice(0,8);
     h+='<tr id="'+id+'" style="display:none;background:var(--surface-2)"><td colspan="'+(5+allM.length)+'" style="padding:9px 14px">'
      +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase;margin-bottom:6px">Vendors inside '+c.cat+'</div>'
      +'<table style="width:100%;border-collapse:collapse;font-size:11.5px">'
-     +vs.map(x=>'<tr><td style="padding:3px 0;color:var(--ink)">'+String(x.n).slice(0,34)+'</td>'
-       +'<td class="num" style="text-align:right;color:var(--ink-2)">'+M(x.r)+'</td>'
-       +'<td class="num" style="text-align:right;width:70px;font-weight:700;color:'+(x.mg>=coMg?'var(--pos)':'var(--neg)')+'">'+(x.mg*100).toFixed(1)+'%</td>'
-       +'<td style="width:96px;padding-left:10px"><div style="height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden">'
-         +'<div style="height:100%;width:'+Math.min(100,(x.mg/Math.max(0.01,coMg))*50).toFixed(0)+'%;background:'+(x.mg>=coMg?'var(--pos)':'var(--neg)')+';opacity:.8"></div></div></td></tr>').join('')
+     +'<tr style="color:var(--ink-4);font-size:10px;text-transform:uppercase;letter-spacing:.05em">'
+       +'<td style="padding:2px 0">Vendor</td><td style="text-align:right">Rev share</td><td style="text-align:right">GP share</td>'
+       +'<td style="text-align:right">Gap</td><td style="text-align:right">Margin</td><td style="text-align:right;padding-left:10px">vs category</td></tr>'
+     +vs.map(x=>'<tr><td style="padding:3px 0;color:var(--ink)">'+String(x.n).slice(0,30)+'</td>'
+       +'<td class="num" style="text-align:right;color:var(--ink-2)">'+(x.rs*100).toFixed(1)+'%</td>'
+       +'<td class="num" style="text-align:right;color:var(--ink-2)">'+(x.gs*100).toFixed(1)+'%</td>'
+       +'<td class="num" style="text-align:right;font-weight:700;color:'+(x.gap>0.004?'var(--neg)':'var(--ink-3)')+'">'+(x.gap>=0?'+':'−')+Math.abs(x.gap*100).toFixed(1)+'</td>'
+       +'<td class="num" style="text-align:right;width:62px">'+(x.mg*100).toFixed(1)+'%</td>'
+       +'<td style="text-align:right;padding-left:10px;width:110px"><span class="num" style="font-weight:700;color:'+(x.vsCat>=0?'var(--pos)':'var(--neg)')+'">'
+         +(x.vsCat>=0?'+':'−')+Math.abs(x.vsCat*100).toFixed(1)+'</span></td></tr>').join('')
      +'</table></td></tr>';
   });
   h+='</table></div>';
@@ -5537,8 +5559,10 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   const note='<div style="margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12.5px;line-height:1.65;color:var(--ink-2)">'
    +'<b style="color:var(--ink)">Read the Gap column.</b> It is revenue share minus gross-profit share. A positive number means the category takes more of the revenue than it gives back in profit'
    +(worst.length?(' — largest right now: '+worst.map(c=>'<b>'+c.cat+'</b> +'+(c.gap*100).toFixed(1)).join(', ')+'.'):'.')
-   +' Cell colour is each month&rsquo;s margin against the company&rsquo;s own '+(coMg*100).toFixed(1)+'%, so red means worse than the business average, not merely low. '
-   +'Click any category to see the vendors inside it — a weak category is almost never uniformly weak.</div>'
+   +' Cell colour compares that month&rsquo;s category margin with <b>the company&rsquo;s margin in the SAME month</b>, not with a long-run average — '
+   +'the business ran at '+(coMgOf(allM[0])*100).toFixed(1)+'% in '+allM[0]+' and '+(coMgOf(allM[allM.length-1])*100).toFixed(1)+'% in '+allM[allM.length-1]
+   +', so a fixed bar would have painted every recent month red for no reason but the passage of time. Red here means worse than the business was THAT month. '
+   +'Click any category to see its vendors, normalised the same way — share of the category&rsquo;s revenue against share of its GP, and each vendor&rsquo;s margin against its own category rather than the company, because 28% is fine in a 28% category and a disaster in a 42% one.</div>'
    +'<div style="margin-top:9px;padding:10px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
    +'<b style="color:var(--warn)">Grain.</b> Vendor money posts per MONTH, so this table is monthly and ignores the date box; the running month is excluded because its ledger is incomplete. '
    +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
@@ -18698,7 +18722,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-141659';
+const BUILD='20260928-142717';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
