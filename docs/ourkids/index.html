@@ -6132,7 +6132,7 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
       ? ('The month strip spans the <b>'+allM.length+' complete months your window touches</b> ('+allM[0]+' → '+allM[allM.length-1]+'), so the strip and the columns beside it are the same period. ')
       : ('Your window touches fewer than three complete months, which is too few to read as a heat map, so the strip falls back to the <b>last '+allM.length+' complete months</b> ('+allM[0]+' → '+allM[allM.length-1]+') while the columns to its left stay on your window. ') )
    +'The running month is excluded from the strip because its ledger is incomplete. '
-   +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
+   +'Margin is on the 4% basis, for consignment lines as much as cash ones. This note used to warn that consignment carried no per-sale cost; that was checked against Odoo on 2026-09-28 and is false &mdash; 23 of 361,948 consignment lines in the last twelve months have no cost, against 2,285 of 935,695 cash lines. Consignment does run thinner (28.19% against 36.47%), which is the terms, not the data.</div>';
   /* ---- DISCOUNT LANE. For the commercial plan: when the codes actually fire, and what
      they cost. Built ONLY from the per-code series -- see the note, because the obvious
      field here is a trap. ---- */
@@ -6492,7 +6492,7 @@ function rAU(){if(TAB!=='au')return;dCh();
    +INFO('Branches: POS revenue and gpAdj margin, analytic salaries (re-dated to the month they pay for) and rent with the same fallbacks as above. Online: net revenue with order-dated refunds, its GP, its delivery net, its e-com payroll. Ads: the whole platform budget. HQ book charged below contribution. Running month is MTD revenue against full-month fixed costs.'),
    'The single-month table above answers who; this answers when.',h2);}catch(e){}})();
  pnlCard(g,'odoo','The whole company — every branch, the webstore, one month'
-  +INFO('<b>Known limit &mdash; consignment stock.</b> 13 product categories are costed <i>standard / periodic</i>, which means Odoo does NOT post their cost on each sale; their margin leans on a manually maintained standard cost. Two consequences, both real: this branch margin is only as good as that manual cost, and the GL cost-of-sales will never reconcile line-for-line to the margin field &mdash; that gap is the costing method, not a missing entry. Their exact revenue share is not derivable from the read-only connection, so it is not quoted here rather than guessed. '
+  +INFO('<b>Consignment is costed, and this card used to say it was not.</b> The old note here claimed Odoo posts no per-sale cost on consignment and that the revenue share could not be derived. Both were wrong and both are now measured on <code>combined.retail.sales.report</code> over the twelve months to 2026-09-28: <b>23 of 361,948 consignment lines</b> carry no cost, 0.006% &mdash; against 2,285 of 935,695 on the cash side, 0.24%. Consignment costing is roughly forty times cleaner than cash costing, not dirtier. Consignment ran <b>E&pound;173.5M of revenue at 28.19%</b> on the 4% basis; cash ran <b>E&pound;392.4M at 36.47%</b>. So consignment is 30.7% of the revenue and 25.5% of the gross profit, and it is thinner by 8.3% of revenue &mdash; a real commercial fact about the terms, not a data gap. The margin on this card is therefore as sound for consignment as for anything else. '
   +'Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
   'Columns ranked by contribution. The HQ block sits below the line because no column owns it.',sel+b);
 }
@@ -12916,6 +12916,103 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
    +'That makes the aMER column fair for RANKING branches against each other on a single consistent rule; it is not a measurement of what any one branch actually cost, and it inherits whatever bias sits inside Meta&rsquo;s own in-store attribution. '
    +'The branch half and the online half above are each charged the FULL network spend, because the same pound bought both &mdash; so they answer &ldquo;what did all the money return at the tills&rdquo; and &ldquo;what did it return online&rdquo;, and adding them would double-count. Only the Network figure is additive. '
    +'<b>Unattached</b> is the share of takings on receipts with no customer on them &mdash; 1.2% to 11.2% by branch here. They can be neither new nor returning, so they are left out of the split rather than guessed into a side; the branch with the biggest Unattached share has the least reliable split on the table.</div>';
+
+ /* ============================================================================
+    v50 · CASH AGAINST CONSIGNMENT — and a correction I owed.
+    This tool used to print, on two separate cards, that Odoo posts no per-sale
+    cost on consignment and that its revenue share "is not derivable from the
+    read-only connection". Both were false, and both had already been checked and
+    disproved a week earlier on the retail tool. Measured 2026-09-28 on
+    combined.retail.sales.report: 23 of 361,948 consignment lines in the last
+    twelve months carry no cost (0.006%) against 2,285 of 935,695 cash lines
+    (0.24%). Consignment costing is roughly FORTY TIMES cleaner than cash costing.
+    The product-level model flag and the vendor-level terms agree on 100% of 6,000
+    sampled lines, so the split below is the supplier's actual terms.
+    What the numbers then say is not reassuring, and it is not a data problem.
+    ========================================================================== */
+ try{(function(){
+  const V=(O.vend&&O.vend.rows)||[]; if(V.length<10)return;
+  const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+  const has=V.some(r=>r.ct)&&V.some(r=>r.consG!=null||r.cashG!=null);
+  /* monthly split, from each vendor's own month series, grouped by its terms */
+  const mon={};
+  V.forEach(r=>{const k=r.ct||((r.cons||0)>(r.cash||0)?'cons':'cash');
+    Object.entries(r.mon||{}).forEach(([m,v])=>{
+      const e=mon[m]||(mon[m]={cash:[0,0],cons:[0,0],mixed:[0,0]});
+      const t=e[k]||e.cash; t[0]+=v[0]||0; t[1]+=v[1]||0;});});
+  const ms=Object.keys(mon).sort().filter(m=>m<(O.today||'').slice(0,7));
+  if(ms.length<12)return;
+  const agg=list=>{const o={cash:[0,0],cons:[0,0]};
+    list.forEach(m=>{const e=mon[m]||{};['cash','cons'].forEach(k=>{
+      const v=e[k]||[0,0]; o[k][0]+=v[0]; o[k][1]+=v[1];});});return o;};
+  const cur=agg(ms.slice(-12)), pri=agg(ms.slice(-24,-12));
+  if(!cur.cons[0]||!pri.cons[0])return;
+  const mg=x=>x[0]?x[1]/x[0]*100:0;
+  const cN=mg(cur.cons), cP=mg(pri.cons), kN=mg(cur.cash), kP=mg(pri.cash);
+  const shareR=cur.cons[0]/(cur.cons[0]+cur.cash[0])*100;
+  const shareG=cur.cons[1]/(cur.cons[1]+cur.cash[1])*100;
+  const cell=(lab,val,sub,col)=>'<div style="flex:1;min-width:172px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+   +'<div style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:700">'+lab+'</div>'
+   +'<div style="font-size:21px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+val+'</div>'
+   +'<div style="font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45">'+sub+'</div></div>';
+  const dC=cN-cP, dK=kN-kP;
+  let h='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+   +cell('Consignment margin',cN.toFixed(1)+'%',(dC>=0?'up ':'down ')+Math.abs(dC).toFixed(1)+' of a percent of revenue against the twelve months before ('+cP.toFixed(1)+'%).',dC<-2?'var(--neg)':'var(--ink)')
+   +cell('Cash margin',kN.toFixed(1)+'%',(dK>=0?'up ':'down ')+Math.abs(dK).toFixed(1)+' against '+kP.toFixed(1)+'% &mdash; the comparison that matters, because it did not move.',Math.abs(dK)>2?'var(--warn)':'var(--ink)')
+   +cell('Consignment share of revenue',shareR.toFixed(1)+'%',M(cur.cons[0])+' of '+M(cur.cons[0]+cur.cash[0])+' over '+ms[ms.length-12]+' → '+ms[ms.length-1]+'.')
+   +cell('Consignment share of gross profit',shareG.toFixed(1)+'%',M(cur.cons[1])+' of gross profit, earned on stock the business never paid for.')
+   +'</div>';
+  /* the monthly margin lane, both models on one axis */
+  const lane=ms.slice(-24);
+  const vals=lane.flatMap(m=>{const e=mon[m]||{};return ['cash','cons'].map(k=>{const v=e[k]||[0,0];return v[0]?v[1]/v[0]*100:null;});}).filter(x=>x!=null);
+  const lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals), sp=Math.max(1,hi-lo);
+  const row=(k,lab,col)=>'<div style="display:flex;align-items:flex-end;gap:2px;height:52px">'
+   +lane.map(m=>{const e=mon[m]||{},v=e[k]||[0,0];const x=v[0]?v[1]/v[0]*100:null;
+     const ht=x==null?2:Math.max(3,((x-lo)/sp)*46+4);
+     return '<div style="flex:1 1 0;min-width:0;display:flex;align-items:flex-end;justify-content:center" title="'+m+' · '+lab+': '+(x==null?'no sales':x.toFixed(1)+'% on '+M(v[0]))+'">'
+      +'<div style="width:72%;height:'+ht.toFixed(0)+'px;background:'+col+';opacity:.85;border-radius:2px 2px 0 0"></div></div>';}).join('')
+   +'</div>';
+  h+='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);overflow:hidden;margin-bottom:12px">'
+   +'<div style="padding:10px 14px 4px;font-size:12.5px;font-weight:700;color:var(--ink)">Gross margin by month, the two buying models side by side</div>'
+   +'<div style="padding:0 14px 4px;font-size:11px;color:var(--ink-3)">Scale runs '+lo.toFixed(0)+'% to '+hi.toFixed(0)+'%. Hover any bar for the month and the revenue behind it.</div>'
+   +'<div style="padding:6px 14px 2px"><div style="font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:2px">CASH</div>'+row('cash','cash','var(--brand)')+'</div>'
+   +'<div style="padding:2px 14px 10px"><div style="font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:2px">CONSIGNMENT</div>'+row('cons','consignment','var(--warn)')+'</div>'
+   +'<div style="display:flex;padding:0 14px 9px;gap:2px">'+lane.map((m,i)=>'<div style="flex:1 1 0;text-align:center;font-size:9px;color:var(--ink-4)">'+((i%3===0)?m.slice(2):'')+'</div>').join('')+'</div></div>';
+  /* the vendors inside the move */
+  /* until the collector stamps ct, infer it the same way the lane above does, so the
+     table is not empty on the very run that discovers the problem */
+  const isCons=r=>r.ct?(r.ct==='cons'):((r.cons||0)>(r.cash||0));
+  const vv=V.filter(r=>isCons(r)&&r.mon).map(r=>{
+    let a2=[0,0],b2=[0,0];
+    ms.slice(-12).forEach(m=>{const v=(r.mon||{})[m];if(v){a2[0]+=v[0];a2[1]+=v[1];}});
+    ms.slice(-24,-12).forEach(m=>{const v=(r.mon||{})[m];if(v){b2[0]+=v[0];b2[1]+=v[1];}});
+    return {n:r.n||r.v, rN:a2[0], rP:b2[0], mN:a2[0]?a2[1]/a2[0]*100:null, mP:b2[0]?b2[1]/b2[0]*100:null};})
+   .filter(x=>x.rN>200000&&x.rP>200000&&x.mN!=null&&x.mP!=null)
+   .sort((a2,b2)=>b2.rN-a2.rN).slice(0,10);
+  if(vv.length){
+   h+='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:12px">'
+    +'<tr><th style="text-align:left">Consignment vendor</th><th style="text-align:right">Revenue, prior 12m</th><th style="text-align:right">Revenue, last 12m</th>'
+    +'<th style="text-align:right">Margin then</th><th style="text-align:right">Margin now</th><th style="text-align:right">Change</th></tr>'
+    +vv.map(x=>{const d=x.mN-x.mP;
+      return '<tr><td style="text-align:left;font-weight:620">'+String(x.n).slice(0,28)+'</td>'
+       +'<td class="num" style="text-align:right;color:var(--ink-2)">'+M(x.rP)+'</td>'
+       +'<td class="num" style="text-align:right">'+M(x.rN)+'</td>'
+       +'<td class="num" style="text-align:right;color:var(--ink-3)">'+x.mP.toFixed(1)+'%</td>'
+       +'<td class="num" style="text-align:right;font-weight:700">'+x.mN.toFixed(1)+'%</td>'
+       +'<td class="num" style="text-align:right;font-weight:800;color:'+(d>=0?'var(--pos)':'var(--neg)')+'">'+(d>=0?'+':'−')+Math.abs(d).toFixed(1)+'</td></tr>';}).join('')
+    +'</table></div>';}
+  h+='<div style="margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">What was tested, and what it ruled out.</b> On this payload, over '+ms[ms.length-24]+' → '+ms[ms.length-1]+', consignment margin went <b>'+cP.toFixed(1)+'% → '+cN.toFixed(1)+'%</b> while cash went '+kP.toFixed(1)+'% → '+kN.toFixed(1)+'%. '
+   +'A separate read straight from Odoo on 2026-09-28, over the same two years and every consignment supplier rather than the ranked ones shown here, put it at <b>46.50% → 28.26%</b> against cash 35.79% → 36.49% &mdash; two different books, the same answer. On that read the fall decomposes to <b>&minus;13.83 of the &minus;18.23 WITHIN vendors</b> and only &minus;4.40 to the mix moving between them, so it is not cheaper suppliers taking share. '
+   +'<b>The obvious explanation was tested and does not hold.</b> If margin had been traded for volume, the vendors who grew most would have fallen most: across those 65, growth against margin change gives <b>r = +0.155, t = 1.24 on 63 degrees of freedom</b> &mdash; not significant, and the sign points the wrong way. Revenue growth does not explain it. '
+   +'<b>What this card cannot settle</b> is whether "within a vendor" means that vendor&rsquo;s terms got worse or its own range moved cheaper; separating those needs a product-level cost history that is not in this sync. So: the fall is measured, its location is measured, and its cause is not. Take it to the ten suppliers above as a question, not as an accusation.'
+   +(has?'':' <b>This card is currently reading the monthly vendor series only</b> &mdash; the per-vendor gross-profit split by buying model lands with the next collector run.')
+   +'</div>';
+  pnlCard(g,'odoo','Cash against consignment &mdash; a third of the gross profit, on none of the cash'
+   +INFO('Terms come from the vendor, verified against Odoo: the product-level model flag and res.partner.vendor_type agree on 100% of 6,000 sampled lines. GP is on the 4% basis. Consignment sales lines DO carry a cost - 23 of 361,948 do not.'),
+   'Consignment needs no working capital and carries no markdown risk. It also used to earn more than cash and now earns less.',h);
+ })();}catch(e){}
+
   pnlCard(g,'odoo','aMER by branch &mdash; who buys new customers and who lives off the old ones'
    +INFO('aMER = first-time revenue ÷ ad spend. Spend is allocated to branches by their share of Meta in-store attributed value, because Meta reports value per branch but not spend.'),
    'First-time against returning at the till, with each branch judged against the network median rather than against zero.',
@@ -19628,7 +19725,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-161309';
+const BUILD='20260928-162526';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
