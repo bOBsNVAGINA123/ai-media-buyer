@@ -5439,6 +5439,115 @@ def pull_vendor_inventory():
     return inv
 
 
+def pull_ap():
+    """v51 THE CASH SIDE OF BUYING. The P&Ls stopped at contribution and never said what the
+    buying actually consumes. Two numbers were missing and both are cash, not profit:
+
+      1. What the purchase commitments need funding for (purchase.order, already pulled).
+      2. What is owed to suppliers right now, and how long the business ACTUALLY takes to pay.
+
+    The payment lag is measured two ways on purpose, because each is biased in a knowable
+    direction and the truth sits between them:
+
+      DPO on a recent window  = AP still unpaid on bills from that window / bills per day.
+        Biased UP by anything left unreconciled; biased DOWN on a short window because
+        recent bills have not had time to be paid. Six months is the compromise.
+      Settled-bill lag        = bill date -> full reconciliation date, weighted by value.
+        Biased DOWN, because a bill that has NOT been settled yet cannot appear in it.
+
+    The aged tail is reported separately and never folded into the lag: 55% of the balance
+    sits on bills older than six months, spread evenly back to Aug 2024, and a read-only
+    connection cannot tell a genuinely unpaid invoice from one settled outside reconciliation.
+    Calling that tail 'debt' would have put a 259-day DPO on the page; calling it nothing
+    would have hidden E£110M. It gets its own line and its own caveat."""
+    out = {"asof": END.isoformat(), "outstanding": 0, "aged": 0, "recent": 0,
+           "byMon": {}, "perDay": 0, "dpo6": None, "dpo3": None, "lagW": None,
+           "agedCut": "", "billed12": 0, "err": ""}
+    try:
+        cut6 = (END - datetime.timedelta(days=181)).isoformat()
+        out["agedCut"] = cut6
+        # --- outstanding AP by bill month (posted vendor bills, not fully paid) ---
+        for r in (ogroup("account.move",
+                         [["move_type", "=", "in_invoice"], ["state", "=", "posted"],
+                          ["payment_state", "in", ["not_paid", "partial"]]],
+                         ["amount_residual_signed"], ["invoice_date:month"]) or []):
+            try: mon = datetime.datetime.strptime(str(r["invoice_date:month"]), "%B %Y").strftime("%Y-%m")
+            except Exception: continue
+            v = abs(r.get("amount_residual_signed") or 0)
+            out["byMon"][mon] = round(out["byMon"].get(mon, 0) + v)
+        out["outstanding"] = sum(out["byMon"].values())
+        c6 = cut6[:7]
+        out["recent"] = sum(v for m, v in out["byMon"].items() if m >= c6)
+        out["aged"] = out["outstanding"] - out["recent"]
+        # --- bill volume, last 12 complete months, for the per-day rate ---
+        y0 = (END.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
+        s12 = (y0 - datetime.timedelta(days=334)).replace(day=1).isoformat()
+        e12 = (END.replace(day=1) - datetime.timedelta(days=1)).isoformat()
+        b12 = 0
+        for r in (ogroup("account.move",
+                         [["move_type", "=", "in_invoice"], ["state", "=", "posted"],
+                          ["invoice_date", ">=", s12], ["invoice_date", "<=", e12]],
+                         ["amount_total_signed"], ["payment_state"]) or []):
+            if r.get("payment_state") == "reversed": continue
+            b12 += abs(r.get("amount_total_signed") or 0)
+        out["billed12"] = round(b12)
+        out["perDay"] = round(b12 / 365.0)
+        # --- DPO on two windows ---
+        def dpo(days):
+            a = (END - datetime.timedelta(days=days)).isoformat()
+            bill = 0
+            for r in (ogroup("account.move",
+                             [["move_type", "=", "in_invoice"], ["state", "=", "posted"],
+                              ["invoice_date", ">=", a]], ["amount_total_signed"], ["payment_state"]) or []):
+                if r.get("payment_state") == "reversed": continue
+                bill += abs(r.get("amount_total_signed") or 0)
+            unpaid = 0
+            for r in (ogroup("account.move",
+                             [["move_type", "=", "in_invoice"], ["state", "=", "posted"],
+                              ["payment_state", "in", ["not_paid", "partial"]],
+                              ["invoice_date", ">=", a]], ["amount_residual_signed"], ["payment_state"]) or []):
+                unpaid += abs(r.get("amount_residual_signed") or 0)
+            pd = bill / float(days)
+            return (round(unpaid / pd) if pd else None), round(bill), round(unpaid)
+        out["dpo6"], out["bill6"], out["unpaid6"] = dpo(181)
+        out["dpo3"], out["bill3"], out["unpaid3"] = dpo(90)
+        # --- value-weighted settled lag, as the lower bound ---
+        try:
+            ml = oexec("account.move.line", "search_read",
+                       [[["move_id.move_type", "=", "in_invoice"], ["move_id.state", "=", "posted"],
+                         ["account_id.account_type", "=", "liability_payable"],
+                         ["full_reconcile_id", "!=", False],
+                         ["date", ">=", (END - datetime.timedelta(days=450)).isoformat()]],
+                        ["date", "balance", "full_reconcile_id"]], {"limit": 6000})
+            frs = sorted({r["full_reconcile_id"][0] for r in ml if r.get("full_reconcile_id")})
+            md = {}
+            for i in range(0, len(frs), 300):
+                for pr in (oexec("account.partial.reconcile", "search_read",
+                                 [[["full_reconcile_id", "in", frs[i:i + 300]]],
+                                  ["full_reconcile_id", "max_date"]], {"limit": 40000}) or []):
+                    f = pr.get("full_reconcile_id"); d = pr.get("max_date")
+                    if not f or not d: continue
+                    if f[0] not in md or d > md[f[0]]: md[f[0]] = d
+            w = wl = 0; n = 0
+            for r in ml:
+                f = r.get("full_reconcile_id")
+                if not f or f[0] not in md: continue
+                try:
+                    b = datetime.date.fromisoformat(r["date"]); st = datetime.date.fromisoformat(md[f[0]])
+                except Exception: continue
+                L = (st - b).days
+                if L < 0 or L > 730: continue
+                a = abs(r.get("balance") or 0); w += a; wl += a * L; n += 1
+            if w: out["lagW"] = round(wl / w); out["lagN"] = n
+        except Exception as e:
+            log("ap lag fail", str(e)[:120])
+        log("AP :: outstanding", format(out["outstanding"], ","), ":: aged", format(out["aged"], ","),
+            ":: perDay", format(out["perDay"], ","), ":: dpo6", out["dpo6"], ":: lagW", out["lagW"])
+    except Exception as e:
+        out["err"] = str(e)[:160]; log("AP pull failed", out["err"])
+    return out
+
+
 def pull_purchases():
     """v9.96 INVENTORY PURCHASES, monthly. Break-even that only covers ads and OpEx is a lie for a
     retailer: the shelves have to be refilled out of the same gross profit, and that cash leaves
@@ -6152,6 +6261,7 @@ def build():
     meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
     mseg = safe(pull_meta_segments, win) or {}
     purch = safe(pull_purchases) or (prev.get("purch") or {})
+    ap = safe(pull_ap) or (prev.get("ap") or {})
     shop = safe(pull_shopify, win) or {k: {d: 0.0 for d in win} for k in ["sessions", "atcRatio", "checkoutRatio", "cvr", "newcust", "retcust", "ncrev", "rcrev"]}
     goog = safe(pull_google, win) or {k: {d: 0.0 for d in win} for k in ["gspend", "gecomrev", "gconv", "gimp", "gclk"]}
     tik = safe(pull_tiktok, win) or {k: {d: 0.0 for d in win} for k in ["tspend", "ttValue", "tpur", "ttOffValue", "ttOffPur", "timp", "tclk"]}
@@ -6599,7 +6709,7 @@ def build():
     online = {"cur": "EGP", "lastSync": ts, "fin": fin, "ad": ad, "bl": bl or {}, "prod": prod,
               "shop": sh, "coh": coh, "nr": nrm, "exp": exp, "rentB": rentB, "rentDx": dict(RENT_DX) or prev.get("rentDx", {}), "pos": pos, "bosta": bosta, "clarity": clarity, "gops": gops, "otruth": otruth, "onu": onu or prev.get("onu", {}), "bcost": bcost, "bnr": bnr, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}),
               "bcatD": (globals().get("_BCATD") or prev.get("bcatD") or {}),
-              "purch": purch, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
+              "purch": purch, "ap": ap, "bnrD": (globals().get("_BNRD") or prev.get("bnrD") or {}), "bstat": bstat, "bcoh": bcoh, "bun": bun,
               # v9.7.2: a run where Meta hands back no custom conversions used to overwrite
               # the branch table with {} -- one bad pull and every branch read "not measured".
               # Keep the last good one, same fallback every other key already has.
