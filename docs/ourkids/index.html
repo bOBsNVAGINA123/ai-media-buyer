@@ -5905,6 +5905,148 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  pnlCard(g,'blend','Cohort engine &mdash; what a year of acquisition is worth'
   +INFO('New customers and CAC measured in '+b.bm+'. Orders per customer per year and lifetime gross profit come from the Odoo customer crawl over the whole history, not this window.'),
   'Retention and LTV:CAC live here, deliberately apart from the run-rate model above.',ch);
+
+ /* ============================================================================
+    v38 · WHAT THE COHORT MODEL HOLDS STILL, AND WHETHER IT SHOULD.
+    The engine above values a year of acquisition at TODAY'S basket and TODAY'S
+    margin, held flat for the customer's whole life. Two things are measurably
+    not flat, and they point in OPPOSITE directions -- so "flat" is not the
+    conservative choice, it is two errors cancelling by accident:
+      ASP is rising. Egyptian prices have moved and the basket with them.
+      MARGIN is falling. Not everywhere -- vendor by vendor it splits -- but the
+      blended webstore margin is lower than it was.
+    Both are measured here on a same-months 12-vs-12 comparison, so seasonality
+    cannot produce either. Growth in ORDER COUNT is deliberately excluded from
+    the per-customer adjustment: more customers is what the cohort count already
+    counts, and applying it again would inflate the same growth twice.
+    ========================================================================== */
+ try{(function(){
+  const nr=O.nr||{}, msA=Object.keys(nr).sort();
+  if(msA.length<25)return;
+  const pick=m=>{const c=nr[m]||{};return {rev:(c.nrev||0)+(c.rrev||0),gp:(c.ngp||0)+(c.rgp||0),ord:(c.nord||0)+(c.rord||0)};};
+  const full=msA.slice(0,-1);                    /* the running month is never complete */
+  const t12=full.slice(-12), p12=full.slice(-24,-12);
+  if(p12.length<12)return;
+  const agg=a=>a.reduce((t,m)=>{const x=pick(m);t.rev+=x.rev;t.gp+=x.gp;t.ord+=x.ord;return t;},{rev:0,gp:0,ord:0});
+  const A=agg(t12), P=agg(p12);
+  if(!A.ord||!P.ord||!P.rev)return;
+  const aovN=A.rev/A.ord, aovP=P.rev/P.ord, aovG=(aovN/aovP-1);
+  const mgN=A.gp/A.rev*100, mgP=P.gp/P.rev*100, mgG=(mgN/mgP-1);
+  const revG=(A.rev/P.rev-1), ordG=(A.ord/P.ord-1);
+  const gpPerOrdN=A.gp/A.ord, gpPerOrdP=P.gp/P.ord, gpoG=(gpPerOrdN/gpPerOrdP-1);
+  /* the growth actually applied to the cohort, user-adjustable, defaulting to measured */
+  const gUser=(GLS&&GLS._asp!=null)?GLS._asp:aovG*100;
+  window.glAsp=function(v){GLS=GLS||{};GLS._asp=parseFloat(v);rGL();};
+  const nCust=annl(b.nc,b.bm), ordPer=glV('oyr');
+  /* a year of orders spread evenly through the year meets on average half the
+     annual price move; the lifetime figure compounds over the measured life. */
+  const yrs=(b.oyr&&b.ltgp&&b.aov&&B.mg)?Math.max(1,(b.ltgp/((b.aov*B.mg/100)||1))/(b.oyr||1)):1;
+  const gp1=gUser/100;
+  const flatRev=nCust*b.aov*ordPer, growRev=flatRev*(1+gp1/2);
+  const flatGP=flatRev*B.mg/100, growGP=growRev*B.mg/100;
+  const bothGP=growRev*(B.mg*(1+mgG))/100;
+  const ltFlat=b.ltgp, ltGrow=b.ltgp*Math.pow(1+gp1,yrs/2), ltBoth=ltGrow*(1+mgG);
+  const MM=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+  const pc=v=>(v>=0?'+':'−')+(Math.abs(v)*100).toFixed(1)+'%';
+  const col=v=>v>=0?'var(--pos)':'var(--neg)';
+  const mtr=(lab,now,prev,g,f,hiGood)=>'<div style="flex:1;min-width:165px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+   +'<div style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:700">'+lab+'</div>'
+   +'<div style="font-size:20px;font-weight:700;color:var(--ink);margin-top:3px;font-variant-numeric:tabular-nums">'+f(now)+'</div>'
+   +'<div style="font-size:11px;margin-top:2px;font-weight:700;color:'+((g>=0)===!!hiGood?'var(--pos)':'var(--neg)')+'">'+pc(g)+' year on year</div>'
+   +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:1px">was '+f(prev)+'</div></div>';
+  let h='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+   +mtr('Average basket',aovN,aovP,aovG,v=>MM(v),1)
+   +mtr('Gross margin',mgN,mgP,mgG,v=>v.toFixed(1)+'%',1)
+   +mtr('Gross profit per order',gpPerOrdN,gpPerOrdP,gpoG,v=>MM(v),1)
+   +mtr('Orders',A.ord,P.ord,ordG,v=>Math.round(v).toLocaleString(),1)
+   +mtr('Revenue',A.rev,P.rev,revG,v=>MM(v),1)
+   +'</div>'
+   +'<div style="font-size:11.5px;color:var(--ink-2);line-height:1.6;margin-bottom:11px">'
+   +'Measured on <b>'+t12[0]+' → '+t12[11]+'</b> against <b>'+p12[0]+' → '+p12[11]+'</b> — the same twelve calendar months a year apart, so none of this is seasonality. '
+   +'The basket is '+pc(aovG)+' and the margin is '+pc(mgG)+'; together they leave gross profit per order '+pc(gpoG)+'. '
+   +(gpoG>=0?'Holding both flat therefore <b>understates</b> a cohort.':'Holding both flat therefore <b>overstates</b> a cohort.')
+   +' Order growth of '+pc(ordG)+' is shown for context and is deliberately NOT applied below: more customers is what the cohort count already counts, and applying it again would bank the same growth twice.</div>'
+   /* the slider */
+   +'<div style="display:grid;grid-template-columns:230px 1fr 150px;gap:12px;align-items:center;margin:10px 0 14px">'
+   +'<div style="font-size:11.5px;font-weight:700">Basket growth carried forward<div style="font-size:10.5px;font-weight:600;color:var(--ink-3)">measured '+(aovG*100).toFixed(1)+'% a year</div></div>'
+   +'<input type="range" min="'+Math.min(-10,aovG*100-20).toFixed(0)+'" max="'+Math.max(40,aovG*100+20).toFixed(0)+'" step="0.5" value="'+gUser+'" oninput="glAsp(this.value)" style="width:100%">'
+   +'<div style="text-align:right"><b style="font-size:12.5px">'+gUser.toFixed(1)+'% / yr</b></div></div>';
+  const TD2='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+   +'<tr><th style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">A year of acquisition</th>'
+   +'<th style="'+TD2+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Held flat</th>'
+   +'<th style="'+TD2+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Basket growth only</th>'
+   +'<th style="'+TD2+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Basket AND margin trend</th>'
+   +'<th style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">What changes between them</th></tr>'
+   +'<tr><td style="'+TD2+';text-align:left">Revenue in year one</td><td style="'+TD2+'">'+MM(flatRev)+'</td><td style="'+TD2+'">'+MM(growRev)+'</td><td style="'+TD2+'">'+MM(growRev)+'</td>'
+   +'<td style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);white-space:normal">orders land through the year, so they meet on average half of one year&rsquo;s price move</td></tr>'
+   +'<tr style="font-weight:800;background:var(--surface-3)"><td style="'+TD2+';text-align:left">Gross profit in year one</td><td style="'+TD2+'">'+MM(flatGP)+'</td><td style="'+TD2+'">'+MM(growGP)+'</td><td style="'+TD2+';color:'+col(bothGP-flatGP)+'">'+MM(bothGP)+'</td>'
+   +'<td style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);white-space:normal">the last column also carries the '+pc(mgG)+' margin move</td></tr>'
+   +'<tr><td style="'+TD2+';text-align:left">Lifetime GP per customer</td><td style="'+TD2+'">'+MM(ltFlat)+'</td><td style="'+TD2+'">'+MM(ltGrow)+'</td><td style="'+TD2+';color:'+col(ltBoth-ltFlat)+'">'+MM(ltBoth)+'</td>'
+   +'<td style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);white-space:normal">compounded over the '+yrs.toFixed(1)+'-year life implied by the measured lifetime GP'+(yrs<=1.001?' — floored at one year, because the measured lifetime GP here is under a single year of spending and compounding a shorter life would flatter it':'')+'</td></tr>'
+   +'<tr style="font-weight:800;background:var(--surface-3)"><td style="'+TD2+';text-align:left">LTGP : CAC</td>'
+   +'<td style="'+TD2+'">'+(b.cac?(ltFlat/b.cac).toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD2+'">'+(b.cac?(ltGrow/b.cac).toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD2+';color:'+col(ltBoth-ltFlat)+'">'+(b.cac?(ltBoth/b.cac).toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3);white-space:normal">against a measured CAC of '+MM(b.cac)+'</td></tr>'
+   +'</table></div>';
+  /* --- vendor margin split: the blended number hides who is actually moving --- */
+  const V=(O.vend&&O.vend.rows)||[];
+  const vs=V.map(v=>{const Mm=v.mon||{};let a={r:0,g:0},q={r:0,g:0};
+    t12.forEach(m=>{const x=Mm[m];if(x){a.r+=x[0]||0;a.g+=x[1]||0;}});
+    p12.forEach(m=>{const x=Mm[m];if(x){q.r+=x[0]||0;q.g+=x[1]||0;}});
+    return {n:String(v.n||'').trim(),rev:a.r,gp:a.g,mg:a.r?a.g/a.r*100:0,mgP:q.r?q.g/q.r*100:0,revP:q.r};})
+   .filter(v=>v.gp>0&&v.revP>1000).sort((x,y)=>y.gp-x.gp).slice(0,10);
+  /* Is the blended margin falling because vendors got thinner, or because the MIX
+     moved toward thinner vendors? Both are measured. Within-vendor is each vendor's
+     own margin move weighted at today's revenue share; mix is each vendor's share
+     move weighted at last year's margin. They sum to the blended change up to a
+     small interaction term, which is printed rather than smeared into either side. */
+  let wWithin=0,wMix=0,rNow=0,rPrev=0;
+  const allV=V.map(v=>{const Mm=v.mon||{};let a={r:0,g:0},q={r:0,g:0};
+    t12.forEach(m=>{const x=Mm[m];if(x){a.r+=x[0]||0;a.g+=x[1]||0;}});
+    p12.forEach(m=>{const x=Mm[m];if(x){q.r+=x[0]||0;q.g+=x[1]||0;}});
+    return {r:a.r,g:a.g,rp:q.r,gp2:q.g};}).filter(v=>v.r>0&&v.rp>0);
+  allV.forEach(v=>{rNow+=v.r;rPrev+=v.rp;});
+  if(rNow&&rPrev)allV.forEach(v=>{
+    const wN=v.r/rNow, wP=v.rp/rPrev, mN=v.g/v.r*100, mP=v.gp2/v.rp*100;
+    wWithin+=wN*(mN-mP); wMix+=(wN-wP)*mP;});
+  const blendNow=allV.reduce((t,v)=>t+v.g,0)/(rNow||1)*100;
+  const blendPrev=allV.reduce((t,v)=>t+v.gp2,0)/(rPrev||1)*100;
+  const blendD=blendNow-blendPrev, inter=blendD-wWithin-wMix;
+  if(rNow&&rPrev)h+='<div style="margin-top:16px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface);border:1px solid var(--line)">'
+   +'<div style="font-size:12.5px;font-weight:800;color:var(--ink);margin-bottom:5px">Why the blended margin moved: the vendors, or which vendors?</div>'
+   +'<div style="font-size:11.5px;line-height:1.65;color:var(--ink-2)"><b>This paragraph is on a wider book than the tiles above it</b> — the vendor ledger covers the webstore AND the tills, so its blended margin will not equal the webstore-only figure at the top of this card. Across every vendor with trade in both years, the blended margin went <b>'+blendPrev.toFixed(1)+'% → '+blendNow.toFixed(1)+'%</b>, a move of <b style="color:'+col(blendD)+'">'+(blendD>=0?'+':'−')+Math.abs(blendD).toFixed(2)+' of a percent of revenue</b>. Splitting it: '
+   +'<b style="color:'+col(wWithin)+'">'+(wWithin>=0?'+':'−')+Math.abs(wWithin).toFixed(2)+'</b> is vendors&rsquo; OWN margins changing, and '
+   +'<b style="color:'+col(wMix)+'">'+(wMix>=0?'+':'−')+Math.abs(wMix).toFixed(2)+'</b> is the MIX moving between them, with '+(inter>=0?'+':'−')+Math.abs(inter).toFixed(2)+' of interaction left over. '
+   +(Math.abs(wMix)>Math.abs(wWithin)
+     ? '<b>Mix BETWEEN vendors is the bigger half.</b> The vendors you already buy have not mostly got worse — the business sold a different blend of them. That is a range and merchandising decision before it is a supplier negotiation.'
+     : '<b>The move sits INSIDE vendors rather than between them.</b>')
+   +' <b style="color:var(--warn)">What this does not settle.</b> &ldquo;Inside a vendor&rdquo; still contains that vendor&rsquo;s own range mix — the table below shows at least one supplier whose margin collapsed while its revenue multiplied, which is a cheaper range scaling, not a worse price. Separating a vendor&rsquo;s prices from its range needs a product-level cost history, which is not in this sync. Read the split as WHERE the change sits, never as WHY.'
+   +'</div></div>';
+  if(vs.length){
+   h+='<div style="font-size:10.5px;font-weight:800;letter-spacing:.09em;color:var(--ink-3);text-transform:uppercase;margin:16px 0 6px">The blended margin move, by the vendors who carry it</div>'
+    +'<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:12px">'
+    +'<tr><th style="text-align:left">Vendor</th><th style="text-align:right">GP, last 12m</th><th style="text-align:right">Margin now</th><th style="text-align:right">Margin a year ago</th><th style="text-align:right">Change</th><th style="text-align:right">Revenue growth</th><th style="text-align:left">Reading</th></tr>';
+   vs.forEach(v=>{const d=v.mg-v.mgP, rg=v.revP?(v.rev/v.revP-1)*100:0;
+    const say=(d<-2&&rg>50)?'Growing fast at a thinner margin — mix, not price: the cheap end of this vendor is what is scaling.'
+      :(d<-2)?'Margin down without the volume to explain it. Cost or discounting; worth a conversation before the next order.'
+      :(d>2)?'Richer than a year ago — whatever changed in this range, it worked.'
+      :'Holding. Nothing to act on here.';
+    h+='<tr><td style="text-align:left;font-weight:620">'+v.n.slice(0,26)+'</td>'
+     +'<td class="num" style="text-align:right">'+MM(v.gp)+'</td>'
+     +'<td class="num" style="text-align:right;font-weight:700">'+v.mg.toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right;color:var(--ink-3)">'+v.mgP.toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right;font-weight:800;color:'+col(d)+'">'+(d>=0?'+':'−')+Math.abs(d).toFixed(1)+'%</td>'
+     +'<td class="num" style="text-align:right;color:'+col(rg)+'">'+(rg>=0?'+':'−')+Math.abs(rg).toFixed(0)+'%</td>'
+     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal">'+say+'</td></tr>';});
+   h+='</table></div>'
+    +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+    +'<b style="color:var(--warn)">Margin change is stated, not explained.</b> A vendor whose margin fell while its revenue multiplied has almost certainly changed MIX rather than price — but this table cannot separate the two, and neither can any other surface here without a product-level cost history. Treat a red row as a question for that supplier, not as a finding about them.</div>';}
+  pnlCard(g,'blend','Is the cohort model standing still while the business moves?'
+   +INFO('Same twelve calendar months a year apart, from the webstore customer book. Basket growth is carried into the cohort value at half a year on the first-year line and compounded over the implied life on the lifetime line. Order growth is shown but deliberately not applied.'),
+   'The engine above values every future order at today&rsquo;s basket and today&rsquo;s margin. Neither has been flat.',h);
+ })();}catch(e){}
 }
 
 /* ===================== v11.9 THE WHOLE COMPANY P&L =====================
@@ -17007,8 +17149,34 @@ function _gpPct(){
  return {gpOn:Math.max(0.05,gpOnGross-drag),gpSt,gpOnGross,drag,dragShip:_dragShip,dragPay:_dragPay,dragCost:_dragCost,dragCol:_dragCol};}
 // account-name -> act id, for deep links straight into Ads Manager with the object pre-selected
 const ACTID={'Ourkids EGP':'336343742536460','Basic':'652528128810469','Playmore 26 EGP Clean':'2619321185136291'};
-function amURL(lvl,id,acct){const a2=ACTID[acct];if(!a2||!id)return null;
- return 'https://adsmanager.facebook.com/adsmanager/manage/'+(lvl==='campaign'?'campaigns?act='+a2+'&selected_campaign_ids='+id:lvl==='adset'?'adsets?act='+a2+'&selected_adset_ids='+id:'ads?act='+a2+'&selected_ad_ids='+id);}
+/* v37 · WHY THE AD LINKS DID NOT OPEN.
+   selected_ad_ids only SELECTS a row; it does not navigate to it. Ads Manager still
+   opens the ad view scoped to whatever campaign and ad set were last looked at, with
+   its own date range and its default Active filter -- so an ad from another campaign,
+   or a paused one, lands on an empty table and reads as a dead link. Two things fix it:
+   carry the PARENTS so the view is scoped to the right branch of the tree, and carry
+   business_id so an account inside a Business Manager does not bounce to the picker.
+   Even then the manage table is a poor place to LOOK at an ad -- so every ad now leads
+   with its preview_shareable_link, which is Meta's own public render of the creative
+   and needs no filters to be right. */
+const FB_BIZ='2581683038758084';
+function amURL(lvl,id,acct,par){const a2=ACTID[acct];if(!a2||!id)return null;
+ const P=par||{};
+ const q=['act='+a2,'business_id='+FB_BIZ];
+ if(lvl==='campaign'){q.push('selected_campaign_ids='+id);}
+ else if(lvl==='adset'){if(P.cid)q.push('selected_campaign_ids='+P.cid);q.push('selected_adset_ids='+id);}
+ else{if(P.cid)q.push('selected_campaign_ids='+P.cid);if(P.asid)q.push('selected_adset_ids='+P.asid);q.push('selected_ad_ids='+id);}
+ return 'https://adsmanager.facebook.com/adsmanager/manage/'+(lvl==='campaign'?'campaigns':lvl==='adset'?'adsets':'ads')+'?'+q.join('&');}
+/* the two links an ad row should carry: LOOK (Meta's own preview) and EDIT (manage table) */
+function adEdit(a){return a?amURL('ad',a.id,a.acct,{cid:a.cid,asid:a.asid}):null;}
+function adSee(a){return (a&&a.pl)?a.pl:null;}
+/* 44x44 creative thumb; fbcdn urls expire between syncs, so a failed load collapses to
+   initials rather than leaving a broken-image box in the middle of a table */
+function adThumb(a,px){const s2=(a&&(a.im||a.th))||null,n2=String((a&&a.n)||'?');
+ const w=px||40, ini=n2.replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'?';
+ const fb='<div style=\"width:'+w+'px;height:'+w+'px;border-radius:7px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:var(--ink-3);flex:0 0 auto\">'+ini+'</div>';
+ if(!s2)return fb;
+ return '<img src=\"'+s2+'\" loading=\"lazy\" alt=\"\" style=\"width:'+w+'px;height:'+w+'px;object-fit:cover;border-radius:7px;border:1px solid var(--line);flex:0 0 auto;display:block\" onerror=\"this.outerHTML='+JSON.stringify(fb).replace(/"/g,'&quot;')+'\">';}
 function amLink(lvl,id,acct,txt){const u=amURL(lvl,id,acct);return u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a9bff;font-size:11.5px;font-weight:700;white-space:nowrap">&#9998; '+(txt||'edit in Ads Manager')+' &rarr;</a>':'';}
 /* v9.46 CAMPAIGN LAUNCH BOARD -- Google AND Meta, at campaign level.
    The existing launch library reads O.mads only, so it is Meta ads and nothing else: after a
@@ -18000,7 +18168,7 @@ function rMETA(){
  let body='';
  rows.slice(0,26).forEach(r=>{
   const _pp=fatPas(r.a);
-  const _lnk=(typeof amURL==='function')?amURL('ad',r.a.id,r.a.acct):null;
+  const _lnk=(typeof adEdit==='function')?adEdit(r.a):null;
   /* A fatigue score measures ATTENTION decay, not profit, and telling someone to pull an ad
      returning 34.94x on a 3.76x break-even is how a tool loses the room. Fatigue that high on
      an ad still clearing break-even by a wide margin means the CREATIVE is tiring while the
@@ -18184,7 +18352,7 @@ function rMETA(){
          expandable -- naming four and hiding fifteen means the fifth one never gets looked
          at. Each row carries the CVR it fell from and to, so the claim can be checked
          against the platform rather than taken on trust. */
-      const row=x=>{const u=(typeof amURL==='function')?amURL('ad',x.id,x.acct):null;
+      const row=x=>{const u=(typeof adEdit==='function')?adEdit(x):null;
         const nm=u?('<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a9bff;font-weight:700;text-decoration:none">'+esc(x.n)+' \u2197</a>'):('<b>'+esc(x.n)+'</b>');
         return '<div style="display:flex;gap:10px;align-items:baseline;padding:4px 0;border-top:1px solid #f0f2f7">'
          +'<div style="flex:1;min-width:0">'+nm
@@ -18227,7 +18395,7 @@ function rMETA(){
    pnlCard(g,'meta','No ad set is losing money over these days',
     'Every Meta ad set with over E£1,000 of spend in '+PW.lbl+' covered its own cost at your delivered margins and attribution. The winners made '+M(okGp)+' after spend on '+M(okSp)+'.','' );
   }else{
-   const rows2=L2.slice(0,8).map(x=>{const u=(typeof amURL==='function')?amURL('adset',x.x.asid,x.x.acct):null;
+   const rows2=L2.slice(0,8).map(x=>{const u=(typeof amURL==='function')?amURL('adset',x.x.asid,x.x.acct,{cid:x.x.cid}):null;
     return '<tr><td style="padding:6px 8px;border-bottom:1px solid #f6d9e0;text-align:left"><b>'
      +(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#a3271a;text-decoration:underline">'+esc((x.x.as||'').slice(0,44))+'</a>':esc((x.x.as||'').slice(0,44)))
      +'</b><div style="font-size:10.5px;color:#b06a76">'+esc(x.x.cmp||'')+' · '+x.x.n+' ad'+(x.x.n===1?'':'s')+'</div></td>'
@@ -19156,7 +19324,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-151339';
+const BUILD='20260928-152230';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -19756,16 +19924,38 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
    const bench=tSp?tVal/tSp:0;
    const scale=rows.filter(r=>r.pas>0&&r.roas>=bench*1.2).sort((x,y)=>y.pas-x.pas).slice(0,5);
    const kill=rows.filter(r=>r.pas<0).sort((x,y)=>x.pas-y.pas).slice(0,5);
-   const store=rows.filter(r=>r.offShare>=0.6&&r.pas>0).sort((x,y)=>y.fv-x.fv).slice(0,4);
-   const card=(ttl,list,col2,note,fmt)=>list.length?'<div style="flex:1;min-width:330px"><div style="font-size:11.5px;font-weight:800;color:'+col2+';margin-bottom:4px">'+ttl+' <span style="font-weight:600;color:#5f6a7d;text-transform:none">&middot; '+winLbl+'</span></div><table class="bt" style="width:100%"><tr><th style="text-align:left">Ad</th><th>Spend</th><th>ROAS</th><th>After spend &middot; online</th><th>After spend &middot; incl. shops</th></tr>'+list.map(r=>{const u=(typeof amURL==='function')?amURL('ad',r.a.id,r.a.acct):null;
-    return '<tr><td style="text-align:left"><b>'+(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:#3a3bd0;text-decoration:none" title="Open this ad in Ads Manager to view or edit">'+String(r.a.n||'').slice(0,40)+'</a>':String(r.a.n||'').slice(0,40))+'</b><div style="font-size:10.5px;color:#5f6a7d">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div></td><td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td><td style="color:'+(r.pasOn>=0?'#0f7a55':'#c4203f')+';font-weight:800">'+(r.pasOn>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pasOn))+'</td><td style="color:'+(r.pas>=0?'#0f7a55':'#c4203f')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>';}).join('')+'</table><div style="font-size:10.5px;color:#5f6a7d;margin-top:3px">'+note+'</div></div>':'';
+   /* v37 STORE DRIVERS, corrected. It used to rank by RAW in-store value, which ranks by
+      budget: the biggest-spending ad tops the list whether or not its return leans in-store
+      at all. The question the card asks is "which ads pull people into shops", so the rank
+      is now in-store value PER POUND of that ad's own spend, against the same figure for the
+      whole account -- a lift, not a total. The 60% share test is kept as a gate because an
+      ad that returns half online is not a footfall ad however big its number. */
+   const accOffPP=tSp?rows.reduce((t,r)=>t+r.fv,0)/tSp:0;
+   rows.forEach(r=>{r.offPP=r.sp?r.fv/r.sp:0; r.offLift=accOffPP?r.offPP/accOffPP:0;});
+   const store=rows.filter(r=>r.offShare>=0.6&&r.pas>0).sort((x,y)=>y.offLift-x.offLift).slice(0,5);
+   const card=(ttl,list,col2,note,extraH,extraF)=>list.length?'<div style="flex:1;min-width:330px"><div style="font-size:11.5px;font-weight:800;color:'+col2+';margin-bottom:4px">'+ttl+' <span style="font-weight:600;color:#5f6a7d;text-transform:none">&middot; '+winLbl+'</span></div><table class="bt" style="width:100%"><tr><th style="text-align:left">Ad</th><th>Spend</th><th>ROAS</th>'+(extraH||'')+'<th>After spend &middot; online</th><th>After spend &middot; incl. shops</th></tr>'+list.map(r=>{
+    const u=adEdit(r.a), pv=adSee(r.a), nm=String(r.a.n||'').slice(0,40);
+    const links='<div style="font-size:10px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap">'
+      +(pv?'<a href="'+pv+'" target="_blank" rel="noopener" style="color:var(--brand);font-weight:700;text-decoration:none" title="Meta’s own render of this creative — opens without any Ads Manager filter">▶ See the ad</a>':'')
+      +(u?'<a href="'+u+'" target="_blank" rel="noopener" style="color:var(--ink-3);font-weight:700;text-decoration:none" title="Ads Manager, scoped to this ad’s campaign and ad set. If the table looks empty, widen the date range or clear the Active filter — the ad is selected, not deleted.">✎ Edit</a>':'')
+      +'</div>';
+    return '<tr><td style="text-align:left"><div style="display:flex;gap:9px;align-items:flex-start">'+adThumb(r.a,40)
+      +'<div style="min-width:0"><b>'+(pv?'<a href="'+pv+'" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:none">'+nm+'</a>':nm)+'</b>'
+      +'<div style="font-size:10.5px;color:#5f6a7d">'+String(r.a.acct||'')+(r.a.cmp?' &middot; '+String(r.a.cmp).slice(0,28):'')+'</div>'+links+'</div></div></td>'
+      +'<td>E&pound; '+money(r.sp)+'</td><td><b>'+r.roas.toFixed(2)+'x</b></td>'
+      +(extraF?extraF(r):'')
+      +'<td style="color:'+(r.pasOn>=0?'#0f7a55':'#c4203f')+';font-weight:800">'+(r.pasOn>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pasOn))+'</td><td style="color:'+(r.pas>=0?'#0f7a55':'#c4203f')+';font-weight:800">'+(r.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(r.pas))+'</td></tr>';}).join('')+'</table><div style="font-size:10.5px;color:#5f6a7d;margin-top:3px">'+note+'</div></div>':'';
    let h3='<div style="display:flex;gap:16px;flex-wrap:wrap">'
     +card('SCALE &mdash; beating the account and making money',scale,'#0f7a55','Account blended ROAS over '+winLbl+' is '+bench.toFixed(2)+'x. These clear it by 20%+ AND cover their own spend.')
     +card('KILL / FIX &mdash; not covering their own spend',kill,'#c4203f','Profit after ad spend is negative over '+winLbl+' at your DELIVERED margins ('+(gpOn*100).toFixed(1)+'% online incl. courier &amp; COD fees / '+(gpSt*100).toFixed(1)+'% store).')
     +'</div>';
-   if(store.length)h3+='<div style="margin-top:14px">'+card('STORE DRIVERS &mdash; most of their return is in-store',store,'#9d6bff','60%+ of the value these produce is in-store, not website. Judging them on website ROAS alone would kill your best footfall ads.')+'</div>';
+   if(store.length)h3+='<div style="margin-top:14px">'+card('STORE DRIVERS &mdash; in-store return per pound, against the account',store,'#9d6bff',
+     'Ranked by IN-STORE VALUE PER POUND OF THEIR OWN SPEND against the account’s '+('E£'+accOffPP.toFixed(2))+' per pound — a lift, not a total, so a big budget cannot buy its way to the top of this list. Each one also returns 60%+ of its value in-store and covers its own spend. '
+     +'<b>Read this as a lean, not as proof.</b> In-store value is Meta’s own offline attribution, which is last-touch matching against the till file: it credits an ad for a walk-in it may only have been near. Meta spend has not been shown to predict branch revenue once trend and the Friday/Saturday pattern are controlled for. What this list says is which ads are matched to shop receipts far more than the average ad, which is a reason to look, not a reason to scale.',
+     '<th title="This ad’s in-store value per pound of spend, divided by the account’s">In-store lift</th>',
+     r=>'<td style="font-weight:800;color:'+(r.offLift>=1?'#0f7a55':'#c4203f')+'">'+r.offLift.toFixed(2)+'&times;<div style="font-size:9.5px;font-weight:600;color:#5f6a7d">E£'+r.offPP.toFixed(2)+'/E£1</div></td>')+'</div>';
    (function(){var nclip=(O.mads||[]).filter(function(a){return a._fvClip;}).length;
-   pnlCard(g,'meta','Where the next E&pound; goes &mdash; last 14 days','Scale, kill, and the ads whose real return is walking into your branches.'+(nclip?' <b style=\"color:#b8860b\">'+nclip+' ads had impossible single-day in-store spikes (Meta last-touch lottery) clipped to a sane ceiling — their ROAS is now honest.</b>':''),h3);})();
+   pnlCard(g,'meta','Where the next E&pound; goes &mdash; '+winLbl,'Scale, kill, and the ads whose real return is walking into your branches.'+(nclip?' <b style=\"color:#b8860b\">'+nclip+' ads had impossible single-day in-store spikes (Meta last-touch lottery) clipped to a sane ceiling — their ROAS is now honest.</b>':''),h3);})();
   }
  }}
 function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19');g.innerHTML='';
