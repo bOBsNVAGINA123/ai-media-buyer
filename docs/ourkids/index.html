@@ -415,6 +415,16 @@ body.scrolled .top{display:none}
 .dpHead{padding:16px 20px 13px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
 .dpBody{padding:16px 20px 26px;overflow:auto;flex:1 1 auto}
 .dpClose{margin-left:auto;flex:0 0 auto}
+.gaSec{border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface);margin:8px 0;overflow:hidden}
+.gaSec>summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:12px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.gaSec>summary::-webkit-details-marker{display:none}
+.gaSec>summary::before{content:'\25B8';color:var(--ink-3);transition:transform var(--t-s) var(--ease);display:inline-block}
+.gaSec[open]>summary::before{transform:rotate(90deg)}
+.gaSec>summary:hover{background:var(--surface-2)}
+.gaSec>summary:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.gaSec .gaN{margin-left:auto;font-weight:600;font-size:11px;color:var(--ink-3)}
+.gaSec>*:not(summary){padding:0 12px 10px}
+@media (prefers-reduced-motion:reduce){.gaSec>summary::before{transition:none}}
 .tdRow{cursor:pointer;position:relative;transition:background var(--t-s) var(--ease)}
 .tdRow:hover{background:var(--surface-2)}
 .tdRow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
@@ -13623,16 +13633,62 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
  // v9.1 Google revenue attribution: campaign / asset group / ad
  setTimeout(()=>{const GA=O.gattr;if(!GA||!(GA.campaigns||[]).length)return;const g5=document.getElementById('g5');
   const money=v=>Math.round(v).toLocaleString();
+  /* v54 THIS CARD WAS SIX RAW TABLES STACKED, ONE OF THEM 401 ROWS LONG. No summary, no
+     ranking that led anywhere, 75,000 characters on one tab -- a data dump wearing the
+     word "attribution". Every section now folds, carries its own row count, and is capped
+     at the rows anyone would actually read, with the remainder stated rather than dropped
+     silently. The shape of the money goes on top as a chart, because that is the question
+     the card is for: where does Google's claimed value come from, and at what return. */
+  const CAP=25;
   const tb=(rows,label,cols)=>{if(!rows.length)return '';
+   const all=rows.slice().sort((a,b)=>(b.sp||0)-(a.sp||0));
+   const shown=all.slice(0,CAP), hid=all.length-shown.length;
+   const hidSp=all.slice(CAP).reduce((t,r)=>t+(r.sp||0),0);
+   rows=shown;
    const xs=rows.map(r=>r.sp?r.cv/r.sp:0);const mn=Math.min.apply(null,xs),mx=Math.max.apply(null,xs);
-   let h='<div style="font-weight:800;font-size:12.5px;margin:10px 0 4px">'+label+'</div><div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr>'+cols.map(c=>'<th style="text-align:'+(c[2]?'left':'center')+'">'+c[0]+'</th>').join('')+'<th>Spend</th><th>Conv value</th><th>ROAS</th><th>Conv</th><th>CPA</th></tr>';
+   let h='<details class="gaSec"><summary>'+label+' <span class="gaN">'+all.length+' row'+(all.length===1?'':'s')+'</span></summary>'
+    +(hid>0?'<div style="font-size:11px;color:var(--ink-3);margin:2px 0 6px">Showing the '+CAP+' biggest by spend. The other '+hid+' took '+('E£'+money(hidSp))+' between them.</div>':'')
+    +'<div style="overflow-x:auto"><table class="bt" style="min-width:760px"><tr>'+cols.map(c=>'<th style="text-align:'+(c[2]?'left':'center')+'">'+c[0]+'</th>').join('')+'<th>Spend</th><th>Conv value</th><th>ROAS</th><th>Conv</th><th>CPA</th></tr>';
    rows.forEach(r=>{const roas=r.sp?r.cv/r.sp:0;
     h+='<tr>'+cols.map(c=>'<td style="text-align:'+(c[2]?'left':'center')+';'+(c[2]?'font-weight:700':'')+'">'+(r[c[1]]||'&mdash;')+'</td>').join('')+'<td>E&pound; '+money(r.sp)+'</td><td>E&pound; '+money(r.cv)+'</td><td'+shade(roas,mn,mx,1)+'><b>'+roas.toFixed(2)+'x</b></td><td>'+r.cn+'</td><td>'+(r.cn?'E&pound; '+money(r.sp/r.cn):'&mdash;')+'</td></tr>';});
-   return h+'</table></div>';};
-  let hh=tb(GA.campaigns,'By CAMPAIGN',[['Campaign','n',1],['Type','t',0]]);
+   return h+'</table></div></details>';};
+  /* WHERE THE MONEY IS, FIRST. One row per campaign, ranked by spend, bar length = spend,
+     bar colour = whether its own claimed return clears break-even. Everything below this is
+     the evidence for it. */
+  let hh='';
+  try{
+   const be2=GPBE();
+   const C=(GA.campaigns||[]).slice().filter(r=>(r.sp||0)>0).sort((a,b)=>b.sp-a.sp);
+   if(C.length){
+    const tSp=C.reduce((t,r)=>t+r.sp,0), tCv=C.reduce((t,r)=>t+(r.cv||0),0);
+    const mxS=C[0].sp||1;
+    const top=C.slice(0,12), rest=C.slice(12);
+    const restSp=rest.reduce((t,r)=>t+r.sp,0), restCv=rest.reduce((t,r)=>t+(r.cv||0),0);
+    const bar=(nm,ty,sp,cv)=>{const ro=sp?cv/sp:0, ok=ro>=be2;
+     return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0">'
+      +'<div style="flex:0 0 240px;min-width:0;font-size:11.5px;font-weight:650;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+String(nm).replace(/"/g,"&quot;")+'">'+nm
+      +(ty?'<span style="font-weight:500;color:var(--ink-3)"> · '+String(ty).replace(/_/g,' ').toLowerCase()+'</span>':'')+'</div>'
+      +'<div style="flex:1 1 auto;height:15px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
+        +'<div style="height:100%;width:'+((sp/mxS)*100).toFixed(1)+'%;background:'+(ok?'var(--pos)':'var(--neg)')+';opacity:.85;border-radius:4px"></div></div>'
+      +'<div class="num" style="flex:0 0 96px;text-align:right;font-size:11.5px;font-weight:700">E£'+money(sp)+'</div>'
+      +'<div class="num" style="flex:0 0 74px;text-align:right;font-size:11.5px;font-weight:800;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(sp?ro.toFixed(2)+'×':'—')+'</div>'
+      +'<div class="num" style="flex:0 0 52px;text-align:right;font-size:10.5px;color:var(--ink-3)">'+((sp/tSp)*100).toFixed(0)+'%</div></div>';};
+    hh+='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:12px 14px;margin-bottom:12px">'
+     +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
+     +'<div style="font-size:13px;font-weight:700;color:var(--ink)">Where the Google spend goes, and what it claims back</div>'
+     +'<div style="font-size:11.5px;color:var(--ink-3)">E£'+money(tSp)+' spent · E£'+money(tCv)+' claimed · '+(tSp?(tCv/tSp).toFixed(2):'—')+'× blended · green clears '+be2.toFixed(2)+'× break-even</div></div>'
+     +'<div style="display:flex;gap:10px;padding:0 0 3px;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--ink-4);text-transform:uppercase">'
+       +'<div style="flex:0 0 240px">Campaign</div><div style="flex:1 1 auto"></div>'
+       +'<div style="flex:0 0 96px;text-align:right">Spend</div><div style="flex:0 0 74px;text-align:right">ROAS</div><div style="flex:0 0 52px;text-align:right">Share</div></div>'
+     +top.map(r=>bar(r.n,r.t,r.sp,r.cv||0)).join('')
+     +(rest.length?bar(rest.length+' smaller campaigns','',restSp,restCv):'')
+     +'<div style="font-size:11px;color:var(--ink-3);margin-top:8px;line-height:1.55">ROAS here is <b>Google&rsquo;s own claimed conversion value</b> over what you paid it, not the ledger &mdash; the same caveat as everywhere else on this tool. Every table below is the evidence behind this chart, folded so the card opens readable.</div>'
+     +'</div>';}
+  }catch(e){}
+  hh+=tb(GA.campaigns,'By CAMPAIGN',[['Campaign','n',1],['Type','t',0]]);
   hh+=tb(GA.assetGroups,'By ASSET GROUP (PMax)',[['Asset group','n',1],['Campaign','cmp',1]]);
   hh+=tb(GA.ads,'By AD (top '+GA.ads.length+')',[['Ad ID','id',1],['Ad group','ag',1],['Campaign','cmp',1]]);
-  if((GA.actions||[]).length){hh+='<div style="font-weight:800;font-size:12.5px;margin:10px 0 4px">CONVERSION ACTIONS &mdash; the attribution model Google is ACTUALLY using</div><div style="overflow-x:auto"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">Conversion action</th><th>Model</th><th>Click window</th><th>Primary</th></tr>'+GA.actions.map(a2=>'<tr><td style="text-align:left;font-weight:700">'+a2.n+'</td><td>'+(a2.model||'&mdash;').replace('GOOGLE_SEARCH_ATTRIBUTION_','').replace('_',' ')+'</td><td>'+(a2.win?a2.win+'d':'&mdash;')+'</td><td>'+(a2.pri?'&#10003;':'')+'</td></tr>').join('')+'</table></div>';}
+  if((GA.actions||[]).length){hh+='<details class="gaSec"><summary>CONVERSION ACTIONS &mdash; the attribution model Google is ACTUALLY using <span class="gaN">'+(GA.actions||[]).length+' rows</span></summary><div style="overflow-x:auto"><table class="bt" style="min-width:560px"><tr><th style="text-align:left">Conversion action</th><th>Model</th><th>Click window</th><th>Primary</th></tr>'+GA.actions.slice().sort((x,y)=>(y.pri?1:0)-(x.pri?1:0)).slice(0,40).map(a2=>'<tr><td style="text-align:left;font-weight:700">'+a2.n+'</td><td>'+(a2.model||'&mdash;').replace('GOOGLE_SEARCH_ATTRIBUTION_','').replace('_',' ')+'</td><td>'+(a2.win?a2.win+'d':'&mdash;')+'</td><td>'+(a2.pri?'&#10003;':'')+'</td></tr>').join('')+((GA.actions||[]).length>40?'<tr><td colspan="4" style="text-align:left;font-size:10.5px;color:var(--ink-3)">Showing the 40 that matter most, primary actions first &mdash; those are the ones Google bids toward. '+((GA.actions||[]).length-40)+' more are secondary and steer nothing.</td></tr>':'')+'</table></div></details>';}
   // v9.3: WHICH events each campaign counts -- the GMB E0-value diagnosis
   if((GA.cmpAct||[]).length){
    const CA=GA.cmpAct;
@@ -13640,30 +13696,39 @@ function rMedia(){if(TAB!=='me')return;dCh();const g=document.getElementById('g5
    const bad=gmb.filter(r=>r.cn>0&&r.cv<r.cn*20);
    if(bad.length){const agg={};bad.forEach(r=>{const e=agg[r.a]=agg[r.a]||[0,0];e[0]+=r.cn;e[1]+=r.cv;});
     hh+='<div style="background:rgba(226,58,99,.08);border-left:3px solid #c4203f;border-radius:8px;padding:9px 12px;margin:12px 0 4px;font-size:12.5px"><b>Why your GMB branch campaigns show hundreds of conversions at ~E&pound;0 value:</b> they are counting '+Object.entries(agg).map(([n2,e])=>'<b>'+n2+'</b> ('+money(e[0])+' conv, E&pound;'+money(e[1])+')').join(', ')+' as conversions. Calls and page actions have no purchase value, so CPA looks cheap while revenue is unmeasured. The per-branch STORE SALE events below fix exactly this.</div>';}
-   let vh='<div style="font-weight:800;font-size:12.5px;margin:10px 0 4px">WHAT EACH CAMPAIGN ACTUALLY COUNTS &mdash; conversion actions per campaign</div><div style="max-height:340px;overflow:auto"><table class="bt" style="min-width:820px"><tr><th style="text-align:left">Campaign</th><th style="text-align:left">Conversion action</th><th>Category</th><th>Counted for bidding</th><th>Value (counted)</th><th>ALL conv</th><th>ALL value</th></tr>';
-   CA.forEach(r=>{const zero=r.cn>0&&r.cv<r.cn*20;
+   let vh='<details class="gaSec"><summary>WHAT EACH CAMPAIGN ACTUALLY COUNTS &mdash; conversion actions per campaign <span class="gaN">'+CA.length+' rows</span></summary><div style="max-height:340px;overflow:auto"><table class="bt" style="min-width:820px"><tr><th style="text-align:left">Campaign</th><th style="text-align:left">Conversion action</th><th>Category</th><th>Counted for bidding</th><th>Value (counted)</th><th>ALL conv</th><th>ALL value</th></tr>';
+   /* zero-value rows first: those are the ones steering budget toward nothing */
+   const _CA=CA.slice().sort((x,y)=>((y.cn>0&&y.cv<y.cn*20)?1:0)-((x.cn>0&&x.cv<x.cn*20)?1:0)||(y.cn||0)-(x.cn||0));
+   const _CS=_CA.slice(0,40), _CH=_CA.length-_CS.length;
+   _CS.forEach(r=>{const zero=r.cn>0&&r.cv<r.cn*20;
     vh+='<tr'+(zero?' style="background:rgba(226,58,99,.07)"':'')+'><td style="text-align:left;font-weight:700">'+r.cmp+'</td><td style="text-align:left">'+r.a+'</td><td style="font-size:10.5px">'+(r.cat||'').replace(/_/g,' ')+'</td><td'+(zero?' style="color:#c4203f;font-weight:800"':'')+'>'+(r.cn||'&mdash;')+'</td><td>'+(r.cv?'E&pound; '+money(r.cv):(r.cn?'<b style="color:#c4203f">E&pound; 0</b>':'&mdash;'))+'</td><td>'+r.an+'</td><td>'+(r.av?'E&pound; '+money(r.av):'&mdash;')+'</td></tr>';});
-   hh+=vh+'</table></div><div style="font-size:10.5px;color:#5f6a7d;margin:2px 0 6px">&ldquo;Counted for bidding&rdquo; = actions Google optimises spend toward (primary). Red rows steer real budget with ~zero purchase value.</div>';}
+   hh+=vh+'</table></div>'+(_CH>0?'<div style="font-size:10.5px;color:var(--ink-3);padding:0 0 6px">Showing 40 of '+_CA.length+', zero-value rows first. '+_CH+' more carry value and are not the problem.</div>':'')+'</details><div style="font-size:10.5px;color:var(--ink-3);margin:2px 0 6px">&ldquo;Counted for bidding&rdquo; = actions Google optimises spend toward (primary). Red rows steer real budget with ~zero purchase value.</div>';}
   // v9.3: Google's OFFLINE / store-side attributed numbers, vs what Odoo actually matched
   if((GA.offline||[]).length){
    const OFR=GA.offline;const isStore=r=>/STORE/i.test(r.t||'')||/STORE/i.test(r.cat||'');
    const sv=OFR.filter(isStore).reduce((t,r)=>t+r.av,0);
    const gv=((O.mcross||{}).plats||{}).google;
-   let oh='<div style="font-weight:800;font-size:12.5px;margin:12px 0 4px">GOOGLE-ATTRIBUTED OFFLINE / STORE &mdash; what Google itself claims</div>';
+   let oh='<details class="gaSec" open><summary>GOOGLE-ATTRIBUTED OFFLINE / STORE &mdash; what Google itself claims <span class="gaN">'+OFR.length+' rows</span></summary>';
    oh+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin:2px 0 8px">'
     +'<span><span class="lbl9">GOOGLE STORE-TYPE CONV VALUE 60D</span><b style="font-size:17px">'+(sv?'E&pound; '+money(sv):'E&pound; 0 &mdash; no store-type action reporting value yet')+'</b></span>'
     +(gv?'<span><span class="lbl9">REAL: GOOGLE-CLICK BUYERS MATCHED IN ODOO POS 180D</span><b style="font-size:17px;color:#0f7a55">E&pound; '+money(gv.posrev)+'</b> <span style="font-size:10.5px;color:#5f6a7d">('+money(gv.cust)+' store buyers of '+money(gv.matched)+' matched &mdash; deterministic, not modelled)</span></span>':'')+'</div>';
    oh+='<div style="overflow-x:auto"><table class="bt" style="min-width:720px"><tr><th style="text-align:left">Action</th><th>Category</th><th>Type</th><th>Counted conv</th><th>Counted value</th><th>ALL conv</th><th>ALL value</th></tr>'
     +OFR.map(r=>'<tr'+(isStore(r)?' style="background:rgba(90,91,240,.06)"':'')+'><td style="text-align:left;font-weight:700">'+r.n+'</td><td style="font-size:10.5px">'+(r.cat||'').replace(/_/g,' ')+'</td><td style="font-size:10.5px">'+(r.t||'').replace(/_/g,' ')+'</td><td>'+(r.cn||'&mdash;')+'</td><td>'+(r.cv?'E&pound; '+money(r.cv):'&mdash;')+'</td><td>'+r.an+'</td><td>'+(r.av?'E&pound; '+money(r.av):'&mdash;')+'</td></tr>').join('')+'</table></div>'
-    +'<div style="font-size:10.5px;color:#5f6a7d;margin:2px 0 6px">Store visits, calls and directions only ever appear in ALL conv &mdash; Google models them and they carry no purchase value. The green number is the honest one: your Odoo POS receipts matched to Google-click customers.</div>';
+    +'</details><div style="font-size:10.5px;color:var(--ink-3);margin:2px 0 6px">Store visits, calls and directions only ever appear in ALL conv &mdash; Google models them and they carry no purchase value. The green number is the honest one: your Odoo POS receipts matched to Google-click customers.</div>';
    hh+=oh;}
   // v9.3: the ASSETS inside each asset group
   if((GA.assets||[]).length){
    const AS=GA.assets;const PL={BEST:'#0f7a55',GOOD:'#4a4bd8',LOW:'#c4203f',LEARNING:'#8e6708'};
-   let ah='<div style="font-weight:800;font-size:12.5px;margin:12px 0 4px">ASSETS INSIDE THE ASSET GROUPS ('+AS.length+')</div><div style="max-height:360px;overflow:auto"><table class="bt" style="min-width:860px"><tr><th style="text-align:left">Campaign</th><th style="text-align:left">Asset group</th><th>Slot</th><th>Type</th><th style="text-align:left">Asset</th><th>Google&rsquo;s label</th></tr>';
-   AS.forEach(r=>{const pl=(r.pl||'').replace('PERFORMANCE_LABEL_','');const col=PL[pl]||'#5f6a7d';
+   let ah='<details class="gaSec"><summary>ASSETS INSIDE THE ASSET GROUPS <span class="gaN">'+AS.length+' rows</span></summary><div style="max-height:360px;overflow:auto"><table class="bt" style="min-width:860px"><tr><th style="text-align:left">Campaign</th><th style="text-align:left">Asset group</th><th>Slot</th><th>Type</th><th style="text-align:left">Asset</th><th>Google&rsquo;s label</th></tr>';
+   /* 400 rows of assets is a dump, not a table. Google gives no per-asset spend or
+      conversions, so the only thing worth ranking on is its own performance label:
+      show every BEST and LOW first (the two that imply an action), cap the rest. */
+   const _ord={BEST:0,LOW:1,GOOD:2,LEARNING:3};
+   const _AS=AS.slice().sort((x,y)=>(_ord[(x.pl||'').replace('PERFORMANCE_LABEL_','')]??9)-(_ord[(y.pl||'').replace('PERFORMANCE_LABEL_','')]??9));
+   const _shown=_AS.slice(0,40), _hid=_AS.length-_shown.length;
+   _shown.forEach(r=>{const pl=(r.pl||'').replace('PERFORMANCE_LABEL_','');const col=PL[pl]||'#5f6a7d';
     ah+='<tr><td style="text-align:left;font-size:10.5px">'+r.cmp+'</td><td style="text-align:left;font-weight:700">'+r.ag+'</td><td style="font-size:10.5px">'+(r.f||'').replace(/_/g,' ')+'</td><td style="font-size:10.5px">'+(r.t||'').replace(/_/g,' ')+'</td><td style="text-align:left">'+(r.x||'&mdash;')+'</td><td style="color:'+col+';font-weight:800;font-size:10.5px">'+(pl||'&mdash;')+'</td></tr>';});
-   hh+=ah+'</table></div><div style="font-size:10.5px;color:#5f6a7d;margin:2px 0 6px">Google exposes NO per-asset conversion or spend metrics inside PMax asset groups &mdash; its own performance label (BEST / GOOD / LOW) is the only per-asset signal that exists. That is a Google limitation, not a missing pull. Rename &ldquo;Asset Group 1&rdquo; in Google Ads to make every table above readable.</div>';}
+   hh+=ah+'</table></div>'+(_hid>0?'<div style="font-size:10.5px;color:var(--ink-3);padding:0 0 6px">Showing 40 of '+_AS.length+', ranked BEST then LOW first because those are the two labels that imply an action. The other '+_hid+' are GOOD or LEARNING.</div>':'')+'</details><div style="font-size:10.5px;color:var(--ink-3);margin:2px 0 6px">Google exposes NO per-asset conversion or spend metrics inside PMax asset groups &mdash; its own performance label (BEST / GOOD / LOW) is the only per-asset signal that exists. That is a Google limitation, not a missing pull. Rename &ldquo;Asset Group 1&rdquo; in Google Ads to make every table above readable.</div>';}
   if(!(GA.cmpAct||[]).length)hh+='<div style="font-size:11.5px;color:var(--warn);margin-top:8px"><b>Per-campaign event breakdown, offline table and asset list land on the NEXT sync</b> &mdash; collector v9.2 just shipped and pulls them from tonight.</div>';
   pnlCard(g5,'ins','Google revenue attribution &mdash; campaign / asset group / ad / EVENT','Google&rsquo;s own conversion value, last 60d ('+GA.win[0]+' &rarr; '+GA.win[1]+'), straight from the Google Ads API. Heat on ROAS within each table.',hh);},50);
  setTimeout(()=>{if(TAB==='me')rLag(g);},0);
@@ -19876,7 +19941,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-180309';
+const BUILD='20260928-181003';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
