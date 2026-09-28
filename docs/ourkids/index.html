@@ -415,6 +415,33 @@ tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--b
 [style*="position:absolute"][style*="font-weight:800"][style*="white-space:nowrap"]{
   text-shadow:0 0 3px rgba(22,24,29,.85), 0 1px 2px rgba(22,24,29,.6);
 }
+
+/* ============================================================================
+   v23 · STICKY BARS MUST BE OPAQUE.
+   The brief asks for subtle translucency on floating navigation, and that is right
+   for a rail with nothing behind it. It is wrong for the filter bar: table rows
+   scroll UNDERNEATH it, so a translucent bar prints its own controls on top of live
+   data and neither is readable -- rows 11 and 12 of the Growth Lab cascade were
+   sitting inside the date picker. Anything that content passes behind is opaque,
+   full stop. The blur stays only on the tab rail, which sits above the page ground.
+   ==========================================================================*/
+.bar{
+  background:var(--surface)!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  box-shadow:0 1px 0 var(--line), 0 6px 16px -10px rgba(22,24,29,.22)!important;
+  border:1px solid var(--line-2)!important;
+}
+.tgroups{background:var(--canvas)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  box-shadow:0 1px 0 var(--line)}
+.tabs{background:var(--canvas)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+/* and give the pane a little air so the first card never starts under the bar */
+.bar{margin-bottom:14px}
+
+/* ---- v23b the original stylesheet declares .tabs{position:relative} AFTER the sticky
+   rules, so the tab row was the one piece of chrome that scrolled away while the group
+   rail and the filter bar stayed pinned -- you lost your place in the tab set the moment
+   you scrolled. Forced, and the whole stack re-measured so nothing overlaps. ---- */
+.tabs{position:sticky!important;top:var(--stick-h,44px)!important;z-index:43!important}
 </style>
 </head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
@@ -18256,7 +18283,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-024918';
+const BUILD='20260928-133100';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
