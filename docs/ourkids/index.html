@@ -2948,10 +2948,16 @@ function rTD(){
    +'<div style="font-size:21px;font-weight:700;letter-spacing:-.02em;color:var(--pos)">Nothing needs you</div>'
    +'<div style="font-size:12.5px;color:var(--ink-2);margin-top:6px;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.6">No rule cleared its money threshold in this window. That is the honest answer, not an empty state waiting to be filled.</div></div>';
 
- g.innerHTML=standing+fall+movers+head+body
+ /* v25 render into a CHILD. Writing innerHTML on the pane destroyed the shared range bar
+    that injBars injects, which is why Today was the one tab with no way to pick a window
+    while every other tab had one. */
+ let host=g.querySelector('#tdBody');
+ if(!host){host=document.createElement('div');host.id='tdBody';g.appendChild(host);}
+ host.innerHTML=standing+fall+movers+head+body
   +(oks.length?'<section style="margin-top:16px"><div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-4);text-transform:uppercase;margin-bottom:8px">Checked and clear</div>'+oks.map(item).join('')+'</section>':'')
   +'<footer style="margin-top:18px;font-size:11.5px;color:var(--ink-3);line-height:1.65;max-width:760px">'
   +'A finding appears only if it can price itself in pounds and name a next step. Numbers are observed; the sentence under each headline is the reading, not a proven cause; the accent pill is the recommendation. Everything else lives on the tabs above as evidence.</footer>';
+ try{if(!g.querySelector('.bar')&&typeof injBars==='function'){g.dataset.bar='';injBars();}}catch(e){}
 }
 window.rTD=rTD;
 
@@ -5221,6 +5227,90 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   +'<div style="margin-top:10px;font-size:11.5px;color:#4a5a70">LTGP : CAC moves from <b>'+(b.cac?(b.ltgp/b.cac).toFixed(2):'—')+'×</b> to <b>'+(b.cac?((b.ltgp*(oyr/(b.oyr||1))*(V.mg/B.mg))/b.cac).toFixed(2):'—')+'×</b>. '
   +'Measured lifetime gross profit per customer is E£'+Math.round(b.ltgp).toLocaleString()+' against a CAC of E£'+Math.round(b.cac).toLocaleString()+'. '
   +'<span style="color:#a4561a">The repeat-rate slider does not feed the revenue line above it</span> &mdash; orders per year is the variable the measured lifetime figures are actually built on, and moving both would count the same behaviour twice.</div>';
+
+ /* ============================================================================
+    v26 · WHICH MONTHS BUY THE BEST CUSTOMERS.
+    The question is not "which month sells most" -- August obviously does. It is
+    "a customer acquired in month X, what are they worth afterwards, and what did
+    they cost to acquire". O.coh answers the first half honestly because g30/g90/
+    g180/g365 are measured from each cohort's OWN start, so every cohort is compared
+    at the same age rather than by how long it has existed.
+    Three corrections the raw numbers demand:
+      1 Aug-Nov 2024 are dropped. POS went live Aug 2024, so every established
+        customer who walked in was registered as NEW. Those four cohorts look like
+        the best the business ever bought; they were its existing regulars.
+      2 The series is DETRENDED against a rolling 12-month mean, or a growing
+        business reads its own growth as "these months are better".
+      3 Months whose ad ledger is incomplete are excluded from the ratio, not
+        shown with a flattering CAC.
+    Sample size is one or two cohorts per calendar month. That is a direction, not
+    a significance test, and the card says so rather than implying more.
+    ========================================================================== */
+ try{(function(){
+  const today=O.today;
+  const ageD=m=>{const d=new Date(Date.parse(m+'-01T00:00:00Z'));d.setUTCMonth(d.getUTCMonth()+1);
+    return Math.round((Date.parse(today)-d.getTime())/864e5);};
+  const AM=adMonthly();
+  const adOK=m=>{try{return typeof adFull==='function'?adFull(m):!!(AM[m]&&AM[m].s);}catch(e){return !!(AM[m]&&AM[m].s);}};
+  const raw=(O.coh||[]).filter(c=>c.size>=150&&ageD(c.m)>=90&&c.m>'2024-11');
+  if(raw.length<8)return;
+  const rows=raw.map(c=>({m:c.m,size:c.size,gp90:c.g90/c.size,
+    gp365:ageD(c.m)>=365?c.g365/c.size:null,
+    cac:(adOK(c.m)&&AM[c.m]&&AM[c.m].s)?AM[c.m].s/c.size:null}));
+  const val={};rows.forEach(r=>val[r.m]=r.gp90);
+  const ms=rows.map(r=>r.m).sort();
+  rows.forEach(r=>{const i=ms.indexOf(r.m);
+    const w=ms.slice(Math.max(0,i-5),Math.min(ms.length,i+7)).map(m=>val[m]);
+    r.rel=r.gp90/(w.reduce((a,b)=>a+b,0)/w.length);});
+  const MN=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  const byCal={};rows.forEach(r=>{const c=r.m.slice(5);(byCal[c]=byCal[c]||[]).push(r);});
+  const cal=Object.entries(byCal).map(([c,v])=>({mo:c,n:v.length,
+     rel:v.reduce((a,x)=>a+x.rel,0)/v.length,
+     gp90:v.reduce((a,x)=>a+x.gp90,0)/v.length,
+     cacs:v.filter(x=>x.cac).map(x=>x.cac)}))
+    .map(o=>({...o, cac:o.cacs.length?o.cacs.reduce((a,b)=>a+b,0)/o.cacs.length:null}))
+    .map(o=>({...o, ratio:o.cac?o.gp90/o.cac:null}))
+    .sort((a,b)=>b.rel-a.rel);
+  const best=cal[0], worst=cal[cal.length-1];
+  const withRatio=cal.filter(o=>o.ratio).sort((a,b)=>b.ratio-a.ratio);
+  const mx=Math.max.apply(null,cal.map(o=>o.rel));
+  const bar=o=>{const w=(o.rel/mx)*100, good=o.rel>=1;
+    return '<div style="flex:1 1 auto;height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
+     +'<div style="height:100%;width:'+w.toFixed(1)+'%;background:'+(good?'var(--pos)':'var(--neg)')+';opacity:.85;border-radius:4px"></div></div>';};
+  let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%;font-size:12.5px">'
+   +'<tr><th style="text-align:left">Acquisition month</th><th style="text-align:left">Customer quality vs an average month</th>'
+   +'<th>GP / customer at 90d</th><th>CAC then</th><th>GP90 : CAC</th><th>Cohorts</th></tr>';
+  cal.forEach(o=>{
+    h+='<tr><td style="text-align:left;font-weight:620">'+MN[+o.mo]+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:9px">'+bar(o)
+      +'<b style="flex:0 0 52px;text-align:right;color:'+(o.rel>=1?'var(--pos)':'var(--neg)')+'">'+(o.rel>=1?'+':'−')+Math.abs((o.rel-1)*100).toFixed(0)+'%</b></div></td>'
+      +'<td>'+M(o.gp90)+'</td>'
+      +'<td>'+(o.cac?M(o.cac):'<span style="color:var(--ink-4)">ad ledger incomplete</span>')+'</td>'
+      +'<td style="font-weight:700;color:'+(o.ratio&&o.ratio>=1.5?'var(--pos)':(o.ratio?'var(--warn)':'var(--ink-4)'))+'">'+(o.ratio?o.ratio.toFixed(2)+'×':'—')+'</td>'
+      +'<td style="color:var(--ink-3)">'+o.n+'</td></tr>';});
+  h+='</table></div>';
+  const verdict='<div style="margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12.5px;line-height:1.65;color:var(--ink-2)">'
+   +'<b style="color:var(--ink)">What this says.</b> A customer bought in <b>'+MN[+best.mo]+'</b> is worth about '
+   +'<b>'+((best.rel-1)*100).toFixed(0)+'% more</b> at ninety days than one bought in an average month; '
+   +'one bought in <b>'+MN[+worst.mo]+'</b> is worth '+((1-worst.rel)*100).toFixed(0)+'% less. '
+   +(withRatio.length?('On what they cost at the time, the best return was <b>'+MN[+withRatio[0].mo]+'</b> at '
+     +withRatio[0].ratio.toFixed(2)+'× and the worst <b>'+MN[+withRatio[withRatio.length-1].mo]+'</b> at '
+     +withRatio[withRatio.length-1].ratio.toFixed(2)+'×. Spending more is easiest to justify where BOTH are high.'):'')
+   +'</div>'
+   +'<div style="margin-top:9px;padding:10px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">How far to trust it.</b> '+rows.length+' cohorts survive the filters, which is one or two per calendar month — '
+   +'a DIRECTION, not a significant result, and nowhere near enough to price a budget on its own. '
+   +'August–November 2024 are excluded because the tills went live in August 2024 and every existing customer who walked in was booked as new; '
+   +'those four cohorts otherwise top the table and they are the business&rsquo;s own regulars, not customers it bought. '
+   +'The series is detrended against a rolling twelve-month mean so growth is not read as seasonality. '
+   +'Months whose ad ledger is incomplete show no CAC rather than a flattering one. '
+   +'This is ninety-day gross profit, not lifetime: a month that acquires slow-burning customers is under-credited here.</div>';
+  pnlCard(g,'odoo','Which months buy the best customers'
+   +INFO('Every cohort measured at the SAME age (90 days from its own first purchase), so a cohort is not rewarded for being old. Quality is shown relative to a rolling 12-month mean to strip out growth.'),
+   'Not which month sells most — which month buys customers who are worth the most afterwards, and what they cost.',
+   h+verdict);
+ })();}catch(e){}
+
  pnlCard(g,'blend','Cohort engine &mdash; what a year of acquisition is worth'
   +INFO('New customers and CAC measured in '+b.bm+'. Orders per customer per year and lifetime gross profit come from the Odoo customer crawl over the whole history, not this window.'),
   'Retention and LTV:CAC live here, deliberately apart from the run-rate model above.',ch);
@@ -18321,7 +18411,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-133907';
+const BUILD='20260928-134752';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
