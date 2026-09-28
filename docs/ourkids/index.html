@@ -442,6 +442,28 @@ tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--b
    rail and the filter bar stayed pinned -- you lost your place in the tab set the moment
    you scrolled. Forced, and the whole stack re-measured so nothing overlaps. ---- */
 .tabs{position:sticky!important;top:var(--stick-h,44px)!important;z-index:43!important}
+
+/* ---- v32 nothing in the card index may be clipped by its container ---- */
+[data-cardnav] .chip{flex:0 0 auto;white-space:nowrap;overflow:visible;text-overflow:clip}
+[data-cardnav] > div{align-items:flex-start}
+
+/* ---- v32b A LABEL COLUMN MUST NOT BE MEAN WITH SPACE IT HAS.
+   The strip rows on Overview pinned their title to a fixed 178px inside a 1,355px row --
+   so "Did we make money? — online vs branches, after everything" truncated at "online vs b…"
+   while eleven hundred pixels sat empty beside it. Titles now take the room that is there
+   and only ellipsis when they genuinely run out. ---- */
+.vstrip [style*="text-overflow:ellipsis"]{min-width:180px}
+@media (max-width:760px){ .vstrip [style*="text-overflow:ellipsis"]{min-width:120px} }
+
+/* ---- v32c A TRUNCATED NUMBER IS A WRONG NUMBER.
+   Six figures on Overview were being cut by four pixels -- E£6,184,562 needing 136px in a
+   132px cell -- which silently turns a number into a different, smaller-looking number.
+   Money never ellipsises: it gets the width it needs and the row gives way instead.
+   Titles get more room too; the 520px cap I had just added was itself clipping two card
+   headings on Costs & payroll. ---- */
+.num, td.num, [class*="num"]{overflow:visible!important;text-overflow:clip!important;white-space:nowrap}
+.card .ct{max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:normal}
+.vstrip [style*="text-overflow:ellipsis"]{max-width:640px}
 </style>
 </head><body>
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
@@ -1195,9 +1217,14 @@ function cardNav(t){try{
     if(lb.length<4)return;
     const key=lb.toLowerCase();if(seen.has(key))return;seen.add(key);
     c.id=c.id||('crd_'+t+'_'+i);
-    items.push([c.id,lb.length>30?lb.slice(0,28)+'…':lb]);});
+    items.push([c.id,lb.length>30?lb.slice(0,28)+'…':lb,lb]);});
   if(items.length<4)return;
-  const chips=items.map(([id,lb])=>'<button type="button" class="chip" style="font-size:10.5px;padding:4px 9px;background:#fff" '
+  /* v32 the chips were being squeezed to 178px by the flex row while their text needed
+     270-351px, so every label was cut mid-word by CSS on top of the ellipsis already in the
+     string -- two truncations fighting. They now size to their own content, never shrink,
+     and carry the full title on hover. */
+  const chips=items.map(([id,lb,full])=>'<button type="button" class="chip" title="'+String(full||lb).replace(/"/g,'&quot;')+'" '
+    +'style="font-size:10.5px;padding:4px 9px;background:#fff;flex:0 0 auto;white-space:nowrap;max-width:none;overflow:visible" '
     +'onclick="document.getElementById(\''+id+'\').scrollIntoView({behavior:\'smooth\',block:\'start\'})">'+lb+'</button>').join(' ');
   const d=document.createElement('details');d.setAttribute('data-cardnav','1');
   d.style.cssText='margin:0 0 10px;padding:6px 11px;border:1px solid #e3e7f2;border-radius:11px;background:#fbfcff';
@@ -2335,7 +2362,7 @@ function verdictStrip(t,grid){
    +'style="display:flex;gap:9px;align-items:baseline;padding:7px 4px;border-bottom:1px solid #f1f3f8;cursor:pointer" '
    +'onmouseover="this.style.background=\'#f8f9fc\'" onmouseout="this.style.background=\'\'">'
    +'<span style="flex:0 0 34px;font-size:10.5px;font-weight:800;letter-spacing:.4px;color:'+COL[o.kind]+';padding-top:2px">'+LBL[o.kind]+'</span>'
-   +'<span style="flex:0 0 178px;font-size:11.5px;font-weight:700;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+o.ttl+'</span>'
+   +'<span style="flex:1 1 300px;min-width:180px;max-width:520px;font-size:11.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+o.ttl+'</span>'
    +'<span style="flex:1;font-size:12.5px;color:#334155;line-height:1.45">'+o.line+'</span></div>').join('')
   +'</div>';
  grid.insertBefore(el,grid.firstChild);
@@ -4608,7 +4635,7 @@ function glance(g,o){
   +'<span style="font-size:10.5px;color:#5f6a7d">'+t[4]+'</span></div></div>';
  const _band=(label,col2,bg2,list)=>list.length?('<div style="border:1px solid '+col2+'22;border-left:4px solid '+col2+';border-radius:12px;background:'+bg2+';padding:9px 11px 11px;margin-bottom:9px">'
   +'<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:'+col2+';margin:0 1px 7px">'+label+'</div>'
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+list.map(_tile).join('')+'</div></div>'):'';
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(174px,1fr));gap:9px">'+list.map(_tile).join('')+'</div></div>'):'';
  /* v12.1 A WALL OF 30 IDENTICAL CARDS HAS NO STORY. The webstore band now reads in rows:
     the MONEY first and bigger (net profit coloured by its sign), then funnel, customers,
     media — each with its own micro-label, so the eye lands on what was made before it
@@ -4633,7 +4660,7 @@ function glance(g,o){
     +gs.map(t=>G[2]?_tileHero(t):_tile(t)).join('')+'</div>';});
   const rest=list.filter((t,i2)=>!used.has(i2));
   if(rest.length)inner+='<div style="font-size:10.5px;font-weight:800;letter-spacing:.1em;color:'+col2+'aa;margin:9px 1px 5px">MORE</div>'
-   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+rest.map(_tile).join('')+'</div>';
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(174px,1fr));gap:9px">'+rest.map(_tile).join('')+'</div>';
   return '<div style="border:1px solid '+col2+'22;border-left:4px solid '+col2+';border-radius:12px;background:'+bg2+';padding:9px 11px 11px;margin-bottom:9px">'
    +'<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:'+col2+'">'+label+'</div>'+inner+'</div>';};
  const tileH=_bandG('The webstore — Shopify only','#3a3bd0','#f7f8ff',tiles.filter(t=>t[5]==='web'))
@@ -17471,7 +17498,7 @@ function rMETA(){
   +'<div style="font-size:10.5px;color:#5f6a7d;margin-top:2px">'+l[4]+'</div></div>').join('');
  pnlCard(g,'meta','ROAS is an output — these four are the inputs'+INFO('The deck’s core rule: ROAS = CPM × CTR × CVR × AOV. Report the four, not the output, and move one lever at a time.'),
   pfWinNote(PW,W,'Meta')+' Reported ROAS: <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per purchase.',
-  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'+levH+'</div>'
+  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(174px,1fr));gap:9px">'+levH+'</div>'
   +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
   +'<b>A rising CPM is not automatically bad.</b> Better-targeted creative costs more per thousand and earns it back on CTR and CVR — judge the four together, never CPM alone.</div>');
 
@@ -17954,7 +17981,7 @@ function rGOOG(){
             ['AOV',M(cur.aov),pc(cur.aov,prv.aov),true,'value per conversion']];
  pnlCard(g,'google','The four inputs — Google’s version'+INFO('Same decomposition as Meta, with CPC in place of CPM: Google sells clicks, so the click price is the lever you actually buy.'),
   pfWinNote(PW,W,'Google')+' Reported ROAS <b>'+cur.roas.toFixed(2)+'×</b> on '+M(cur.sp)+' at '+M(cur.cpa)+' per conversion.',
-  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px">'
+  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(174px,1fr));gap:9px">'
   +lev.map(l=>'<div style="border:1px solid #e6eaf2;border-radius:11px;padding:11px 13px;background:#fff">'
    +'<div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#64748B">'+l[0]+'</div>'
    +'<div style="font-size:21px;font-weight:800;color:#161d2e;margin:2px 0 1px">'+l[1]+'</div>'
@@ -18744,7 +18771,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-143545';
+const BUILD='20260928-144702';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
