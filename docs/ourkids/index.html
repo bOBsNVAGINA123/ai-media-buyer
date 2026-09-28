@@ -2583,7 +2583,15 @@ function fixCurrency(root){
  /* Scoped to the VISIBLE grid, never the whole document: a TreeWalker over the full page on every
     tab switch stalled the renderer outright. Cheap string test first so the walk only happens on
     the rare render that actually needs it. */
- const host=root||document.querySelector('.grid:not(.hide)');
+ /* v52 THIS ONLY EVER CLEANED THE OVERVIEW TAB. `.hide` is set on the PANE wrapper
+    (#hmC, #pnC ...), never on the .grid inside it, so `.grid:not(.hide)` matched all 45
+    grids and took the first -- g1 -- on every single call. The net that exists to catch a
+    doubled currency prefix has therefore never covered any tab but the first one. */
+ const host=root||(function(){
+   try{const m=(typeof TBT!=='undefined')?TBT.find(x=>x[0]===TAB):null;
+     const pane=m?document.getElementById(m[1]):document.getElementById(TAB+'C');
+     if(pane)return pane;}catch(e){}
+   return document.querySelector('.grid:not(.hide)');})();
  if(!host)return 0;
  if(!/(E£\s*){2,}/.test(host.innerText||''))return 0;
  const rx=/(E£\s*){2,}/;
@@ -7597,6 +7605,14 @@ function merHeat(g){
  const mf=af('meta'),gf=af('google'),tf=af('tt');
  const a0=Date.parse(A.start+'T00:00:00Z'),f0=Date.parse(F.start+'T00:00:00Z');
  const ai=d=>Math.round((d-a0)/864e5), fi=d=>Math.round((d-f0)/864e5);
+ /* branch till revenue for one day, from the per-branch daily series */
+ const _BD=O.bnrD||{}, _BW=_BD._w||{};
+ const _bn=Object.keys(_BD).filter(k=>k!=='_w');
+ const _bt0=_BW.start?Date.parse(_BW.start+'T00:00:00Z'):null;
+ const _stDay=(ms)=>{ if(!_bt0||!_BW.n)return 0;
+   const i=Math.round((ms-_bt0)/864e5); if(i<0||i>=_BW.n)return 0;
+   let t=0; for(const b of _bn){t+=((_BD[b]||{}).grev||[])[i]||0;} return t;};
+ const _stCov=!!(_bt0&&_BW.n);
  const dayRow=(ms)=>{const i=ai(ms),j=fi(ms);
   if(i<0||i>=A.n||j<0||j>=F.n)return null;
   const sp=(A.spend||[])[i]||0;
@@ -7611,7 +7627,12 @@ function merHeat(g){
      conversion value at the offline attribution setting, plus TikTok's offline events */
   const claimOff=(((A.instoreMeta||[])[i]||0)*afo())+(((A.ttOffValue||[])[i]||0)*tf);
   const keep=gross>0?net/gross:1;                  /* what share of placed demand survived */
-  return {sp:sp,net:net,gross:gross,canc:canc,cxr:gross?canc/gross*100:0,
+  /* v52 the tills, same day. MER on this card was webstore-only while ROAS-both beside it
+     added the shops in -- so two columns on one row answered different questions and the
+     one labelled "real revenue" quietly meant a third of the real revenue. */
+  const st=_stDay(ms);
+  return {sp:sp,net:net,gross:gross,canc:canc,cxr:gross?canc/gross*100:0,st:st,
+   merBoth:sp?(net+st)/sp:null,
    merB:sp?gross/sp:null, merA:sp?net/sp:null,
    amerB:sp?(nc+canc*share)/sp:null, amerA:sp?nc/sp:null,
    roasOn:sp?claimOn*keep/sp:null, roasOff:sp?claimOff/sp:null,
@@ -7622,17 +7643,39 @@ function merHeat(g){
  const rows=use.map(ms=>{const r=dayRow(ms);if(!r)return null;
   const dt=new Date(ms);r.d=dt.toISOString().slice(0,10);r.wd=dt.getUTCDay();return r;}).filter(Boolean);
  if(rows.length<2)return;
+ /* v52 THE BLENDED COLUMN IS NOT SCALED AGAINST BREAK-EVEN, AND THAT IS DELIBERATE.
+    Blended MER on this business runs near 30x, because the seven tills turn over roughly
+    six times what the webstore does and almost none of that is walk-in traffic the ads
+    bought. Against a ~3.5x break-even every cell saturates to the darkest green and the
+    column carries no information at all -- the honest reading "media is a small fraction
+    of how this company sells" is true, and it is also the same answer every single day.
+    So this one column is scaled against the WINDOW'S OWN MEDIAN: the colour shows which
+    days were strong FOR THIS BUSINESS, and the header says so. The break-even comparison
+    still lives on MER-online beside it, where the denominator and the revenue actually
+    belong to each other. */
+ const _q=GPQ();
+ const _tn=rows.reduce((t,r)=>t+(r.net||0),0), _ts=rows.reduce((t,r)=>t+(r.st||0),0);
+ const _blMg=(_tn+_ts)?((_tn*_q.gpOn)+(_ts*_q.gpSt))/(_tn+_ts):_q.gpOn;
+ const beBothTrue=_blMg>0?1/_blMg:be;
+ const _mb=rows.map(r=>r.merBoth).filter(x=>x!=null).sort((a,b)=>a-b);
+ const beBoth=_mb.length?_mb[Math.floor(_mb.length/2)]:be;   /* median = the neutral tone */
+ const _stOK=_stCov&&_ts>0;
  const CMP=window.MHCMP!==0;
  const pw=(function(){try{return cmpWr(ST.s,ST.e);}catch(e){return null;}})();
  const off=(CMP&&pw&&pw[0])?Math.round((Date.parse(ST.s+'T00:00:00Z')-Date.parse(pw[0]+'T00:00:00Z'))/864e5):null;
  const prev=off?{}:null;
  if(off)rows.forEach(r=>{const p=dayRow(Date.parse(r.d+'T00:00:00Z')-off*864e5);if(p)prev[r.d]=p;});
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
+ /* v52 The blended column CANNOT be heat-mapped against the online break-even. The shops
+    carry a different margin and no delivery drag, so the bar moves with the revenue mix:
+    blended margin = (webstore net x delivered online margin + till revenue x store margin)
+    / all of it, and the break-even is one over that. Colouring a blended ratio against the
+    webstore bar would paint a perfectly healthy day red purely because the shops sold well. */
  /* v9.83 A REAL HEAT MAP: the cell IS the colour. No pills, no second line dangling under the
     number. The ramp runs continuously either side of break-even so variation between 3x and 5x
     is visible instead of everything below 6.19x reading as one flat red. */
- const heat=(v)=>{if(v==null)return 'background:#fafbfd;color:var(--ink-3)';
-  const r=v/be;
+ const heat=(v,bar)=>{if(v==null)return 'background:#fafbfd;color:var(--ink-3)';
+  const r=v/(bar||be);
   const S=[[1.40,'#0a5c46','#ffffff'],[1.20,'#12855f','#ffffff'],[1.05,'#35a177','#ffffff'],
            [0.95,'#8ecdb0','#10352a'],[0.85,'#cfe8d9','#14483a'],[0.75,'#fdf0cf','#6b5312'],
            [0.65,'#fbdcb0','#6b4712'],[0.55,'#f8c3a8','#6b2f12'],[0.45,'#f3a394','#5f1c14'],
@@ -7641,8 +7684,8 @@ function merHeat(g){
   return 'background:#e4786c;color:#fff';};
  const TD='padding:4px 6px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px';
  const TH='padding:5px 6px;border-bottom:2px solid #e2e6ef;font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right';
- const cell=(v,pv)=>{const d=(pv!=null&&pv&&v!=null)?((v/pv-1)*100):null;
-  return '<td style="'+TD+';text-align:center;padding:5px 7px;'+heat(v)+'">'
+ const cell=(v,pv,bar)=>{const d=(pv!=null&&pv&&v!=null)?((v/pv-1)*100):null;
+  return '<td style="'+TD+';text-align:center;padding:5px 7px;'+heat(v,bar)+'">'
    +'<span style="font-weight:800">'+(v==null?'—':v.toFixed(2)+'×')+'</span>'
    +(d!=null?'<span style="opacity:.72;font-size:10.5px;font-weight:700;margin-left:5px">'+(d>=0?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>':'')
    +'</td>';};
@@ -7651,24 +7694,24 @@ function merHeat(g){
   b+='<tr'+(wk?' style="background:#fbfcff"':'')+'>'
    +'<td style="'+TD+';text-align:left;font-weight:700">'+r.d.slice(5)+(wk?' <span style="font-size:10.5px;color:#5f6a7d">'+(r.wd===5?'FR':'SA')+'</span>':'')+'</td>'
    +'<td style="'+TD+'">'+M(r.sp)+'</td>'
-   +cell(r.merA,p&&p.merA)+cell(r.amerA,p&&p.amerA)
+   +cell(r.merA,p&&p.merA)+cell(r.merBoth,p&&p.merBoth,beBoth)+cell(r.amerA,p&&p.amerA)
    +cell(r.roasOn,p&&p.roasOn)+cell(r.roasOff,p&&p.roasOff)+cell(r.roasAll,p&&p.roasAll)
    +'<td style="'+TD+';color:'+(r.cxr>=12?'#a3271a':'#5b6478')+'">'+r.cxr.toFixed(1)+'%</td></tr>';});
  const T=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
- const tSp=T('sp'),tNet=T('net'),tGross=T('gross'),tCanc=T('canc');
- const tot={sp:tSp,merB:tSp?tGross/tSp:null,merA:tSp?tNet/tSp:null,
+ const tSp=T('sp'),tNet=T('net'),tGross=T('gross'),tCanc=T('canc'),tSt=T('st');
+ const tot={sp:tSp,merB:tSp?tGross/tSp:null,merA:tSp?tNet/tSp:null,merBoth:tSp?(tNet+tSt)/tSp:null,
   amerB:null,amerA:null,roasB:null,roasA:null};
  const wavg=k=>{let n=0,d=0;rows.forEach(r=>{if(r[k]!=null){n+=r[k]*r.sp;d+=r.sp;}});return d?n/d:null;};
  tot.amerB=wavg('amerB');tot.amerA=wavg('amerA');
  tot.roasOn=wavg('roasOn');tot.roasOff=wavg('roasOff');tot.roasAll=wavg('roasAll');
  b+='<tr style="font-weight:800;background:#f7f8fc"><td style="'+TD+';text-align:left">TOTAL</td>'
   +'<td style="'+TD+'">'+M(tSp)+'</td>'
-  +cell(tot.merA,null)+cell(tot.amerA,null)
+  +cell(tot.merA,null)+cell(tot.merBoth,null,beBoth)+cell(tot.amerA,null)
   +cell(tot.roasOn,null)+cell(tot.roasOff,null)+cell(tot.roasAll,null)
   +'<td style="'+TD+'">'+(tGross?(tCanc/tGross*100).toFixed(1):'0')+'%</td></tr>';
  const head='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
   +'<tr><th style="'+TH+';text-align:left">Day</th><th style="'+TH+'">Spend</th>'
-  +'<th style="'+TH+'">MER<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">real revenue ÷ spend</div></th>'
+  +'<th style="'+TH+'">MER &middot; online<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">webstore revenue &divide; spend</div></th>'+'<th style="'+TH+'">MER &middot; both<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">webstore + tills &divide; spend<br><span style="color:var(--warn)">shaded vs this window&rsquo;s median, not break-even</span></div></th>'
   +'<th style="'+TH+'">aMER<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">first-time buyers ÷ spend</div></th>'
   +'<th style="'+TH+'">ROAS · online<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">what platforms claim on the web</div></th>'
   +'<th style="'+TH+'">ROAS · in-store<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">what they claim in the shops</div></th>'
@@ -7678,6 +7721,7 @@ function merHeat(g){
  pnlCard(g,'blend','Every day, heat-mapped — MER, aMER and blended ROAS, before and after cancellations'
   +INFO('BEFORE = the demand placed that day (booked revenue plus the value of orders later cancelled). AFTER = what survived into the ledger, which is what Odoo counts and what the rest of this page uses. aMER before splits the cancelled value by that day’s own new-customer share. Blended ROAS is what Meta + Google + TikTok each claimed, at your attribution setting, summed — they overlap, so it always flatters; the AFTER column discounts it by the day’s survival rate. Heat is graded against the delivered break-even of '+BEBOTH(1)+', the multiple a day must clear once goods, courier and fees are paid.'),
   '<b>'+ST.s+' → '+ST.e+'</b> · '+rows.length+' days'
+  +(_stOK?(' · <b>MER · both</b> adds the seven tills to the webstore: '+M(_ts)+' of till revenue against '+M(_tn)+' online over this window, so it runs near '+beBoth.toFixed(0)+'&times; and its true blended break-even is only '+beBothTrue.toFixed(2)+'&times;. That gap is not a win the ads earned &mdash; most shop revenue is walk-in trade no campaign touched. Read it as scale, and judge the media on MER · online beside it.'):' · <b>MER · both is unavailable</b>: the per-branch daily till series does not cover this window.')
   +(clipped?' (last '+CAP+' of a longer range)':'')
   +' · break-even '+BEBOTH(1)+' · '
   +'<a href="javascript:void(0)" onclick="window.MHCMP=(window.MHCMP===0?1:0);rTab()" style="color:#4a4bd8;font-weight:800">'+(CMP?'☑':'☐')+' compare vs '+((pw&&pw[0])?pw[0]+' → '+pw[1]:'previous')+'</a>'
@@ -19811,7 +19855,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-164451';
+const BUILD='20260928-175842';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
