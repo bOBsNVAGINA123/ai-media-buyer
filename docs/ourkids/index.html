@@ -2340,11 +2340,11 @@ const TABGROUPS=[
  ['Overview',[['on','Online store'],['hm','Daily heat map'],['off','Branches'],['tm','Pace & timeframes'],['rm','How every number is built']]],
  ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
  ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
- ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
+ ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['bg','New launches'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['Growth Lab',[['gl','Growth Lab']]],
  ['P&L',[['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
  ['Diagnose',[['why','What moved revenue'],['ab','What to do next'],['ai','All findings'],['me','Return per pound'],['ic','Claim vs ledger'],['md','Where the next pound goes']]],
- ['Traffic & creative',[['cv','CVR doctor'],['mn','Menu map'],['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log'],['bg','Launches & budgets']]],
+ ['Traffic & creative',[['cv','CVR doctor'],['mn','Menu map'],['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log']]],
  ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
 ];
 const TABQ={
@@ -17516,7 +17516,7 @@ const BG_WKBG='background:#f1f4ff;';
 /* segmented view + per-section filters, so this tab stops being one infinite scroll */
 function bgSet(k,v){ST['bg_'+k]=v;rBG();}
 function bgG(k,d){const v=ST['bg_'+k];return v===undefined?d:v;}
-function bgChips(){const V=bgG('view','BUDGETS');
+function bgChips(){const V=bgG('view','LAUNCHES');
  return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 12px 8px">'
  +[['BUDGETS','Budget changes'],['LAUNCHES','Ad launches'],['BOTH','Both']].map(x=>'<span class="chip" style="'+(V===x[0]?'background:var(--indigo);color:#fff;border-color:var(--indigo)':'')+'" onclick="bgSet(\'view\',\''+x[0]+'\')">'+x[1]+'</span>').join(' ')+'</div>';}
 function bgSel(k,d,opts,lbl){const v=bgG(k,d);
@@ -17859,7 +17859,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
  const fON=af('meta'),fOFF=afo();const AK=(ST.att&&ST.att.meta)||'default';
  const {gpOn,gpSt}=_gpPct();
  const AL=(O.attr&&O.attr.labels)||{};
- document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>BUDGET CALLS</b>: every budget change on both accounts (60d, Meta activity feed), judged on the object&rsquo;s own day-by-day numbers. <b>AD LAUNCHES</b>: a library of every ad that started delivering in the last 3 weeks. Website and store legs are shown separately &mdash; at the attribution window you pick below, each leg scaled by its OWN measured ladder. GP uses your DELIVERED channel margins ('+(gpOn*100).toFixed(1)+'% online — goods, courier both ways, COD &amp; payment fees charged — / '+(gpSt*100).toFixed(1)+'% store, from Odoo).';
+ document.getElementById('bn17').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>BUDGET CALLS</b>: every budget change on both accounts (60d, Meta activity feed), judged on the object&rsquo;s own day-by-day numbers. <b>NEW LAUNCHES</b>: every ad by its FIRST day of delivery, over a window you pick &mdash; today, yesterday, L3D/L7D/L14D/L21D/L30D, or any number of days you type. Website and store legs are shown separately &mdash; at the attribution window you pick below, each leg scaled by its OWN measured ladder. GP uses your DELIVERED channel margins ('+(gpOn*100).toFixed(1)+'% online — goods, courier both ways, COD &amp; payment fees charged — / '+(gpSt*100).toFixed(1)+'% store, from Odoo).';
  // attribution selector (same measured ladders as everywhere else)
  const _pctLive=(m=>m?m[1]:null)(/\((\d+)% of live\)/.exec(String(AL[AK]||'')));
  try{cmpLaunches(g);}catch(e){}
@@ -17870,7 +17870,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
   '<div class="cs" style="margin:0 0 10px;max-width:900px">'+attExpl+'</div>';
  // v9.7.2: the tab is segmented — budget changes and ad launches are two different jobs
  // and nobody should scroll one to reach the other
- const BGV=bgG('view','BUDGETS');
+ const BGV=bgG('view','LAUNCHES');
  pnlCard(g,'meta','What are you looking at','Pick one. Each section carries its own filters.',bgChips());
  const HASD=Object.keys(SD).length>0||(O.mads||[]).some(a=>a.d);
  const w0=W?new Date(W.start+'T00:00:00Z'):null;
@@ -18077,20 +18077,41 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
  (function(){
   if(!W||BGV==='BUDGETS')return;
   const ads=(O.mads||[]).filter(a=>a.d);
-  if(!ads.length){pnlCard(g,'meta','Ad launch library','Per-day ad series arrive on the next collector run; the launch library activates then.','');return;}
+  if(!ads.length){pnlCard(g,'meta','New launches','Per-day ad series arrive on the next collector run; the launch board activates then.','');return;}
   const today=W.n-1;
   let bs=0,bv=0;ads.forEach(a=>{for(let k=today-13;k<=today;k++){bs+=a.d.sp[k]||0;bv+=((a.d.pv[k]||0)*fON)+((a.d.fv[k]||0)*fOFF);}});
   const bench=bs?bv/bs:null;
   const L=[];
+  /* v53 THE LAUNCH WINDOW IS A CONTROL, NOT A CONSTANT. It was pinned to 21 days, so
+     "what went live today" and "what went live this month" were the same screen and you
+     had to read the dates off the cards. LWIN is the number of days back a first delivery
+     day still counts as a launch: 1 is today only, 2 includes yesterday, and the box takes
+     any number up to the length of the feed. */
+  const LWIN=Math.max(1,Math.min(W.n,parseInt(bgG('lwin',21),10)||21));
   ads.forEach(a=>{let f0=-1;for(let k=0;k<W.n;k++){if((a.d.sp[k]||0)>0){f0=k;break;}}
-   if(f0<1||f0<W.n-21)return;
+   /* f0===0 is excluded on purpose: an ad already spending on the first day of the feed
+      did not necessarily launch then -- the feed just starts there. */
+   if(f0<1||f0<W.n-LWIN)return;
    let sp=0,pv=0,fv=0,pu=0,op=0,ncv=0,im=0,vv=0;
    for(let k=f0;k<=today;k++){sp+=a.d.sp[k]||0;pv+=a.d.pv[k]||0;fv+=a.d.fv[k]||0;pu+=a.d.pu[k]||0;op+=a.d.op[k]||0;ncv+=a.d.ncv[k]||0;im+=a.d.im[k]||0;vv+=(a.d.vv||[])[k]||0;}
-   if(sp<1000)return;
+   /* the E£1,000 floor exists to keep noise out of a 3-week list; on a 1-3 day window it
+      would hide almost every genuine new launch, so it scales with the window. */
+   if(sp<(LWIN<=3?150:(LWIN<=7?400:1000)))return;
    pv*=fON;fv*=fOFF;ncv*=fOFF;
    const gp3=pv*gpOn+fv*gpSt;
    L.push({a,f0,days:today-f0+1,sp,pv,fv,pu,op,ncv,im,vv,roas:sp?(pv+fv)/sp:0,cpp:pu?sp/pu:null,cpo:op?sp/op:null,gp:gp3,pas:gp3-sp});});
-  if(!L.length){pnlCard(g,'meta','Ad launch library &mdash; none in the last 3 weeks','No ad crossed E&pound;1,000 spend with a first delivery day inside the last 21 days.','');return;}
+  const LWLBL=(n)=>n===1?'today':(n===2?'today or yesterday':('the last '+n+' days'));
+  const lwinBar=()=>'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 9px">'
+   +'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">LAUNCHED</span>'
+   +[[1,'Today'],[2,'Yesterday'],[3,'L3D'],[7,'L7D'],[14,'L14D'],[21,'L21D'],[30,'L30D'],[60,'L60D']]
+     .map(o=>'<span class="chip" style="'+(LWIN===o[0]?'background:var(--brand);color:#fff;border-color:var(--brand)':'')+'" onclick="bgSet(\'lwin\','+o[0]+')">'+o[1]+'</span>').join(' ')
+   +'<span style="font-size:11.5px;color:var(--ink-3);margin-left:4px">or</span>'
+   +'<input type="number" min="1" max="'+W.n+'" value="'+LWIN+'" onchange="bgSet(\'lwin\',this.value)" '
+   +'style="width:74px;font-size:12.5px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px" aria-label="Launched within how many days">'
+   +'<span style="font-size:11.5px;color:var(--ink-3)">days back &middot; feed covers '+W.n+'</span></div>';
+  if(!L.length){pnlCard(g,'meta','New launches &mdash; none '+LWLBL(LWIN),
+    'An ad counts as launched on its FIRST day of delivery. Nothing crossed the spend floor with a first day inside '+LWLBL(LWIN)+' &mdash; widen the window.',
+    lwinBar());return;}
   // v9.7.2: the launch library gets its own filters + sort, same reason as everywhere else
   const lq=String(bgG('lq','')).toLowerCase(),lac=bgG('lacct','ALL'),lvd=bgG('lvd','ALL'),lsrt=bgG('lsort','sp');
   const lbench=(x)=>x.days<3?'TOO EARLY':(x.pas<0&&x.days>=5?'BLEEDING':(bench&&x.roas>=bench*1.15&&x.pas>0?'STRONG':(bench&&x.roas<=bench*0.6?'WEAK':'NORMAL')));
@@ -18099,7 +18120,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     &&(!lq||String(x.a.n||'').toLowerCase().indexOf(lq)>=0||String(x.a.cmp||'').toLowerCase().indexOf(lq)>=0));
   const LK={sp:x=>x.sp,pas:x=>x.pas,roas:x=>x.roas,f0:x=>x.f0};
   LF.sort((x,y)=>(LK[lsrt]||LK.sp)(y)-(LK[lsrt]||LK.sp)(x));
-  const lbar='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 0 10px">'
+  const lbar=lwinBar()+'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 0 10px">'
    +'<input placeholder="Search ad / campaign…" value="'+String(bgG('lq','')).replace(/"/g,'&quot;')+'" oninput="bgSet(\'lq\',this.value)" style="font-size:12.5px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:230px">'
    +bgSel('lacct','ALL',[['ALL','All accounts']].concat(laccts.map(a=>[a,a])),'ACCOUNT')
    +bgSel('lvd','ALL',[['ALL','All verdicts'],['STRONG','Strong start'],['NORMAL','Normal ramp'],['WEAK','Weak — kill watch'],['BLEEDING','Bleeding — kill'],['TOO EARLY','Too early']],'VERDICT')
@@ -18134,7 +18155,7 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     (NCLIVE2?'<div class="ak"><span>NC store value</span><b>E&pound; '+money(x.ncv)+'</b></div>':'')+
     '<div class="ak" style="border:0"><span>'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener" style="color:var(--brand);font-size:11.5px">preview &rarr;</a>':'')+'</span><b>'+amLink('ad',a.id,a.acct,'edit')+'</b></div>'+
     strip+'</div>';}).join('');
-  pnlCard(g,'meta','Ad launch library &mdash; '+L.length+' launches in the last 3 weeks','Every ad whose FIRST delivery day is inside the last 21 days, E&pound;1,000+ spent. Website and store legs separated, each on its own measured attribution ladder ('+String((O.attr&&O.attr.labels&&O.attr.labels[AK])||AK).replace(/<[^>]*>/g,'')+'). Verdict = since-launch TOTAL ROAS vs the account&rsquo;s last-14d blend: STRONG START &ge;115%, KILL WATCH &le;60%. Strip = daily ROAS since launch.',attSel+lbar+'<div class="adg">'+cards+'</div>');
+  pnlCard(g,'meta','New launches &mdash; '+L.length+' ad'+(L.length===1?'':'s')+' that went live '+LWLBL(LWIN),'Every ad whose FIRST delivery day falls inside '+LWLBL(LWIN)+', over E&pound;'+(LWIN<=3?'150':(LWIN<=7?'400':'1,000'))+' spent &mdash; the floor scales with the window so a one-day view is not emptied by it. Website and store legs separated, each on its own measured attribution ladder ('+String((O.attr&&O.attr.labels&&O.attr.labels[AK])||AK).replace(/<[^>]*>/g,'')+'). Verdict = since-launch TOTAL ROAS vs the account&rsquo;s last-14d blend: STRONG START &ge;115%, KILL WATCH &le;60%. Strip = daily ROAS since launch.',attSel+lbar+'<div class="adg">'+cards+'</div>');
  })();
  // ---------------- TIKTOK: online + in-store, same treatment as Meta ----------------
  (function(){
@@ -19855,7 +19876,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-175842';
+const BUILD='20260928-180309';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
