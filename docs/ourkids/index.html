@@ -5615,10 +5615,60 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
       : ('Your window falls outside the daily vendor series (which starts '+(dS||'—')+'), so these columns read ALL complete months instead. '))
    +'The running month is excluded from the strip because its ledger is incomplete. '
    +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
+  /* ---- DISCOUNT LANE. For the commercial plan: when the codes actually fire, and what
+     they cost. Built ONLY from the per-code series -- see the note, because the obvious
+     field here is a trap. ---- */
+  let disc='';
+  try{
+   const P=O.promo||{};
+   const roll=src=>{const MM={};
+     Object.entries(src||{}).forEach(([code,dd])=>Object.entries(dd||{}).forEach(([d,v])=>{
+       const m=d.slice(0,7); const x=MM[m]||(MM[m]={ord:0,rev:0,disc:0,codes:{}});
+       x.ord+=v[0]||0; x.rev+=v[1]||0; x.disc+=v[2]||0;
+       x.codes[code]=(x.codes[code]||0)+(v[2]||0);}));
+     return MM;};
+   const onM=roll(P.on), offM=roll(P.off);
+   const ms=[...new Set([...Object.keys(onM),...Object.keys(offM)])].sort();
+   if(ms.length){
+    const lane=(lbl,MM,col)=>{
+      const mx=Math.max.apply(null,ms.map(m=>(MM[m]?MM[m].disc:0)))||1;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
+       +'<div style="flex:0 0 92px;font-size:12.5px;font-weight:650;color:var(--ink)">'+lbl+'</div>'
+       +ms.map(m=>{const a2=MM[m];const h=a2?Math.max(3,(a2.disc/mx)*34):3;
+         const top=a2?Object.entries(a2.codes).sort((x,y)=>y[1]-x[1])[0]:null;
+         return '<div style="flex:1 1 0;min-width:0;text-align:center" title="'+m+': '+(a2?M(a2.disc)+' given on '+M(a2.rev)+' of orders ('+(a2.rev?(a2.disc/a2.rev*100).toFixed(1):'0')+'%)'+(top?' · biggest code '+top[0]+' '+M(top[1]):''):'no codes')+'">'
+          +'<div style="height:36px;display:flex;align-items:flex-end;justify-content:center">'
+          +'<div style="width:70%;height:'+h.toFixed(0)+'px;background:'+col+';opacity:.85;border-radius:3px 3px 0 0"></div></div>'
+          +'<div class="num" style="font-size:10.5px;color:var(--ink-3);margin-top:3px">'+(a2&&a2.rev?(a2.disc/a2.rev*100).toFixed(0)+'%':'·')+'</div></div>';}).join('')
+       +'</div>';};
+    const codesOf=MM=>{const all={};Object.values(MM).forEach(a2=>Object.entries(a2.codes).forEach(([c,v])=>all[c]=(all[c]||0)+v));
+      return Object.entries(all).sort((a2,b2)=>b2[1]-a2[1]).slice(0,5);};
+    disc='<div style="margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
+     +'<div style="padding:11px 16px"><div style="font-size:13px;font-weight:700;letter-spacing:-.015em;color:var(--ink)">When the discounts fire</div>'
+     +'<div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">Bar height is money given away; the figure under it is the rate on the orders that used a code.</div></div>'
+     +'<div style="display:flex;align-items:center;gap:12px;padding:0 16px 4px"><div style="flex:0 0 92px"></div>'
+     +ms.map(m=>'<div style="flex:1 1 0;text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--ink-4)">'+m.slice(2)+'</div>').join('')+'</div>'
+     +lane('In store',offM,'var(--warn)')
+     +lane('Online',onM,'var(--brand)')
+     +'<div style="display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--line-2)">'
+     +[['In store',codesOf(offM)],['Online',codesOf(onM)]].map((x,i2)=>
+       '<div style="flex:1 1 260px;padding:11px 16px'+(i2?';border-left:1px solid var(--line)':'')+'">'
+       +'<div style="font-size:10px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase;margin-bottom:5px">Biggest '+x[0].toLowerCase()+' codes</div>'
+       +x[1].map(c=>'<div style="display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:2px 0">'
+         +'<span style="color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+c[0].slice(0,24)+'</span>'
+         +'<b class="num" style="color:var(--ink)">'+M(c[1])+'</b></div>').join('')+'</div>').join('')
+     +'</div>'
+     +'<div style="padding:10px 16px;background:var(--warn-wash);border-top:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+     +'<b style="color:var(--warn)">What this is, and what it is not.</b> These are CODE-driven discounts only — coupons, staff and loyalty codes — over the '
+     +(Object.keys(P.offBase||{}).length||90)+' days the promo feed covers ('+((P.win||[])[0]||'—')+' onward). It does not include markdowns, price changes or bundle pricing, so it is a floor on what you give away, not the total. '
+     +'The obvious field for a total was checked and rejected: promo.offBase[2] reconciles to the pound with branch GROSS PROFIT (Aug E£18,612,493 against posMg 31.83%), not with discount — reading it as discount would have claimed the shops discount at a third of revenue when that is their margin.</div></div>';
+   }
+  }catch(e){disc='';}
+
   pnlCard(g,'odoo','Category heat map &mdash; where the revenue is and where the margin is not'
    +INFO('Rows are POS categories built from the vendor ledger. Cell = that month’s gross margin, coloured against the company average. Gap = revenue share minus GP share.'),
    'For the commercial plan: which categories carry the revenue, which carry the profit, and where those two disagree.',
-   h+note);
+   h+note+disc);
  })();}catch(e){}
 
  pnlCard(g,'blend','Cohort engine &mdash; what a year of acquisition is worth'
@@ -18771,7 +18821,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-144702';
+const BUILD='20260928-145824';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
