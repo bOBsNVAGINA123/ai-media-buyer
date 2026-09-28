@@ -213,7 +213,7 @@ table.bt tbody tr:hover{background:var(--surface-2)}
   --canvas:#FAF9F7; --canvas-2:#F2F1ED;
   --surface:#FFFFFF; --surface-2:#FAFAF8; --surface-3:#F5F4F1;
   /* ink */
-  --ink:#16181D; --ink-2:#4B515C; --ink-3:#656C7A; --ink-4:#6B7280;  /* ink-4 was #8E939D and failed at 3.08:1 on the metric labels -- the SAME mistake as the old ink-3. A four-step grey ramp where the lightest step cannot be read is a three-step ramp with a decoration on the end. */
+  --ink:#16181D; --ink-2:#4B515C; --ink-3:#656C7A; --ink-4:#666D7C;  /* ink-4 has now failed contrast TWICE: #8E939D at 3.08:1, then #6B7280 at 4.40:1 on --surface-3 -- passing on white and never checked against the tinted surfaces. tools/contrast.js now checks every ink and semantic token against every surface token and exits non-zero, so a fourth time cannot ship unnoticed. */
   /* structure */
   --line:#E7E5E0; --line-2:#DAD8D2; --line-3:#C9C6BE;
   /* the one accent */
@@ -18893,7 +18893,15 @@ function rGOOG(){
   }catch(e){return null;}};
   ads.forEach(a=>{const q=IS[a.n]||IS[a.id]; if(!q)return;
    const c=slice(a,PW.a,PW.b); if(c.sp<2000||c.pur<3||c.roas<be)return;
-   const bl=q.bl||0, isv=q.is||0; if(bl<0.10||isv<=0)return;
+   const bl=q.bl||0, isv=q.is||0, rl0=q.rl||0; if(bl<0.10||isv<=0)return;
+   /* v42 THE TWO BUDGET RULES USED TO CONTRADICT EACH OTHER ON THE SAME CAMPAIGN.
+      A campaign can lose share to budget AND to rank at once; Shopping - All Products
+      lost 22% to budget and 40% to rank, so the raise rule fired at P0 and the
+      rank rule fired at P1 directly beneath it, on the same campaign, with opposite
+      instructions. Rank loss above budget loss IS the definition of rank-limited:
+      the money is not the binding constraint, so the raise is suppressed here and
+      the rank card below says so rather than the two just shouting past each other. */
+   if(rl0>=bl)return;
    const dec=mDecay(a);
    /* the return the NEXT pound should be expected to earn */
    const mRoas=dec?Math.min(c.roas,dec.hi):c.roas*0.75;   /* no history -> a 25% haircut, never the full average */
@@ -18925,7 +18933,8 @@ function rGOOG(){
    const rl=q.rl||0, bl=q.bl||0; if(rl<0.30||rl<bl)return;
    A.push({p:'P1',money:c.sp*mo*0.15,lbl:'WASTED / MO',
     t:'Do NOT raise budget on '+(a.n||a.id)+' — it is losing on rank',
-    w:'It loses <b>'+(rl*100).toFixed(0)+'% of auctions to rank</b> and only '+(bl*100).toFixed(0)+'% to budget. More money buys nothing here; the bid, the landing page or the ad relevance is what is losing. Raising the budget on a rank-limited campaign is the single most common way to spend more for the same impressions.',
+    w:'It loses <b>'+(rl*100).toFixed(0)+'% of auctions to rank</b> and only '+(bl*100).toFixed(0)+'% to budget. More money buys nothing here; the bid, the landing page or the ad relevance is what is losing. Raising the budget on a rank-limited campaign is the single most common way to spend more for the same impressions.'
+      +(bl>=0.10?' <b>It is genuinely budget-capped as well</b> — it forfeits '+(bl*100).toFixed(0)+'% of auctions to money — and a raise-the-budget line for it has been suppressed on purpose: when rank loss is the bigger of the two, the budget is not the binding constraint and raising it buys the auctions the bidder already ranked last.':''),
     ev:'Impression share '+((q.is||0)*100).toFixed(0)+'% · '+('E£'+Math.round(c.sp).toLocaleString())+' over '+PW.lbl});});
 
   /* Terms that took money and returned nothing */
@@ -19433,7 +19442,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-154053';
+const BUILD='20260928-154544';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
