@@ -403,6 +403,12 @@ body.scrolled .top{display:none}
 .dpHead{padding:16px 20px 13px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
 .dpBody{padding:16px 20px 26px;overflow:auto;flex:1 1 auto}
 .dpClose{margin-left:auto;flex:0 0 auto}
+.tdRow{cursor:pointer;position:relative;transition:background var(--t-s) var(--ease)}
+.tdRow:hover{background:var(--surface-2)}
+.tdRow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.tdRow::after{content:'\203A';position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--ink-4);font-size:15px;opacity:0;transition:opacity var(--t-s) var(--ease)}
+.tdRow:hover::after,.tdRow:focus-visible::after{opacity:1}
+@media (prefers-reduced-motion:reduce){.tdRow,.tdRow::after{transition:none}}
 .dpRow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
 .dpRow b{font-variant-numeric:tabular-nums}
 tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--brand)}
@@ -2783,6 +2789,27 @@ function tdDelta(cur,prev,goodUp,fmt){
    +'<span style="font-size:11.5px;color:var(--ink-3);margin-left:5px;font-variant-numeric:tabular-nums">'
    +(pc>=0?'+':'−')+Math.abs(pc).toFixed(1)+'%</span>';
 }
+/* ============================================================================
+   v39 · TODAY IS CLICKABLE. Every row on the first screen names an entity --
+   a platform, a supplier, a customer type, a step of the funnel -- and until now
+   none of them went anywhere, so the answer to "which one" always meant leaving
+   the page and finding the tab by hand. Each row now opens the detail panel with
+   its own numbers and a link straight to the tab that owns it.
+   The payload is stashed at render time rather than re-derived on click: the
+   window can change between the two, and a drill that silently uses a different
+   window from the row you clicked is worse than no drill.
+   ========================================================================== */
+window._tdD={};
+window.tdDrill=function(kind,key){try{
+  const D=(window._tdD||{})[kind]; if(!D)return;
+  const r=D.rows[key]; if(!r)return;
+  const foot=(r.foot||D.foot||'')
+   +(r.tab?'<div style="margin-top:11px"><button type="button" class="btn p" style="font-size:11.5px" onclick="dpClose();tab(\''+r.tab+'\')">Open '+r.tabName+' →</button></div>':'');
+  window.dpOpen(r.title, D.sub, r.rows, foot);
+}catch(e){}};
+/* a row that drills: pointer, hover lift, keyboard reachable */
+function tdClick(kind,key){return ' role="button" tabindex="0" class="tdRow" onclick="tdDrill(\''+kind+'\',\''+String(key).replace(/'/g,"\\'")+'\')"'
+  +' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();tdDrill(\''+kind+'\',\''+String(key).replace(/'/g,"\\'")+'\');}"';}
 function rTD(){
  if(TAB!=='td')return;
  const g=document.getElementById('tdC');if(!g)return;
@@ -2929,7 +2956,7 @@ function rTD(){
   const totSp=prow.reduce((a2,x)=>a2+x.sp,0)||1;
   const be=GPBE();
   const platHTML='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
-   +prow.map((r,i)=>'<div style="display:flex;align-items:center;gap:14px;padding:12px 16px'+(i?';border-top:1px solid var(--line)':'')+'">'
+   +prow.map((r,i)=>'<div'+tdClick('plat',r.nm)+' style="display:flex;align-items:center;gap:14px;padding:12px 16px'+(i?';border-top:1px solid var(--line)':'')+'">'
      +'<div style="flex:0 0 74px;font-size:12.5px;font-weight:650;color:var(--ink)">'+r.nm+'</div>'
      +'<div style="flex:0 0 86px">'+tdSpark(r.spSlice,r.col)+'<div style="font-size:10px;color:var(--ink-4);text-align:center;margin-top:1px">spend</div></div>'
      +'<div style="flex:0 0 86px">'+tdSpark(r.roasSlice,r.col)+'<div style="font-size:10px;color:var(--ink-4);text-align:center;margin-top:1px">ROAS</div></div>'
@@ -2945,6 +2972,19 @@ function rTD(){
    +'</div>').join('')
    +'<div style="padding:9px 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
    +'ROAS here is what each platform CLAIMS it caused, over what you paid it — their own marking, not the ledger. Break-even '+be.toFixed(2)+'× delivered.</div></div>';
+  (function(){const TABOF={Meta:['mt','the Meta tab'],Google:['gg','the Google tab'],TikTok:['tk','the TikTok tab']};
+   const R={};prow.forEach(r=>{const t=TABOF[r.nm]||[null,null];
+    R[r.nm]={title:r.nm, tab:t[0], tabName:t[1], rows:[
+     ['Spend in this window',M(r.sp)],
+     ['Share of all ad spend',((r.sp/totSp)*100).toFixed(1)+'%'],
+     ['Claimed ROAS',r.dead?'feed dark':(r.roas==null?'—':r.roas.toFixed(2)+'×'),r.roas==null?null:(r.roas>=be?'var(--pos)':'var(--neg)')],
+     ['Claimed ROAS, prior window',r.roasP?r.roasP.toFixed(2)+'×':'—'],
+     ['Break-even, delivered',be.toFixed(2)+'×'],
+     ['Claimed value',M(r.sp*(r.roas||0))],
+     ['Above or below break-even',r.roas==null?'—':((r.roas-be)>=0?'+':'−')+Math.abs(r.roas-be).toFixed(2)+'×',r.roas==null?null:(r.roas>=be?'var(--pos)':'var(--neg)')]
+    ], foot:(r.dead?'<b style="color:var(--warn)">This platform has recorded no spend in the window.</b> A dark feed reads as zero, not as missing, in every blended number on this page. ':'')
+     +'ROAS here is the platform&rsquo;s OWN claim over what you paid it. It is not the ledger, it is not deduplicated against the other platforms, and the three claims added together exceed the store&rsquo;s actual revenue.'};});
+   window._tdD.plat={sub:'Platform, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:R};})();
 
   /* ---- customer mix. CORRECTION: I first shipped this month-grain, claiming daily NC/RC
      ORDER counts did not exist. They do -- O.ad.newcust and O.ad.retcust, daily, sitting
@@ -2962,7 +3002,7 @@ function rTD(){
   const aovBp=(noP.v+roP.v)?(ncP.v+rcP.v)/(noP.v+roP.v):null;
   const mons=tdNcRcMonths(W.s,W.e);
   const totNR=(ncW.v+rcW.v)||1;
-  const mixRow=(lab,rev,revP,ord,ordP,col)=>'<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
+  const mixRow=(lab,rev,revP,ord,ordP,col)=>'<div'+tdClick('mix',lab)+' style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
     +'<div style="flex:0 0 104px;font-size:12.5px;font-weight:650;color:var(--ink)">'+lab+'</div>'
     +'<div style="flex:1 1 auto;height:7px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
       +'<div style="height:100%;width:'+((rev/totNR)*100).toFixed(1)+'%;background:'+col+';opacity:.85;border-radius:4px"></div></div>'
@@ -2998,6 +3038,21 @@ function rTD(){
      +'</table>'
      +'<div style="font-size:11px;color:var(--ink-3);margin-top:8px;line-height:1.55">The daily series sums to these monthly figures exactly, and their total matches Shopify orders for the same months — which is why the split above can be cut to any date range rather than rounded to a month.</div>'
      +'</div></details></div>';
+  window._tdD.mix={sub:'Customer type, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:{
+   'First-time':{title:'First-time customers',tab:'rt',tabName:'Retention',rows:[
+     ['Revenue',M(ncW.v)],['Revenue, prior window',M(ncP.v)],
+     ['Change',SM(ncW.v-ncP.v),ncW.v>=ncP.v?'var(--pos)':'var(--neg)'],
+     ['Orders',Math.round(noW.v).toLocaleString()],['Orders, prior window',Math.round(noP.v).toLocaleString()],
+     ['Average basket',aovN?M(aovN):'—'],['Average basket, prior',aovNp?M(aovNp):'—'],
+     ['Share of revenue',((ncW.v/totNR)*100).toFixed(1)+'%']],
+    foot:'A first-time customer is one with no earlier receipt anywhere in the ledger. This is the numerator of aMER; the money that bought them is on the platform rows above.'},
+   'Returning':{title:'Returning customers',tab:'rt',tabName:'Retention',rows:[
+     ['Revenue',M(rcW.v)],['Revenue, prior window',M(rcP.v)],
+     ['Change',SM(rcW.v-rcP.v),rcW.v>=rcP.v?'var(--pos)':'var(--neg)'],
+     ['Orders',Math.round(roW.v).toLocaleString()],['Orders, prior window',Math.round(roP.v).toLocaleString()],
+     ['Average basket',aovR?M(aovR):'—'],['Average basket, prior',aovRp?M(aovRp):'—'],
+     ['Share of revenue',((rcW.v/totNR)*100).toFixed(1)+'%']],
+    foot:'Returning revenue is not free: it is the return on acquisition you already paid for. Judge it against the cohort engine in the Growth Lab, not against this window&rsquo;s ad spend.'}}};
 
   /* the funnel: sessions and CVR, day-exact */
   const se=win(tdAd('sessions'),as), seP=winP(tdAd('sessions'),as);
@@ -3008,13 +3063,24 @@ function rTD(){
   const funHTML='<div style="display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
    +[['Sessions',se.v.toLocaleString(),se.v,seP.v,se.slice,'var(--brand)',v=>Math.round(v).toLocaleString()],
      ['Conversion rate',cvAvg!=null?cvAvg.toFixed(2)+'%':'—',cvAvg,cvPa,cv.slice,'var(--pos)',v=>v.toFixed(2)+'%']]
-     .map((x,i)=>'<div style="flex:1 1 220px;padding:14px 18px'+(i?';border-left:1px solid var(--line)':'')+'">'
+     .map((x,i)=>'<div'+tdClick('fun',x[0])+' style="flex:1 1 220px;padding:14px 18px'+(i?';border-left:1px solid var(--line)':'')+'">'
        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;height:20px">'
        +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase">'+x[0]+'</div>'
        +'<div style="width:74px">'+tdSpark(x[4],x[5])+'</div></div>'
        +'<div class="num" style="font-size:24px;font-weight:720;letter-spacing:-.026em;color:var(--ink);margin:4px 0 2px">'+x[1]+'</div>'
        +tdDelta(x[2],x[3],true,x[6])+'</div>').join('')
    +'</div>';
+  window._tdD.fun={sub:'Funnel, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:{
+   'Sessions':{title:'Sessions',tab:'cv',tabName:'the page funnel',rows:[
+     ['Sessions',Math.round(se.v).toLocaleString()],['Prior window',Math.round(seP.v).toLocaleString()],
+     ['Change',(se.v>=seP.v?'+':'−')+Math.abs(Math.round(se.v-seP.v)).toLocaleString(),se.v>=seP.v?'var(--pos)':'var(--neg)'],
+     ['Per day',Math.round(se.v/(W.span||1)).toLocaleString()]],
+    foot:'Bot sessions are excluded. From September 2026 roughly six in ten raw store sessions were Singapore datacentre traffic converting at zero — any session number that does not say it excludes them is fiction.'},
+   'Conversion rate':{title:'Conversion rate',tab:'cv',tabName:'the page funnel',rows:[
+     ['Conversion rate',cvAvg!=null?cvAvg.toFixed(2)+'%':'—'],['Prior window',cvPa!=null?cvPa.toFixed(2)+'%':'—'],
+     ['Change',(cvAvg!=null&&cvPa!=null)?((cvAvg>=cvPa?'+':'−')+Math.abs(cvAvg-cvPa).toFixed(2)+'%'):'—',(cvAvg>=cvPa)?'var(--pos)':'var(--neg)'],
+     ['Sessions behind it',Math.round(se.v).toLocaleString()]],
+    foot:'A mean of the daily rates, not orders divided by sessions over the whole window — so a single huge day cannot dominate it. Orders and sessions come from different books; the two agree to within a fraction of a percent but are not the same measurement.'}}};
 
   panels='<section style="margin-bottom:16px">'
    +'<div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px"><h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">Where the money went</h2>'
@@ -3053,7 +3119,7 @@ function rTD(){
     +top.map((r,i)=>{
       const pos=r.d>=0, c=pos?'var(--pos)':'var(--neg)';
       const w=(Math.abs(r.d)/mx)*100;
-      return '<div style="display:flex;align-items:center;gap:14px;padding:11px 16px'+(i?';border-top:1px solid var(--line)':'')+'">'
+      return '<div'+tdClick('mov',r.n)+' style="display:flex;align-items:center;gap:14px;padding:11px 16px'+(i?';border-top:1px solid var(--line)':'')+'">'
        +'<div style="flex:0 0 172px;min-width:0;font-size:12.5px;font-weight:620;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+String(r.n).replace(/"/g,'')+'">'+String(r.n).slice(0,30)+'</div>'
        +'<div style="flex:0 0 78px">'+tdSpark(r.sl,c)+'</div>'
        +'<div style="flex:1 1 auto;display:flex;align-items:center;gap:8px">'
@@ -3063,6 +3129,14 @@ function rTD(){
        +'<div class="num" style="flex:0 0 146px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+M(r.prev)+' → '+M(r.cur)+'</div>'
       +'</div>';}).join('')
     +'</div></section>';
+   (function(){const R={};top.forEach(r=>{R[r.n]={title:String(r.n),tab:'vl',tabName:'Vendor Capital',rows:[
+     ['Gross profit, this window',M(r.cur)],['Gross profit, prior window',M(r.prev)],
+     ['Change',SM(r.d),r.d>=0?'var(--pos)':'var(--neg)'],
+     ['Relative change',r.prev?((r.d/r.prev>=0?'+':'−')+Math.abs(r.d/r.prev*100).toFixed(1)+'%'):'—',r.d>=0?'var(--pos)':'var(--neg)'],
+     ['Share of the biggest move',((Math.abs(r.d)/mx)*100).toFixed(0)+'%']],
+    foot:'Gross profit on the 4% basis, from this supplier&rsquo;s own daily series across the webstore and the tills. '
+     +'<b>A move is stated here, never explained.</b> A supplier can fall because it was discounted, because it went out of stock, because the mix inside its range moved, or because last window was its peak — this row cannot tell those apart, and neither can the Vendor Capital tab without a product-level cost history.'};});
+   window._tdD.mov={sub:'Supplier gross profit, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:R};})();
   }
  }catch(e){}
 
@@ -19324,7 +19398,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-152230';
+const BUILD='20260928-152732';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
