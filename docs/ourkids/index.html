@@ -950,8 +950,8 @@ function stickMeasure(){try{
    the reason, so the disagreement is impossible to read as an error in the data.
    ==========================================================================*/
 const WINDECL={
- gl:function(){try{const b=glBase();return {label:'baseline month '+b.bm,
-   why:'Growth Lab models a COMPLETE month and scales from it; a part-month baseline would make every lever read wrong.',fixed:1};}catch(e){return null;}},
+ gl:function(){try{const b=glBase();return {label:'baseline month '+b.bm+' for the levers — the category heat map below follows your date box',
+   why:'The sliders model a COMPLETE month and scale from it; a part-month baseline would make every lever read wrong. The category table underneath is on the daily vendor series and does read the range you pick.',fixed:1};}catch(e){return null;}},
  rt:function(){return {label:'lifetime cohorts + the month you pick on the card',
    why:'Retention is measured per acquisition cohort over its own life, so a date range cannot bound it.',fixed:1};},
  cp:function(){return {label:'every registered customer since Aug 2024',
@@ -5475,13 +5475,30 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  try{(function(){
   const V=(O.vend&&O.vend.rows)||[]; if(V.length<5)return;
   const nowM=(O.today||'').slice(0,7);
+  /* v31c THE SUMMARY COLUMNS FOLLOW THE DATE BOX. 99.8% of vendor revenue now carries a
+     daily [rev,gp] series back to O.vend.dayStart, so share, margin and gap can be cut to
+     any window instead of always reading all history. The MONTH STRIP stays monthly on
+     purpose -- it is the history, and that is what a heat map is for. If the window falls
+     outside the daily series the card says so and falls back to all months, rather than
+     showing an empty table or a silently wrong one. */
+  const dS=(O.vend&&O.vend.dayStart)||null;
+  const dIx=d=>dS?Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(dS+'T00:00:00Z'))/864e5):-1;
+  const dLen=(V.find(r=>r.d)||{d:[[]]}).d[0].length||0;
+  const wi0=dIx(ST.s), wi1=dIx(ST.e);
+  const dayOK=!!dS && dLen>0 && wi1>=0 && wi0<dLen;
+  const dSum=r=>{ if(!dayOK||!r.d)return null;
+    let i0=Math.max(0,wi0), i1=Math.min(dLen-1,wi1); if(i1<i0)return null;
+    let rv=0,gp=0; for(let i=i0;i<=i1;i++){rv+=r.d[0][i]||0; gp+=r.d[1][i]||0;} return [rv,gp];};
   const CAT={};
   V.forEach(r=>{const c=r.cat||'(uncategorised)';
-    const e=CAT[c]||(CAT[c]={cat:c,mon:{},vend:[],r:0,g:0});
+    const e=CAT[c]||(CAT[c]={cat:c,mon:{},vend:[],r:0,g:0,wr:0,wg:0});
     e.vend.push(r);
     Object.entries(r.mon||{}).forEach(([m,v])=>{ if(m>=nowM)return;
       const x=e.mon[m]||(e.mon[m]=[0,0]); x[0]+=v[0]||0; x[1]+=v[1]||0;
-      e.r+=v[0]||0; e.g+=v[1]||0; });});
+      e.r+=v[0]||0; e.g+=v[1]||0; });
+    const w=dSum(r); if(w){e.wr+=w[0]; e.wg+=w[1]; r._w=w;} });
+  /* when the window is served, the headline columns read IT; the strip stays all months */
+  if(dayOK){ Object.values(CAT).forEach(c=>{ if(c.wr>0){ c.r=c.wr; c.g=c.wg; } }); }
   const cats=Object.values(CAT).filter(c=>c.r>0);
   if(!cats.length)return;
   const totR=cats.reduce((a,c)=>a+c.r,0), totG=cats.reduce((a,c)=>a+c.g,0);
@@ -5534,7 +5551,8 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
        category's revenue, share of its GP, the gap between those two, and margin against
        the CATEGORY's own margin rather than the company's -- a 28% vendor is fine in a 28%
        category and a disaster in a 42% one. */
-    const vAll=c.vend.map(r=>({n:r.n||r.v,r:r.r||0,g:r.g||0,mg:r.r?r.g/r.r:0}))
+    const vAll=c.vend.map(r=>{const w=(dayOK&&r._w)?r._w:[r.r||0,r.g||0];
+        return {n:r.n||r.v,r:w[0],g:w[1],mg:w[0]?w[1]/w[0]:0};})
       .filter(x=>x.r>0);
     const vR=vAll.reduce((a,x)=>a+x.r,0)||1, vG=vAll.reduce((a,x)=>a+x.g,0)||1;
     const vs=vAll.map(x=>({...x, rs:x.r/vR, gs:x.g/vG, gap:(x.r/vR)-(x.g/vG), vsCat:x.mg-c.mg}))
@@ -5564,7 +5582,11 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
    +', so a fixed bar would have painted every recent month red for no reason but the passage of time. Red here means worse than the business was THAT month. '
    +'Click any category to see its vendors, normalised the same way — share of the category&rsquo;s revenue against share of its GP, and each vendor&rsquo;s margin against its own category rather than the company, because 28% is fine in a 28% category and a disaster in a 42% one.</div>'
    +'<div style="margin-top:9px;padding:10px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
-   +'<b style="color:var(--warn)">Grain.</b> Vendor money posts per MONTH, so this table is monthly and ignores the date box; the running month is excluded because its ledger is incomplete. '
+   +'<b style="color:var(--warn)">Grain.</b> '
+   +(dayOK
+      ? ('Share, margin and gap read <b>'+ST.s+' → '+ST.e+'</b> exactly — 99.8% of vendor revenue carries a daily series back to '+dS+'. The month strip to the right stays monthly on purpose: it is the history. ')
+      : ('Your window falls outside the daily vendor series (which starts '+(dS||'—')+'), so these columns read ALL complete months instead. '))
+   +'The running month is excluded from the strip because its ledger is incomplete. '
    +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
   pnlCard(g,'odoo','Category heat map &mdash; where the revenue is and where the margin is not'
    +INFO('Rows are POS categories built from the vendor ledger. Cell = that month’s gross margin, coloured against the company average. Gap = revenue share minus GP share.'),
@@ -18722,7 +18744,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-142717';
+const BUILD='20260928-143545';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
