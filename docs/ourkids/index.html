@@ -5844,8 +5844,16 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   cats.forEach(c=>Object.entries(c.mon).forEach(([m,v])=>{
     const x=coMon[m]||(coMon[m]=[0,0]); x[0]+=v[0]; x[1]+=v[1];}));
   const coMgOf=m=>{const x=coMon[m];return (x&&x[0])?x[1]/x[0]:coMg;};
-  /* last 13 complete months, most recent last */
-  const allM=[...new Set(cats.flatMap(c=>Object.keys(c.mon)))].sort().filter(m=>m<nowM).slice(-13);
+  /* v40 THE MONTH STRIP FOLLOWS THE DATE BOX TOO. It was pinned to the last 13 complete
+     months, so a card whose summary columns moved with the window sat next to a history
+     that never did -- two different periods on one row, which is exactly the thing this
+     tool is not allowed to do. The strip now spans the COMPLETE months your window
+     touches. Under three of them a strip is not a heat map, so it falls back to the last
+     13 and the grain note says which of the two you are looking at. */
+  const monAll=[...new Set(cats.flatMap(c=>Object.keys(c.mon)))].sort().filter(m=>m<nowM);
+  const winM=monAll.filter(m=>m>=ST.s.slice(0,7)&&m<=ST.e.slice(0,7));
+  const stripWin=winM.length>=3;
+  const allM=stripWin?winM.slice(-24):monAll.slice(-13);
   cats.forEach(c=>{c.mg=c.g/c.r; c.rs=c.r/totR; c.gs=c.g/totG; c.gap=c.rs-c.gs;});
   cats.sort((a,b)=>b.rs-a.rs);
   /* colour a cell by how far its margin sits from the company margin */
@@ -5916,8 +5924,11 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
    +'<div style="margin-top:9px;padding:10px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
    +'<b style="color:var(--warn)">Grain.</b> '
    +(dayOK
-      ? ('Share, margin and gap read <b>'+ST.s+' → '+ST.e+'</b> exactly — 99.8% of vendor revenue carries a daily series back to '+dS+'. The month strip to the right stays monthly on purpose: it is the history. ')
+      ? ('Share, margin and gap read <b>'+ST.s+' → '+ST.e+'</b> exactly — 99.8% of vendor revenue carries a daily series back to '+dS+'. ')
       : ('Your window falls outside the daily vendor series (which starts '+(dS||'—')+'), so these columns read ALL complete months instead. '))
+   +(stripWin
+      ? ('The month strip spans the <b>'+allM.length+' complete months your window touches</b> ('+allM[0]+' → '+allM[allM.length-1]+'), so the strip and the columns beside it are the same period. ')
+      : ('Your window touches fewer than three complete months, which is too few to read as a heat map, so the strip falls back to the <b>last '+allM.length+' complete months</b> ('+allM[0]+' → '+allM[allM.length-1]+') while the columns to its left stay on your window. ') )
    +'The running month is excluded from the strip because its ledger is incomplete. '
    +'Margin is on the 4% basis. Consignment categories carry their own caveat — Odoo posts no per-sale cost for them, so their margin leans on a manually maintained standard cost.</div>';
   /* ---- DISCOUNT LANE. For the commercial plan: when the codes actually fire, and what
@@ -5933,7 +5944,10 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
        x.codes[code]=(x.codes[code]||0)+(v[2]||0);}));
      return MM;};
    const onM=roll(P.on), offM=roll(P.off);
-   const ms=[...new Set([...Object.keys(onM),...Object.keys(offM)])].sort();
+   let ms=[...new Set([...Object.keys(onM),...Object.keys(offM)])].sort();
+   /* the discount lane sits under the heat map and must not show a different period */
+   const msW=ms.filter(m=>m>=ST.s.slice(0,7)&&m<=ST.e.slice(0,7));
+   const discWin=msW.length>=2; if(discWin)ms=msW;
    if(ms.length){
     const lane=(lbl,MM,col)=>{
       const mx=Math.max.apply(null,ms.map(m=>(MM[m]?MM[m].disc:0)))||1;
@@ -5950,7 +5964,8 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
       return Object.entries(all).sort((a2,b2)=>b2[1]-a2[1]).slice(0,5);};
     disc='<div style="margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
      +'<div style="padding:11px 16px"><div style="font-size:13px;font-weight:700;letter-spacing:-.015em;color:var(--ink)">When the discounts fire</div>'
-     +'<div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">Bar height is money given away; the figure under it is the rate on the orders that used a code.</div></div>'
+     +'<div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">Bar height is money given away; the figure under it is the rate on the orders that used a code. '
+     +(discWin?('Showing the '+ms.length+' months your window touches.'):('Your window touches fewer than two months of the promo feed, so every month it covers is shown.'))+'</div></div>'
      +'<div style="display:flex;align-items:center;gap:12px;padding:0 16px 4px"><div style="flex:0 0 92px"></div>'
      +ms.map(m=>'<div style="flex:1 1 0;text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--ink-4)">'+m.slice(2)+'</div>').join('')+'</div>'
      +lane('In store',offM,'var(--warn)')
@@ -19398,7 +19413,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-152732';
+const BUILD='20260928-153048';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
