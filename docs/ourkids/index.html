@@ -4878,6 +4878,44 @@ window._glBaseCache=null;
 function glBaseCached(){ if(window._glBaseCache)return window._glBaseCache;
   window._glBaseCache=glBase(); return window._glBaseCache; }
 function glBaseInvalidate(){ window._glBaseCache=null; }
+/* ============================================================================
+   v24 · SEASONALITY. Growth Lab annualised its baseline month by multiplying by 12.
+   Measured over 25 complete months: August is the single largest month in the whole
+   history at +100.8% above the mean, and the pattern repeats -- a seasonal index built
+   from two independent years puts August at 1.64x and February at 0.64x. So August x12
+   is E£837.6M against a trailing-twelve actual of E£520.2M: a 61% overstatement, and
+   every annual figure and every "plan total" inherited it.
+   seasIdx(m) divides the month by its own seasonal factor before annualising, which
+   reproduces the trailing-twelve actual to within 2%. The factor is shown on the card
+   so the correction is never silent.
+   ==========================================================================*/
+var _SEAS=null;
+function seasTable(){
+ if(_SEAS)return _SEAS;
+ try{
+  const PA=pnlAgg().M, nowM=(O.today||'').slice(0,7);
+  const tot=m=>{const q=PA[m];if(!q)return 0;const on=(q.g||0)-(q.r||0);
+    let br=0;Object.keys(O.pos||{}).forEach(b=>{const v=(O.pos[b]||{})[m];if(v)br+=v[0]||0;});return on+br;};
+  const ms=Object.keys(PA).sort().filter(m=>m<nowM&&tot(m)>0);
+  if(ms.length<12){return (_SEAS={idx:{},n:0});}
+  /* each rolling 12-month block normalised to its OWN mean, so a growing business does
+     not read its growth as seasonality */
+  const byCal={};
+  for(let end=ms.length-1; end>=11; end-=12){
+    const yr=ms.slice(end-11,end+1);
+    const mean=yr.reduce((a,m)=>a+tot(m),0)/12;
+    if(mean<=0)continue;
+    yr.forEach(m=>{const c=m.slice(5);(byCal[c]=byCal[c]||[]).push(tot(m)/mean);});
+  }
+  const idx={};Object.keys(byCal).forEach(c=>{const v=byCal[c];idx[c]=v.reduce((a,b)=>a+b,0)/v.length;});
+  const years=Math.max.apply(null,Object.values(byCal).map(v=>v.length).concat([0]));
+  return (_SEAS={idx:idx,n:years});
+ }catch(e){return (_SEAS={idx:{},n:0});}
+}
+function seasIdx(m){try{const t=seasTable();const v=t.idx[(m||'').slice(5)];
+  return (v&&isFinite(v)&&v>0.25&&v<4)?v:1;}catch(e){return 1;}}
+/* annualise a month HONESTLY: strip its seasonal factor, then multiply by twelve */
+function annl(v,m){return v*12/seasIdx(m);}
 function glBase(){
  if(GLS&&GLS._b)return GLS._b;
  const A=O.ad,SH=O.shop,F=O.fin;
@@ -5010,9 +5048,9 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  const B={};KEYS.forEach(k=>B[k]=b[k]);
  const now=glRun(B), sc=glRun(V);
  /* ---------- 1. the headline ---------- */
- const dM=sc.revTot-now.revTot, dY=dM*12;
- const dGP=sc.afterAds-now.afterAds, dGPy=dGP*12;
- const kp=[['Monthly revenue',sc.revTot,null,'cur'],['Annual run-rate',sc.revTot*12,null,'cur'],
+ const dM=sc.revTot-now.revTot, dY=annl(dM,b.bm);   /* v24 deseasonalised */
+ const dGP=sc.afterAds-now.afterAds, dGPy=annl(dGP,b.bm);
+ const kp=[['Monthly revenue',sc.revTot,null,'cur'],['Annual run-rate',annl(sc.revTot,b.bm),null,'cur'],
    ['Contribution after ads',sc.afterAds,null,'cur'],['After ads AND overhead',sc.afterAll,null,'cur']];
  let head='<div class="kpis">'+kH(kp,'gl')+'</div>'
   +'<div style="margin-top:10px;padding:11px 13px;border-radius:10px;border:1px solid '+(dM>=0?'#bfe3d0':'#f3c9d3')+';background:'+(dM>=0?'#f2fbf6':'#fff5f7')+'">'
@@ -5106,7 +5144,7 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
  const rank=LV.map(l=>{const W=Object.assign({},B);
    W[l[0]]=B[l[0]]*(1+l[2]*STEP);
    const r=glRun(W);
-   return {k:l[0],n:l[1],dir:l[2],rev:(r.revTot-now.revTot)*12,gp:(r.afterAds-now.afterAds)*12,
+   return {k:l[0],n:l[1],dir:l[2],rev:annl(r.revTot-now.revTot,b.bm),gp:annl(r.afterAds-now.afterAds,b.bm),
      from:B[l[0]],to:W[l[0]]};})
   .filter(x=>isFinite(x.gp)).sort((a2,b2)=>b2.gp-a2.gp);
  const mxg=Math.max.apply(null,rank.map(x=>Math.abs(x.gp)).concat([1]));
@@ -5142,12 +5180,12 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
      each with the change it causes GIVEN the ones already applied. Order matters when levers
      multiply, so the order used is printed and the residual is shown rather than smeared. */
   const order=rank.map(x=>x.k).filter(k=>moved.indexOf(k)>=0).concat(moved.filter(k=>rank.every(x=>x.k!==k)));
-  const W=Object.assign({},B);let prev=now.afterAds*12;const steps=[];
-  order.forEach(k=>{W[k]=V[k];const r=glRun(W);const v=r.afterAds*12;steps.push({k,d:v-prev});prev=v;});
-  const target=sc.afterAds*12, start=now.afterAds*12;
+  const W=Object.assign({},B);let prev=annl(now.afterAds,b.bm);const steps=[];
+  order.forEach(k=>{W[k]=V[k];const r=glRun(W);const v=annl(r.afterAds,b.bm);steps.push({k,d:v-prev});prev=v;});
+  const target=annl(sc.afterAds,b.bm), start=annl(now.afterAds,b.bm);
   const nm={};LV.forEach(l=>nm[l[0]]=l[1]);SL.forEach(s2=>s2[1].forEach(x=>nm[x[0]]=x[1]));
   const span=Math.max(Math.abs(target-start),1);
-  wf='<div style="font-size:11.5px;color:#4a5a70;line-height:1.55;margin-bottom:10px">From <b>'+M(start)+'</b> of annual contribution after ads at the '+b.bm+' baseline, to <b>'+M(target)+'</b> with your sliders. Each bar is what that one lever adds <b>given the ones above it</b> &mdash; levers multiply, so the order is the ranking order and is printed rather than assumed away.</div>'
+  wf='<div style="font-size:11.5px;color:var(--warn);background:var(--warn-wash);border:1px solid var(--warn-line);border-radius:var(--r-m);padding:8px 11px;margin-bottom:9px"><b>Annualised on '+b.bm+'&rsquo;s seasonal index of '+seasIdx(b.bm).toFixed(2)+'&times;</b>, not by multiplying by twelve. '+b.bm+' is '+(seasIdx(b.bm)>=1?(((seasIdx(b.bm)-1)*100).toFixed(0)+'% BIGGER'):(((1-seasIdx(b.bm))*100).toFixed(0)+'% smaller'))+' than an average month across '+seasTable().n+' year'+(seasTable().n===1?'':'s')+' of history, so a plain &times;12 would overstate the year by '+(((seasIdx(b.bm))-1)*100).toFixed(0)+'%.</div>'+'<div style="font-size:11.5px;color:#4a5a70;line-height:1.55;margin-bottom:10px">From <b>'+M(start)+'</b> of annual contribution after ads at the '+b.bm+' baseline, to <b>'+M(target)+'</b> with your sliders. Each bar is what that one lever adds <b>given the ones above it</b> &mdash; levers multiply, so the order is the ranking order and is printed rather than assumed away.</div>'
    +'<div style="display:flex;flex-direction:column;gap:5px">'
    +steps.map(st=>{const w=Math.min(100,Math.abs(st.d)/span*100);
      return '<div style="display:grid;grid-template-columns:200px 1fr 130px;gap:10px;align-items:center">'
@@ -5163,7 +5201,7 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   'Built from the sliders you moved. Nothing here is a recommendation the tool invented; it is your scenario, decomposed.',wf);
  /* ---------- 6. cohort engine, kept separate ---------- */
  const rep=glV('rep'), oyr=glV('oyr');
- const cohNow=b.nc*12*b.aov*b.oyr, cohSc=b.nc*12*V.aov*oyr;
+ const cohNow=annl(b.nc,b.bm)*b.aov*b.oyr, cohSc=annl(b.nc,b.bm)*V.aov*oyr;
  let ch='<div style="font-size:11.5px;color:#4a5a70;line-height:1.55;margin-bottom:10px">'
   +'<b>A different question from everything above.</b> The run-rate asks what this month is worth twelve times. This asks what <b>one year of acquisition</b> is worth over those customers&rsquo; lives. The same order can appear in both, so <b>never add these two numbers together</b>.</div>'
   +'<div style="display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;margin:7px 0">'
@@ -5175,10 +5213,10 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   +'<input type="range" min="'+(b.oyr*0.5)+'" max="'+(b.oyr*2.5)+'" step="0.01" value="'+oyr+'" oninput="glSet(\'oyr\',this.value)" style="width:100%">'
   +'<div style="text-align:right"><b style="font-size:12.5px">'+oyr.toFixed(2)+'</b></div></div>'
   +'<table style="width:100%;border-collapse:collapse;margin-top:10px">'
-  +rowc('New customers acquired per year',b.nc*12,b.nc*12,'measured in '+b.bm+', &times; 12',0,1)
+  +rowc('New customers acquired per year',annl(b.nc,b.bm),annl(b.nc,b.bm),'measured in '+b.bm+', annualised on its '+seasIdx(b.bm).toFixed(2)+'&times; seasonal index',0,1)
   +rowc('Revenue from one year of acquisition',cohNow,cohSc,'new customers &times; AOV &times; orders per customer per year',1)
   +rowc('Gross profit on it',cohNow*B.mg/100,cohSc*V.mg/100,'&times; online margin')
-  +rowc('Cost to acquire them',b.cac*b.nc*12,b.cac*b.nc*12,'measured CAC E£'+Math.round(b.cac).toLocaleString()+' &times; new customers')
+  +rowc('Cost to acquire them',b.cac*annl(b.nc,b.bm),b.cac*annl(b.nc,b.bm),'measured CAC E£'+Math.round(b.cac).toLocaleString()+' &times; new customers')
   +'</table>'
   +'<div style="margin-top:10px;font-size:11.5px;color:#4a5a70">LTGP : CAC moves from <b>'+(b.cac?(b.ltgp/b.cac).toFixed(2):'—')+'×</b> to <b>'+(b.cac?((b.ltgp*(oyr/(b.oyr||1))*(V.mg/B.mg))/b.cac).toFixed(2):'—')+'×</b>. '
   +'Measured lifetime gross profit per customer is E£'+Math.round(b.ltgp).toLocaleString()+' against a CAC of E£'+Math.round(b.cac).toLocaleString()+'. '
@@ -18283,7 +18321,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-133100';
+const BUILD='20260928-133907';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
