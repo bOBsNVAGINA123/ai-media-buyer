@@ -30,7 +30,11 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .card[data-a=odoo]{border-top-color:#4a4bd8}.card[data-a=shop]{border-top-color:#0f7a55}.card[data-a=meta]{border-top-color:#2f7fe0}.card[data-a=blend]{border-top-color:#12b0a4}.card[data-a=ins]{border-top-color:#ff8b42}
 .drag{position:absolute;top:12px;left:9px;color:#9aa3b5;cursor:grab;font-size:12.5px;user-select:none}.card.drg{opacity:.4}
 .xp{position:absolute;top:10px;right:12px;color:#5f6a7d;cursor:pointer;font-size:14px;font-weight:800;padding:2px 6px;border-radius:7px}.xp:hover{background:#eef0fb;color:#4a4bd8}
-.chead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding-left:12px;padding-right:24px}
+.chead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:14px;padding-left:12px;padding-right:24px}
+/* v44 flex-wrap is load-bearing, not cosmetic: the branch cards put a `flex:1 0 100%`
+   metric strip inside this header, and without wrapping a 100% basis is laid out beside
+   the title instead of under it -- the strip started 130px in and ran 100px off the right
+   edge of its own card on every one of the seven branch panels. */
 .ct{font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.25}.info{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#eceff5;color:#5f6a7d;font-size:10.5px;font-weight:800;align-items:center;justify-content:center;cursor:help;margin-left:5px;vertical-align:middle;position:relative}
 .info:hover::after{content:attr(data-t);position:absolute;left:16px;top:0;width:300px;background:#161d2e;color:#fff;font-size:11.5px;font-weight:500;line-height:1.5;padding:8px 10px;border-radius:8px;z-index:40;white-space:normal}
 .cs{font-size:12.5px;color:var(--mut);margin-top:3px;font-weight:500;line-height:1.45;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;max-width:760px}.cs.open{-webkit-line-clamp:unset;display:block}.cs:not(.open):after{content:''}
@@ -40,7 +44,12 @@ select,input{font:inherit;font-size:12.5px;font-weight:600;border:1px solid #dfe
 .up{color:var(--grn)}.dn{color:var(--red)}.ft{color:var(--mut)}
 .adg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}.adc{background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px;padding:10px}.adc img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:#e8ebf3}.adc .ph{width:100%;height:110px;border-radius:8px;background:linear-gradient(135deg,#4a4bd8,#3a9bff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:21px}.adc .an{font-size:11.5px;font-weight:700;margin:7px 0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.adc .ak{display:flex;justify-content:space-between;font-size:11.5px;color:#5a637a;margin-top:2px}.adc .ak b{color:#161d2e}
 .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px 16px;margin-top:12px;padding:13px 14px;background:#f8f9fc;border:1px solid #eef0f6;border-radius:12px}.kgrid .kpi{text-align:left}.kgrid .kpi .v{font-size:21px}
-.cwb{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:10.5px;color:#646e83;flex-wrap:wrap}.cwb input{font:inherit;font-size:10.5px;padding:2px 4px;border:1px solid #dfe3ea;border-radius:5px;color:#0F172A;background:#fff}.cwb.on input{border-color:#4f46e5;color:#4f46e5;font-weight:700}.cwx{cursor:pointer;color:#4f46e5;font-weight:700;border:1px solid #c7c9f5;border-radius:99px;padding:1px 7px;background:#eef0ff}.cv{position:relative;height:150px;margin-top:8px}.lgd{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:7px;font-size:11.5px;color:#5a637a}
+.cwb{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:10.5px;color:#646e83;flex-wrap:wrap}.cwb input{font:inherit;font-size:10.5px;padding:2px 4px;border:1px solid #dfe3ea;border-radius:5px;color:#0F172A;background:#fff}.cwb.on input{border-color:#4f46e5;color:#4f46e5;font-weight:700}.cwx{cursor:pointer;color:#4f46e5;font-weight:700;border:1px solid #c7c9f5;border-radius:99px;padding:1px 7px;background:#eef0ff}.cv{position:relative;height:150px;margin-top:8px}
+/* v44 a canvas with no Chart on it yet is 300x150 by spec, which is WIDER than most of the
+   containers these sit in -- so every deferred chart stuck out of its card until the moment
+   it initialised. Chart.js sets an explicit pixel width once it runs, so capping the
+   placeholder costs nothing and stops the bleed. */
+canvas{max-width:100%}.lgd{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:7px;font-size:11.5px;color:#5a637a}
 .lg{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 4px;border-radius:6px}.lg.off{opacity:.32;text-decoration:line-through}.sw{width:13px;height:3px;border-radius:2px}
 .chan .r{display:flex;align-items:center;gap:10px;margin:8px 0}.chan .n{width:86px;font-size:12.5px;font-weight:700}.chan .t{flex:1;height:11px;background:#f0f2f7;border-radius:7px;overflow:hidden}.chan .f{height:100%;border-radius:7px}.chan .vl{width:170px;text-align:right;font-size:12.5px;font-weight:700}
 table.bt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}table.bt th{text-align:right;color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:7px 7px;border-bottom:1px solid #e6e9f0;position:sticky;top:0;background:#fff;z-index:1}table.bt th:first-child{text-align:left}table.bt td{padding:6px 7px;border-bottom:1px solid #f4f6fa;text-align:right;font-variant-numeric:tabular-nums}.bt tr:nth-child(even) td{background:#fafbfd}.bt tr:hover td{background:#f3f5fa}table.bt td:first-child{text-align:left;font-weight:700}table.bt input{width:88px;text-align:right;padding:4px 6px;font-size:12.5px}
@@ -19487,7 +19496,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-154908';
+const BUILD='20260928-155525';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
