@@ -824,7 +824,9 @@ function gpStale(){return GPADJ()>0;}
    2.94 side by side -- so the number a card fell back to depended on which card it was, and
    the 4% correction had to be chased through every one of them. GPQ() is the only safe
    accessor; GPFB is the only fallback, and it is the measured basis, not a memory of one. */
-var GPFB={gpOn:0.2604,gpSt:0.367,gpOnGross:0.3513,drag:0.0916,dragShip:0.071,dragPay:0.0206,dragCost:0.071,dragCol:0.0351};
+/* v41: gpSt was 0.367, the ALL-HISTORY store margin. The tool now strikes the store
+   margin on the last three complete months, so the fallback matches that rule. */
+var GPFB={gpOn:0.2604,gpSt:0.329,gpOnGross:0.3513,drag:0.0916,dragShip:0.071,dragPay:0.0206,dragCost:0.071,dragCol:0.0351};
 function GPQ(){try{const q=_gpPct();return (q&&q.gpOn>0)?q:GPFB;}catch(e){return GPFB;}}
 function GPBE(){const q=GPQ();return q.gpOn>0?1/q.gpOn:1/GPFB.gpOn;}
 /* v11.0 BOTH BREAK-EVENS, EVERY TIME. One number was being printed and called "break-even"
@@ -1288,17 +1290,34 @@ function ecomPay(m){try{
  return nb>0?nb*shr:base;}catch(e){return 372076;}}
 function feeAll(m){return ((window.O&&O.exp&&O.exp[m])||{})['Payment & collection fees']||0;}
 function feeNet(m){try{return Math.max(0,feeAll(m)-(s2h(m)?(s2('cost',m)||0):0));}catch(e){return feeAll(m);}}
+/* ============================================================================
+   v41 · ONE STORE MARGIN, NOT TWO. The tool carried two of them and used both
+   in the same sentences: posMg() read the LAST COMPLETE MONTH (31.83%) while
+   _gpPct().gpSt read ALL 25 MONTHS OF HISTORY (36.68%). Every profit-after-ads
+   figure that credits in-store value used the second, so in-store gross profit
+   was being struck about 11% too generously -- because store margin has been
+   falling all year (34.9% in January to 31.83% in August) and an all-history
+   average is mostly 2024.
+   The webstore side had already been corrected to a 90-day window for exactly
+   this reason, with a comment saying a break-even should follow the margin the
+   business earns NOW. The store side beside it was never changed. It is now the
+   SAME rule: the last three complete months, and gpSt is this function rather
+   than a second computation of the same thing. One month alone was also too
+   noisy to anchor every ad decision to -- the month-to-month spread is over
+   three percent of revenue.
+   ========================================================================== */
 var _POSMGC=null;
+function posMgMonths(){try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
+  const ks=Object.keys(P);if(!ks.length)return [];
+  return [...new Set(ks.flatMap(b=>Object.keys(P[b]||{})))].sort().filter(m=>m!==nowM).slice(-3);}catch(e){return [];}}
 function posMg(){if(_POSMGC!==null)return _POSMGC;
- try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
-  const ks=Object.keys(P);if(!ks.length)return (_POSMGC=GPFB.gpSt);
-  const pm=Object.keys(P[ks[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0];
-  if(!pm)return (_POSMGC=GPFB.gpSt);
-  let r=0,g=0;ks.forEach(b=>{const v=(P[b]||{})[pm];if(v){r+=v[0]||0;g+=gpAdj(v[0],v[1]);}});
+ try{const P=window.O.pos||{},ks=Object.keys(P),ms=posMgMonths();
+  if(!ks.length||!ms.length)return (_POSMGC=GPFB.gpSt);
+  let r=0,g=0;ks.forEach(b=>ms.forEach(m=>{const v=(P[b]||{})[m];if(v){r+=v[0]||0;g+=gpAdj(v[0],v[1]);}}));
   return (_POSMGC=(r>0?g/r:GPFB.gpSt));}catch(e){return (_POSMGC=GPFB.gpSt);}}
-function posMgMonth(){try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
-  const ks=Object.keys(P);if(!ks.length)return '';
-  return Object.keys(P[ks[0]]||{}).sort().filter(m=>m!==nowM).slice(-1)[0]||'';}catch(e){return '';}}
+/* the label that goes beside any printed store margin, so the window is never implied */
+function posMgWin(){const m=posMgMonths();return m.length?(m.length>1?(m[0]+' → '+m[m.length-1]):m[0]):'';}
+function posMgMonth(){const m=posMgMonths();return m.length?m[m.length-1]:'';}
 var _BLXC=null;
 function blxStats(){if(_BLXC!==null)return _BLXC;
  try{const O2=window.O,bl=O2&&O2.bl;if(!bl)return (_BLXC={r:1,n:0,lo:1,hi:1});
@@ -5560,7 +5579,7 @@ function rGL(){if(TAB!=='gl')return;dCh();glBaseInvalidate();
   ['MARGIN & COST',[
    ['mg','Online gross margin',0.5,1.8,0.1,v=>v.toFixed(1)+'%','On the 4% basis: revenue × 0.96 − cost. Moves with vendor and category mix — the Vendor Capital tab ranks who carries it.'],
    ['brRev','Branch monthly revenue',0.3,2,1000,v=>'E£'+Math.round(v).toLocaleString(),'The seven tills, VAT-inclusive, in '+b.bm+'.'],
-   ['brMg','Branch gross margin',0.5,1.8,0.1,v=>v.toFixed(1)+'%','Real POS margin on the 4% basis.'],
+   ['brMg','Branch gross margin',0.5,1.8,0.1,v=>v.toFixed(1)+'%','The company store margin on the 4% basis, across all seven tills. Struck on the LAST THREE COMPLETE MONTHS, the same recency rule the webstore margin uses \u2014 an all-history average reads 36.8% because it is mostly 2024, and the shops run near 33% now.'],
    ['spend','Ad spend per month',0,3,1000,v=>'E£'+Math.round(v).toLocaleString(),'Meta + Google + TikTok. Raising it does NOT raise sessions on this slider — move sessions yourself, so the two effects stay separable.'],
    ['ovh','Monthly overhead',0.5,1.6,1000,v=>'E£'+Math.round(v).toLocaleString(),'The whole posted expense book for '+b.bm+', ad invoices excluded (they are in Ad spend).']]]];
  let sh='';
@@ -17202,8 +17221,9 @@ function _gpPct(){
  let so=0,go=0;(function(){const R=(O.shop&&O.shop.rev)||[],G=(O.shop&&O.shop.gp)||[];
   for(let i=Math.max(0,R.length-_GW);i<R.length;i++){so+=R[i]||0;go+=gpAdj(R[i]||0,G[i]||0);}})();
  const gpOnGross=so>5e3?go/so:(FF&&FF.company&&FF.company.gpPct?FF.company.gpPct:GPFB.gpOnGross);
- let sr=0,sg=0;Object.values(O.pos||{}).forEach(b=>Object.values(b).forEach(v=>{sr+=v[0]||0;sg+=gpAdj(v[0],v[1]);}));
- const gpSt=sr>0?sg/sr:GPFB.gpSt;
+ /* v41: one store margin. This used to sum ALL 25 months of POS history here and
+    disagree with posMg() by 4.9% of revenue on the same books. */
+ const gpSt=(typeof posMg==='function')?posMg():GPFB.gpSt;
  let drag=0,_dragShip=0,_dragPay=0,_dragCost=0,_dragCol=0;
  try{
   const PAm=pnlAggShop().M;/* v12.4 SHOPIFY only -- marketplace was polluting this */const nowM=(O.today||'').slice(0,7);
@@ -19413,7 +19433,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-153048';
+const BUILD='20260928-154053';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
