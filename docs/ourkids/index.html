@@ -2919,34 +2919,58 @@ function rTD(){
    +'<div style="padding:9px 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
    +'ROAS here is what each platform CLAIMS it caused, over what you paid it — their own marking, not the ledger. Break-even '+be.toFixed(2)+'× delivered.</div></div>';
 
-  /* customer mix: revenue is day-exact, the AOV split is month-grain */
+  /* ---- customer mix. CORRECTION: I first shipped this month-grain, claiming daily NC/RC
+     ORDER counts did not exist. They do -- O.ad.newcust and O.ad.retcust, daily, sitting
+     beside ncrev/rcrev; I searched for "ncord" and missed them. They reconcile EXACTLY to
+     the monthly ledger and to total Shopify orders (Jul: 2,573/2,205 = nr.nord/nr.rord,
+     sum 4,778 = shop.ord; Aug: 4,461/2,602, sum 7,063). So the split is day-exact, and the
+     monthly ledger is shown beneath it as a reconciliation rather than as the source. ---- */
   const ncW=win(tdAd('ncrev'),as), rcW=win(tdAd('rcrev'),as);
   const ncP=winP(tdAd('ncrev'),as), rcP=winP(tdAd('rcrev'),as);
+  const noW=win(tdAd('newcust'),as), roW=win(tdAd('retcust'),as);
+  const noP=winP(tdAd('newcust'),as), roP=winP(tdAd('retcust'),as);
+  const aovN=noW.v?ncW.v/noW.v:null, aovR=roW.v?rcW.v/roW.v:null;
+  const aovB=(noW.v+roW.v)?(ncW.v+rcW.v)/(noW.v+roW.v):null;
+  const aovNp=noP.v?ncP.v/noP.v:null, aovRp=roP.v?rcP.v/roP.v:null;
+  const aovBp=(noP.v+roP.v)?(ncP.v+rcP.v)/(noP.v+roP.v):null;
   const mons=tdNcRcMonths(W.s,W.e);
-  const nord=mons.reduce((a2,x)=>a2+(x.nord||0),0), rord=mons.reduce((a2,x)=>a2+(x.rord||0),0);
-  const nrev=mons.reduce((a2,x)=>a2+(x.nrev||0),0), rrev=mons.reduce((a2,x)=>a2+(x.rrev||0),0);
-  const aovN=nord?nrev/nord:null, aovR=rord?rrev/rord:null, aovB=(nord+rord)?(nrev+rrev)/(nord+rord):null;
   const totNR=(ncW.v+rcW.v)||1;
-  const mixBar=(lab,v,prev,col,share)=>'<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
-    +'<div style="flex:0 0 118px;font-size:12.5px;font-weight:650;color:var(--ink)">'+lab+'</div>'
+  const mixRow=(lab,rev,revP,ord,ordP,col)=>'<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)">'
+    +'<div style="flex:0 0 104px;font-size:12.5px;font-weight:650;color:var(--ink)">'+lab+'</div>'
     +'<div style="flex:1 1 auto;height:7px;background:var(--surface-3);border-radius:4px;overflow:hidden">'
-      +'<div style="height:100%;width:'+share.toFixed(1)+'%;background:'+col+';opacity:.85;border-radius:4px"></div></div>'
-    +'<span style="flex:0 0 40px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+share.toFixed(0)+'%</span>'
-    +'<div class="num" style="flex:0 0 116px;text-align:right;font-size:12.5px;font-weight:700">'+M(v)+'</div>'
-    +'<div style="flex:0 0 96px;text-align:right">'+tdDelta(v,prev,true,M)+'</div></div>';
+      +'<div style="height:100%;width:'+((rev/totNR)*100).toFixed(1)+'%;background:'+col+';opacity:.85;border-radius:4px"></div></div>'
+    +'<span style="flex:0 0 36px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+((rev/totNR)*100).toFixed(0)+'%</span>'
+    +'<div class="num" style="flex:0 0 112px;text-align:right;font-size:12.5px;font-weight:700">'+M(rev)+'</div>'
+    +'<div style="flex:0 0 92px;text-align:right">'+tdDelta(rev,revP,true,M)+'</div>'
+    +'<div class="num" style="flex:0 0 74px;text-align:right;font-size:12.5px;color:var(--ink-2)">'+Math.round(ord).toLocaleString()+'</div>'
+    +'<div style="flex:0 0 84px;text-align:right">'+tdDelta(ord,ordP,true,v=>Math.round(v).toLocaleString())+'</div></div>';
   const mixHTML='<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
-   +mixBar('First-time',ncW.v,ncP.v,'var(--brand)',(ncW.v/totNR)*100)
-   +mixBar('Returning',rcW.v,rcP.v,'var(--pos)',(rcW.v/totNR)*100)
+   +'<div style="display:flex;gap:12px;padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase">'
+     +'<div style="flex:0 0 104px">Customer</div><div style="flex:1 1 auto"></div><div style="flex:0 0 36px"></div>'
+     +'<div style="flex:0 0 112px;text-align:right">Revenue</div><div style="flex:0 0 92px;text-align:right">vs prior</div>'
+     +'<div style="flex:0 0 74px;text-align:right">Orders</div><div style="flex:0 0 84px;text-align:right">vs prior</div></div>'
+   +mixRow('First-time',ncW.v,ncP.v,noW.v,noP.v,'var(--brand)')
+   +mixRow('Returning',rcW.v,rcP.v,roW.v,roP.v,'var(--pos)')
    +'<div style="display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--line-2)">'
-     +[['AOV first-time',aovN],['AOV returning',aovR],['AOV both',aovB]].map((x,i)=>
-       '<div style="flex:1 1 150px;padding:12px 16px'+(i?';border-left:1px solid var(--line)':'')+'">'
+     +[['AOV first-time',aovN,aovNp],['AOV returning',aovR,aovRp],['AOV both',aovB,aovBp]].map((x,i2)=>
+       '<div style="flex:1 1 150px;padding:12px 16px'+(i2?';border-left:1px solid var(--line)':'')+'">'
        +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.055em;color:var(--ink-4);text-transform:uppercase">'+x[0]+'</div>'
-       +'<div class="num" style="font-size:19px;font-weight:700;color:var(--ink);margin-top:3px">'+(x[1]?M(x[1]):'—')+'</div></div>').join('')
+       +'<div class="num" style="font-size:19px;font-weight:700;color:var(--ink);margin:3px 0 2px">'+(x[1]?M(x[1]):'—')+'</div>'
+       +tdDelta(x[1],x[2],true,M)+'</div>').join('')
    +'</div>'
-   +'<div style="padding:9px 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)">'
-   +'Revenue is day-exact for '+W.s+' → '+W.e+'. <b>The AOV split is MONTH grain</b> — first-time and returning ORDER counts only exist per month, so these read '
-   +(mons.length?('the whole of '+mons.map(x=>x.m).join(', ')):'no complete month in range')
-   +', not your date box. Pro-rating them to days would look more precise than the data is.</div></div>';
+   +'<details style="border-top:1px solid var(--line);background:var(--surface-2)">'
+     +'<summary style="padding:9px 16px;font-size:11.5px;color:var(--ink-3);cursor:pointer;list-style:none">'
+     +'Day-exact for '+W.s+' → '+W.e+' · reconciliation against the monthly ledger ›</summary>'
+     +'<div style="padding:0 16px 12px"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+     +'<tr style="color:var(--ink-4)"><td style="padding:4px 0">Month</td><td style="text-align:right">First-time orders</td>'
+     +'<td style="text-align:right">Returning orders</td><td style="text-align:right">Total</td></tr>'
+     +mons.map(x=>'<tr><td style="padding:4px 0;color:var(--ink-2)">'+x.m+'</td>'
+       +'<td class="num" style="text-align:right">'+(x.nord||0).toLocaleString()+'</td>'
+       +'<td class="num" style="text-align:right">'+(x.rord||0).toLocaleString()+'</td>'
+       +'<td class="num" style="text-align:right;font-weight:700">'+(((x.nord||0)+(x.rord||0))).toLocaleString()+'</td></tr>').join('')
+     +'</table>'
+     +'<div style="font-size:11px;color:var(--ink-3);margin-top:8px;line-height:1.55">The daily series sums to these monthly figures exactly, and their total matches Shopify orders for the same months — which is why the split above can be cut to any date range rather than rounded to a month.</div>'
+     +'</div></details></div>';
 
   /* the funnel: sessions and CVR, day-exact */
   const se=win(tdAd('sessions'),as), seP=winP(tdAd('sessions'),as);
@@ -18585,7 +18609,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-140603';
+const BUILD='20260928-141352';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
