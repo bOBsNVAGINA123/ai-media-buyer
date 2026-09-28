@@ -3627,8 +3627,12 @@ function okCauses(o){
     '<b>'+esc(r.n)+'</b> ('+r.pf+') stopped working — website ROAS '+r.orp.toFixed(1)+'\u00d7 &rarr; '+r.orc.toFixed(1)+'\u00d7 on spend that barely moved ('+M(r.sp)+' &rarr; '+M(r.sc)+'). Judged on website value only, because in-store conversions arrive late.']));
    if((RM.lagged||[]).length)out.rev.push(['note',
     '<b>'+RM.lagged.length+' campaign'+(RM.lagged.length>1?'s look':' looks')+' collapsed but earn most of their value in store</b>, and Meta backfills in-store conversions for about a fortnight — a day holds ~165 of them at three days old and ~600 by two weeks. Do not act on those yet.']);
-   RM.lost.slice(0,2).filter(r=>!RM.died.some(x=>x.n===r.n&&x.pf===r.pf)).forEach(r=>out.rev.push(['bad',
-    '<b>'+esc(r.n)+'</b> ('+r.pf+') fell '+M(Math.abs(r.dv))+' in claimed value, ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
+   RM.lost.slice(0,4).filter(r=>!RM.died.some(x=>x.n===r.n&&x.pf===r.pf)).slice(0,2).forEach(r=>out.rev.push(
+    r.stopped
+     ? ['note','<b>'+esc(r.n)+'</b> ('+r.pf+') is <b>switched off</b> — spend '+M(r.sp)+' &rarr; '+M(r.sc)+', so the '+M(Math.abs(r.dv))+' of claimed value it no longer earns is a decision you made, not a collapse. It is here so the total reconciles, not because it needs fixing.']
+     : r.turnedDown
+     ? ['note','<b>'+esc(r.n)+'</b> ('+r.pf+') was <b>turned down</b> '+(r.spDrop*100).toFixed(0)+'% ('+M(r.sp)+' &rarr; '+M(r.sc)+'). Value fell '+M(Math.abs(r.dv))+' — roughly in line with the budget, so this is the cut working, not the ad failing.']
+     : ['bad','<b>'+esc(r.n)+'</b> ('+r.pf+') fell '+M(Math.abs(r.dv))+' in claimed value on broadly unchanged spend, ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
    RM.won.slice(0,2).forEach(r=>out.rev.push(['good',
     '<b>'+esc(r.n)+'</b> ('+r.pf+') added '+M(r.dv)+', ROAS '+r.rp.toFixed(1)+'\u00d7 &rarr; '+r.rc.toFixed(1)+'\u00d7.']));
   }
@@ -16886,7 +16890,14 @@ function okRevMoves(days){
  const R={};
  E.forEach(e=>{const k=e.pf+'|'+e.n; const r=R[k]||(R[k]={n:e.n,pf:e.pf,sc:0,sp:0,vc:0,vp:0,oc:0,op_:0,fc:0,fp:0});
   r.sc+=e.sc;r.sp+=e.sp;r.vc+=e.vc;r.vp+=e.vp;r.oc+=e.oc;r.op_+=e.op_;r.fc+=e.fc;r.fp+=e.fp;});
+ /* v28 AN AD YOU SWITCHED OFF IS NOT AN AD THAT FAILED. `died` already guards on spend,
+    but `lost` did not, so every campaign that was simply paused arrived in the findings
+    as "claimed value fell to zero" -- which reads as a collapse and is really a decision
+    you made. spDrop classifies it: more than half the spend gone means it was turned off
+    or down, and the card says that instead of raising an alarm about it. */
  const L=Object.values(R).map(r=>({...r,dv:r.vc-r.vp,ds:r.sc-r.sp,
+   spDrop:r.sp>0?(1-(r.sc/r.sp)):0, stopped:(r.sp>=2000&&r.sc<=r.sp*0.12),
+   turnedDown:(r.sp>=2000&&r.sc<r.sp*0.5&&r.sc>r.sp*0.12),
    rc:r.sc?r.vc/r.sc:0, rp:r.sp?r.vp/r.sp:0,
    orc:r.sc?r.oc/r.sc:0, orp:r.sp?r.op_/r.sp:0,          // online-only ROAS, lag-free
    offShare:r.vp?r.fp/r.vp:0}));
@@ -17885,16 +17896,59 @@ function rGOOG(){
      so this is the one place a spend increase can be sized instead of guessed: the share
      of auctions lost to budget, applied to what the campaign already earns, minus the
      spend it would take at the campaign's own current efficiency. */
+  /* ============================================================================
+     v27 · PRICE THE MARGINAL POUND, NOT THE AVERAGE ONE.
+     This model used to value uncapped auctions at the campaign's AVERAGE ROAS. That
+     is the most expensive assumption in media buying: the auctions a budget cap
+     denies you are the ones the bidder ranked LAST, so they convert worse than the
+     ones it already bought. Tested on each campaign's own daily history -- split its
+     days into high-spend and low-spend halves and compare ROAS -- six of eleven
+     campaigns convert WORSE on their bigger days, and the campaign this card was
+     rating P0 was the second worst: Search-DSA-catch-all returns 8.35x on E£587 days
+     and 3.66x on E£1,089 days, a decay of 0.44. Its average of 11.62x cleared the
+     3.83x bar comfortably; its MARGINAL 3.66x does not clear it at all.
+     The uplift is now valued at the campaign's own measured decay, and any campaign
+     whose marginal return falls under break-even is refused rather than recommended.
+     Observational, not experimental: high-spend days may also be high-demand days,
+     which would bias the decay UPWARD, so a decay below 1 is if anything understated.
+     ========================================================================== */
+  const mDecay=a=>{try{
+    const d=a.d; if(!d||!d.sp||!d.pv)return null;
+    const days=[];for(let i=0;i<d.sp.length;i++){const sp=d.sp[i]||0;if(sp>50)days.push({s:sp,v:(d.pv[i]||0)});}
+    if(days.length<20)return null;
+    days.sort((x,y)=>x.s-y.s);
+    const h=Math.floor(days.length/2);
+    const ag=g=>{const S=g.reduce((t,x)=>t+x.s,0),V=g.reduce((t,x)=>t+x.v,0);return S>0?V/S:0;};
+    const lo=ag(days.slice(0,h)), hi=ag(days.slice(-h));
+    if(!lo||!hi)return null;
+    return {lo:lo, hi:hi, k:hi/lo, n:days.length};
+  }catch(e){return null;}};
   ads.forEach(a=>{const q=IS[a.n]||IS[a.id]; if(!q)return;
    const c=slice(a,PW.a,PW.b); if(c.sp<2000||c.pur<3||c.roas<be)return;
    const bl=q.bl||0, isv=q.is||0; if(bl<0.10||isv<=0)return;
-   const upliftV=c.val*(bl/isv), upliftSp=upliftV/c.roas;
+   const dec=mDecay(a);
+   /* the return the NEXT pound should be expected to earn */
+   const mRoas=dec?Math.min(c.roas,dec.hi):c.roas*0.75;   /* no history -> a 25% haircut, never the full average */
+   if(mRoas<be){
+     A.push({p:'P1',money:0,lbl:'DO NOT RAISE',
+      t:'Do NOT raise the budget on '+(a.n||a.id)+' — it is capped, but the next pound loses money',
+      w:'It loses <b>'+(bl*100).toFixed(0)+'% of auctions to budget</b> and its AVERAGE return of '+c.roas.toFixed(2)+'× clears the '+be.toFixed(2)+'× bar. Its MARGINAL return does not: on its own '+(dec?dec.n:0)+' days of history it returns '+(dec?dec.lo.toFixed(2):'—')+'× on low-spend days and <b>'+(dec?dec.hi.toFixed(2):'—')+'× on high-spend days. Uncapping buys the auctions the bidder already ranked last.',
+      ev:'Marginal decay '+(dec?dec.k.toFixed(2):'—')+'× measured on this campaign alone. Fix the bid, the feed or the landing page before the budget.'});
+     return;
+   }
+   const upliftV=c.val*(bl/isv), upliftSp=upliftV/mRoas;
    const gain=upliftV*gpOn-upliftSp; if(gain<=0)return;
    /* P0 is reserved for money that is worth interrupting the week for; a capped campaign
       forfeiting E£10k/month is real but it is not more urgent than a six-figure P1. */
    A.push({p:(gain*mo>=25000)?'P0':'P1',money:gain*mo,lbl:'GP FORGONE / MO',
     t:'Raise the budget on '+(a.n||a.id),
-    w:'It shows for '+(isv*100).toFixed(0)+'% of its auctions and loses <b>'+(bl*100).toFixed(0)+'% to budget</b>, not to rank — the ranking is fine, the money simply runs out. It returns '+c.roas.toFixed(2)+'× against '+be.toFixed(2)+'× break-even, so the auctions it is skipping are profitable ones.',
+    w:'It shows for '+(isv*100).toFixed(0)+'% of its auctions and loses <b>'+(bl*100).toFixed(0)+'% to budget</b>, not to rank — the ranking is fine, the money simply runs out. '
+      +(dec
+        ? ('On its own '+dec.n+' days of history it returns '+dec.lo.toFixed(2)+'× on quiet days and <b>'+dec.hi.toFixed(2)+'× on heavy ones</b>'
+           +(dec.hi>=c.roas
+              ? (', so spending more has NOT cost it efficiency. Priced at the window average of '+mRoas.toFixed(2)+'× — the lower of the two — against '+be.toFixed(2)+'× break-even.')
+              : (', so the next pound is priced at <b>'+mRoas.toFixed(2)+'×</b>, not at its '+c.roas.toFixed(2)+'× average, against '+be.toFixed(2)+'× break-even.')))
+        : ('There is no daily history to measure the decay, so the average of '+c.roas.toFixed(2)+'× is cut by 25% to <b>'+mRoas.toFixed(2)+'×</b> against '+be.toFixed(2)+'× break-even.')),
     ev:'Uncapping to full share is worth roughly '+('E£'+Math.round(upliftV).toLocaleString())+' more revenue for '+('E£'+Math.round(upliftSp).toLocaleString())+' more spend over '+PW.lbl});});
 
   /* Rank-limited is the opposite prescription and gets confused with the above constantly */
@@ -18411,7 +18465,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20260928-134752';
+const BUILD='20260928-135820';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
