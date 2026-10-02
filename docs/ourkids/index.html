@@ -14026,7 +14026,9 @@ function pnlBar(g,extra){const allM=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].
  if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
- ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><span class="chip" onclick="pnlQuick(&quot;mtd&quot;)">MTD</span><span class="chip" onclick="pnlQuick(3)">L3M</span><span class="chip" onclick="pnlQuick(6)">L6M</span><span class="chip" onclick="pnlQuick(13)">L13M</span><span class="chip" onclick="pnlQuick(&quot;all&quot;)">All</span><label>From</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Attr</label>'+attrBar()+(extra||'')+'<div class="sp"></div><span class="cs">Month filter + attribution window apply to every card on this tab.</span></div>';
+ ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><span class="chip" onclick="pnlQuick(&quot;mtd&quot;)">MTD</span><span class="chip" onclick="pnlQuick(3)">L3M</span><span class="chip" onclick="pnlQuick(6)">L6M</span><span class="chip" onclick="pnlQuick(13)">L13M</span><span class="chip" onclick="pnlQuick(&quot;all&quot;)">All</span><label>From</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Show</label><select onchange="pnlCtl(&quot;pnlPct&quot;,this.value)">'
+   +[['both','E\u00a3 + %'],['pct','% only'],['money','E\u00a3 only']].map(o=>'<option value="'+o[0]+'"'+((ST.pnlPct||'both')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')
+   +'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Attr</label>'+attrBar()+(extra||'')+'<div class="sp"></div><span class="cs">Month filter + attribution window apply to every card on this tab.</span></div>';
  g.appendChild(ctl);}
 window.pnlQuick=pnlQuick;
 function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6');g.innerHTML='';
@@ -16211,7 +16213,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const _vsSel='<select onchange="ST[\''+_vsKey+'\']=this.value;rRetail()" onclick="event.stopPropagation()" '
      +'style="font-size:11.5px;padding:3px 7px;border:1px solid var(--bd);border-radius:5px;font-weight:600;margin-left:8px">'
      +_vsOpts.map(o=>'<option value="'+o+'"'+(o===_vs?' selected':'')+'>'+(o===''?'compare with…':('vs '+o))+'</option>').join('')+'</select>';
-   h3+='<div style="font-weight:800;font-size:14px;margin:14px 0 2px;cursor:pointer" onclick="brWater(\''+n.replace(/'/g,'')+'\')" title="Click for the profit waterfall">'+n+' <span style="color:#4a4bd8;font-size:11.5px">&#9662; waterfall</span>'+_vsSel+(LTG[n]?' <span class="cs" style="font-weight:600">&mdash; LTGP per acquired customer E&pound; '+LTG[n].toLocaleString()+' <span title="Lifetime gross profit per customer first acquired at this branch. From the report.pos.order partner crawl (186k offline customers), as of '+((FF.bltg||{}).asOf||'')+'.">&#9432;</span></span>':'')+'</div>'+T(BL,bcols)+(function(){
+   h3+='<div style="font-weight:800;font-size:14px;margin:14px 0 2px;cursor:pointer" onclick="brWater(\''+n.replace(/'/g,'')+'\')" title="Click for the profit waterfall">'+n+' <span style="color:#4a4bd8;font-size:11.5px">&#9662; waterfall</span>'+_vsSel+(LTG[n]?' <span class="cs" style="font-weight:600">&mdash; LTGP per acquired customer E&pound; '+LTG[n].toLocaleString()+' <span title="Lifetime gross profit per customer first acquired at this branch. From the report.pos.order partner crawl (186k offline customers), as of '+((FF.bltg||{}).asOf||'')+'.">&#9432;</span></span>':'')+'</div>'+T(BL,bcols,{rev:prv})+(function(){
      if(!_vs)return '';
      /* both sides on bcols -- the months this block's header claims */
      const A1=sumB(n,bcols);
@@ -16501,7 +16503,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {n:'Company EBITDA est',f:m=>eb(m),fmt:POS,sh:1,b:1,tt:'GP &minus; platform ads &minus; accounting OpEx. Conservative: if agency-billed ad spend is inside the ADV accounts it is counted twice here'},
     {n:'EBITDA, %',f:m=>{const tr2=onNet(m)+retRev(m);return tr2?eb(m)/tr2*100:null;},fmt:PCT,sh:1},
     {n:'MER, x (total rev &divide; platform ads)',f:m=>A[m]&&A[m].s?(onNet(m)+retRev(m))/A[m].s:null,fmt:X,sh:1}];
-   let h4=T(CM,cmb);
+   let h4=T(CM,cmb,{rev:m=>onNet(m)+retRev(m)});
    const ebv=cmb.map(eb);const pos=ebv.filter(v=>v>0).length;
    h4+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+(pos>=cmb.length/2?C.grn:C.red)+'"></span><span>'+pos+' of '+cmb.length+' months EBITDA-positive. Best: '+cmb[ebv.indexOf(Math.max(...ebv))]+' (E&pound; '+money(Math.max(...ebv))+'), worst: '+cmb[ebv.indexOf(Math.min(...ebv))]+' (E&pound; '+money(Math.min(...ebv))+').</span></div></div>';
    pnlCard(g,'ins','Company &mdash; Combined Monthly P&L (ACTUAL OpEx)','Shopify + retail, with the REAL posted expense ledger as OpEx. Months where POS accounting + expenses both exist.',h4);}
@@ -17010,13 +17012,28 @@ function monthScopeNote(){
 }
 function vWin(r){if(!ST.pm0&&!ST.pm1)return null;if(!r.mon)return {r:0,g:0,has:0};let a=0,b=0,n=0;for(const m in r.mon){if(ST.pm0&&m<ST.pm0)continue;if(ST.pm1&&m>ST.pm1)continue;a+=r.mon[m][0];b+=r.mon[m][1];n++;}return {r:a,g:b,has:n};}
 /* v6.4 -- the month-column table renderer, hoisted out of rPnl so the Costs tab can use it too. */
-function MKT(CURM){return (lines,cols)=>{let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+(m===CURM?' <span style="color:#4a4bd8">(MTD)</span>':'')+'</th>').join('')+'</tr>';
+/* v68 COMMON-SIZE for every MKT-built P&L. opt.rev is the denominator and is passed in by
+   the CALL SITE -- never guessed from the line names, because these tables do not share a
+   revenue concept (one is Shopify net revenue, one is company total, one is branch POS) and
+   several have none at all (LTGP per customer, Meta reach, order counts). A table with no
+   opt.rev renders exactly as before. Lines already expressed as a rate, and per-unit or
+   count lines, are skipped: a percentage of revenue would be meaningless on them. */
+const PNL_NOPCT=/orders|customers|\bAOV\b|reach|sessions|units|parcels|people|receipts|tickets|baskets|visits|\brate\b|margin|ROAS|\bMER\b/i;
+function MKT(CURM){return (lines,cols,opt)=>{
+  const RV=opt&&opt.rev;
+  const PP=ST.pnlPct==='money'?'':(ST.pnlPct==='pct'?'pct':'both');let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="min-width:'+Math.max(680,130+cols.length*90)+'px"><tr><th style="text-align:left">Line</th>'+cols.map(m=>'<th>'+m+(m===CURM?' <span style="color:#4a4bd8">(MTD)</span>':'')+'</th>').join('')+'</tr>';
   lines.forEach(L=>{if(L===null){h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:2px;border:0"></td></tr>';return;}
    /* v10.2 section bands: a P&L that runs 30 undifferentiated rows makes the reader rebuild
       its structure from the row names. Bands name the block each row belongs to. */
    if(L.hdr){h+='<tr><td colspan="'+(cols.length+1)+'" style="text-align:left;background:#eef1f8;font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#44506a;padding:6px 8px;border-top:1.5px solid #cfd6e6">'+L.hdr+'</td></tr>';return;}
    const vals=cols.map(L.f);const nums=vals.filter(v=>v!=null&&isFinite(v));const mn=nums.length?Math.min(...nums):0,mx=nums.length?Math.max(...nums):0;
-   h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left'+(L.ind?';padding-left:22px;color:#5a6577':'')+'">'+L.n+(L.q?Q(L.q):'')+'</td>'+vals.map((v,ci)=>'<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+(v==null||!isFinite(v)?'&mdash;':L.fmt(v))+(L.mk?(L.mk(cols[ci])||''):'')+'</td>').join('')+'</tr>';});
+   h+='<tr'+(L.b?' style="font-weight:800;border-top:1.5px solid #dfe3ec"':'')+'><td'+(L.tt?' title="'+L.tt+'"':'')+' style="text-align:left'+(L.ind?';padding-left:22px;color:#5a6577':'')+'">'+L.n+(L.q?Q(L.q):'')+'</td>'+vals.map((v,ci)=>{const txt=(v==null||!isFinite(v))?'&mdash;':L.fmt(v);
+     let out=txt;
+     if(RV&&PP&&v!=null&&isFinite(v)&&!L.np&&!/%/.test(txt)&&!/^[\d.,]+ *x$/.test(txt)&&!PNL_NOPCT.test(L.n)){
+      const b=RV(cols[ci]);
+      if(b&&isFinite(b)){const q=((v/b*100).toFixed(1)+'%').replace('-','\u2212');
+       out=(PP==='pct')?q:(txt+'<span style="display:block;color:#8b94a7;font-size:10px;font-weight:600;margin-top:1px">'+q+'</span>');}}
+     return '<td'+(L.sh?shade(v,mn,mx,L.gd==null?1:L.gd):'')+'>'+out+(L.mk?(L.mk(cols[ci])||''):'')+'</td>';}).join('')+'</tr>';});
   return h+'</table></div>';};}
 /* v6.4 ---------------------------------------------------------------- COSTS & PAYROLL TAB
    Shipping economics and the salary ledger used to render on the Shopify P&L tab, where they
@@ -17811,7 +17828,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
   const BASISNOTE=gpStale()
    ?'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#8e5c34"></span><span><b>Gross profit on this table is corrected in the page, not yet in the feed.</b> The published payload is stamped <code>'+esc((window.O||{}).gpBasis||'none')+'</code> and this page needs <code>'+GP_BASIS_OK+'</code>, so it adds the 8.28%-of-revenue adjustment itself. It switches off automatically on the first sync that stamps the right basis &mdash; it cannot be applied twice.</span></div></div>'
    :'<div class="ins" style="margin-bottom:9px"><div class="row"><span class="dot" style="background:#0f7a55"></span><span><b>Gross profit on this table is on the 4% basis at source</b> &mdash; the collector rebuilds it as revenue &times; 0.96 &minus; cost. Payload basis: <code>'+esc(O.gpBasis||'')+'</code>.</span></div></div>';
-  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',BASISNOTE+T(SL2,mons)+SHCALC);}
+  pnlCard(g,'shop','Shopify &mdash; Monthly P&L (ACTUALS)','Six blocks, each subtracting to its own bold line: demand &rarr; revenue &rarr; product margin &rarr; delivery &rarr; media &rarr; bottom line. Cancelled orders are deducted once, in block 1, and repeated at the bottom as information only. Real team-tagged refunds, real channel margin, real orders and AOV. Noon/Amazon/Homzmart excluded.',BASISNOTE+T(SL2,mons,{rev:NETR})+SHCALC);}
  // ---- 2 · OPEX — ACTUAL FROM ACCOUNTING ----
  if(O.exp&&Object.keys(O.exp).length){
   const GRP=['Payroll & benefits','Rent — branches','Rent — HQ / warehouses / flats','Utilities (elec/water/gas)','Packing & bags','Payment & collection fees','Cargo & transport','Offline advertising & gifts','Platform ads via bills (memo)','Maintenance','Comms & internet','Other OpEx'];
@@ -17835,7 +17852,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    {n:'Ads (acquisition view)',f:m=>ck==='nc'&&A[m]&&A[m].s?-A[m].s:null,fmt:NEG,sh:0,tt:'Full ad spend charged to first-time; months before the ads feed show &mdash;'},
    {n:'Profit contribution',f:m=>R(m)?(ck==='nc'?G(m)-((A[m]&&A[m].s)||0):G(m)):null,fmt:POS,sh:1,b:1},
    {n:ck==='nc'?'aMER, x (new-customer revenue &divide; ad spend)':'Share of Shopify gross, %',f:m=>ck==='nc'?(A[m]&&A[m].s?R(m)/A[m].s:null):(M[m]&&M[m].g?R(m)/M[m].g*100:null),fmt:ck==='nc'?X:PCT,sh:1}];
-  pnlCard(g,'shop',(ck==='nc'?'First-time':'Returning')+' Customers &mdash; Monthly P&L (Odoo ACTUAL)','Real revenue, margin, orders and AOV per customer type from the order-level crawl &mdash; full history, no partial-month garbage, no estimated COGS.',T(CL,cmons));}
+  pnlCard(g,'shop',(ck==='nc'?'First-time':'Returning')+' Customers &mdash; Monthly P&L (Odoo ACTUAL)','Real revenue, margin, orders and AOV per customer type from the order-level crawl &mdash; full history, no partial-month garbage, no estimated COGS.',T(CL,cmons,{rev:m=>R(m)||null}));}
 
 
 }
@@ -21311,7 +21328,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-230607';
+const BUILD='20261003-001523';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
