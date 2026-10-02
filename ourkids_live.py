@@ -2957,6 +2957,53 @@ def pull_pos_customers():
             _out.sort(key=lambda x: -x["ltgp"])
             XTRA["hookV"] = {"rows": _out[:40], "base": round(_base), "asOf": END.isoformat(), "minN": 25}
             log("acquisition-hook brands", len(_out), "brands >=25 first-time buyers")
+            # ---- VENDOR LTV, THE WAY LTV ACTUALLY MEANS SOMETHING ----------------
+            # hookV above is LIFETIME gross profit per acquired customer, which quietly
+            # rewards any vendor whose customers happen to have been acquired earlier --
+            # two years of trading beats one year every time, regardless of quality.
+            # This is the same question asked fairly: for the customers a vendor ACQUIRED,
+            # what is gross profit per customer at a FIXED number of days from each of
+            # their own first purchases, counting a customer at a horizon only once that
+            # horizon has actually elapsed for them. Same shape as the cohort horizons.
+            try:
+                _HZ = [0, 30, 60, 90, 180, 365, 730]
+                _pm2 = {}
+                for _pid, _d, _br, _mg, _oid, _rv, _qy in rows:
+                    _pm2.setdefault(_pid, []).append((_d, _mg))
+                _vc = {}
+                for p in _all:
+                    _f = first.get(p)
+                    _fd = _f[0] if isinstance(_f, (tuple, list)) else _f
+                    if not _fd: continue
+                    _f0 = datetime.date.fromisoformat(_fd)
+                    _age = (END - _f0).days
+                    _vs = PFV.get(p) or ()
+                    if not _vs: continue
+                    _ok = [i for i, H in enumerate(_HZ) if _age >= H]
+                    if not _ok: continue
+                    _acc = [0.0] * len(_HZ)
+                    for _d, _mg in _pm2.get(p, ()):
+                        _dd = (datetime.date.fromisoformat(_d) - _f0).days
+                        if _dd < 0: continue
+                        for i in _ok:
+                            if _dd <= _HZ[i]: _acc[i] += _mg
+                    for _v in _vs:
+                        e = _vc.setdefault(_v, {"n": 0, "g": [0.0] * len(_HZ), "mat": [0] * len(_HZ)})
+                        e["n"] += 1
+                        for i in _ok:
+                            e["mat"][i] += 1; e["g"][i] += _acc[i]
+                _vout = []
+                for _v, e in _vc.items():
+                    if e["n"] < 25: continue
+                    _vout.append({"v": _v, "nm": (VNM.get(_v) or _v)[:40], "n": e["n"],
+                                  "cur": [round(e["g"][i] / e["mat"][i], 1) if e["mat"][i] else None
+                                          for i in range(len(_HZ))],
+                                  "mat": e["mat"]})
+                _vout.sort(key=lambda x: -(x["cur"][3] or x["cur"][1] or 0))
+                XTRA["vcoh"] = {"hz": _HZ, "rows": _vout[:60], "asOf": END.isoformat(), "minN": 25}
+                log("vendor LTV cohorts", len(_vout), "vendors >=25 acquired customers, 7 horizons")
+            except Exception as _e:
+                log("vendor LTV cohorts FAILED", _e)
         except Exception as _e:
             log("hook brands fail", str(_e)[:120])
         log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
@@ -6608,6 +6655,8 @@ def build():
                 return "vendor cash/consignment GP split missing (cashG/consG)"
             # same trap, cohort edition: g0/g60/g730 ride on the heavy cohort pulls, so
             # without a gate line the LTGP horizon columns serve forever from cached prev.
+            if not ((pv.get("vcoh") or {}).get("rows")):
+                return "vendor LTV cohorts missing (vcoh)"
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
@@ -6948,7 +6997,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "touch": safe(pull_ga4_touch) or prev.get("touch") or {},
@@ -6993,7 +7042,7 @@ def build():
                 except Exception: return None
             mine, theirs = _wend(online), _wend(r0)
             if theirs and (not mine or theirs > mine):
-                keep = ["bnrD", "bnr", "bstat", "bcoh", "bun", "cube", "dec", "decB", "hookV",
+                keep = ["bnrD", "bnr", "bstat", "bcoh", "bun", "cube", "dec", "decB", "hookV", "vcoh",
                         "xchan", "mcross", "rtCohPack", "vinv", "bunr", "vmon", "pmon", "vday", "pday"]
                 took = [k for k in keep if r0.get(k)]
                 for k in took: online[k] = r0[k]
