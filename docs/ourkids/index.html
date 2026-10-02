@@ -18866,6 +18866,88 @@ function metaNCRC(g, ads, PW, W, fON, fOFF){
    Spend decomposes on its own identity: spend = impressions x CPM/1000.
    ========================================================================== */
 window.DXN=0;
+/* v59 the products behind a campaign, and the campaigns behind a search term.
+   Both carry SHARE OF THE PARENT'S MOVE, which is the column that turns a list into an
+   explanation: a child that moved E£5k inside a parent that moved E£50k owns 10% of it.
+   Shares can exceed 100% and can be negative -- children routinely pull against each
+   other -- so the column is printed as it falls out rather than normalised to look tidy. */
+window.gProd=function(tr,payload){try{
+ const nx=tr.nextElementSibling;
+ if(nx&&nx.classList&&nx.classList.contains('dxRow')){nx.remove();tr.classList.remove('dxOpen');return;}
+ const host=tr.closest('table');
+ if(host){host.querySelectorAll('tr.dxRow').forEach(x=>x.remove());host.querySelectorAll('tr.dxOpen').forEach(x=>x.classList.remove('dxOpen'));}
+ tr.classList.add('dxOpen');
+ const a=JSON.parse(decodeURIComponent(payload));
+ const GK=O.gkids||{}, kids=(GK.prod||{})[a.c]||[], cov=(GK.cov||{})[a.c]||null;
+ const pk=a.pk||'7';
+ const PR=((GK.pairs||{})[pk])||null;
+ const M5=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const row=document.createElement('tr'); row.className='dxRow';
+ const td=document.createElement('td'); td.colSpan=tr.cells.length;
+ td.style.cssText='padding:0 10px 12px;background:var(--surface-2)';
+ const rows=kids.map(k=>{const c=k.p[pk][0],p2=k.p[pk][1];
+   return {n:k.n,id:k.id,sp:c[0],im:c[1],ck:c[2],cn:c[3],cv:c[4],
+     psp:p2[0],pcv:p2[4],pcn:p2[3], d:c[4]-p2[4], ds:c[0]-p2[0]};})
+  .filter(x=>x.sp>0||x.psp>0)
+  .sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)).slice(0,25);
+ const TD8='padding:4px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11px';
+ const covPct=cov?(pk==='7'?(cov.sp7?cov.kept7/cov.sp7*100:0):(cov.sp30?cov.kept30/cov.sp30*100:0)):null;
+ td.innerHTML='<div style="padding-top:9px">'
+  +'<div style="font-size:12.5px;font-weight:700;color:var(--ink)">Products inside '+esc(a.c)+'</div>'
+  +'<div style="font-size:11px;color:var(--ink-3);margin:1px 0 7px">'
+    +(PR?('last '+pk+' days, '+PR.cur[0]+' → '+PR.cur[1]+', against '+PR.prev[0]+' → '+PR.prev[1]):'')
+    +(cov?(' · showing '+rows.length+' of '+cov.n+' products'):'')+'</div>'
+  +(rows.length?('<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse">'
+   +'<thead><tr><th style="'+TD8+';text-align:left">Product</th><th style="'+TD8+'">Spend</th><th style="'+TD8+'">Value</th>'
+   +'<th style="'+TD8+'">Δ value</th><th style="'+TD8+'">Share of the campaign move</th><th style="'+TD8+'">Conv</th></tr></thead><tbody>'
+   +rows.map(x=>{const sh=a.dV?(x.d/a.dV*100):null;
+     return '<tr><td style="'+TD8+';text-align:left;max-width:300px;white-space:normal">'+esc(String(x.n||x.id).slice(0,64))+'</td>'
+      +'<td style="'+TD8+'">'+M5(x.sp)+'</td>'
+      +'<td style="'+TD8+'">'+M5(x.cv)+'</td>'
+      +'<td style="'+TD8+';font-weight:800;color:'+(x.d>=0?'var(--pos)':'var(--neg)')+'">'+(x.d>=0?'+':'−')+M5(Math.abs(x.d))+'</td>'
+      +'<td style="'+TD8+';font-weight:700;color:'+(sh==null?'var(--ink-3)':(sh>=0?'var(--pos)':'var(--neg)'))+'">'+(sh==null?'—':((sh>=0?'+':'−')+Math.abs(sh).toFixed(1)+'%'))+'</td>'
+      +'<td style="'+TD8+'">'+(x.cn||0).toFixed(1)+'</td></tr>';}).join('')
+   +'</tbody></table></div>'):'<div style="font-size:11.5px;color:var(--ink-3);padding:4px 0">No product rows for this campaign — Search and DSA campaigns have no product grain.</div>')
+  +(cov?('<div style="margin-top:9px;padding:10px 12px;border-radius:var(--r-m);background:'+(covPct!=null&&covPct<50?'var(--warn-wash)':'var(--surface)')+';border:1px solid '+(covPct!=null&&covPct<50?'var(--warn-line)':'var(--line)')+';font-size:11px;line-height:1.55;color:var(--ink-2)">'
+    +'<b style="color:'+(covPct!=null&&covPct<50?'var(--warn)':'var(--ink)')+'">These '+cov.kept+' products carry '+(covPct!=null?covPct.toFixed(0):'—')+'% of this campaign&rsquo;s spend</b>, out of '+cov.n+' that ran. '
+    +(covPct!=null&&covPct<50?'<b>That is under half</b>, so this list is a sample of the move and not the explanation of it — the tail is long and flat, and most of the change sits in products too small to list individually. ':'')
+    +'<b>Share of the campaign move</b> is each product&rsquo;s own value change over the campaign&rsquo;s. Shares can pass 100% or go negative, because products pull against each other; they are shown as they fall out rather than scaled to add up.</div>'):'')
+  +'</div>';
+ row.appendChild(td); tr.parentNode.insertBefore(row,tr.nextSibling);
+}catch(e){}};
+/* the campaigns a search term actually fired in */
+window.gTermCmp=function(tr,term,dV){try{
+ const nx=tr.nextElementSibling;
+ if(nx&&nx.classList&&nx.classList.contains('dxRow')){nx.remove();tr.classList.remove('dxOpen');return;}
+ const host=tr.closest('table');
+ if(host){host.querySelectorAll('tr.dxRow').forEach(x=>x.remove());host.querySelectorAll('tr.dxOpen').forEach(x=>x.classList.remove('dxOpen'));}
+ tr.classList.add('dxOpen');
+ const t=decodeURIComponent(term);
+ const GK=O.gkids||{}, kids=(GK.term||{})[t]||[];
+ const sp2=Math.abs(span(ST.s,ST.e)||7); const pk=sp2>=16?'30':'7';
+ const PR=((GK.pairs||{})[pk])||null;
+ const M5=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const row=document.createElement('tr'); row.className='dxRow';
+ const td=document.createElement('td'); td.colSpan=tr.cells.length;
+ td.style.cssText='padding:0 10px 12px;background:var(--surface-2)';
+ const TD9='padding:4px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11px';
+ const rows=kids.map(k=>{const c=k.p[pk][0],p2=k.p[pk][1];
+   return {n:k.n,sp:c[0],cv:c[4],cn:c[3],psp:p2[0],pcv:p2[4],d:c[4]-p2[4]};})
+   .filter(x=>x.sp>0||x.psp>0).sort((x,y)=>y.cv-x.cv);
+ td.innerHTML='<div style="padding-top:9px"><div style="font-size:12.5px;font-weight:700;color:var(--ink)">“'+esc(t)+'” fired in '+rows.length+' campaign'+(rows.length===1?'':'s')+'</div>'
+  +'<div style="font-size:11px;color:var(--ink-3);margin:1px 0 7px">'+(PR?('last '+pk+' days, '+PR.cur[0]+' → '+PR.cur[1]+', against '+PR.prev[0]+' → '+PR.prev[1]):'')+'</div>'
+  +(rows.length?('<table style="width:100%;border-collapse:collapse">'
+   +'<thead><tr><th style="'+TD9+';text-align:left">Campaign</th><th style="'+TD9+'">Spend</th><th style="'+TD9+'">Value</th><th style="'+TD9+'">Δ value</th><th style="'+TD9+'">Share of the term move</th><th style="'+TD9+'">ROAS</th></tr></thead><tbody>'
+   +rows.map(x=>{const sh=dV?(x.d/dV*100):null;
+     return '<tr><td style="'+TD9+';text-align:left">'+esc(String(x.n).slice(0,46))+'</td>'
+      +'<td style="'+TD9+'">'+M5(x.sp)+'</td><td style="'+TD9+'">'+M5(x.cv)+'</td>'
+      +'<td style="'+TD9+';font-weight:800;color:'+(x.d>=0?'var(--pos)':'var(--neg)')+'">'+(x.d>=0?'+':'−')+M5(Math.abs(x.d))+'</td>'
+      +'<td style="'+TD9+';font-weight:700;color:'+(sh==null?'var(--ink-3)':(sh>=0?'var(--pos)':'var(--neg)'))+'">'+(sh==null?'—':((sh>=0?'+':'−')+Math.abs(sh).toFixed(1)+'%'))+'</td>'
+      +'<td style="'+TD9+'">'+(x.sp?(x.cv/x.sp).toFixed(2)+'×':'—')+'</td></tr>';}).join('')+'</tbody></table>'):
+   '<div style="font-size:11.5px;color:var(--ink-3)">This term is outside the 80 biggest by spend, which is as far as the campaign split is shipped.</div>')
+  +'<div style="margin-top:9px;font-size:11px;color:var(--ink-3);line-height:1.55">A term can fire in several campaigns at once, which is why the same words can be cheap in one and expensive in another — and why a term-level average hides the campaign that is actually paying for it. <b>This split is a fixed '+pk+'-day pair</b>, picked to match your range, not your exact dates.</div></div>';
+ row.appendChild(td); tr.parentNode.insertBefore(row,tr.nextSibling);
+}catch(e){}};
 window.dxToggle=function(tr,payload){try{
  const nx=tr.nextElementSibling;
  if(nx&&nx.classList&&nx.classList.contains('dxRow')){nx.remove();tr.classList.remove('dxOpen');return;}
@@ -19709,16 +19791,19 @@ function rGOOG(){
   const TD5='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
   let h='<div style="overflow:auto;max-height:560px"><table class="bt" data-nosort style="width:100%">'
    +'<tr><th style="text-align:left">Search term</th><th style="text-align:right">Spend</th><th style="text-align:right">Value</th>'
-   +'<th style="text-align:right">Δ value</th><th style="text-align:right">Impr</th><th style="text-align:right">CTR</th>'
+   +'<th style="text-align:right">Δ value</th><th style="text-align:right">Share of the 25</th><th style="text-align:right">Impr</th><th style="text-align:right">CTR</th>'
    +'<th style="text-align:right">CVR</th><th style="text-align:right">AOV</th><th style="text-align:left">What moved it</th></tr>';
   const ar=(c,pv,good,f)=>{if(!pv)return '<div style="font-size:10px;color:var(--ink-3)">—</div>';
    const d=(c/pv-1)*100, up=d>=0;
    return '<div style="font-size:10px;font-weight:700;color:'+((up===!!good)?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
+  const _dAllT=rows.reduce((t,r)=>t+(r.live?r.d:0),0);
   rows.forEach(r=>{
-   h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink);max-width:220px;white-space:normal">'+esc(String(r.t).slice(0,46))+'</td>'
+   const _k=encodeURIComponent(String(r.t));
+   h+='<tr class="dxable" onclick="gTermCmp(this,\''+_k+'\','+(r.live?r.d:0)+')"><td style="text-align:left;font-weight:620;color:var(--ink);max-width:220px;white-space:normal"><span class="dxCar">▸</span> '+esc(String(r.t).slice(0,46))+'</td>'
     +'<td style="'+TD5+'">'+M(r.sp)+'</td>'
     +'<td style="'+TD5+'">'+M(r.cv)+'</td>'
     +'<td style="'+TD5+';font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.live?((r.d>=0?'+':'−')+M(Math.abs(r.d))):'new')+'</td>'
+    +'<td style="'+TD5+';font-weight:700;color:'+((!r.live||!_dAllT)?'var(--ink-3)':((r.d/_dAllT)>=0?'var(--pos)':'var(--neg)'))+'">'+((!r.live||!_dAllT)?'—':(((r.d/_dAllT)>=0?'+':'−')+Math.abs(r.d/_dAllT*100).toFixed(1)+'%'))+'</td>'
     +'<td style="'+TD5+'">'+N(r.im)+ar(r.im,r.imL,true)+'</td>'
     +'<td style="'+TD5+'">'+(r.ctr*100).toFixed(2)+'%'+ar(r.ctr,r.ctrL,true)+'</td>'
     +'<td style="'+TD5+'">'+(r.cvr*100).toFixed(2)+'%'+ar(r.cvr,r.cvrL,true)+'</td>'
@@ -19733,7 +19818,9 @@ function rGOOG(){
    +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
    +'<b style="color:var(--warn)">This card does NOT read the date box.</b> Search terms arrive with their own window &mdash; <b>'+((S.win||[])[0]||'—')+' → '+((S.win||[])[1]||'—')+'</b>, pulled '+(S.pulled||'—')+' &mdash; and the prior-period fields are cut to match it. Everything else on this tab reads your range; this one cannot, so it says so instead of relabelling itself. '
    +'<b>Spend is current-window only</b> in that feed, so the spend column carries no comparison and the money move is not decomposed &mdash; only the value move is. '
-   +'Value = impressions × CTR × CVR × AOV, each factor valued with the ones before it already moved, so the four sum to the change exactly.</div>';
+   +'Value = impressions × CTR × CVR × AOV, each factor valued with the ones before it already moved, so the four sum to the change exactly. '
+   +'<b>Click any term</b> to see which campaigns it actually fired in and what share of its move each one carries — the same words can be cheap in one campaign and expensive in another, and a term-level average hides that. '
+   +'<b>Share of the 25</b> is this term\u2019s move over the net move of the 25 shown, not of the account; shares can exceed 100% or go negative because terms pull against each other.</div>';
   pnlCard(g,'google','Search terms &mdash; what actually moved each one'
    +INFO('From searchIntel: current and prior period on impressions, clicks, conversions and value. Decomposed per term on the same identity as the account.'),
    'The 25 terms whose claimed value moved most, each split into the one factor that moved it.',h);
@@ -19962,22 +20049,41 @@ function rGOOG(){
  const be=gpOn>0?1/gpOn:GPBE();       /* v12.8 was a hand-typed 3.76 */
  const cr=ads.map(a=>{const c=agg(PW.a,PW.b,[a]),p=PW.ok?agg(PW.pa,PW.pb,[a]):agg(0,-1,[a]);
    return {a,c,p,gp:c.val*gpOn-c.sp};}).filter(x=>x.c.sp>0).sort((x,y)=>y.c.sp-x.c.sp);
+ /* v59 EVERY METRIC GETS ITS PRIOR, AND THE ROW OPENS INTO ITS PRODUCTS.
+    Spend carried a vs-prior and value, conversions, cost/conv and after-ad-cost did not,
+    so four of the six numbers were levels with nothing to read them against. Each now
+    carries the same comparison the window header already promises. The row also opens
+    into the products behind it, with each product's SHARE OF THE CAMPAIGN'S OWN MOVE --
+    and the coverage of that list printed, because the product tail is long and flat
+    (one campaign ran 3,296 products in a week). */
+ const dAll=cr.reduce((t,x)=>t+(x.c.val-(x.p?x.p.val:0)),0);
+ const vsP=(c,p2,f,good)=>{if(!p2||!(p2>0))return '<div style="font-size:10.5px;color:#5f6a7d">no prior</div>';
+  const d=(c/p2-1)*100, up=d>=0;
+  return '<div style="font-size:10.5px;font-weight:700;color:'+((up===!!good)?'#0f6e56':'#a3271a')+'">'
+   +(up?'▲':'▼')+Math.abs(d).toFixed(0)+'% · was '+f(p2)+'</div>';};
+ const GK=O.gkids||{};
+ const pairKey=(function(){const sp=Math.abs(span(ST.s,ST.e)||7);return sp>=16?'30':'7';})();
  let cb='';
  cr.forEach(x=>{
   const v=x.c.roas>=be?['earning','#0f6e56']:(x.c.pur<5?['too little data','#5f6a7d']:['below breakeven','#a3271a']);
-  cb+='<tr><td style="'+TD+';text-align:left"><b>'+esc(x.a.n||'')+'</b>'
+  const kids=(GK.prod||{})[x.a.n]||null;
+  const cov=(GK.cov||{})[x.a.n]||null;
+  const dV=x.c.val-(x.p?x.p.val:0);
+  const payload=kids?encodeURIComponent(JSON.stringify({c:x.a.n,pk:pairKey,dV:dV})):'';
+  cb+='<tr'+(kids?' class="dxable" onclick="gProd(this,\''+payload+'\')"':'')+'><td style="'+TD+';text-align:left">'+(kids?'<span class="dxCar">▸</span> ':'')+'<b>'+esc(x.a.n||'')+'</b>'
    +'<div style="font-size:10.5px;color:#5f6a7d">'+esc(x.a.cmp||'')+(x.a.st?' · '+esc(String(x.a.st).toLowerCase()):'')+'</div></td>'
    +'<td style="'+TD+'">'+M(x.c.sp)+'<div style="font-size:10.5px;color:#5f6a7d">'+sg(pc(x.c.sp,x.p.sp))+'</div></td>'
-   +'<td style="'+TD+'">'+M(x.c.val)+'</td>'
+   +'<td style="'+TD+'">'+M(x.c.val)+vsP(x.c.val,x.p?x.p.val:0,M,true)+'</td>'
    +'<td style="'+TD+';font-weight:800">'+x.c.roas.toFixed(2)+'×'
      +'<div style="font-size:10.5px;font-weight:600;color:'+(x.p.sp>0&&x.p.roas>0?(x.c.roas>=x.p.roas?'#0f6e56':'#a3271a'):'#5f6a7d')+'">'
      +(x.p.sp>0&&x.p.roas>0?(sg(pc(x.c.roas,x.p.roas))+' · was '+x.p.roas.toFixed(2)+'×'):'no prior period')+'</div></td>'
    +'<td style="'+TD+'">'+(function(){const q=IS[x.a.n];if(!q||q.is==null)return '<span style="color:var(--ink-3)">—</span>';
      const b=Math.round((q.bl||0)*100),r=Math.round((q.rl||0)*100);
      return Math.round(q.is*100)+'%<div style="font-size:10.5px;color:#5f6a7d">'+(b>=r?b+'% lost on budget':r+'% lost on rank')+'</div>';})()+'</td>'
-   +'<td style="'+TD+'">'+N(x.c.pur)+'</td>'
-   +'<td style="'+TD+'">'+(x.c.cpa?M(x.c.cpa):'—')+'</td>'
-   +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+(x.gp>=0?'+':'−')+M(Math.abs(x.gp))+'</td>'
+   +'<td style="'+TD+'">'+N(x.c.pur)+vsP(x.c.pur,x.p?x.p.pur:0,N,true)+'</td>'
+   +'<td style="'+TD+'">'+(x.c.cpa?M(x.c.cpa):'—')+vsP(x.c.cpa,x.p?x.p.cpa:0,M,false)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(x.gp>=0?'#0f6e56':'#a3271a')+'">'+(x.gp>=0?'+':'−')+M(Math.abs(x.gp))
+     +(x.p&&x.p.sp>0?('<div style="font-size:10.5px;font-weight:600;color:#5f6a7d">was '+((x.p.val*gpOn-x.p.sp)>=0?'+':'−')+M(Math.abs(x.p.val*gpOn-x.p.sp))+'</div>'):'')+'</td>'
    +'<td style="'+TD+';text-align:left"><b style="color:'+v[1]+';font-size:11.5px">'+v[0]+'</b></td></tr>';});
  pnlCard(g,'google','Every campaign on its own money'+INFO('The selected range per campaign, with gross profit left after the ad is paid for at your real online margin.'),
   '<b>'+PW.lbl+'</b>'+(PW.ok?(' against the '+PW.pn+' days before it, '+PW.plbl+'.'):' — no prior period inside the 60-day Google feed, so the ROAS move is blank.')
@@ -20668,7 +20774,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-184550';
+const BUILD='20261002-185806';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
