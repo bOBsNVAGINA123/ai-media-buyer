@@ -1135,9 +1135,18 @@ window.inkc=function(hex,bg){try{
 }catch(e){return hex;}};
 function stickMeasure(){try{
   const g=document.querySelector('.tgroups'), t=document.getElementById('tabrow');
-  const cl=(v,d)=>(!v||!isFinite(v)||v<20||v>140)?d:v;   /* a sane header is 20-140px */
-  const gh=cl(g?Math.round(g.getBoundingClientRect().height):0,44);
-  const th=cl(t?Math.round(t.getBoundingClientRect().height):0,40);
+  /* v71 THE CLAMP WAS THE BUG, AGAIN. The old bound was 20-140px, but .tgroups is 149px
+     the moment the tab chips wrap to more than one row -- which is the normal state at
+     anything under a very wide window. A real reading of 149 was therefore thrown away and
+     replaced by the 44px default, so every sticky element below the tab group sat ~105px
+     too high and floated over the cards. A clamp that silently substitutes a constant turns
+     a correct measurement into a permanent wrong answer; it now only rejects the genuinely
+     impossible, and says so out loud when it fires. */
+  const cl=(v,d,lbl)=>{if(!v||!isFinite(v)||v<20||v>600){
+    if(v)console.warn('stickMeasure: implausible '+lbl+' height '+v+'px, falling back to '+d);
+    return d;} return v;};
+  const gh=cl(g?Math.round(g.getBoundingClientRect().height):0,44,'.tgroups');
+  const th=cl(t?Math.round(t.getBoundingClientRect().height):0,40,'#tabrow');
   const r=document.documentElement.style;
   r.setProperty('--stick-h',gh+'px');
   r.setProperty('--stick-h2',(gh+th+4)+'px');
@@ -1145,8 +1154,10 @@ function stickMeasure(){try{
      scrollIntoView({block:'start'}), which puts the target at viewport y=0 -- which is
      behind 230px of sticky chrome, so the card's own title landed underneath the filter
      bar and the jump looked like it had gone to the wrong place. */
-  const b=document.querySelector('.bar');
-  const bh=(function(v){return (!v||!isFinite(v)||v<20||v>220)?93:v;})(b?Math.round(b.getBoundingClientRect().height):0);
+  /* the first .bar on the page is often a hidden one (height 0), which clamped to the
+     default every time; take the first VISIBLE bar instead. */
+  const b=[...document.querySelectorAll('.bar')].find(e=>e.getBoundingClientRect().height>0)||null;
+  const bh=cl(b?Math.round(b.getBoundingClientRect().height):0,93,'.bar');
   r.setProperty('--stick-all',(gh+th+4+bh)+'px');
 }catch(e){}}
 /* v46 · THE STICKY OFFSETS WERE MEASURED BEHIND THE PASSWORD GATE AND NEVER AGAIN.
@@ -21438,7 +21449,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261003-014843';
+const BUILD='20261003-015220';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
