@@ -3559,6 +3559,120 @@ def pull_gads_grain():
     return res
 
 
+def pull_gads_children():
+    """v59 WHAT SITS INSIDE A ROW: the campaigns behind a search term, and the products
+    behind a campaign -- so both tables expand instead of dead-ending.
+
+    NOT daily, and the reason is measured rather than assumed. Over 30 days the raw grain
+    is 35,823 search-term rows and 77,809 shopping rows; daily per pair would dominate the
+    payload. Two aggregated window PAIRS instead -- last 7 against the 7 before, and last 30
+    against the 30 before -- and the card stamps which pair it used. A fixed window that
+    says so beats a daily one that never ships.
+
+    The honesty problem this pull has to carry: the product tail is enormous and flat.
+    'Shopping - All Products' ran 3,296 products in one week and its top 40 by spend cover
+    13.4% of it. So every campaign ships its own coverage number and the card prints it; a
+    13% slice must never be presented as the explanation of a 100% move.
+    """
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not (dev and cid): return {}
+    try: at, hd = _gads_hdr()
+    except Exception as e:
+        log("gads children :: token fail", str(e)[:120]); return {}
+    if not at: return {}
+    base = "https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid)
+    def q(gql):
+        try:
+            req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=180) as r: d = json.loads(r.read())
+            rows = []
+            for b2 in (d if isinstance(d, list) else [d]): rows += b2.get("results", [])
+            return rows
+        except Exception as e:
+            log("gads children :: query fail ::", str(e)[:160]); return []
+    def win(n, back=0):
+        hi = END - datetime.timedelta(days=back * n)
+        lo = hi - datetime.timedelta(days=n - 1)
+        return lo.isoformat(), hi.isoformat()
+    PAIRS = {"7": (win(7, 0), win(7, 1)), "30": (win(30, 0), win(30, 1))}
+    lo30, hi30 = win(30, 1)[0], win(30, 0)[1]      # one pull covers both pairs
+    def metrics(r):
+        m = r.get("metrics") or {}
+        return (round(float(m.get("costMicros") or 0) / 1e6),
+                int(float(m.get("impressions") or 0)),
+                int(float(m.get("clicks") or 0)),
+                round(float(m.get("conversions") or 0), 2),
+                round(float(m.get("conversionsValue") or 0)))
+    def bucket(rows, keyfn):
+        """key -> {pairKey: [cur5, prev5]}"""
+        out = {}
+        for r in rows:
+            ds = ((r.get("segments") or {}).get("date") or "")
+            if not ds: continue
+            k = keyfn(r)
+            if k is None: continue
+            e = out.setdefault(k, {p: [[0] * 5, [0] * 5] for p in PAIRS})
+            mv = metrics(r)
+            for pk, (cw, pw) in PAIRS.items():
+                slot = 0 if (cw[0] <= ds <= cw[1]) else (1 if (pw[0] <= ds <= pw[1]) else None)
+                if slot is None: continue
+                for i in range(5): e[pk][slot][i] += mv[i]
+        return out
+    res = {"pairs": {k: {"cur": list(v[0]), "prev": list(v[1])} for k, v in PAIRS.items()},
+           "term": {}, "prod": {}, "cov": {}, "err": ""}
+    try:
+        # ---- search term -> campaigns ----
+        st = q("SELECT search_term_view.search_term, campaign.name, segments.date, metrics.impressions, "
+               "metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value "
+               "FROM search_term_view WHERE segments.date BETWEEN '%s' AND '%s' AND metrics.cost_micros > 0"
+               % (lo30, hi30))
+        b = bucket(st, lambda r: (((r.get("searchTermView") or {}).get("searchTerm") or "") + "\u0000"
+                                  + ((r.get("campaign") or {}).get("name") or "")))
+        byterm = {}
+        for k, v in b.items():
+            t, c = k.split("\u0000", 1)
+            byterm.setdefault(t, []).append({"n": c, "p": v})
+        rank = sorted(byterm.items(), key=lambda kv: -sum(x["p"]["30"][0][0] for x in kv[1]))[:80]
+        res["term"] = {t: sorted(rows, key=lambda x: -x["p"]["30"][0][0])[:6] for t, rows in rank}
+        # ---- campaign -> products ----
+        sp = q("SELECT campaign.name, segments.product_item_id, segments.product_title, segments.date, "
+               "metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, "
+               "metrics.conversions_value FROM shopping_performance_view WHERE segments.date BETWEEN "
+               "'%s' AND '%s' AND metrics.cost_micros > 0" % (lo30, hi30))
+        titles = {}
+        for r in sp:
+            sg = r.get("segments") or {}
+            if sg.get("productItemId"): titles[sg["productItemId"]] = sg.get("productTitle") or ""
+        b2 = bucket(sp, lambda r: (((r.get("campaign") or {}).get("name") or "") + "\u0000"
+                                   + ((r.get("segments") or {}).get("productItemId") or "")))
+        bycmp = {}
+        for k, v in b2.items():
+            c, pid = k.split("\u0000", 1)
+            bycmp.setdefault(c, []).append({"id": pid, "n": titles.get(pid, pid)[:70], "p": v})
+        for c, rows in bycmp.items():
+            tot7 = sum(x["p"]["7"][0][0] for x in rows) or 0
+            tot30 = sum(x["p"]["30"][0][0] for x in rows) or 0
+            # Ranking by the value MOVE alone kept 50 products carrying 3.4% of one
+            # campaign's spend -- the biggest movers are not the biggest spenders. Keep the
+            # union of both rankings so the list answers "what changed" AND "where the money
+            # is", and report the coverage either way.
+            by_move = sorted(rows, key=lambda x: -abs(x["p"]["30"][0][4] - x["p"]["30"][1][4]))[:35]
+            by_spend = sorted(rows, key=lambda x: -x["p"]["30"][0][0])[:35]
+            seen = set(); keep = []
+            for x in by_spend + by_move:
+                if x["id"] in seen: continue
+                seen.add(x["id"]); keep.append(x)
+            res["prod"][c] = keep
+            res["cov"][c] = {"n": len(rows), "kept": len(keep),
+                             "sp7": tot7, "sp30": tot30,
+                             "kept7": sum(x["p"]["7"][0][0] for x in keep),
+                             "kept30": sum(x["p"]["30"][0][0] for x in keep)}
+        log("gads children ::", len(res["term"]), "terms ::", len(res["prod"]), "campaigns with products")
+    except Exception as e:
+        res["err"] = str(e)[:160]; log("gads children failed", res["err"])
+    return res
+
+
 def pull_google_attr():
     """v9.0: Google revenue attribution at campaign, asset-group (PMax) and ad level,
     last 60d totals from the Google Ads API. Conversion value as Google reports it."""
@@ -6655,6 +6769,7 @@ def build():
     # They now run AFTER the payload is on disk, under a wall-clock budget.
     gattr = safe(pull_google_attr) or {}
     ggrain = safe(pull_gads_grain) or (prev.get("ggrain") or {})
+    gkids = safe(pull_gads_children) or (prev.get("gkids") or {})
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
@@ -6818,6 +6933,7 @@ def build():
                           XTRA.get("cube") or {}, prev.get("cube") or {}),
               "gattr": gattr or prev.get("gattr") or {},
               "ggrain": ggrain,
+              "gkids": gkids,
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
