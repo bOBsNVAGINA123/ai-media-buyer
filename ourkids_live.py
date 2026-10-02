@@ -1674,19 +1674,24 @@ def pull_cohorts():
         for pid, f in first.items():
             m = f[:7]
             if m < "2024-08": continue
-            c = coh.setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "r90": 0.0, "r365": 0.0})
+            c = coh.setdefault(m, {"size": 0, "g0": 0.0, "g30": 0.0, "g60": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "g730": 0.0, "r0": 0.0, "r90": 0.0, "r365": 0.0})
             c["size"] += 1
             f0 = datetime.date.fromisoformat(f)
             for d, amt, mg in by_p[pid]:
                 dd = (datetime.date.fromisoformat(d) - f0).days
                 if dd < 0: continue
+                # dd<=0 is the acquisition DAY, i.e. what the first purchase itself earned
+                if dd <= 0: c["g0"] += mg; c["r0"] += amt
                 if dd <= 30: c["g30"] += mg
+                if dd <= 60: c["g60"] += mg
                 if dd <= 90: c["g90"] += mg; c["r90"] += amt
                 if dd <= 180: c["g180"] += mg
                 if dd <= 365: c["g365"] += mg; c["r365"] += amt
-        out = [{"m": m, "size": c["size"], "g30": round(c["g30"]), "g90": round(c["g90"]),
-                "g180": round(c["g180"]), "g365": round(c["g365"]),
-                "r90": round(c["r90"]), "r365": round(c["r365"])} for m, c in sorted(coh.items())]
+                if dd <= 730: c["g730"] += mg
+        out = [{"m": m, "size": c["size"], "g0": round(c["g0"]), "g30": round(c["g30"]),
+                "g60": round(c["g60"]), "g90": round(c["g90"]),
+                "g180": round(c["g180"]), "g365": round(c["g365"]), "g730": round(c["g730"]),
+                "r0": round(c["r0"]), "r90": round(c["r90"]), "r365": round(c["r365"])} for m, c in sorted(coh.items())]
         lagH = [0] * 15
         for pid, lst in by_p.items():
             dl = sorted({d for d, _a, _m in lst})
@@ -2858,16 +2863,19 @@ def pull_pos_customers():
         bcoh = {}
         for pid, (fd, fb) in first.items():
             m = fd[:7]
-            c2 = bcoh.setdefault(fb, {}).setdefault(m, {"size": 0, "g30": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "r90": 0.0, "r365": 0.0})
+            c2 = bcoh.setdefault(fb, {}).setdefault(m, {"size": 0, "g0": 0.0, "g30": 0.0, "g60": 0.0, "g90": 0.0, "g180": 0.0, "g365": 0.0, "g730": 0.0, "r0": 0.0, "r90": 0.0, "r365": 0.0})
             c2["size"] += 1
             f0 = datetime.date.fromisoformat(fd)
             for d, mg, rv in pm_[pid]:
                 dd = (datetime.date.fromisoformat(d) - f0).days
                 if dd < 0: continue
+                if dd <= 0: c2["g0"] += mg; c2["r0"] += rv
                 if dd <= 30: c2["g30"] += mg
+                if dd <= 60: c2["g60"] += mg
                 if dd <= 90: c2["g90"] += mg; c2["r90"] += rv
                 if dd <= 180: c2["g180"] += mg
                 if dd <= 365: c2["g365"] += mg; c2["r365"] += rv
+                if dd <= 730: c2["g730"] += mg
         for b2 in bcoh:
             for m in bcoh[b2]: bcoh[b2][m] = {k: (round(v) if isinstance(v, float) else v) for k, v in bcoh[b2][m].items()}
         cntX = {}
@@ -6598,6 +6606,17 @@ def build():
             _vr = (pv.get("vend") or {}).get("rows") or []
             if _vr and not any(r.get("consG") is not None for r in _vr):
                 return "vendor cash/consignment GP split missing (cashG/consG)"
+            # same trap, cohort edition: g0/g60/g730 ride on the heavy cohort pulls, so
+            # without a gate line the LTGP horizon columns serve forever from cached prev.
+            _ch = pv.get("coh") or []
+            if _ch and not any(c.get("g0") is not None for c in _ch):
+                return "cohort LTGP horizons missing (g0/g60/g730)"
+            _bc = pv.get("bcoh") or {}
+            for _b in _bc.values():
+                _mm = list(_b.values()) if isinstance(_b, dict) else []
+                if _mm and not any(m.get("g0") is not None for m in _mm):
+                    return "branch cohort LTGP horizons missing (g0/g60/g730)"
+                break
         except Exception:
             pass
         return None
