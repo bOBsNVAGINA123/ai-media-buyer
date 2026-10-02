@@ -17388,17 +17388,43 @@ window.vSkus=function(tr,code){try{
  if(!P.length){
   cell.innerHTML='<div style="padding:10px 4px;font-size:11.5px;color:var(--ink-3)">No product-level rows for this supplier in the product feed. The feed carries the '+(((O.prodv||{}).rows)||[]).length+' products with enough trade to rank; a supplier below that floor shows here as empty rather than as zero.</div>';
  }else{
-  P.sort((a,b)=>((b.g||0)+(b.ogp||0))-((a.g||0)+(a.ogp||0)));
+  /* v57 THE DRAWER NOW MOVES. It listed levels -- revenue, GP, margin, stock -- which
+     answers "how big" and never "what changed", and the product daily series was sitting
+     right there unused. Each SKU is now cut to the date box and its compare window and
+     split the same way the supplier table is: gross profit = revenue x margin, so the row
+     says whether it sold more or earned more per pound. Where the daily series does not
+     cover the range the row falls back to its window totals and the column reads blank
+     rather than guessing a movement. */
+  const _pS=(O.prodv&&O.prodv.dayStart)||null;
+  const _pw=cmpWr(ST.s,ST.e);
+  const _pn=((P.find(x=>x.d)||{d:[[]]}).d[0]||[]).length;
+  const _pix=d=>_pS?Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(_pS+'T00:00:00Z'))/864e5):-1;
+  const _i0=Math.max(0,_pix(ST.s)), _i1=Math.min(_pn-1,_pix(ST.e));
+  const _b0=Math.max(0,_pix(_pw[0])), _b1=Math.min(_pn-1,_pix(_pw[1]));
+  const _dOK=!!_pS&&_pn>0&&_i1>=_i0, _cOK=_dOK&&_b1>=_b0;
+  const _sum=(d,k,i,j)=>{let t=0;const A=d&&d[k];if(!A)return 0;for(let x=Math.max(0,i);x<=j;x++)t+=A[x]||0;return t;};
+  P.forEach(x=>{
+   if(_dOK&&x.d){
+    x._cr=_sum(x.d,0,_i0,_i1); x._cg=_sum(x.d,1,_i0,_i1);
+    if(_cOK){x._pr=_sum(x.d,0,_b0,_b1); x._pg=_sum(x.d,1,_b0,_b1);}
+    const cm=x._cr?x._cg/x._cr:0, pm=(x._pr)?x._pg/x._pr:0;
+    if(_cOK&&x._pr>0){const ch=dcmpChain([['Volume',x._cr,x._pr],['Margin',cm,pm]]);
+      x._vol=ch[0].d; x._mar=ch[1].d; x._dGP=x._cg-x._pg; x._live=1; x._cm=cm; x._pm=pm;}
+    else {x._cm=cm;}
+   }});
+  const _useW=_dOK;
+  P.sort((a,b)=>(_useW?((b._cg||0)-(a._cg||0)):(((b.g||0)+(b.ogp||0))-((a.g||0)+(a.ogp||0)))));
   const show=P.slice(0,40), hid=P.length-show.length;
-  const hidR=P.slice(40).reduce((t,x)=>t+(x.r||0)+(x.orev||0),0);
+  const hidR=P.slice(40).reduce((t,x)=>t+(_useW?(x._cr||0):((x.r||0)+(x.orev||0))),0);
   const TD3='padding:4px 7px;border-bottom:1px solid var(--line);font-size:11px;text-align:right;font-variant-numeric:tabular-nums';
   cell.innerHTML='<div style="font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:8px 2px 5px">'
-    +P.length+' product'+(P.length===1?'':'s')+' &mdash; ranked by gross profit</div>'
+    +P.length+' product'+(P.length===1?'':'s')+' &mdash; '+(_useW?('ranked by gross profit over '+ST.s+' → '+ST.e):'ranked by gross profit, all history')+(_cOK?(' · against '+_pw[0]+' → '+_pw[1]):'')+'</div>'
    +'<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse">'
    +'<thead><tr><th style="'+TD3+';text-align:left">Product</th><th style="'+TD3+'">Revenue</th><th style="'+TD3+'">Gross profit</th>'
-   +'<th style="'+TD3+'">GP%</th><th style="'+TD3+'">Units</th><th style="'+TD3+'">On hand</th><th style="'+TD3+';text-align:left">Open</th></tr></thead><tbody>'
+   +'<th style="'+TD3+'">GP%</th>'+(_cOK?'<th style="'+TD3+'">Δ GP</th><th style="'+TD3+';text-align:left">Sold more or earned more</th>':'')
+   +'<th style="'+TD3+'">On hand</th><th style="'+TD3+';text-align:left">Open</th></tr></thead><tbody>'
    +show.map(x=>{
-     const rev=(x.r||0)+(x.orev||0), gp=(x.g||0)+(x.ogp||0), mg=rev?gp/rev*100:0;
+     const rev=_useW?(x._cr||0):((x.r||0)+(x.orev||0)), gp=_useW?(x._cg||0):((x.g||0)+(x.ogp||0)), mg=rev?gp/rev*100:0;
      const st=x.st||{}, oos=st.oos||0;
      const nm=String(x.n||'').replace(/^\[[^\]]*\]\s*/,'');
      return '<tr><td style="'+TD3+';text-align:left;max-width:320px;white-space:normal">'+esc(nm)
@@ -17407,7 +17433,13 @@ window.vSkus=function(tr,code){try{
       +'<td style="'+TD3+'">'+M2(rev)+'</td>'
       +'<td style="'+TD3+';font-weight:700">'+M2(gp)+'</td>'
       +'<td style="'+TD3+';font-weight:700;color:'+(mg>=30?'var(--pos)':(mg<15?'var(--neg)':'var(--ink)'))+'">'+mg.toFixed(1)+'%</td>'
-      +'<td style="'+TD3+'">'+Math.round(x.q||0).toLocaleString()+'</td>'
+      +(_cOK?('<td style="'+TD3+';font-weight:800;color:'+((x._dGP||0)>=0?'var(--pos)':'var(--neg)')+'">'+(x._live?(((x._dGP||0)>=0?'+':'−')+M2(Math.abs(x._dGP||0))):'new')+'</td>'
+        +'<td style="'+TD3+';text-align:left;white-space:normal;min-width:190px;color:var(--ink-2)">'
+        +(!x._live?'<span style="color:var(--ink-3)">nothing in the compare window</span>'
+          :(Math.abs(x._vol)>=Math.abs(x._mar)
+            ? ('<b>'+(x._vol>=0?'sold more':'sold less')+'</b> · revenue '+M2(x._pr)+' → '+M2(x._cr)+', '+((x._vol>=0?'+':'−')+M2(Math.abs(x._vol))))
+            : ('<b>'+(x._mar>=0?'earned more per pound':'earned less per pound')+'</b> · margin '+(x._pm*100).toFixed(1)+'% → '+(x._cm*100).toFixed(1)+'%, '+((x._mar>=0?'+':'−')+M2(Math.abs(x._mar))))))
+        +'</td>'):'')
       +'<td style="'+TD3+';color:'+(st.u?'var(--ink)':'var(--warn)')+'">'+(st.u?Math.round(st.u).toLocaleString():'0')+(oos?' <span style="color:var(--neg);font-size:10px">'+oos+' oos</span>':'')+'</td>'
       +'<td style="'+TD3+';text-align:left">'+(x.url
          ?'<a href="'+String(x.url).replace(/"/g,'&quot;')+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--brand);font-weight:700;text-decoration:none">shop ↗</a>'
@@ -17415,7 +17447,7 @@ window.vSkus=function(tr,code){try{
    +'</tbody></table></div>'
    +(hid>0?'<div style="font-size:10.5px;color:var(--ink-3);padding:6px 2px 0">Showing the 40 biggest by gross profit. The other '+hid+' carry '+M2(hidR)+' of revenue between them.</div>':'')
    +'<div style="font-size:10.5px;color:var(--ink-3);padding:6px 2px 0;line-height:1.5">Revenue and gross profit are retail plus Shopify on the 4% basis, over the product feed&rsquo;s own window. '
-   +'<b>Only '+_urlPct+'% of products in this feed carry a stored Shopify URL</b> ('+_urlN+' of '+_urlT+'), so a row showing <b>search</b> instead of <b>shop</b> means the collector has no link for it &mdash; <b>that is not evidence the product is unlisted</b>. The search link finds it by name; the Listing Gap tab is where the actual listing question is answered.</div>';
+   +(_cOK?'<b>Δ GP splits into the only two things it can be</b> — sold more, or earned more per pound — and the two sum to the change exactly. ':(_dOK?'<b>No compare window inside the product daily series</b>, so this drawer shows levels for your range without a movement column. ':'<b>Your range sits outside the product daily series</b>, so these are all-history totals, not your window. '))+'<b>Only '+_urlPct+'% of products in this feed carry a stored Shopify URL</b> ('+_urlN+' of '+_urlT+'), so a row showing <b>search</b> instead of <b>shop</b> means the collector has no link for it &mdash; <b>that is not evidence the product is unlisted</b>. The search link finds it by name; the Listing Gap tab is where the actual listing question is answered.</div>';
  }
  row.appendChild(cell); tr.parentNode.insertBefore(row,tr.nextSibling);
 }catch(e){}};
@@ -19519,6 +19551,88 @@ function rGOOG(){
    'The 25 terms whose claimed value moved most, each split into the one factor that moved it.',h);
  })();}catch(e){}
 
+ /* ---- v57 AD GROUPS AND KEYWORDS, decomposed on the date box ----
+    These were on the page as current-window totals only, and I wrongly reported that as
+    "not decomposable". The data was always there; the collector just never asked for the
+    other window. It now ships both grains DAILY, so these read your range exactly like the
+    campaign table does, spend included -- which search terms still cannot do. */
+ try{(function(){
+  const GG=O.ggrain||{}; if(!GG.start||!GG.n)return;
+  const gix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(GG.start+'T00:00:00Z'))/864e5);
+  const n=GG.n;
+  const pw2=cmpWr(ST.s,ST.e);
+  const a0=Math.max(0,gix(ST.s)), a1=Math.min(n-1,gix(ST.e));
+  const b0=Math.max(0,gix(pw2[0])), b1=Math.min(n-1,gix(pw2[1]));
+  if(a1<a0)return;
+  const live=b1>=b0;
+  const sum=(d,k,i,j)=>{let t=0;const A=d&&d[k];if(!A)return 0;for(let x=Math.max(0,i);x<=j;x++)t+=A[x]||0;return t;};
+  const met=(d,i,j)=>{const sp=sum(d,'sp',i,j),im=sum(d,'im',i,j),ck=sum(d,'clk',i,j),cn=sum(d,'cn',i,j),cv=sum(d,'cv',i,j);
+   return {sp,im,ck,cn,cv,ctr:im?ck/im:0,cvr:ck?cn/ck:0,aov:cn?cv/cn:0,cpc:ck?sp/ck:0,roas:sp?cv/sp:0};};
+  const FF3={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%',
+             'Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v),'Cost per click':v=>M(v)};
+  const SH3={'Impressions':['more people saw it','fewer people saw it'],
+             'Click-through rate':['it was clicked more','it was clicked less'],
+             'Conversion rate':['the clicks bought more','the clicks bought less'],
+             'Average order value':['the baskets were bigger','the baskets were smaller']};
+  const TD6='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+  const build=(list,label,sub2)=>{
+   const rows=list.map(x=>{
+    const c=met(x.d,a0,a1), p2=live?met(x.d,b0,b1):null;
+    if(c.sp<1&&(!p2||p2.sp<1))return null;
+    const on=!!(p2&&p2.im>0&&p2.ck>0&&p2.cn>0);
+    const ch=on?dcmpChain([['Impressions',c.im,p2.im],['Click-through rate',c.ctr,p2.ctr],
+                           ['Conversion rate',c.cvr,p2.cvr],['Average order value',c.aov,p2.aov]]):null;
+    const sch=on?dcmpChain([['Impressions',c.im,p2.im],['Click-through rate',c.ctr,p2.ctr],['Cost per click',c.cpc,p2.cpc]]):null;
+    const top=ch?ch.slice().sort((u,v)=>Math.abs(v.d)-Math.abs(u.d))[0]:null;
+    const stop=sch?sch.slice().sort((u,v)=>Math.abs(v.d)-Math.abs(u.d))[0]:null;
+    return {x,c,p:p2,on,top,stop,d:c.cv-(p2?p2.cv:0),ds:c.sp-(p2?p2.sp:0)};})
+    .filter(Boolean).sort((u,v)=>Math.abs(v.d)-Math.abs(u.d)).slice(0,25);
+   if(!rows.length)return '';
+   const ar2=(c,pv,good)=>{if(!pv)return '<div style="font-size:10px;color:var(--ink-3)">—</div>';
+    const d=(c/pv-1)*100,up=d>=0;
+    return '<div style="font-size:10px;font-weight:700;color:'+((up===!!good)?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
+   let h='<div style="overflow:auto;max-height:560px"><table class="bt" data-nosort style="width:100%">'
+    +'<tr><th style="text-align:left">'+label+'</th><th style="text-align:right">Spend</th><th style="text-align:right">Value</th>'
+    +'<th style="text-align:right">Δ value</th><th style="text-align:right">ROAS</th><th style="text-align:right">CPC</th>'
+    +'<th style="text-align:right">CTR</th><th style="text-align:right">CVR</th><th style="text-align:right">AOV</th>'
+    +'<th style="text-align:left">What moved the value</th><th style="text-align:left">What moved the spend</th></tr>';
+   rows.forEach(r=>{
+    const ok=r.c.roas>=be5;
+    h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink);max-width:230px;white-space:normal">'+esc(String(r.x.n||'').slice(0,46))
+      +'<div style="font-size:10px;font-weight:600;color:var(--ink-3)">'+esc(String(r.x.cmp||'').slice(0,34))+(r.x.mt?' · '+String(r.x.mt).toLowerCase():'')+'</div></td>'
+     +'<td style="'+TD6+'">'+M(r.c.sp)+(r.p?ar2(r.c.sp,r.p.sp,false):'')+'</td>'
+     +'<td style="'+TD6+'">'+M(r.c.cv)+'</td>'
+     +'<td style="'+TD6+';font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.on?((r.d>=0?'+':'−')+M(Math.abs(r.d))):'new')+'</td>'
+     +'<td style="'+TD6+';font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×</td>'
+     +'<td style="'+TD6+'">'+M(r.c.cpc)+(r.p?ar2(r.c.cpc,r.p.cpc,false):'')+'</td>'
+     +'<td style="'+TD6+'">'+(r.c.ctr*100).toFixed(2)+'%'+(r.p?ar2(r.c.ctr,r.p.ctr,true):'')+'</td>'
+     +'<td style="'+TD6+'">'+(r.c.cvr*100).toFixed(2)+'%'+(r.p?ar2(r.c.cvr,r.p.cvr,true):'')+'</td>'
+     +'<td style="'+TD6+'">'+M(r.c.aov)+(r.p?ar2(r.c.aov,r.p.aov,true):'')+'</td>'
+     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:215px">'
+      +(!r.on?'<span style="color:var(--ink-3)">no delivery in the compare window — a start, not a move</span>'
+        :'<b>'+SH3[r.top.n][r.top.d>=0?0:1]+'</b> · '+FF3[r.top.n](r.top.from)+' → '+FF3[r.top.n](r.top.to)
+         +' <span style="font-weight:700;color:'+(r.top.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.top.d>=0?'+':'−')+M(Math.abs(r.top.d))+'</span>')+'</td>'
+     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:180px">'
+      +(!r.on?'<span style="color:var(--ink-3)">—</span>'
+        :r.stop.n.toLowerCase()+' '+FF3[r.stop.n](r.stop.from)+' → '+FF3[r.stop.n](r.stop.to)
+         +' <span style="font-weight:700;color:'+(r.stop.d>=0?'var(--neg)':'var(--pos)')+'">'+(r.stop.d>=0?'+':'−')+M(Math.abs(r.stop.d))+'</span>')+'</td></tr>';});
+   return h+'</table></div>'+(sub2||'');};
+  const foot='<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--ink)">Both moves are decomposed, because both denominators are here.</b> Value = impressions × CTR × CVR × AOV; spend = impressions × CTR × CPC. Each factor is valued with the ones before it already moved, so each set sums to its change exactly, with no residual — and that makes the split order-dependent, in the funnel order shown. '
+   +'This reads <b>'+ST.s+' → '+ST.e+'</b> against <b>'+pw2[0]+' → '+pw2[1]+'</b> from a '+n+'-day daily series starting '+GG.start+'. Unlike the search-term card, this one does follow your date box, and it can decompose spend as well as value. '
+   +'ROAS is Google&rsquo;s claimed conversion value over spend, not the ledger.</div>';
+  const agH=build(GG.ag||[],'Ad group','');
+  if(agH)pnlCard(g,'google','Ad group against ad group &mdash; '+PW.lbl+' vs the window before'
+   +INFO('Daily ad-group series from the Google Ads API, aggregated over both windows and decomposed. Spend included, so the money move is split too.'),
+   'Every ad group that spent, ranked by how much claimed value moved, with the factor behind each move.',agH+foot);
+  const kwH=build(GG.kw||[],'Keyword','');
+  if(kwH)pnlCard(g,'google','Keyword against keyword &mdash; '+PW.lbl+' vs the window before'
+   +INFO('Daily keyword series from keyword_view. Covers the keywords that served; Shopping and PMax have no keywords, so this will never explain the whole account.'),
+   'The paid keywords that moved, and what moved each of them.',kwH
+   +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">Keywords explain a minority of this account and always will.</b> Shopping and Performance Max do not bid on keywords at all, and they carry most of the spend — so this table is the Search side only. Do not read the total at the bottom of it as the account.</div>');
+ })();}catch(e){}
+
  /* ---- 1. the four inputs ---- */
  const lev=[['CPC',M(cur.cpc),pc(cur.cpc,prv.cpc),false,'what a click costs'],
             ['CTR',cur.ctr.toFixed(2)+'%',pc(cur.ctr,prv.ctr),true,'clicks / impressions'],
@@ -20328,7 +20442,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-181421';
+const BUILD='20261002-183313';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
