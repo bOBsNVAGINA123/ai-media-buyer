@@ -17419,6 +17419,73 @@ window.vSkus=function(tr,code){try{
  }
  row.appendChild(cell); tr.parentNode.insertBefore(row,tr.nextSibling);
 }catch(e){}};
+/* ============================================================================
+   v56 · DECOMPOSE EVERYTHING THAT CAN BE DECOMPOSED, AND SAY WHAT CANNOT.
+   The scoreboard decomposes the account and the campaigns. The same question --
+   WHY did this move -- applies to every other entity in the tool, and the answer
+   is only honest where two comparable windows actually exist. Audit of the payload:
+     vendors    daily [revenue, gross profit] x 400 days  -> YES, over the date box
+     products   daily [revenue, gross profit] x 400 days  -> YES, over the date box
+     search terms  current AND prior (im/ck/cn/cv + imL/ckL/cnL/cvL) -> YES, on its
+                own fixed 28-day window, which is NOT the date box and says so
+     keywords   current window only, no prior fields      -> NO
+     google ads current window only, no prior fields      -> NO
+   The two NOs get stated on the page rather than filled with something plausible.
+   TWO IDENTITIES, both exact:
+     money   revenue = units x price           (where units exist)
+     profit  gross profit = revenue x margin   (always, and this is the useful one)
+   A gross-profit move is either "it sold more" or "it earned less per pound", and
+   those are completely different problems with completely different fixes.
+   ========================================================================== */
+window.dcmpChain=function(facs){/* [[label, cur, prev], ...] multiplied; exact, sequential */
+ const out=[]; const run=facs.map(f=>f[2]);
+ for(let i=0;i<facs.length;i++){
+  const before=run.reduce((a,b)=>a*b,1);
+  run[i]=facs[i][1];
+  out.push({n:facs[i][0], d:run.reduce((a,b)=>a*b,1)-before, from:facs[i][2], to:facs[i][1]});}
+ return out;};
+/* revenue+margin decomposition of a set of rows carrying daily [rev, gp] */
+window.dcmpGP=function(rows,i0,i1,p0,p1,nameOf){
+ const M3=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const sum=(d,a,b,k)=>{let t=0;if(!d||!d[k])return 0;for(let i=Math.max(0,a);i<=b;i++)t+=d[k][i]||0;return t;};
+ return rows.map(r=>{
+  const cr=sum(r.d,i0,i1,0), cg=sum(r.d,i0,i1,1);
+  const pr=sum(r.d,p0,p1,0), pg=sum(r.d,p0,p1,1);
+  if(cr<=0&&pr<=0)return null;
+  const cm=cr?cg/cr:0, pm=pr?pg/pr:0;
+  const ch=dcmpChain([['Volume',cr,pr],['Margin',cm,pm]]);
+  const dGP=cg-pg;
+  const vol=ch[0].d, mar=ch[1].d;
+  return {n:nameOf(r), r, cr,cg,pr,pg,cm,pm,dGP,dRev:cr-pr, vol,mar,
+    live:pr>0, top:Math.abs(vol)>=Math.abs(mar)?'Volume':'Margin'};
+ }).filter(Boolean);};
+/* the shared renderer: a ranked, decomposed table */
+window.dcmpTable=function(list,opt){
+ const M3=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const sg=v=>(v>=0?'+':'−')+M3(Math.abs(v));
+ const TD4='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+ const mx=Math.max.apply(null,list.map(x=>Math.abs(x.dGP)).concat([1]));
+ let h='<div style="overflow:auto;max-height:560px"><table class="bt" data-nosort style="width:100%">'
+  +'<tr><th style="text-align:left">'+(opt.label||'Name')+'</th><th style="text-align:right">Revenue</th>'
+  +'<th style="text-align:right">Gross profit</th><th style="text-align:right">Δ GP</th>'
+  +'<th style="text-align:right">Margin</th><th style="text-align:right">Sold more</th>'
+  +'<th style="text-align:right">Earned more per £</th><th style="text-align:left">Which of the two</th></tr>';
+ list.forEach(x=>{
+  const w=Math.abs(x.dGP)/mx*100;
+  h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink);max-width:260px;white-space:normal">'+esc(String(x.n).slice(0,52))+'</td>'
+   +'<td style="'+TD4+'">'+M3(x.cr)+'</td>'
+   +'<td style="'+TD4+'">'+M3(x.cg)+'</td>'
+   +'<td style="'+TD4+';font-weight:800;color:'+(x.dGP>=0?'var(--pos)':'var(--neg)')+'">'+(x.live?sg(x.dGP):'new')+'</td>'
+   +'<td style="'+TD4+'">'+(x.cm*100).toFixed(1)+'%<div style="font-size:10px;color:var(--ink-3)">was '+(x.live?(x.pm*100).toFixed(1)+'%':'—')+'</div></td>'
+   +'<td style="'+TD4+';color:'+(x.vol>=0?'var(--pos)':'var(--neg)')+'">'+(x.live?sg(x.vol):'—')+'</td>'
+   +'<td style="'+TD4+';color:'+(x.mar>=0?'var(--pos)':'var(--neg)')+'">'+(x.live?sg(x.mar):'—')+'</td>'
+   +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:210px">'
+     +(!x.live?'<span style="color:var(--ink-3)">nothing in the compare window — a start, not a move</span>'
+       :(x.top==='Volume'
+         ? ('<b>'+(x.vol>=0?'it sold more':'it sold less')+'</b> · revenue '+M3(x.pr)+' → '+M3(x.cr)+', worth '+sg(x.vol)+' of the '+sg(x.dGP))
+         : ('<b>'+(x.mar>=0?'it earned more per pound':'it earned less per pound')+'</b> · margin '+(x.pm*100).toFixed(1)+'% → '+(x.cm*100).toFixed(1)+'%, worth '+sg(x.mar)+' of the '+sg(x.dGP))))
+   +'</td></tr>';});
+ return h+'</table></div>';};
 function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12');g.innerHTML='';
  const money=v=>Math.round(Math.abs(v)).toLocaleString(),E='E&pound; ';
  /* v9.91: this tab shipped as a FIXED lifetime window, so changing the date box did nothing and
@@ -17495,6 +17562,62 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
   +'<div class="row"><span class="dot" style="background:'+C.violet+'"></span><span><b>LTGP per customer is the planning number, not revenue.</b> It is the total lifetime gross profit of everyone who ever bought this supplier, divided by how many of them there are. A supplier can be small in revenue and still sit at the top of this column, which means its buyers are unusually valuable overall &mdash; those are the ranges to widen. Read it next to Repeat %: high LTGP with high repeat is a habit-forming range; high LTGP with low repeat is one big-ticket purchase and will not compound.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>Attribution caveat, stated plainly.</b> These customer columns are correlational. They tell you what buyers of a supplier are worth in total, across every supplier they buy. They do not prove the supplier caused that value. The Acquired column is the closest thing here to a causal read, because it only counts people whose relationship with you started in that basket.</span></div></div>');
  });
+ /* ---- v56 WHAT MOVED GROSS PROFIT: vendors, then products, both decomposed ---- */
+ try{(function(){
+  const dS=(O.vend&&O.vend.dayStart)||null; if(!dS)return;
+  const ix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(dS+'T00:00:00Z'))/864e5);
+  const VR=(O.vend&&O.vend.rows)||[]; const n=((VR.find(x=>x.d)||{d:[[]]}).d[0]||[]).length;
+  if(!n)return;
+  const pw=cmpWr(ST.s,ST.e);
+  const i0=Math.max(0,ix(ST.s)), i1=Math.min(n-1,ix(ST.e));
+  const p0=Math.max(0,ix(pw[0])), p1=Math.min(n-1,ix(pw[1]));
+  if(i1<i0){pnlCard(g,'ins','What moved gross profit','Your date range sits outside the '+n+'-day vendor and product daily series (it starts '+dS+'), so nothing here can be compared against it. Pick a range inside that window.','');return;}
+  const windowed=p1>=p0;
+  const M3=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+  const note=(what,cov)=>'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--ink)">Gross profit = revenue × margin, and the two columns add to the change exactly.</b> '
+   +'&ldquo;Sold more&rdquo; values the revenue move at the OLD margin; &ldquo;earned more per pound&rdquo; values the margin move at the NEW revenue. That is a sequential split, so it is exact with no residual, and it is order-dependent &mdash; a different order shifts credit between the two without changing the total. '
+   +'The distinction is the whole point: <b>selling more of something thin and selling the same amount of something richer are different businesses with different fixes.</b> '
+   +(cov?cov+' ':'')
+   +'Reading <b>'+ST.s+' → '+ST.e+'</b> against <b>'+pw[0]+' → '+pw[1]+'</b>, on the 4% basis, retail and webstore together. A '+what+' with no trade in the compare window is marked a start rather than given a movement.</div>';
+  /* --- vendors --- */
+  const vlist=dcmpGP(VR.filter(x=>x.d),i0,i1,p0,p1,r=>r.n||r.v)
+    .filter(x=>Math.abs(x.dGP)>0||x.cg>0)
+    .sort((a,b)=>Math.abs(b.dGP)-Math.abs(a.dGP)).slice(0,30);
+  if(vlist.length){
+   const up=vlist.filter(x=>x.live&&x.dGP>0).reduce((t,x)=>t+x.dGP,0);
+   const dn=vlist.filter(x=>x.live&&x.dGP<0).reduce((t,x)=>t+x.dGP,0);
+   const volT=vlist.filter(x=>x.live).reduce((t,x)=>t+x.vol,0);
+   const marT=vlist.filter(x=>x.live).reduce((t,x)=>t+x.mar,0);
+   const lead=Math.abs(volT)>=Math.abs(marT)?'volume':'margin';
+   pnlCard(g,'ins','What moved gross profit &mdash; by supplier'
+    +INFO('Each supplier aggregated from its own daily [revenue, gross profit] series over both windows, then split into the volume effect and the margin effect. Exact: the two sum to the change.'),
+    'Thirty biggest movers, up or down. The last column says which of the only two things it can be.',
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:11px">'
+    +'<div style="flex:1;min-width:180px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700">Gained</div><div style="font-size:19px;font-weight:700;color:var(--pos)">+'+M3(up)+'</div><div style="font-size:11px;color:var(--ink-3)">across '+vlist.filter(x=>x.live&&x.dGP>0).length+' suppliers</div></div>'
+    +'<div style="flex:1;min-width:180px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700">Lost</div><div style="font-size:19px;font-weight:700;color:var(--neg)">−'+M3(Math.abs(dn))+'</div><div style="font-size:11px;color:var(--ink-3)">across '+vlist.filter(x=>x.live&&x.dGP<0).length+' suppliers</div></div>'
+    +'<div style="flex:1;min-width:180px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700">Net, split</div><div style="font-size:19px;font-weight:700;color:'+((volT+marT)>=0?'var(--pos)':'var(--neg)')+'">'+((volT+marT)>=0?'+':'−')+M3(Math.abs(volT+marT))+'</div><div style="font-size:11px;color:var(--ink-3)">'+(volT>=0?'+':'−')+M3(Math.abs(volT))+' volume · '+(marT>=0?'+':'−')+M3(Math.abs(marT))+' margin &mdash; <b>'+lead+' leads</b></div></div>'
+    +'</div>'
+    +dcmpTable(vlist,{label:'Supplier'})+note('supplier',''));}
+  /* --- products --- */
+  const PR=((O.prodv&&O.prodv.rows)||[]).filter(x=>x.d);
+  if(PR.length){
+   const pS=(O.prodv&&O.prodv.dayStart)||dS;
+   const pix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(pS+'T00:00:00Z'))/864e5);
+   const pn=((PR[0].d||[[]])[0]||[]).length;
+   const a0=Math.max(0,pix(ST.s)), a1=Math.min(pn-1,pix(ST.e));
+   const b0=Math.max(0,pix(pw[0])), b1=Math.min(pn-1,pix(pw[1]));
+   if(a1>=a0){
+    const plist=dcmpGP(PR,a0,a1,b0,b1,r=>String(r.n||'').replace(/^\[[^\]]*\]\s*/,''))
+      .filter(x=>Math.abs(x.dGP)>0||x.cg>0)
+      .sort((a,b)=>Math.abs(b.dGP)-Math.abs(a.dGP)).slice(0,30);
+    if(plist.length)pnlCard(g,'ins','What moved gross profit &mdash; by product'
+     +INFO('Same split, at SKU level, from the product daily series. Coverage is '+((O.prodv&&O.prodv.dayCov)||'—')+'% of revenue, so the rows below do not sum to the company.'),
+     'The thirty products that moved the most gross profit, and whether each one moved on volume or on margin.',
+     dcmpTable(plist,{label:'Product'})
+     +note('product','<b>This table covers '+((O.prodv&&O.prodv.dayCov)||'—')+'% of revenue</b>, not all of it &mdash; the product feed carries the SKUs with enough trade to rank, so these rows will not add up to the supplier table above. '));}}
+ })();}catch(e){}
+
  // ---------- 4. branch index matrix ----------
  const brTot={};BRS.forEach(b=>brTot[b]=V.reduce((a,r)=>a+((r.br&&r.br[b])?r.br[b][0]:0),0));
  const netRet=V.reduce((a,r)=>a+r.r,0);
@@ -19334,6 +19457,68 @@ function rGOOG(){
     'Which campaigns moved the account, and the one factor that moved each of them.',h);}
  }catch(e){}}
 
+ /* ---- v56 SEARCH TERMS, DECOMPOSED ON THEIR OWN PRIOR WINDOW ----
+    searchIntel ships im/ck/cn/cv for the current window AND imL/ckL/cnL/cvL for the
+    one before it, so the same revenue identity applies term by term. It does NOT ship
+    prior spend, so a term's SPEND move cannot be decomposed and is not pretended to be.
+    This window is searchIntel's own 28 days, NOT the date box -- stated on the card,
+    because a card that silently answers for a different period than the one you picked
+    is the exact failure the window stamps exist to stop. */
+ try{(function(){
+  const S=O.searchIntel||{}; const T=(S.terms||[]).filter(x=>x&&(x.cv>0||x.cvL>0));
+  if(T.length<5)return;
+  const rows=T.map(x=>{
+   const im=x.im||0, imL=x.imL||0, ck=x.ck||0, ckL=x.ckL||0, cn=x.cn||0, cnL=x.cnL||0, cv=x.cv||0, cvL=x.cvL||0;
+   const ctr=im?ck/im:0, ctrL=imL?ckL/imL:0;
+   const cvr=ck?cn/ck:0, cvrL=ckL?cnL/ckL:0;
+   const aov=cn?cv/cn:0, aovL=cnL?cvL/cnL:0;
+   const live=imL>0&&ckL>0&&cnL>0;
+   const ch=live?dcmpChain([['Impressions',im,imL],['Click-through rate',ctr,ctrL],
+                            ['Conversion rate',cvr,cvrL],['Average order value',aov,aovL]]):null;
+   const top=ch?ch.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0]:null;
+   return {t:x.t,sp:x.sp||0,im,imL,ck,ckL,cn,cnL,cv,cvL,d:cv-cvL,ctr,ctrL,cvr,cvrL,aov,aovL,live,top,ch};})
+   .filter(x=>Math.abs(x.d)>0)
+   .sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,25);
+  if(!rows.length)return;
+  const FF2={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%',
+             'Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v)};
+  const SH={'Impressions':['more people searched it','fewer people searched it'],
+            'Click-through rate':['it was clicked more','it was clicked less'],
+            'Conversion rate':['the clicks bought more','the clicks bought less'],
+            'Average order value':['the baskets were bigger','the baskets were smaller']};
+  const TD5='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+  let h='<div style="overflow:auto;max-height:560px"><table class="bt" data-nosort style="width:100%">'
+   +'<tr><th style="text-align:left">Search term</th><th style="text-align:right">Spend</th><th style="text-align:right">Value</th>'
+   +'<th style="text-align:right">Δ value</th><th style="text-align:right">Impr</th><th style="text-align:right">CTR</th>'
+   +'<th style="text-align:right">CVR</th><th style="text-align:right">AOV</th><th style="text-align:left">What moved it</th></tr>';
+  const ar=(c,pv,good,f)=>{if(!pv)return '<div style="font-size:10px;color:var(--ink-3)">—</div>';
+   const d=(c/pv-1)*100, up=d>=0;
+   return '<div style="font-size:10px;font-weight:700;color:'+((up===!!good)?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
+  rows.forEach(r=>{
+   h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink);max-width:220px;white-space:normal">'+esc(String(r.t).slice(0,46))+'</td>'
+    +'<td style="'+TD5+'">'+M(r.sp)+'</td>'
+    +'<td style="'+TD5+'">'+M(r.cv)+'</td>'
+    +'<td style="'+TD5+';font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.live?((r.d>=0?'+':'−')+M(Math.abs(r.d))):'new')+'</td>'
+    +'<td style="'+TD5+'">'+N(r.im)+ar(r.im,r.imL,true)+'</td>'
+    +'<td style="'+TD5+'">'+(r.ctr*100).toFixed(2)+'%'+ar(r.ctr,r.ctrL,true)+'</td>'
+    +'<td style="'+TD5+'">'+(r.cvr*100).toFixed(2)+'%'+ar(r.cvr,r.cvrL,true)+'</td>'
+    +'<td style="'+TD5+'">'+M(r.aov)+ar(r.aov,r.aovL,true)+'</td>'
+    +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:230px">'
+     +(!r.live?'<span style="color:var(--ink-3)">nothing in the prior window — a new term, not a move</span>'
+       :'<b>'+SH[r.top.n][r.top.d>=0?0:1]+'</b> · '+r.top.n.toLowerCase()+' '+FF2[r.top.n](r.top.from)+' → '+FF2[r.top.n](r.top.to)
+        +' <span style="font-weight:700;color:'+(r.top.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.top.d>=0?'+':'−')+M(Math.abs(r.top.d))+'</span>'
+        +(r.d&&Math.abs(r.top.d)<=Math.abs(r.d)?' <span style="color:var(--ink-3)">('+Math.abs(r.top.d/r.d*100).toFixed(0)+'% of its move)</span>':' <span style="color:var(--ink-3)">(the others offset it)</span>'))
+    +'</td></tr>';});
+  h+='</table></div>'
+   +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">This card does NOT read the date box.</b> Search terms arrive with their own window &mdash; <b>'+((S.win||[])[0]||'—')+' → '+((S.win||[])[1]||'—')+'</b>, pulled '+(S.pulled||'—')+' &mdash; and the prior-period fields are cut to match it. Everything else on this tab reads your range; this one cannot, so it says so instead of relabelling itself. '
+   +'<b>Spend is current-window only</b> in that feed, so the spend column carries no comparison and the money move is not decomposed &mdash; only the value move is. '
+   +'Value = impressions × CTR × CVR × AOV, each factor valued with the ones before it already moved, so the four sum to the change exactly.</div>';
+  pnlCard(g,'google','Search terms &mdash; what actually moved each one'
+   +INFO('From searchIntel: current and prior period on impressions, clicks, conversions and value. Decomposed per term on the same identity as the account.'),
+   'The 25 terms whose claimed value moved most, each split into the one factor that moved it.',h);
+ })();}catch(e){}
+
  /* ---- 1. the four inputs ---- */
  const lev=[['CPC',M(cur.cpc),pc(cur.cpc,prv.cpc),false,'what a click costs'],
             ['CTR',cur.ctr.toFixed(2)+'%',pc(cur.ctr,prv.ctr),true,'clicks / impressions'],
@@ -20143,7 +20328,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-180338';
+const BUILD='20261002-181421';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
