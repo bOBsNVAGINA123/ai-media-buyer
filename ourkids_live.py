@@ -3477,6 +3477,88 @@ def pull_meta_driven_cross():
     mc = dict(plats["meta"]); mc.update({"days": 180, "orders": total, "plats": plats})
     XTRA["mcross"] = mc
 
+def pull_gads_grain():
+    """v57 AD GROUPS AND KEYWORDS, DAILY -- so they read the date box like campaigns do.
+
+    I previously told Shavi these were 'not decomposable'. That was wrong, and the way it
+    was wrong is worth recording: I checked the PAYLOAD, found only a current-window total
+    on gattr.kw and gattr.ads, and reported the limit of my own collector as a limit of the
+    data. The Google Ads API serves any window, including spend, at both grains. Verified
+    on 2026-10-02: 19 ad groups x 60 days and 23 keywords x 60 days, and a four-factor
+    decomposition over two 7-day windows closed with a residual of 0.0000 on every row.
+
+    Daily rather than a fixed pair of windows on purpose: a fixed window is what forces
+    searchIntel to say 'this card does not read the date box', and one of those on a tab
+    is already one too many.
+    """
+    dev = os.environ.get("GOOGLE_DEVELOPER_TOKEN", ""); cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
+    if not (dev and cid): return {}
+    try: at, hd = _gads_hdr()
+    except Exception as e:
+        log("gads grain :: token fail", str(e)[:120]); return {}
+    if not at: return {}
+    N = 60
+    d0 = END - datetime.timedelta(days=N - 1)
+    base = "https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid)
+    def q(gql):
+        try:
+            req = urllib.request.Request(base, data=json.dumps({"query": gql}).encode(), headers=hd)
+            with urllib.request.urlopen(req, timeout=120) as r: d = json.loads(r.read())
+            rows = []
+            for b2 in (d if isinstance(d, list) else [d]): rows += b2.get("results", [])
+            return rows
+        except Exception as e:
+            log("gads grain :: query fail ::", str(e)[:160]); return []
+    def idx(ds):
+        try: return (datetime.date.fromisoformat(ds) - d0).days
+        except Exception: return -1
+    def pack(rows, keyfn, namefn):
+        out = {}
+        for r in rows:
+            k = keyfn(r)
+            if k is None: continue
+            i = idx(((r.get("segments") or {}).get("date") or ""))
+            if i < 0 or i >= N: continue
+            e = out.get(k)
+            if not e:
+                e = out[k] = dict(namefn(r))
+                e["d"] = {m: [0] * N for m in ("sp", "im", "clk", "cn", "cv")}
+            m = r.get("metrics") or {}
+            e["d"]["sp"][i]  += round(float(m.get("costMicros") or 0) / 1e6)
+            e["d"]["im"][i]  += int(float(m.get("impressions") or 0))
+            e["d"]["clk"][i] += int(float(m.get("clicks") or 0))
+            e["d"]["cn"][i]  += float(m.get("conversions") or 0)
+            e["d"]["cv"][i]  += round(float(m.get("conversionsValue") or 0))
+        for e in out.values():
+            e["d"]["cn"] = [round(x, 2) for x in e["d"]["cn"]]
+        return list(out.values())
+    res = {"start": d0.isoformat(), "n": N, "ag": [], "kw": []}
+    try:
+        ag = q("SELECT ad_group.id, ad_group.name, ad_group.status, campaign.name, segments.date, "
+               "metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, "
+               "metrics.conversions_value FROM ad_group WHERE segments.date BETWEEN '%s' AND '%s' "
+               "AND metrics.impressions > 0" % (d0.isoformat(), END.isoformat()))
+        res["ag"] = pack(ag, lambda r: ((r.get("adGroup") or {}).get("id")),
+                         lambda r: {"id": (r.get("adGroup") or {}).get("id"),
+                                    "n": (r.get("adGroup") or {}).get("name") or "",
+                                    "st": (r.get("adGroup") or {}).get("status") or "",
+                                    "cmp": (r.get("campaign") or {}).get("name") or ""})
+        kw = q("SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, "
+               "ad_group_criterion.keyword.match_type, ad_group.name, campaign.name, segments.date, "
+               "metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, "
+               "metrics.conversions_value FROM keyword_view WHERE segments.date BETWEEN '%s' AND '%s' "
+               "AND metrics.impressions > 0" % (d0.isoformat(), END.isoformat()))
+        res["kw"] = pack(kw, lambda r: (((r.get("adGroupCriterion") or {}).get("keyword") or {}).get("text")),
+                         lambda r: {"n": ((r.get("adGroupCriterion") or {}).get("keyword") or {}).get("text") or "",
+                                    "mt": ((r.get("adGroupCriterion") or {}).get("keyword") or {}).get("matchType") or "",
+                                    "ag": (r.get("adGroup") or {}).get("name") or "",
+                                    "cmp": (r.get("campaign") or {}).get("name") or ""})
+        log("gads grain ::", len(res["ag"]), "ad groups ::", len(res["kw"]), "keywords ::", N, "days from", res["start"])
+    except Exception as e:
+        log("gads grain failed", str(e)[:160])
+    return res
+
+
 def pull_google_attr():
     """v9.0: Google revenue attribution at campaign, asset-group (PMax) and ad level,
     last 60d totals from the Google Ads API. Conversion value as Google reports it."""
@@ -6572,6 +6654,7 @@ def build():
     # inside an upload, so data.js was never written and the commit step never ran.
     # They now run AFTER the payload is on disk, under a wall-clock budget.
     gattr = safe(pull_google_attr) or {}
+    ggrain = safe(pull_gads_grain) or (prev.get("ggrain") or {})
     gads = safe(pull_google_ads) or prev.get("gads", [])
     tads = safe(pull_tiktok_ads) or prev.get("tads", [])
     bcost = safe(pull_branch_costs) or {}
@@ -6734,6 +6817,7 @@ def build():
                                         "cat": (_n.get("cat") or _p.get("cat") or {})})(
                           XTRA.get("cube") or {}, prev.get("cube") or {}),
               "gattr": gattr or prev.get("gattr") or {},
+              "ggrain": ggrain,
               "objD": objd or prev.get("objD") or {},
               "partial": END.isoformat(), "fullEnd": FULLEND.isoformat(), "today": today.isoformat(),
               "macc": {a: {m: {k: round(v) for k, v in mm.items()} for m, mm in ms.items()} for a, ms in MACC.items()},
