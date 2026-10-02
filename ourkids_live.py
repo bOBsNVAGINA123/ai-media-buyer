@@ -6590,6 +6590,14 @@ def build():
             # Gate on the data's own shape, not on remembering to dispatch a run by hand.
             if (pv.get("vend") or {}).get("rows") and not (pv.get("vend") or {}).get("dayStart"):
                 return "vendor daily series missing (date box cannot drive Where-to-focus without it)"
+            # v62a AND AGAIN, exactly as the comment above predicted. cashG/consG were added
+            # to pull_vendors, the collector shipped, two syncs ran -- and the field never
+            # appeared, because pull_vendors only runs on a HEAVY crawl and the shape gate
+            # had no reason to ask for it, so `vend` kept being served from the cached prev.
+            # A new vendor field needs its own line here or it silently never arrives.
+            _vr = (pv.get("vend") or {}).get("rows") or []
+            if _vr and not any(r.get("consG") is not None for r in _vr):
+                return "vendor cash/consignment GP split missing (cashG/consG)"
         except Exception:
             pass
         return None
