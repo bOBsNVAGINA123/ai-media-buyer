@@ -6532,7 +6532,169 @@ function rAU(){if(TAB!=='au')return;dCh();
   pnlCard(g,'odoo','Company total, month by month — the whole business on one line of sight'
    +INFO('Branches: POS revenue and gpAdj margin, analytic salaries (re-dated to the month they pay for) and rent with the same fallbacks as above. Online: net revenue with order-dated refunds, its GP, its delivery net, its e-com payroll. Ads: the whole platform budget. HQ book charged below contribution. Running month is MTD revenue against full-month fixed costs.'),
    'The single-month table above answers who; this answers when.',h2);}catch(e){}})();
- pnlCard(g,'odoo','The whole company — every branch, the webstore, one month'
+  /* ============================================================================
+     v60 · HEAD TO HEAD. The table above is every column side by side, which answers
+     "who is biggest" but not "is THIS branch better than THAT one" -- comparing two
+     columns on a nine-column grid means counting across with a finger, and the lines
+     that matter most (margin, rent load, contribution margin) are the ones hardest
+     to hold in your head while you do it.
+     Pick any two columns, including ONLINE, and every line is restated as A, B, the
+     gap, and which way it points. The RATE lines are the ones worth reading: a branch
+     can be smaller on every absolute line and still be the better business, and on
+     this account two of them are.
+     ========================================================================== */
+  /* ============================================================================
+     v61 · THE SAME P&L ON YOUR DATE RANGE, NOT ONLY ON A WHOLE MONTH.
+     This tab was month-locked because the ledger behind half of it IS monthly: rent
+     and salaries are posted once a month, not per day. That is a real constraint and
+     the tab was right to declare it -- but declaring it is not the same as being
+     useless outside a calendar month, and "pick a month" is not an answer to "how did
+     these two do last week".
+     So the range view is built and every line says which kind of number it is:
+       MEASURED per day   branch revenue, from the per-branch daily till series.
+       MONTH-RATE applied  gross profit. There is no daily GP per branch anywhere in
+                           the payload, so each day is valued at ITS OWN month's
+                           measured branch margin -- exact inside a month, a weighted
+                           blend across a boundary, and never a company average.
+       PRO-RATED           rent, salaries, utilities. A monthly posting divided by the
+                           days in that month and multiplied by the days you picked.
+                           This is arithmetic, not measurement: a half-month of rent is
+                           not an observation, and a range that straddles a quarterly
+                           rent cheque will still be lumpy underneath.
+     Nothing here is new data. It is the same book, cut by days, with the cut labelled.
+     ========================================================================== */
+  const auRange=(function(){
+   try{
+    const BD=O.bnrD||{}, BW=BD._w||{};
+    if(!BW.start||!BW.n)return null;
+    const bi=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(BW.start+'T00:00:00Z'))/864e5);
+    const i0=Math.max(0,bi(ST.s)), i1=Math.min(BW.n-1,bi(ST.e));
+    if(i1<i0)return null;
+    const days=i1-i0+1;
+    const dayISO=i=>new Date(Date.parse(BW.start+'T00:00:00Z')+i*864e5).toISOString().slice(0,10);
+    const dim=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+    /* month -> how many of YOUR days fall in it, for pro-rating the monthly book */
+    const share={};
+    for(let i=i0;i<=i1;i++){const m=dayISO(i).slice(0,7); share[m]=(share[m]||0)+1;}
+    const pro=book=>{let t=0;Object.keys(share).forEach(m=>{const v=(book||{})[m]; if(v)t+=v*share[m]/dim(m);});return t;};
+    const mgOf=(br,m)=>{const v=((O.pos||{})[br]||{})[m]; return (v&&v[0])?gpAdj(v[0],v[1])/v[0]:null;};
+    const out=[];
+    Object.keys(BD).filter(k=>k!=='_w').forEach(br=>{
+     const d=BD[br]||{}; let rev=0, gp=0, ord=0;
+     for(let i=i0;i<=i1;i++){
+      const rv=(d.grev||[])[i]||0; if(!rv&&!((d.nord||[])[i])&&!((d.rord||[])[i]))continue;
+      const m=dayISO(i).slice(0,7); const mg=mgOf(br,m);
+      rev+=rv; gp+=rv*(mg==null?posMg():mg);
+      ord+=((d.nord||[])[i]||0)+((d.rord||[])[i]||0);}
+     if(rev<=0)return;
+     const sal=pro(Object.fromEntries(Object.entries((O.bcost||{})[br]||{}).map(([m,v])=>[m,(v||{}).sal||0])));
+     const rent=pro((O.rentB||{})[br]||{});
+     out.push({n:br,rev,gp,ord,sal,rent,util:0,ads:0,ship:0,contrib:0,_rng:1});});
+    if(!out.length)return null;
+    /* utilities allocated on revenue share, same rule the month table uses */
+    const utilBook={}; Object.keys(share).forEach(m=>{const E2=(O.exp||{})[m]||{};
+      utilBook[m]=(E2['Utilities (elec/water/gas)']||0)+(E2['Maintenance']||0);});
+    const utilTot=pro(utilBook);
+    const brRev=out.reduce((a,c)=>a+c.rev,0)||1;
+    out.forEach(c=>{c.util=utilTot*(c.rev/brRev);});
+    /* ONLINE from the Shopify daily series, on the same days */
+    const F=O.fin||{};
+    let onRev=0,onGp=0,onOrd=0;
+    try{const r=rng(ST.s,ST.e);
+      if(r){for(let i=r[0];i<=r[1];i++){const gr=((O.shop.rev||[])[i]||0)*1000, rf=SREF(i)*1000;
+        onRev+=gr-rf; onOrd+=(O.shop.ord||[])[i]||0;}
+        onGp=onRev*GPQ().gpOnGross;}}catch(e){}
+    const onSal=pro(Object.fromEntries(Object.keys(share).map(m=>{const E2=(O.exp||{})[m]||{};
+      const brS=Object.keys(O.bcost||{}).reduce((a,b)=>a+(((O.bcost[b]||{})[m]||{}).sal||0),0);
+      return [m,Math.max(0,(E2['Payroll & benefits']||0)-brS)*0.228];})));
+    const onCol2={n:'ONLINE',rev:onRev,gp:onGp,ord:onOrd,sal:onSal,rent:0,util:0,ads:0,ship:0,contrib:0,_rng:1};
+    out.forEach(c=>{c.contrib=c.gp-c.sal-c.rent-c.util;});
+    onCol2.contrib=onCol2.gp-onCol2.sal;
+    if(onRev>0)out.push(onCol2);
+    out._days=days; out._months=Object.keys(share).sort();
+    return out;
+   }catch(e){return null;}
+  })();
+  try{(function(){
+   const useR=(ST.auScope==='range')&&auRange;
+   const SRC=useR?auRange:ALL;
+   const pick=SRC.filter(c=>c.n!=='TOTAL');
+   if(pick.length<2)return;
+   const aN=ST.auA||pick[0].n, bN=ST.auB||(pick.find(c=>c.n==='ONLINE')?'ONLINE':pick[1].n);
+   const A=pick.find(c=>c.n===aN)||pick[0], B=pick.find(c=>c.n===bN)||pick[1];
+   const sel=(id,cur)=>'<select onchange="ST.'+id+'=this.value;rAU()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--bd);border-radius:6px;font-weight:600">'
+     +pick.map(c=>'<option value="'+c.n.replace(/"/g,'')+'"'+(c.n===cur?' selected':'')+'>'+c.n+'</option>').join('')+'</select>';
+   const pct=(x,d)=>x.rev?(d/x.rev*100):null;
+   /* higher is better on every one of these except the cost loads */
+   const LINES=[
+    ['Revenue',      c=>c.rev,                     'cur', 1],
+    ['Gross profit', c=>c.gp,                      'cur', 1],
+    ['GP margin',    c=>c.rev?c.gp/c.rev*100:null, 'pct', 1],
+    ['Orders',       c=>c.ord,                     'num', 1],
+    ['Revenue per order', c=>c.ord?c.rev/c.ord:null,'cur',1],
+    ['Salaries',     c=>-c.sal,                    'cur', 0],
+    ['Salaries as % of revenue', c=>pct(c,c.sal),  'pct', 0],
+    ['Rent',         c=>-(c.rent||0),              'cur', 0],
+    ['Rent as % of revenue', c=>pct(c,c.rent||0),  'pct', 0],
+    ['Rent + salaries as % of revenue', c=>pct(c,(c.rent||0)+(c.sal||0)), 'pct', 0],
+    ['CONTRIBUTION', c=>c.contrib,                 'cur', 1],
+    ['Contribution margin', c=>c.rev?c.contrib/c.rev*100:null, 'pct', 1]];
+   const fm=(v,k)=>v==null?'&mdash;':(k==='pct'?v.toFixed(1)+'%':(k==='num'?Math.round(v).toLocaleString():(v<0?'&minus;':'')+M(v)));
+   const TDv='padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px';
+   const scopeChip=(k,lab,on)=>'<span class="chip" style="'+(on?'background:var(--brand);color:#fff;border-color:var(--brand)':'')+'" onclick="ST.auScope=\''+k+'\';rAU()">'+lab+'</span>';
+   let vh='<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;padding:0 0 11px">'
+    +'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">COMPARE</span>'+sel('auA',aN)
+    +'<span style="font-size:12.5px;color:var(--ink-3);font-weight:700">versus</span>'+sel('auB',bN)
+    +'<span style="width:1px;height:18px;background:var(--line);margin:0 3px"></span>'
+    +'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">PERIOD</span>'
+    +scopeChip('month','The month · '+mSel,!useR)
+    +(auRange?scopeChip('range','Your range · '+ST.s+' → '+ST.e,useR)
+             :'<span class="chip" style="opacity:.5" title="Your range falls outside the per-branch daily till series">Your range · unavailable</span>')
+    +(useR?'<span style="font-size:11.5px;color:var(--warn);font-weight:700">'+auRange._days+' days · fixed costs pro-rated</span>':'')+'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<tr><th style="'+TDv+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Line</th>'
+    +'<th style="'+TDv+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">'+A.n+'</th>'
+    +'<th style="'+TDv+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">'+B.n+'</th>'
+    +'<th style="'+TDv+';font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Gap</th>'
+    +'<th style="'+TDv+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">Which way it points</th></tr>';
+   let rateWins=0, rateTot=0;
+   LINES.forEach(L=>{
+    const va=L[1](A), vb=L[1](B), k=L[2], hi=L[3];
+    if(va==null&&vb==null)return;
+    const gap=(va!=null&&vb!=null)?va-vb:null;
+    const better=gap==null?null:((gap>=0)===!!hi);
+    const rel=(va!=null&&vb!=null&&vb!==0&&k!=='pct')?((va/vb-1)*100):null;
+    if(k==='pct'&&gap!=null){rateTot++; if(better)rateWins++;}
+    const strong=/CONTRIBUTION|margin|% of revenue/.test(L[0]);
+    vh+='<tr'+(strong?' style="background:var(--surface-3)"':'')+'>'
+     +'<td style="'+TDv+';text-align:left;font-weight:'+(strong?'800':'620')+';color:var(--ink)">'+L[0]+'</td>'
+     +'<td style="'+TDv+'">'+fm(va,k)+'</td><td style="'+TDv+'">'+fm(vb,k)+'</td>'
+     +'<td style="'+TDv+';font-weight:800;color:'+(better==null?'var(--ink-3)':(better?'var(--pos)':'var(--neg)'))+'">'
+       +(gap==null?'&mdash;':((gap>=0?'+':'&minus;')+fm(Math.abs(gap),k).replace('&minus;','')))
+       +(rel!=null?'<div style="font-size:10px;font-weight:600;color:var(--ink-3)">'+(rel>=0?'+':'&minus;')+Math.abs(rel).toFixed(0)+'%</div>':'')+'</td>'
+     +'<td style="'+TDv+';text-align:left;font-size:11.5px;color:var(--ink-2);white-space:normal">'
+       +(better==null?'<span style="color:var(--ink-3)">one of the two has no figure for this line</span>'
+         :('<b>'+(better?A.n:B.n)+'</b> '+(k==='pct'?'on the rate':(hi?'on the money':'carries less'))
+           +(L[0]==='Revenue'?' &mdash; size, which is not the same as being better':'')))
+     +'</td></tr>';});
+   vh+='</table></div>'
+    +'<div style="margin-top:11px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface);border:1px solid var(--line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
+    +'<b style="color:var(--ink)">Read the shaded lines, not the big ones.</b> Revenue and gross profit mostly tell you which is bigger. The rates &mdash; margin, rent and salary load, contribution margin &mdash; tell you which is the better business per pound it turns over, and a smaller column routinely wins them. '
+    +'On this pairing <b>'+A.n+' wins '+rateWins+' of the '+rateTot+' rate lines</b>. '
+    +'<b>ONLINE is not like-for-like with a branch</b> and the table does not pretend otherwise: it pays no rent, carries the whole courier bill, and its revenue is net of refunds while branch revenue is VAT-inclusive till money. Compare a branch with a branch for a fair fight; compare a branch with ONLINE to see what the two models actually cost. '
+    +'Ads sit in neither column here &mdash; the whole budget is charged once, to the company, in the table above.'
+    +(useR?('<br><br><b style="color:var(--warn)">You are reading YOUR DATE RANGE ('+auRange._days+' days across '+auRange._months.join(', ')+'), and the lines are not all the same kind of number.</b> '
+      +'<b>Revenue and orders are MEASURED per day</b> from the per-branch till series. '
+      +'<b>Gross profit is derived</b>: there is no daily GP per branch anywhere in the payload, so each day is valued at its own month&rsquo;s measured branch margin &mdash; exact inside one month, a revenue-weighted blend across a boundary. '
+      +'<b>Rent, salaries and utilities are PRO-RATED</b> &mdash; the monthly posting divided by that month&rsquo;s days and multiplied by yours. That is arithmetic, not an observation: half a month of rent was never actually paid, and a range straddling a quarterly rent cheque stays lumpy underneath. '
+      +'Switch to <b>The month</b> for the version where every line is a posting.'):'')
+    +'</div>';
+   pnlCard(g,'odoo','Head to head &mdash; any branch against any other, or against the webstore'
+    +INFO('Same month and same sources as the table above; this is an arrangement of those columns, not a second calculation. Gap is A minus B, with the relative difference under it on money lines.'),
+    'Pick two columns. Every line restated as A, B, the gap, and which way it points.',vh);
+  })();}catch(e){}
+
+ pnlCard(g,'odoo','The whole company \u2014 every branch, the webstore, one month'
   +INFO('<b>Consignment is costed, and this card used to say it was not.</b> The old note here claimed Odoo posts no per-sale cost on consignment and that the revenue share could not be derived. Both were wrong and both are now measured on <code>combined.retail.sales.report</code> over the twelve months to 2026-09-28: <b>23 of 361,948 consignment lines</b> carry no cost, 0.006% &mdash; against 2,285 of 935,695 on the cash side, 0.24%. Consignment costing is roughly forty times cleaner than cash costing, not dirtier. Consignment ran <b>E&pound;173.5M of revenue at 28.19%</b> on the 4% basis; cash ran <b>E&pound;392.4M at 36.47%</b>. So consignment is 30.7% of the revenue and 25.5% of the gross profit, and it is thinner by 8.3% of revenue &mdash; a real commercial fact about the terms, not a data gap. The margin on this card is therefore as sound for consignment as for anything else. '
   +'Branch revenue and margin: report.pos.order, GP on the 4% basis. Salaries and rent: the analytic ledger, with EXCEL/AVG fallbacks marked on the cell. Utilities+maintenance and Meta in-store spend allocated by revenue share, identically to the Branches P&L. ONLINE pays its own e-com payroll, its delivery net of shipping collected, and the rest of the ad budget after the branch allocation — so the Ads row sums to the real total spend. Refunds are order-dated where the payload carries them.'),
   'Columns ranked by contribution. The HQ block sits below the line because no column owns it.',sel+b);
@@ -20774,7 +20936,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-185806';
+const BUILD='20261002-200000';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
