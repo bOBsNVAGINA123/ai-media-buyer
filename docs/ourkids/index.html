@@ -1523,6 +1523,27 @@ function feeNet(m){try{return Math.max(0,feeAll(m)-(s2h(m)?(s2('cost',m)||0):0))
    three percent of revenue.
    ========================================================================== */
 var _POSMGC=null;
+/* ============================================================================
+   v63 · THE AD BUDGET IS THE WEBSTORE'S, EVERYWHERE. ONE SWITCH, NOT FIVE.
+   Shavi, twice: "the ads are STRICTLY for Shopify". The tool was splitting the ad
+   bill across the webstore and the shops in FIVE separate places, each with its own
+   arithmetic -- the one-order card, the net-profit split, the whole-company P&L, the
+   branch aMER, and the Growth Lab's branch scope. I fixed the one he screenshotted
+   and the other four would have survived, which is the exact habit the notes in this
+   file keep catching.
+   The split came from Meta's own attributed-value share, which is an attribution
+   artefact, not a purchase decision. The purchase decision is his and it is: this
+   money buys webstore traffic. Measured support for keeping any of it on the shops is
+   weak -- branch revenue tracks Meta spend in levels (beta +20.8, t 11.2 with month
+   fixed effects) but collapses to beta +6.1, t 2.01 on first differences.
+   So: ONE constant, used by every site. Branches carry no ad cost; the webstore
+   carries all of it. Flip ADS_ONLINE_FRAC to go back to a split and all five move
+   together.
+   ========================================================================== */
+const ADS_ONLINE_FRAC=1;            /* share of MEDIA charged to the webstore */
+function adsSplit(meta,google,tt){
+ const m=meta||0,g=google||0,t=tt||0, f=ADS_ONLINE_FRAC;
+ return {on:g+t+m*f, st:m*(1-f), all:g+t+m, frac:f};}
 function posMgMonths(){try{const nowM=(window.O.today||'').slice(0,7),P=window.O.pos||{};
   const ks=Object.keys(P);if(!ks.length)return [];
   return [...new Set(ks.flatMap(b=>Object.keys(P[b]||{})))].sort().filter(m=>m!==nowM).slice(-3);}catch(e){return [];}}
@@ -5449,6 +5470,10 @@ function gl12rent(br,m){ const bk=(O.rentB||{})[br]; if(!bk)return 0;
    in that month. Meta reports value per branch and never spend, so this is an
    allocation and every surface that shows it says so. */
 function glBrSpend(br,m){ try{
+  /* v63 the media bill belongs to the webstore, so a branch model charges no ad cost.
+     The allocation below is kept behind the switch rather than deleted, because the
+     branch aMER card still needs a denominator and says so on its own face. */
+  if(ADS_ONLINE_FRAC>=1)return 0;
   const A=O.ad,t0=Date.parse(A.start+'T00:00:00Z'); let ms=0;
   for(let i=0;i<A.n;i++){const d=new Date(t0+i*864e5).toISOString().slice(0,10);
     if(d.slice(0,7)===m)ms+=(A.mspend||[])[i]||0;}
@@ -5663,7 +5688,9 @@ function rGLBranch(g,b){
   ['mg','Gross margin',0.5,1.6,0.1,v=>v.toFixed(1)+'%','This branch\u2019s OWN measured margin on the 4% basis, not the company figure.'],
   ['rent','Rent per month',0,2,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'Trailing 12-month average of posted rent for this branch. A single month is the wrong unit: the cheques are quarterly.'],
   ['sal','Payroll per month',0.3,2,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'Trailing 12-month average of posted salaries tagged to this branch.'],
-  ['spend','Allocated ad spend',0,3,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),'ALLOCATED, not measured. Meta reports in-store attributed value per branch but never spend, so this is Meta spend split by that value share.']];
+  ['spend',(ADS_ONLINE_FRAC>=1?'Ad spend charged here':'Allocated ad spend'),0,3,1000,v=>'E\u00a3'+Math.round(v).toLocaleString(),
+    (ADS_ONLINE_FRAC>=1?'Zero by decision, not by accident: the media budget is bought to drive the webstore, so no branch is charged for it. Drag it up to model what this shop would have to return if you did spend against it.'
+                      :'ALLOCATED, not measured. Meta reports in-store attributed value per branch but never spend, so this is Meta spend split by that value share.')]];
  let sh='';
  SL.forEach(x=>{const k=x[0],lo=b[k]*x[2],hi=(b[k]*x[3])||1,cur=V[k],base=b[k];
   const d=base?((cur/base-1)*100):0;
@@ -5690,18 +5717,23 @@ function rGLBranch(g,b){
   +'<th style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3);text-transform:uppercase">How it is computed</th></tr>'
   +row('Till revenue',now.rev,sc.rev,'receipts &times; basket',1,'rev')
   +row('Gross profit',now.gp,sc.gp,'revenue &times; this branch&rsquo;s margin (4% basis)',0,'gp')
-  +row('Allocated ad spend',-V.spend,-V.spend,'allocated, not measured &mdash; see the note under the table')
+  +row((ADS_ONLINE_FRAC>=1?'Ad spend charged here':'Allocated ad spend'),-V.spend,-V.spend,
+     (ADS_ONLINE_FRAC>=1?'zero &mdash; the whole media budget sits with the webstore':'allocated, not measured &mdash; see the note under the table'))
   +row('After ads',now.afterAds,sc.afterAds,'GP &minus; allocated ad spend',1,'afterAds')
   +row('Rent',-B.rent,-V.rent,'trailing 12-month average')
   +row('Payroll',-B.sal,-V.sal,'trailing 12-month average')
   +row('After rent and payroll',now.afterAll,sc.afterAll,'what this floor actually contributes',1,'afterAll')
   +'</table></div>'
   +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.55;color:var(--ink-2)">'
-  +'<b style="color:var(--warn)">This is contribution, not net profit.</b> It charges the shop for its own floor and its own people and nothing else &mdash; no share of head office, no central logistics, no finance costs. Two lines are not measurements: ad spend is allocated from Meta&rsquo;s in-store attributed value, and rent and payroll are twelve-month averages rather than what posted in '+b.bm+'.</div>';
+  +'<b style="color:var(--warn)">This is contribution, not net profit.</b> It charges the shop for its own floor and its own people and nothing else &mdash; no share of head office, no central logistics, no finance costs. '
+  +(ADS_ONLINE_FRAC>=1
+    ?'<b>And no media.</b> The ad budget is bought to drive the webstore, so the whole bill is charged there and no branch carries any of it. That makes every branch contribution on this page BETTER than it would be under any split, and it is a deliberate choice rather than a gap &mdash; the slider is there if you want to model spending against this shop. '
+    :'One line is not a measurement: ad spend is allocated from Meta&rsquo;s in-store attributed value. ')
+  +'Rent and payroll are twelve-month averages rather than what posted in '+b.bm+'.</div>';
  pnlCard(g,'blend','The cascade &mdash; every line, both scenarios','Read left to right. No step is hidden.',ct);
  /* --- lever ranking, one at a time, same 10% --- */
  const LV=[['recp','Receipts',1],['basket','Average basket',1],['mg','Gross margin',1],
-   ['rent','Rent',-1],['sal','Payroll',-1],['spend','Allocated ad spend',-1]];
+   ['rent','Rent',-1],['sal','Payroll',-1],['spend',(ADS_ONLINE_FRAC>=1?'Ad spend charged here':'Allocated ad spend'),-1]];
  const fmtL=(k,v)=>k==='mg'?v.toFixed(1)+'%':(k==='recp'?Math.round(v).toLocaleString()+' receipts':'E\u00a3'+Math.round(v).toLocaleString());
  const rankR=LV.map(l=>{const W=Object.assign({},B);W[l[0]]=B[l[0]]*(1+l[2]*0.10);const r=glRun(W);
    return {k:l[0],n:l[1],gp:annl(r.afterAll-now.afterAll,b.bm),rev:annl(r.rev-now.rev,b.bm),from:B[l[0]],to:W[l[0]]};})
@@ -6431,7 +6463,9 @@ function rAU(){if(TAB!=='au')return;dCh();
   const rent=rentP!=null?rentP:(n==='Dokki'?0:rAvg[n]);
   const share=totPos?rev/totPos:0;
   const util=utilPool*share;
-  const ads=adsOK?AD.ms*(AD.ov?AD.io/AD.ov:0)*share:0;
+  /* v63 was AD.ms x Meta's in-store value share x this branch's revenue share. The ads
+     are bought for the webstore, so no branch column carries any of the media bill. */
+  const ads=adsOK?AD.ms*(1-ADS_ONLINE_FRAC)*(AD.ov?AD.io/AD.ov:0)*share:0;
   return {n:n,rev:rev,gp:gp,ord:ord,sal:sal,salEst:salP==null,rent:rent,rentEst:rentP==null&&n!=='Dokki',
     util:util,ads:ads,contrib:gp-sal-rent-util-ads};});
  cols.sort((a,b)=>b.contrib-a.contrib);
@@ -8492,7 +8526,8 @@ function orderLadder(g,o){
      ========================================================================== */
   const netShare=aov-goods-courier+shipBack-fees-adPoShare-(opxPo||0);
   const netFull=aov-goods-courier+shipBack-fees-adPo-(opxPo||0);
-  const net=netFull;
+  /* v63 the same constant every other card now reads */
+  const net=(ADS_ONLINE_FRAC>=1)?netFull:netShare;
   const be=1/q.gpOn;
   const roasClaim=(o.broas&&o.broas[0])||0;
   let run=aov;
@@ -8501,7 +8536,9 @@ function orderLadder(g,o){
    ['Courier — full bill',-courier,null,'outbound + return legs + RTO'],
    ['Shipping the customer paid',+shipBack,null,'collected at checkout — covers part of the bill'],
    ['COD & payment fees',-fees,null,'Bosta collection + PayMob'],
-   ['Ads — the whole budget',-adPo,null,'every pound of Meta, Google and TikTok, charged here. You buy this traffic for the webstore, so the webstore pays for all of it'],
+   [(ADS_ONLINE_FRAC>=1?'Ads — the whole budget':'Its share of ads'),-(ADS_ONLINE_FRAC>=1?adPo:adPoShare),null,
+     (ADS_ONLINE_FRAC>=1?'every pound of Meta, Google and TikTok, charged here. You buy this traffic for the webstore, so the webstore pays for all of it'
+                        :'Google + TikTok whole, Meta at its measured '+Math.round(mShare*100)+'% web share')],
    ['Its share of OpEx',-(opxPo||0),null,opxPo!=null?'packing, cargo, HQ share — last complete month per order':'(no complete month posted)']];
   let rows='';
   L.forEach((r,i)=>{run= i===0?r[1]:run+r[1];
@@ -8559,7 +8596,8 @@ function netSplitCard(g){
  for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);if(mons.indexOf(m)<0)continue;
   mWeb+=(O.ad.mecomrev||[])[i]||0; mSt+=(O.ad.instoreMeta||[])[i]||0;}
  const mShareOn=(mWeb+mSt)>0?mWeb/(mWeb+mSt):1;
- const adsOn=adG+adT+adM*mShareOn, adsSt=adM*(1-mShareOn);
+ /* v63 the whole media bill sits with the webstore */
+ const _as=adsSplit(adM,adG,adT); const adsOn=_as.on, adsSt=_as.st;
 
  // --- opex, by what the account is ---
  /* v9.66: when the range sits inside the RUNNING month, its expense ledger is mostly
@@ -8637,7 +8675,9 @@ function netSplitCard(g){
    +(mons.length===1?('the whole month '+mons[0]):('months '+mons[0]+' → '+mons[mons.length-1]))
    +' — NOT the '+Math.max(1,span(ST.s,ST.e))+' days in your date box</div><br>'
   +lead+(typeof EST!=='undefined'&&EST?'<span style="color:#a4561a"><b>'+nowM+' is the running month and its expense ledger is barely posted (E£'+Math.round(expTot(nowM)).toLocaleString()+' booked vs E£'+Math.round(expTot(lastFull)).toLocaleString()+' in '+lastFull+') — operating costs, payroll and courier below are charged at '+lastFull+'’s posted book × '+elapN+'/'+dimN+' elapsed days. Estimates, not postings.</b></span> ':'')+'Complete accounting months in your range: <b>'+win+'</b>'+(dropped.length?' (the running month '+nowM+' is excluded — a part-month of revenue against a full month of rent reads as a fake loss)':'')+'. '
-  +'Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '
+  +(ADS_ONLINE_FRAC>=1
+    ?('<b>The whole ad budget is charged to the webstore</b>, because that is what it is bought to do. Meta&rsquo;s own attributed value would put '+Math.round((1-mShareOn)*100)+'% of its spend against the shops, and that split is deliberately NOT used: it is an attribution artefact, and the measured link is weak — branch revenue tracks Meta spend in levels (beta +20.8, t 11.2 with seasonality removed) but collapses to beta +6.1, t 2.01 on first differences. The branches therefore carry no media cost on this card, which makes the webstore line the conservative one. ')
+    :('Meta is split '+Math.round(mShareOn*100)+'% online / '+Math.round((1-mShareOn)*100)+'% in store, which is the split Meta’s own attributed value reports for these months. '))
   +'The shared overhead pool of '+M(shared)+' goes '+Math.round(wOn*100)+'% online / '+Math.round((1-wOn)*100)+'% shops, on revenue.',
   body
   +'<div class="ins" style="margin-top:9px"><div class="row"><span class="dot" style="background:'+C.orange+'"></span><span><b>The one judgement call, named.</b> Every figure above is a posted ledger number except the split of the shared overhead pool. Move that pool entirely to the shops and online improves by '+M(shared*wOn)+'; move it entirely to online and the shops improve by the same. It changes who looks profitable, never whether the company is.</span></div>'
@@ -13263,6 +13303,7 @@ function bScore(g){const BL=O.bl||{},FN=O.fin||{},AD=O.ad||{},BM=O.bmeta||{},B=_
    +cell('Online half',onA.toFixed(2)+'×',M(onNc)+' of first-time webstore revenue over that same total spend.')
    +'</div>';
   const note='<div style="margin-top:11px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--neg)">The spend column here is NOT a cost any branch carries.</b> Every P&amp;L on this tool charges the whole media budget to the webstore, because that is what it is bought to do &mdash; on that basis a branch&rsquo;s ad spend is zero and a per-branch aMER has no denominator at all. The allocation below survives on this card alone, as a <b>yardstick for ranking branches against each other</b>, and nowhere else. Do not carry it into a branch P&amp;L; it is not in one.<br><br>'
    +'<b style="color:var(--warn)">How this is measured, and where it stops being a measurement.</b> '
    +'Till revenue, the first-time and returning split, baskets, Meta&rsquo;s in-store attributed value and its in-store new customers are MEASURED, per branch and per day. '
    +'<b>The two derived things are the spend split and therefore aMER.</b> Meta reports attributed VALUE per branch but never spend, so each branch here is charged a share of Meta spend equal to its share of Meta&rsquo;s in-store attributed value. '
@@ -20964,7 +21005,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-202933';
+const BUILD='20261002-203712';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
