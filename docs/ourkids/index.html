@@ -16391,7 +16391,19 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
         here: measured over 2025-12..2026-09 it runs 0.96-1.03x ALL-CHANNEL revenue and
         1.17-1.21x Shopify-only, i.e. it is an all-channel split and would print ~120%
         against this Shopify-only column. */
-     cs.forEach(c=>c.revC=c.rev); on.revC=0; T.revC=cs.reduce((a,c)=>a+(c.rev||0),0);
+     cs.forEach(c=>c.revC=c.rev);
+     /* v70 ONLINE used to print a dash on the whole customer split. The numbers DO exist in
+        O.nr -- they are just on a different base: measured over 2025-12..2026-09 that pack
+        totals 0.96-1.03x ALL-CHANNEL online revenue and 1.17-1.21x Shopify-only. So it is
+        shown against the base it is actually measured on (all-channel online, marketplaces
+        included) and marked, instead of being hidden or silently divided by Shopify. */
+     let _nc=0,_nr=0,_rr=0,_ra=0;
+     MS.forEach(m=>{const r=(O.nr||{})[m]; if(r){_nc+=r.nord||0;_nr+=r.nrev||0;_rr+=r.rrev||0;}
+       const pa=M[m]; if(pa)_ra+=(pa.g||0)-(pa.r||0);});
+     if(_ra>0&&(_nr+_rr)>0){on.nc=_nc; on.nrev=_nr; on.rrev=_rr;
+       on.unr=Math.max(0,_ra-_nr-_rr); on.revC=_ra; on.cBase='allch';}
+     else on.revC=0;
+   T.revC=cs.reduce((a,c)=>a+(c.rev||0),0)+(on.revC||0);
      let gl=0; ms.forEach(m=>{try{gl+=expTot(m);}catch(e){}});
      return {cs:cs,on:on,T:T,ov:ov,ovK:ovK,ovTot:ovTot,gl:gl,
              cols:cs.concat([on,T]), ebitda:T.contrib-ovTot};};
@@ -16442,12 +16454,18 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const THc='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
    const bd=c=>(isOn(c)||isT(c))?';border-left:2px solid var(--line-2)':'';
    const cell=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){v=null;} return F[L.f](v);};
+   /* the ONLINE customer split is measured on all-channel online revenue, which is NOT the
+      Shopify revenue printed at the top of its own column -- so any cell using that base is
+      marked, on ONLINE and on the TOTAL that contains it. */
+   const CB='<span title="Measured on ALL-CHANNEL online revenue (Noon, Amazon and Homzmart included), not the Shopify-only revenue shown in this column." style="color:var(--warn);font-weight:800;cursor:help;margin-left:3px">\u00b0</span>';
+   const cbMark=(L,c,X)=>(pkOf(L)==='revC'&&((c.cBase==='allch')||(c.n==='TOTAL'&&X.on&&X.on.cBase==='allch')))?CB:'';
    const show=(L,c,X)=>{const money=cell(L,c,X), q=pcell(L,c,X);
-     if(!PM||q==null)return money;
-     if(PM==='pct')return q;
+     const mk=cbMark(L,c,X);
+     if(!PM||q==null)return money+mk;
+     if(PM==='pct')return q+mk;
      /* stacked, not inline: ten columns are already wide, and "E£99,351,205 19.4%" on one
         line reads as one number at a glance. */
-     return money+'<span style="display:block;color:var(--ink-3);font-size:10.5px;font-weight:600;margin-top:1px">'+q+'</span>';};
+     return money+mk+'<span style="display:block;color:var(--ink-3);font-size:10.5px;font-weight:600;margin-top:1px">'+q+'</span>';};
    /* v66 COLOUR GRADING, same shade() every other P&L table on this tool uses, so this
       table reads like its neighbours instead of being the one flat grid on the tab.
       Scaled across the BRANCH columns only -- ONLINE is not like-for-like and TOTAL is a
@@ -16466,9 +16484,26 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
         as-is  -- lines that are already a rate (margins, the % rows) and AOV, which is a
                   per-order figure: a percentage of revenue would be meaningless, so the
                   money value stands in both modes. */
-   const SHARE={'Revenue (POS, actual)':1,'Orders':1,'New customers':1};
+   const SHARE={'Revenue (POS, actual)':1,'Orders':'n','New customers':'n'};
    const REVC={'New-customer revenue':1,'Returning revenue':1,'Unregistered revenue':1};
-   const pkOf=L=>(L.f==='pct'||L.l==='AOV')?'as':(SHARE[L.l]?'share':(REVC[L.l]?'revC':'rev'));
+   /* v70 THE BASE IS NOW EXPLICIT AND SWITCHABLE. Reading a column where one row is a
+      share of the company and the next is a share of its own revenue, with nothing saying
+      which, is the fastest way to misread a P&L. Every percentage now carries its base in
+      the row label, and the base itself is a picker:
+        auto    -- revenue, orders and new customers as a share of the COMPANY, everything
+                   else against its own column's revenue (the default, and the one that
+                   makes each line say what it is for);
+        own     -- every money line against its own column's revenue (counts have no money
+                   base, so they stay a company share and are labelled as such);
+        company -- every line as a share of the TOTAL column, money and counts alike. */
+   const PB=ST.rpCombB==='own'?'own':(ST.rpCombB==='company'?'company':'auto');
+   const pkAuto=L=>(L.f==='pct'||L.l==='AOV')?'as':(SHARE[L.l]?'share':(REVC[L.l]?'revC':'rev'));
+   const pkOf=L=>{const a2=pkAuto(L); if(a2==='as')return 'as';
+     if(PB==='company')return 'share';
+     if(PB==='own')return a2==='share'?'share':a2;
+     return a2;};
+   const BASEL={rev:'of own revenue',revC:'of own revenue',share:'share of company'};
+   const baseTag=L=>{const k=pkOf(L); return BASEL[k]?('<span style="color:var(--ink-3);font-weight:500;font-size:10px;margin-left:6px">\u00b7 '+BASEL[k]+'</span>'):'';};
    const pctOf=(L,c,X)=>{const pk=pkOf(L); if(pk==='as')return null;
      let v;try{v=L.g(c,X);}catch(e){return null;}
      if(v==null||!isFinite(v))return null;
@@ -16503,7 +16538,12 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      +'style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:6px">'
      +[['both','E£ + %'],['pct','% only'],['money','E£ only']]
        .map(o=>'<option value="'+o[0]+'"'+((o[0]==='money'?'':o[0])===PM?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
+   const bsel='<select onchange="ST.rpCombB=this.value;rRetail()" '
+     +'style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:6px">'
+     +[['auto','Auto (per line)'],['own','% of own revenue'],['company','% share of company']]
+       .map(o=>'<option value="'+o[0]+'"'+(o[0]===PB?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
    let ch='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel+' <span style="margin-left:10px">Show</span>'+psel
+     +'<span style="margin-left:10px">% base</span>'+bsel
      +' <span style="margin-left:10px;color:var(--ink-3)">Click any line to break it down month by month.</span></div>'
      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
      +'<tr><th style="'+THc+';text-align:left">'+(selM?(selM+partL(selM)):(MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+(MS.indexOf(NOWM)>=0?(' · incl. '+NOWD+'d of '+NOWM):'')))+'</th>'
@@ -16514,7 +16554,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     ch+='<tr style="cursor:pointer'+(L.b?';background:var(--surface-3);font-weight:800':'')+(L.ov&&!L.b?';background:var(--surface-2)':'')+'"'
       +' onclick="ST.rpCombX='+(open?'null':i)+';rRetail()" title="Break this line down by month">'
       +'<td style="'+TDc+';text-align:left;font-weight:'+(L.b?'800':'620')+';color:var(--ink)">'
-      +'<span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(open?'▾':'▸')+'</span>'+L.l+'</td>'
+      +'<span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(open?'▾':'▸')+'</span>'+L.l+(PM?baseTag(L):'')+'</td>'
       +(function(){const sc=gscale(L,base);return base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+paint(L,c,base,sc)+'">'+show(L,c,base)+'</td>').join('');})()+'</tr>';
     if(!open)return;
     ALLM.forEach(m=>{const X=mbuild(m);
@@ -16530,7 +16570,9 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     +'The ONLINE column is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
     +'<b>Branches carry no media</b> &mdash; the whole ad budget is charged to the webstore, because that is what it is bought to do. '
     +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((Q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget.'
-    +'<br><br><b style="color:var(--ink)">Percentages are common-size, and the base differs by line.</b> '
+    +'<br><br><b style="color:var(--ink)">Percentages are common-size, the base is written on every row, and the <span style="color:var(--warn)">% base</span> picker switches it.</b> '
+    +'<b>Auto</b> gives each line the base that makes it mean something; <b>% of own revenue</b> puts every money line over its own column; <b>% share of company</b> puts every line, counts included, over the TOTAL column. '
+    +'Cells marked <span style="color:var(--warn);font-weight:800">\u00b0</span> are the ONLINE customer split, measured on all-channel online revenue (marketplaces included) rather than the Shopify-only revenue at the top of that column. '
     +'Revenue, orders and new customers show a <b>share of the company</b> (a line as a percentage of itself would read 100% everywhere). '
     +'The customer-split lines divide by <b>branch</b> revenue, the base their own share rows use, because that split does not cover the webstore. '
     +'Every other money line divides by <b>its own column&rsquo;s revenue</b>. '
@@ -21396,7 +21438,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261003-014012';
+const BUILD='20261003-014843';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
