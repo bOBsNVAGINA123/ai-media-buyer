@@ -1911,7 +1911,7 @@ function ltPortfolio(h){
    +'<td>'+(r.rev?rtF(r.rev):'\u2014')+'</td></tr>';}).join('')
  +'</table><div class="rtNote">'
  +(ADS_ONLINE_FRAC>=1?('<b style="color:var(--warn)">\u26a0 LTGP : CAC is not comparable across these rows.</b> The whole ad budget is charged to the webstore by decision, so every in-store scope is divided by a CAC that is near zero by construction &mdash; measured today, SHOPIFY E\u00a3384 against ALL STORES E\u00a32.73. That, not customer quality, is what makes the branch ratios run into the hundreds. <b>Rank the shops against each other on LTGP, AOV, APF or repeat rate; use LTGP : CAC only for Shopify and BLENDED.</b><br><br>'):'')
- +'<b>AOV</b> = revenue \u00F7 transactions. <b>UPT</b> = units \u00F7 transactions (from <code>product_qty</code> on the POS report and the Shopify order lines \u2014 a dash means that scope has not been re-crawled since UPT was added). <b>APF</b> = orders per customer per year from their own order history, so it is a real repeat rate, not revenue \u00F7 customers. A portfolio with a high AOV and a low APF is a one-off shop; the opposite is a habit \u2014 and only the second one compounds against CAC.</div></div>'):'';}
+ +'<b>AOV</b> = revenue \u00F7 transactions. <b>UPT</b> = units \u00F7 transactions (from <code>product_qty</code> on the POS report and the Shopify order lines \u2014 a dash means that scope has not been re-crawled since UPT was added). <b>APF</b> = orders per customer per year from their own order history, so it is a real repeat rate, not revenue \u00F7 customers. A portfolio with a high AOV and a low APF is a one-off shop; the opposite is a habit \u2014 and only the second one compounds against CAC. <br><br><b>On tenure.</b> LTGP is already measured at a fixed horizon, so it is comparable; APF per year and revenue per month are rates, so they are too. <b>Repeat % is lifetime</b> and therefore rises with how long a scope&rsquo;s customers have been on the books \u2014 read it alongside APF, not instead of it. For the same question asked of suppliers, with tenure divided out entirely, see <b>Vendor LTV</b> on Products \u2192 Vendors &amp; products LTV.</div></div>'):'';}
 function rLT(){if(TAB!=='lt')return;dCh();
  const g=document.getElementById('g21');
  const M=rtM();if(!M.length||typeof RT_LT==='undefined'){g.innerHTML='';document.getElementById('bn21').innerHTML='No monthly data in this sync.';return;}
@@ -18200,7 +18200,55 @@ window.dcmpTable=function(list,opt){
          : ('<b>'+(x.mar>=0?'it earned more per pound':'it earned less per pound')+'</b> · margin '+(x.pm*100).toFixed(1)+'% → '+(x.cm*100).toFixed(1)+'%, worth '+sg(x.mar)+' of the '+sg(x.dGP))))
    +'</td></tr>';});
  return h+'</table></div>';};
+/* v72 VENDOR LTV, MEANT LITERALLY. The acquisition-hook card ranks vendors on LIFETIME gross
+   profit per customer they acquired, which rewards any vendor whose customers simply started
+   earlier -- two years of trading beats one regardless of quality. This asks the same question
+   fairly: for the customers a vendor ACQUIRED, what is gross profit per customer at a FIXED
+   number of days from each of THEIR OWN first purchase, counting a customer at a horizon only
+   once that horizon has elapsed for them. The last column is the one that matters: GP at a year
+   divided by GP on day one, i.e. how much a vendor's customers come BACK for, with the size of
+   the first basket divided out -- a cheap hook with a high multiple beats an expensive one with
+   a flat line. */
+function vcohCard(g){
+ const V=O.vcoh; if(!V||!V.rows||!V.rows.length)return;
+ const HZ=V.hz||[0,30,60,90,180,365,730];
+ const lbl=h=>h===0?'First purchase':(h+'d');
+ const key=ST.vcohK||'mult';
+ const mult=r=>{const a=r.cur[0],b=r.cur[HZ.indexOf(365)];return (a&&b&&a>0)?b/a:null;};
+ const rows=V.rows.slice().sort((x,y)=>{
+   if(key==='mult')return (mult(y)||0)-(mult(x)||0);
+   if(key==='n')return y.n-x.n;
+   const i=HZ.indexOf(+key); if(i<0)return 0;
+   return (y.cur[i]||0)-(x.cur[i]||0);});
+ const TD='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;white-space:nowrap';
+ const TH='padding:5px 8px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const chip=(k,t)=>'<span class="chip" style="'+(String(key)===String(k)?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ST.vcohK=\''+k+'\';rVend()">'+t+'</span>';
+ let h='<div style="margin-bottom:8px;font-size:11.5px;color:var(--ink-2)">Rank by '
+   +HZ.map(x=>chip(x,lbl(x))).join(' ')+' '+chip('mult','365d \u00f7 first')+' '+chip('n','Customers')+'</div>'
+   +'<div style="overflow-x:auto"><table class="bt heat" data-hc="'+HZ.map((_,i)=>i+2).join(',')+','+(HZ.length+2)+'" data-hcx="1" style="width:100%">'
+   +'<tr><th style="'+TH+';text-align:left">Vendor that acquired them</th><th style="'+TH+'">Customers</th>'
+   +HZ.map(x=>'<th style="'+TH+'">'+lbl(x)+'</th>').join('')
+   +'<th style="'+TH+'">365d \u00f7 first</th></tr>';
+ rows.slice(0,40).forEach(r=>{
+  h+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+String(r.nm).replace(/</g,'&lt;')+'</td>'
+   +'<td style="'+TD+'">'+r.n.toLocaleString()+'</td>'
+   +HZ.map((x,i)=>{const v=r.cur[i],m=r.mat[i]||0;
+     return '<td style="'+TD+'"'+(m?(' title="'+m.toLocaleString()+' customers have completed '+lbl(x)+'"'):'')+'>'
+      +(v==null||!m?'\u2014':('E\u00a3'+Math.round(v).toLocaleString()))+'</td>';}).join('')
+   +'<td style="'+TD+';font-weight:800">'+(mult(r)!=null?mult(r).toFixed(2)+'\u00d7':'\u2014')+'</td></tr>';});
+ h+='</table></div><div class="rtNote">'
+  +'<b>Every column is per customer the vendor acquired, measured from that customer\u2019s own first purchase</b>, so a vendor is never credited for its customers simply being older. '
+  +'A customer counts at a horizon only once that horizon has actually elapsed for them, which is why the customer count behind each column falls as the window lengthens \u2014 hover a cell for it. '
+  +'<b>365d \u00f7 first</b> divides out the size of the first basket and leaves the repeat behaviour: 1.00\u00d7 means they never came back, 3.00\u00d7 means a year was worth three first baskets. '
+  +'Vendors with fewer than '+V.minN+' acquired customers are not listed. Measured '+(V.asOf||'')+'.'
+  +'</div>';
+ pnlCard(g,'odoo','Vendor LTV \u2014 what the customers a vendor ACQUIRED are worth, at a fixed age'
+  +INFO('Gross profit per acquired customer at 0/30/60/90/180/365/730 days from their own first purchase. Unlike lifetime value this cannot be inflated by a vendor whose customers started earlier.'),
+  'Tenure-normalised, so an older vendor is not flattered. Rank by any horizon, or by how much they come back for.',h);
+ try{applyHeat(g);}catch(e){}}
+window.vcohCard=vcohCard;
 function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12');g.innerHTML='';
+ try{vcohCard(g);}catch(e){console.error('vendor LTV cohort card failed:',e);}
  const money=v=>Math.round(Math.abs(v)).toLocaleString(),E='E&pound; ';
  /* v9.91: this tab shipped as a FIXED lifetime window, so changing the date box did nothing and
     said nothing. Each vendor carries a monthly revenue/GP series, so the rows can be re-cut to
@@ -21449,7 +21497,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261003-015220';
+const BUILD='20261003-020157';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
