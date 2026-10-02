@@ -16315,6 +16315,13 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      const ovTot=ovK.reduce((a,k)=>a+ov[k],0);
      const all=cs.concat([on]);
      const T={n:'TOTAL'}; KEYS.forEach(k=>T[k]=all.reduce((a,c)=>a+(c[k]||0),0));
+     /* the customer split is branch-only, so its share rows divide by BRANCH revenue --
+        dividing the TOTAL's new-customer revenue by a revenue line that includes the
+        webstore would understate every share. O.nr (the online cohort pack) is NOT used
+        here: measured over 2025-12..2026-09 it runs 0.96-1.03x ALL-CHANNEL revenue and
+        1.17-1.21x Shopify-only, i.e. it is an all-channel split and would print ~120%
+        against this Shopify-only column. */
+     cs.forEach(c=>c.revC=c.rev); on.revC=0; T.revC=cs.reduce((a,c)=>a+(c.rev||0),0);
      let gl=0; ms.forEach(m=>{try{gl+=expTot(m);}catch(e){}});
      return {cs:cs,on:on,T:T,ov:ov,ovK:ovK,ovTot:ovTot,gl:gl,
              cols:cs.concat([on,T]), ebitda:T.contrib-ovTot};};
@@ -16345,11 +16352,14 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {l:'New-customer revenue', g:c=>c.nrev||null, f:'cur'},
     {l:'Returning revenue', g:c=>c.rrev||null, f:'cur'},
     {l:'Unregistered revenue', g:c=>c.unr||null, f:'cur'},
-    {l:'Salaries (branch-tagged)', g:c=>isOn(c)?null:(c.sal||0), f:'neg'},
-    {l:'Rent (branch-tagged)', g:c=>isOn(c)?null:(c.rent||0), f:'neg'},
-    {l:'Utilities + maintenance (allocated)', g:c=>isOn(c)?null:(c.util||0), f:'neg'},
-    {l:'Courier + payment fees', g:c=>c.drag?c.drag:(isOn(c)?0:null), f:'neg'},
-    {l:'Media (whole ad budget)', g:c=>c.med||0, f:'neg', m:1},
+    {l:'New-customer revenue %', g:c=>c.revC?c.nrev/c.revC*100:null, f:'pct', m:1},
+    {l:'Returning revenue %', g:c=>c.revC?c.rrev/c.revC*100:null, f:'pct', m:1},
+    {l:'Unregistered revenue %', g:c=>c.revC?c.unr/c.revC*100:null, f:'pct', m:1, gd:-1},
+    {l:'Salaries (branch-tagged)', g:c=>isOn(c)?null:(c.sal||0), f:'neg', gd:-1, rel:1},
+    {l:'Rent (branch-tagged)', g:c=>isOn(c)?null:(c.rent||0), f:'neg', gd:-1, rel:1},
+    {l:'Utilities + maintenance (allocated)', g:c=>isOn(c)?null:(c.util||0), f:'neg', gd:-1, rel:1},
+    {l:'Courier + payment fees', g:c=>c.drag?c.drag:(isOn(c)?0:null), f:'neg', gd:-1, rel:1},
+    {l:'Media (whole ad budget)', g:c=>c.med||0, f:'neg', m:1, gd:-1, rel:1},
     {l:'CONTRIBUTION', g:c=>c.contrib, f:'sgn', b:1},
     {l:'Contribution margin', g:c=>c.rev?c.contrib/c.rev*100:null, f:'pct', m:1}];
    const OVSTART=LINES.length;
@@ -16362,6 +16372,21 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const THc='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
    const bd=c=>(isOn(c)||isT(c))?';border-left:2px solid var(--line-2)':'';
    const cell=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){v=null;} return F[L.f](v);};
+   /* v66 COLOUR GRADING, same shade() every other P&L table on this tool uses, so this
+      table reads like its neighbours instead of being the one flat grid on the tab.
+      Scaled across the BRANCH columns only -- ONLINE is not like-for-like and TOTAL is a
+      sum, so neither belongs in the scale. Cost lines are graded on their share of that
+      branch's revenue (rel), not the raw pound figure, or the biggest shop is painted
+      worst simply for being biggest. */
+   const shBg=(v,mn,mx,good)=>{const t=shade(v,mn,mx,good);const m=t.match(/background:([^"]+)/);
+     return m?(';background:'+m[1]):'';};
+   const gval=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){return null;}
+     if(v==null||!isFinite(v))return null;
+     return (L.rel&&c.rev)?v/c.rev:v;};
+   const gscale=(L,X)=>{const ns=X.cs.map(c=>gval(L,c,X)).filter(v=>v!=null&&isFinite(v));
+     return ns.length>1?{mn:Math.min.apply(null,ns),mx:Math.max.apply(null,ns)}:null;};
+   const paint=(L,c,X,sc)=>{if(!sc||isOn(c)||isT(c))return '';
+     const v=gval(L,c,X); return v==null?'':shBg(v,sc.mn,sc.mx,L.gd==null?1:L.gd);};
 
    /* month strips are only built for the line you opened */
    const MCACHE={};
@@ -16386,11 +16411,11 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
       +' onclick="ST.rpCombX='+(open?'null':i)+';rRetail()" title="Break this line down by month">'
       +'<td style="'+TDc+';text-align:left;font-weight:'+(L.b?'800':'620')+';color:var(--ink)">'
       +'<span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(open?'▾':'▸')+'</span>'+L.l+'</td>'
-      +base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+'">'+cell(L,c,base)+'</td>').join('')+'</tr>';
+      +(function(){const sc=gscale(L,base);return base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+paint(L,c,base,sc)+'">'+cell(L,c,base)+'</td>').join('');})()+'</tr>';
     if(!open)return;
     ALLM.forEach(m=>{const X=mbuild(m);
       ch+='<tr style="background:var(--surface-2)"><td style="'+TDc+';text-align:left;padding-left:26px;font-size:11px;color:var(--ink-2)">'+m+(m===NOWM?('<span style="color:var(--warn);font-weight:700"> · '+NOWD+'d only</span>'):'')+'</td>'
-       +X.cols.map(c=>'<td style="'+TDc+bd(c)+';font-size:11px;color:var(--ink-2)">'+cell(L,c,X)+'</td>').join('')+'</tr>';});
+       +(function(){const sc=gscale(L,X);return X.cols.map(c=>'<td style="'+TDc+bd(c)+';font-size:11px;color:var(--ink-2)'+paint(L,c,X,sc)+'">'+cell(L,c,X)+'</td>').join('');})()+'</tr>';});
    });
    ch+='</table></div>';
 
@@ -16401,6 +16426,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     +'The ONLINE column is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
     +'<b>Branches carry no media</b> &mdash; the whole ad budget is charged to the webstore, because that is what it is bought to do. '
     +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((Q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget.'
+    +'<br><br><b style="color:var(--ink)">Colour ranks the branch columns only</b> &mdash; green is the better end, red the worse, and only genuine outliers are painted (the same scale every other P&amp;L table here uses). ONLINE and TOTAL are never in the scale, because one is not like-for-like and the other is a sum. <b>Cost lines are ranked on their share of that branch&rsquo;s revenue</b>, not the raw figure, so the largest shop is not painted worst for being largest.'
     +'<br><br><b style="color:var(--ink)">The expense block is the posted ledger, charged once.</b> '
     +'Branch salaries and rent come from the branch-tagged analytic ledger, so the GL payroll and branch-rent accounts are shown <b>net of what is already charged above</b>. '
     +'<b>&ldquo;Payment &amp; collection fees&rdquo; is not listed</b>: that account is the bucket holding the Bosta courier bill, which is already the courier line &mdash; charging the bucket as well would bill Bosta twice. '
@@ -21246,7 +21272,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-211235';
+const BUILD='20261002-230101';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
