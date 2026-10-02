@@ -5874,6 +5874,11 @@ def pull_vendors():
                      "br": {b: [round(x[0]), round(x[1])] for b, x in d["br"].items()},
                      "r90": round(d["r90"]), "p90": round(d["p90"]),
                      "cash": round(d["cash"]), "cons": round(d["cons"]), "cat": cat,
+                     # v59a these were accumulated in V() and then dropped here: the row is
+                     # rebuilt from an explicit key list, so adding a field to the accumulator
+                     # is only half the change. `cash`/`cons` shipped and `cashG`/`consG` did
+                     # not, which is exactly how a half-landed field looks in the payload.
+                     "cashG": round(d["cashG"]), "consG": round(d["consG"]),
                      "cust": c.get("cust", 0), "acq": c.get("acq", 0),
                      "ltgp": c.get("ltgp", 0), "rep": c.get("rep", 0), "opc": c.get("opc", 0)})
     rows.sort(key=lambda x: -(x["r"] + x["orev"]))
