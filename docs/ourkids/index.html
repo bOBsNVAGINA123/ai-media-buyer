@@ -16372,6 +16372,12 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const THc='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
    const bd=c=>(isOn(c)||isT(c))?';border-left:2px solid var(--line-2)':'';
    const cell=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){v=null;} return F[L.f](v);};
+   const show=(L,c,X)=>{const money=cell(L,c,X), q=pcell(L,c,X);
+     if(!PM||q==null)return money;
+     if(PM==='pct')return q;
+     /* stacked, not inline: ten columns are already wide, and "E£99,351,205 19.4%" on one
+        line reads as one number at a glance. */
+     return money+'<span style="display:block;color:var(--ink-3);font-size:10.5px;font-weight:600;margin-top:1px">'+q+'</span>';};
    /* v66 COLOUR GRADING, same shade() every other P&L table on this tool uses, so this
       table reads like its neighbours instead of being the one flat grid on the tab.
       Scaled across the BRANCH columns only -- ONLINE is not like-for-like and TOTAL is a
@@ -16380,6 +16386,30 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
       worst simply for being biggest. */
    const shBg=(v,mn,mx,good)=>{const t=shade(v,mn,mx,good);const m=t.match(/background:([^"]+)/);
      return m?(';background:'+m[1]):'';};
+   /* v67 COMMON-SIZE P&L. Every line also as a percentage, with the base chosen by what the
+      line IS rather than one blanket "/ revenue":
+        share  -- revenue, orders and new customers are shown as a share of the COMPANY,
+                  because "revenue as a % of revenue" is 100% on every column and says nothing;
+        revC   -- the customer-split money lines divide by BRANCH revenue, the same base the
+                  share rows use, since that split does not cover the webstore;
+        rev    -- every other money line divides by its own column's revenue;
+        as-is  -- lines that are already a rate (margins, the % rows) and AOV, which is a
+                  per-order figure: a percentage of revenue would be meaningless, so the
+                  money value stands in both modes. */
+   const SHARE={'Revenue (POS, actual)':1,'Orders':1,'New customers':1};
+   const REVC={'New-customer revenue':1,'Returning revenue':1,'Unregistered revenue':1};
+   const pkOf=L=>(L.f==='pct'||L.l==='AOV')?'as':(SHARE[L.l]?'share':(REVC[L.l]?'revC':'rev'));
+   const pctOf=(L,c,X)=>{const pk=pkOf(L); if(pk==='as')return null;
+     let v;try{v=L.g(c,X);}catch(e){return null;}
+     if(v==null||!isFinite(v))return null;
+     if(pk==='share'){let tv;try{tv=L.g(X.T,X);}catch(e){tv=null;}
+       return (tv&&isFinite(tv))?v/tv*100:null;}
+     const base=(pk==='revC')?c.revC:c.rev;
+     return base?v/base*100:null;};
+   /* default shows the percentages rather than hiding them behind a toggle; 'money' is the
+      explicit opt-out, because '' would be indistinguishable from "never chosen". */
+   const PM=ST.rpCombP==='money'?'':(ST.rpCombP==='pct'?'pct':'both');
+   const pcell=(L,c,X)=>{const q=pctOf(L,c,X); return q==null?null:q.toFixed(1)+'%';};
    const gval=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){return null;}
      if(v==null||!isFinite(v))return null;
      return (L.rel&&c.rev)?v/c.rev:v;};
@@ -16399,7 +16429,11 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      +ALLM.slice().reverse().map(m=>'<option value="'+m+'"'+(m===selM?' selected':'')+'>'+m+partL(m)+'</option>').join('')
      +'</select>';
 
-   let ch='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel
+   const psel='<select onchange="ST.rpCombP=this.value;rRetail()" '
+     +'style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:6px">'
+     +[['both','E£ + %'],['pct','% only'],['money','E£ only']]
+       .map(o=>'<option value="'+o[0]+'"'+((o[0]==='money'?'':o[0])===PM?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
+   let ch='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel+' <span style="margin-left:10px">Show</span>'+psel
      +' <span style="margin-left:10px;color:var(--ink-3)">Click any line to break it down month by month.</span></div>'
      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
      +'<tr><th style="'+THc+';text-align:left">'+(selM?(selM+partL(selM)):(MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+(MS.indexOf(NOWM)>=0?(' · incl. '+NOWD+'d of '+NOWM):'')))+'</th>'
@@ -16411,11 +16445,11 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
       +' onclick="ST.rpCombX='+(open?'null':i)+';rRetail()" title="Break this line down by month">'
       +'<td style="'+TDc+';text-align:left;font-weight:'+(L.b?'800':'620')+';color:var(--ink)">'
       +'<span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(open?'▾':'▸')+'</span>'+L.l+'</td>'
-      +(function(){const sc=gscale(L,base);return base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+paint(L,c,base,sc)+'">'+cell(L,c,base)+'</td>').join('');})()+'</tr>';
+      +(function(){const sc=gscale(L,base);return base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+paint(L,c,base,sc)+'">'+show(L,c,base)+'</td>').join('');})()+'</tr>';
     if(!open)return;
     ALLM.forEach(m=>{const X=mbuild(m);
       ch+='<tr style="background:var(--surface-2)"><td style="'+TDc+';text-align:left;padding-left:26px;font-size:11px;color:var(--ink-2)">'+m+(m===NOWM?('<span style="color:var(--warn);font-weight:700"> · '+NOWD+'d only</span>'):'')+'</td>'
-       +(function(){const sc=gscale(L,X);return X.cols.map(c=>'<td style="'+TDc+bd(c)+';font-size:11px;color:var(--ink-2)'+paint(L,c,X,sc)+'">'+cell(L,c,X)+'</td>').join('');})()+'</tr>';});
+       +(function(){const sc=gscale(L,X);return X.cols.map(c=>'<td style="'+TDc+bd(c)+';font-size:11px;color:var(--ink-2)'+paint(L,c,X,sc)+'">'+show(L,c,X)+'</td>').join('');})()+'</tr>';});
    });
    ch+='</table></div>';
 
@@ -16426,6 +16460,11 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     +'The ONLINE column is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
     +'<b>Branches carry no media</b> &mdash; the whole ad budget is charged to the webstore, because that is what it is bought to do. '
     +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((Q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget.'
+    +'<br><br><b style="color:var(--ink)">Percentages are common-size, and the base differs by line.</b> '
+    +'Revenue, orders and new customers show a <b>share of the company</b> (a line as a percentage of itself would read 100% everywhere). '
+    +'The customer-split lines divide by <b>branch</b> revenue, the base their own share rows use, because that split does not cover the webstore. '
+    +'Every other money line divides by <b>its own column&rsquo;s revenue</b>. '
+    +'Margins and AOV are left alone &mdash; they are already a rate, and a per-order figure as a percentage of revenue would mean nothing.'
     +'<br><br><b style="color:var(--ink)">Colour ranks the branch columns only</b> &mdash; green is the better end, red the worse, and only genuine outliers are painted (the same scale every other P&amp;L table here uses). ONLINE and TOTAL are never in the scale, because one is not like-for-like and the other is a sum. <b>Cost lines are ranked on their share of that branch&rsquo;s revenue</b>, not the raw figure, so the largest shop is not painted worst for being largest.'
     +'<br><br><b style="color:var(--ink)">The expense block is the posted ledger, charged once.</b> '
     +'Branch salaries and rent come from the branch-tagged analytic ledger, so the GL payroll and branch-rent accounts are shown <b>net of what is already charged above</b>. '
@@ -21272,7 +21311,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-230101';
+const BUILD='20261002-230607';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
