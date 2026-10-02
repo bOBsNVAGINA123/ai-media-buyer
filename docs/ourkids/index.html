@@ -437,6 +437,13 @@ body.scrolled .top{display:none}
 .vRow.vOpen{background:var(--surface-2)}
 .vSkuRow>td{border-bottom:2px solid var(--line)}
 @media (prefers-reduced-motion:reduce){.vRow .vCar{transition:none}}
+.dxRow>td{border-bottom:2px solid var(--line)}
+.dxable{cursor:pointer}
+.dxable:hover{background:var(--surface-2)}
+.dxable .dxCar{display:inline-block;color:var(--ink-3);font-size:10px;transition:transform var(--t-s) var(--ease)}
+.dxable.dxOpen .dxCar{transform:rotate(90deg);color:var(--brand)}
+.dxable.dxOpen{background:var(--surface-2)}
+@media (prefers-reduced-motion:reduce){.dxable .dxCar{transition:none}}
 .tdRow{cursor:pointer;position:relative;transition:background var(--t-s) var(--ease)}
 .tdRow:hover{background:var(--surface-2)}
 .tdRow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
@@ -18845,6 +18852,52 @@ function metaNCRC(g, ads, PW, W, fON, fOFF){
      +'Checked against the shops’ own POS orders, Meta has matched <b>4.6%</b> of store purchases on days 1–5 old against <b>~16%</b> once they mature — so those bars are at roughly <b>a third</b> of where they will land, and should roughly triple. '
      +'Days older than six are final: the mature rate has held at 15.6–17.9% for five straight weeks, so a fall at the right-hand edge is the counting window, not customers walking away.</div>';})());
 }
+/* ============================================================================
+   v58 · META DECOMPOSED AT THREE GRAINS, AND EVERY ROW OPENS.
+   Google got the scoreboard and the decomposition; Meta did not, even though it
+   carries a RICHER funnel -- 123 ads with daily series across 14 campaigns and 74
+   ad sets, including add-to-cart, which Google does not give at all.
+   THE IDENTITY, verified on the live payload before anything was built:
+     value = impressions x (ATC/impr) x (purchases/ATC) x (value/purchase)
+   1,430,793 x ... reproduces E£699,278 of claimed value exactly, so the four
+   factors split any change with no residual. That is a true funnel rather than
+   Google's three-step one: it separates "fewer people saw it" from "fewer added to
+   cart" from "fewer of those bought" from "they bought less".
+   Spend decomposes on its own identity: spend = impressions x CPM/1000.
+   ========================================================================== */
+window.DXN=0;
+window.dxToggle=function(tr,payload){try{
+ const nx=tr.nextElementSibling;
+ if(nx&&nx.classList&&nx.classList.contains('dxRow')){nx.remove();tr.classList.remove('dxOpen');return;}
+ const host=tr.closest('table');
+ if(host)host.querySelectorAll('tr.dxRow').forEach(x=>x.remove());
+ if(host)host.querySelectorAll('tr.dxOpen').forEach(x=>x.classList.remove('dxOpen'));
+ tr.classList.add('dxOpen');
+ const d=JSON.parse(decodeURIComponent(payload));
+ const M4=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const row=document.createElement('tr'); row.className='dxRow';
+ const td=document.createElement('td'); td.colSpan=tr.cells.length;
+ td.style.cssText='padding:0 10px 12px;background:var(--surface-2)';
+ const bars=(list,title,sub)=>{
+  if(!list||!list.length)return '';
+  const mx=Math.max.apply(null,list.map(x=>Math.abs(x.d)).concat([1]));
+  return '<div style="margin-top:10px"><div style="font-size:12px;font-weight:700;color:var(--ink)">'+title+'</div>'
+   +'<div style="font-size:11px;color:var(--ink-3);margin:1px 0 6px">'+sub+'</div>'
+   +list.map(x=>{const w=Math.min(100,Math.abs(x.d)/mx*100),pos=x.d>=0;
+     return '<div style="display:flex;align-items:center;gap:10px;padding:3px 0">'
+      +'<div style="flex:0 0 170px;font-size:11.5px;font-weight:620;color:var(--ink)">'+x.n+'</div>'
+      +'<div style="flex:1 1 auto;height:12px;background:var(--surface-3);border-radius:3px;position:relative;overflow:hidden">'
+        +'<div style="position:absolute;left:'+(pos?'50%':(50-w/2)+'%')+';width:'+(w/2).toFixed(1)+'%;height:100%;background:'+(pos?'var(--pos)':'var(--neg)')+';opacity:.85;border-radius:3px"></div></div>'
+      +'<div class="num" style="flex:0 0 112px;text-align:right;font-size:11.5px;font-weight:800;color:'+(pos?'var(--pos)':'var(--neg)')+'">'+(pos?'+':'−')+M4(Math.abs(x.d))+'</div>'
+      +'<div class="num" style="flex:0 0 165px;text-align:right;font-size:10.5px;color:var(--ink-3)">'+x.f+' → '+x.t+'</div></div>';}).join('')
+   +'</div>';};
+ td.innerHTML='<div style="padding-top:9px"><div style="font-size:12.5px;font-weight:700;color:var(--ink)">'+esc(d.name)+'</div>'
+   +(d.sub?'<div style="font-size:11px;color:var(--ink-3)">'+esc(d.sub)+'</div>':'')
+   +bars(d.val,'Why the value moved '+(d.dv>=0?'+':'−')+M4(Math.abs(d.dv)),d.vid)
+   +bars(d.spd,'Why the spend moved '+(d.ds>=0?'+':'−')+M4(Math.abs(d.ds)),d.sid)
+   +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:9px;line-height:1.5">Each factor is valued with the ones above it already moved, so the bars sum to the total exactly. That makes the split order-dependent, in the funnel order shown.</div></div>';
+ row.appendChild(td); tr.parentNode.insertBefore(row,tr.nextSibling);
+}catch(e){}};
 function rMETA(){
  if(TAB!=='mt')return; dCh();
  const g=document.getElementById('g31'); g.innerHTML='';
@@ -18858,6 +18911,137 @@ function rMETA(){
  const today=W.n-1;
  bn.innerHTML='<b>META</b> — scored on the RevUp <i>Paid Media Mastery</i> framework. '
   +'Reading <b>'+PW.lbl+'</b>'+(PW.ranged?'':' (date box empty — last 7 days)')+'. Fatigue is each ad against <b>its own</b> best week, never an account average.';
+
+ /* ---- v58 SCOREBOARD + DECOMPOSITION, at campaign / ad set / ad ---- */
+ try{(function(){
+  const S=(d,k,i,j)=>{let t=0;const A=d&&d[k];if(!A)return 0;for(let x=Math.max(0,i);x<=j;x++)t+=A[x]||0;return t;};
+  const met=(list,i,j)=>{let sp=0,im=0,atc=0,pu=0,pv=0,fv=0,rch=0,nc=0;
+   list.forEach(a=>{sp+=S(a.d,'sp',i,j);im+=S(a.d,'im',i,j);atc+=S(a.d,'atc',i,j);
+    pu+=S(a.d,'pu',i,j);pv+=S(a.d,'pv',i,j);fv+=S(a.d,'fv',i,j);rch+=S(a.d,'rch',i,j);nc+=S(a.d,'nc',i,j);});
+   pv*=fON; fv*=fOFF;
+   return {sp,im,atc,pu,pv,fv,rch,nc,val:pv,
+     atcr:im?atc/im:0, cvr:atc?pu/atc:0, aov:pu?pv/pu:0,
+     cpm:im?sp/im*1000:0, roas:sp?pv/sp:0, cpa:pu?sp/pu:0, freq:rch?im/rch:0};};
+  const cur=met(ads,PW.a,PW.b), prv=PW.ok?met(ads,PW.pa,PW.pb):null;
+  const pc2=(c,p)=>(p>0)?((c/p-1)*100):null;
+  const be6=GPBE();
+  const kcell=(lab,val,d,good,sub)=>{
+   const up=d!=null&&d>=0, col=d==null?'var(--ink-3)':((up===!!good)?'var(--pos)':'var(--neg)');
+   return '<div style="flex:1 1 150px;min-width:150px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+    +'<div style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:700">'+lab+'</div>'
+    +'<div style="font-size:21px;font-weight:700;color:var(--ink);margin-top:3px;font-variant-numeric:tabular-nums">'+val+'</div>'
+    +'<div style="font-size:11px;font-weight:700;margin-top:2px;color:'+col+'">'+(d==null?'no comparison':((up?'▲ ':'▼ ')+Math.abs(d).toFixed(1)+'%'))+'</div>'
+    +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:1px;line-height:1.4">'+sub+'</div></div>';};
+  const P=k=>prv?prv[k]:null;
+  const kpis='<div style="display:flex;flex-wrap:wrap;gap:10px">'
+   +kcell('Spend',M(cur.sp),pc2(cur.sp,P('sp')),false,'what you paid Meta')
+   +kcell('Claimed value',M(cur.val),pc2(cur.val,P('val')),true,'website value at your attribution setting')
+   +kcell('ROAS',cur.roas.toFixed(2)+'×',pc2(cur.roas,P('roas')),true,'break-even '+be6.toFixed(2)+'× delivered')
+   +kcell('AOV',M(cur.aov),pc2(cur.aov,P('aov')),true,'value per purchase')
+   +kcell('CPM',M(cur.cpm),pc2(cur.cpm,P('cpm')),false,N(cur.im)+' impressions')
+   +kcell('Add-to-cart rate',(cur.atcr*100).toFixed(2)+'%',pc2(cur.atcr,P('atcr')),true,N(cur.atc)+' add-to-carts')
+   +kcell('Cart → purchase',(cur.cvr*100).toFixed(1)+'%',pc2(cur.cvr,P('cvr')),true,N(cur.pu)+' purchases')
+   +kcell('Frequency',cur.freq.toFixed(2)+'×',pc2(cur.freq,P('freq')),false,N(cur.rch)+' people reached')
+   +'</div>';
+  let dec='';
+  if(prv&&prv.im>0&&prv.atc>0&&prv.pu>0){
+   const FV={'Impressions':v=>N(v),'Add-to-cart rate':v=>(v*100).toFixed(2)+'%',
+             'Cart → purchase':v=>(v*100).toFixed(1)+'%','Average order value':v=>M(v),'CPM':v=>M(v)};
+   const rev=dcmpChain([['Impressions',cur.im,prv.im],['Add-to-cart rate',cur.atcr,prv.atcr],
+                        ['Cart → purchase',cur.cvr,prv.cvr],['Average order value',cur.aov,prv.aov]]);
+   const spd=dcmpChain([['Impressions',cur.im,prv.im],['CPM',cur.cpm/1000,prv.cpm/1000]]);
+   const dV=cur.val-prv.val, dS=cur.sp-prv.sp;
+   const top=rev.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];
+   const bars=(list,tot)=>{const mx=Math.max.apply(null,list.map(x=>Math.abs(x.d)).concat([1]));
+    return list.map(x=>{const w=Math.min(100,Math.abs(x.d)/mx*100),pos=x.d>=0;
+     return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0">'
+      +'<div style="flex:0 0 175px;font-size:11.5px;font-weight:650;color:var(--ink)">'+x.n+'</div>'
+      +'<div style="flex:1 1 auto;height:13px;background:var(--surface-3);border-radius:3px;position:relative;overflow:hidden">'
+        +'<div style="position:absolute;left:'+(pos?'50%':(50-w/2)+'%')+';width:'+(w/2).toFixed(1)+'%;height:100%;background:'+(pos?'var(--pos)':'var(--neg)')+';opacity:.85;border-radius:3px"></div></div>'
+      +'<div class="num" style="flex:0 0 118px;text-align:right;font-size:11.5px;font-weight:800;color:'+(pos?'var(--pos)':'var(--neg)')+'">'+(pos?'+':'−')+M(Math.abs(x.d))+'</div>'
+      +'<div class="num" style="flex:0 0 175px;text-align:right;font-size:10.5px;color:var(--ink-3)">'+(FV[x.n]?FV[x.n](x.from)+' → '+FV[x.n](x.to):'')+'</div></div>';}).join('');};
+   dec='<div style="margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:12px 14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--ink)">Why claimed value moved '+(dV>=0?'+':'−')+M(Math.abs(dV))+'</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">value = impressions × add-to-cart rate × cart→purchase × AOV · the four add to the whole</div>'
+    +bars(rev,dV)
+    +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12px;line-height:1.6;color:var(--ink-2)">'
+    +'<b style="color:var(--ink)">The specific reason:</b> '+top.n.toLowerCase()+' '+(top.d>=0?'rose':'fell')+' from <b>'+FV[top.n](top.from)+'</b> to <b>'+FV[top.n](top.to)+'</b>, worth <b style="color:'+(top.d>=0?'var(--pos)':'var(--neg)')+'">'+(top.d>=0?'+':'−')+M(Math.abs(top.d))+'</b>'
+    +(dV&&Math.abs(top.d)<=Math.abs(dV)?(' — '+Math.abs(top.d/dV*100).toFixed(0)+'% of the whole move.'):' — more than the whole move; the rest offset it.')
+    +' <b>Meta separates the two halves of a conversion problem that Google cannot</b>: a fall in add-to-cart rate is the ad, a fall in cart→purchase is the site.</div>'
+    +'<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Why spend moved '+(dS>=0?'+':'−')+M(Math.abs(dS))+'</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">spend = impressions × CPM ÷ 1,000</div>'
+    +bars(spd,dS)+'</div>';}
+  else dec='<div style="margin-top:12px;padding:11px 13px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;color:var(--ink-2)">The compare window falls outside the '+W.n+'-day Meta feed, so nothing here can be decomposed against it.</div>';
+  pnlCard(g,'meta','Meta scoreboard &mdash; '+PW.lbl
+   +INFO('Verified against the live payload before it was built: impressions × ATC rate × cart→purchase × AOV reproduces claimed value exactly, so the four factors split any change with no residual.'),
+   'What the account did, what moved, and the one factor that moved it.',kpis+dec);
+
+  /* ---- three grains, switchable, every row opens ---- */
+  const LV=ST.mtLv||'cmp';
+  const keyOf={cmp:a=>a.cid||a.cmp, as:a=>a.asid||a.as, ad:a=>a.id};
+  const nameOf={cmp:a=>a.cmp||a.cid, as:a=>a.as||a.asid, ad:a=>a.n||a.id};
+  const subOf={cmp:a=>a.acct||'', as:a=>a.cmp||'', ad:a=>(a.cmp||'')+(a.as?' · '+a.as:'')};
+  const grp={};
+  ads.forEach(a=>{const k=keyOf[LV](a); if(k==null)return; (grp[k]=grp[k]||{n:nameOf[LV](a),sub:subOf[LV](a),list:[]}).list.push(a);});
+  const FV2={'Impressions':v=>N(v),'Add-to-cart rate':v=>(v*100).toFixed(2)+'%',
+             'Cart → purchase':v=>(v*100).toFixed(1)+'%','Average order value':v=>M(v),'CPM':v=>M(v)};
+  const SH4={'Impressions':['more people saw it','fewer people saw it'],
+             'Add-to-cart rate':['more of them added to cart','fewer of them added to cart'],
+             'Cart → purchase':['more carts converted','fewer carts converted'],
+             'Average order value':['the baskets were bigger','the baskets were smaller']};
+  const rows=Object.keys(grp).map(k=>{
+   const G=grp[k], c=met(G.list,PW.a,PW.b), p2=PW.ok?met(G.list,PW.pa,PW.pb):null;
+   if(c.sp<50&&(!p2||p2.sp<50))return null;
+   const on=!!(p2&&p2.im>0&&p2.atc>0&&p2.pu>0);
+   const rev=on?dcmpChain([['Impressions',c.im,p2.im],['Add-to-cart rate',c.atcr,p2.atcr],
+                           ['Cart → purchase',c.cvr,p2.cvr],['Average order value',c.aov,p2.aov]]):null;
+   const spd=on?dcmpChain([['Impressions',c.im,p2.im],['CPM',c.cpm/1000,p2.cpm/1000]]):null;
+   const top=rev?rev.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d))[0]:null;
+   return {k,G,c,p:p2,on,rev,spd,top,d:c.val-(p2?p2.val:0),ds:c.sp-(p2?p2.sp:0),n:G.n,sub:G.sub};})
+   .filter(Boolean).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,30);
+  const chips=[['cmp','Campaign',Object.keys(grp).length],['as','Ad set',0],['ad','Ad',0]]
+   .map(x=>'<span class="chip" style="'+(LV===x[0]?'background:var(--brand);color:#fff;border-color:var(--brand)':'')+'" onclick="ST.mtLv=\''+x[0]+'\';rMETA()">'+x[1]+'</span>').join(' ');
+  const TD7='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+  const ar3=(c,pv,good)=>{if(!pv)return '<div style="font-size:10px;color:var(--ink-3)">—</div>';
+   const d=(c/pv-1)*100,up=d>=0;
+   return '<div style="font-size:10px;font-weight:700;color:'+((up===!!good)?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
+  let h='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 10px"><span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">GRAIN</span> '+chips
+   +'<span style="font-size:11.5px;color:var(--ink-3);margin-left:6px">'+rows.length+' shown &middot; click any row for its full breakdown</span></div>'
+   +'<div style="overflow:auto;max-height:580px"><table class="bt" data-nosort style="width:100%">'
+   +'<tr><th style="text-align:left">Name</th><th style="text-align:right">Spend</th><th style="text-align:right">Value</th>'
+   +'<th style="text-align:right">Δ value</th><th style="text-align:right">ROAS</th><th style="text-align:right">CPM</th>'
+   +'<th style="text-align:right">ATC rate</th><th style="text-align:right">Cart→buy</th><th style="text-align:right">AOV</th>'
+   +'<th style="text-align:left">What moved it</th></tr>';
+  rows.forEach(r=>{
+   const ok=r.c.roas>=be6;
+   const payload=encodeURIComponent(JSON.stringify({name:r.n,sub:r.sub,dv:r.d,ds:r.ds,
+     vid:'value = impressions × ATC rate × cart→purchase × AOV',
+     sid:'spend = impressions × CPM ÷ 1,000',
+     val:r.rev?r.rev.map(x=>({n:x.n,d:x.d,f:FV2[x.n](x.from),t:FV2[x.n](x.to)})):[],
+     spd:r.spd?r.spd.map(x=>({n:x.n,d:x.d,f:FV2[x.n]?FV2[x.n](x.n==='CPM'?x.from*1000:x.from):x.from,t:FV2[x.n]?FV2[x.n](x.n==='CPM'?x.to*1000:x.to):x.to})):[]}));
+   h+='<tr class="dxable" onclick="dxToggle(this,\''+payload+'\')"><td style="text-align:left;font-weight:620;color:var(--ink);max-width:230px;white-space:normal">'
+     +'<span class="dxCar">▸</span> '+esc(String(r.n||'').slice(0,46))
+     +(r.sub?'<div style="font-size:10px;font-weight:600;color:var(--ink-3)">'+esc(String(r.sub).slice(0,40))+'</div>':'')+'</td>'
+    +'<td style="'+TD7+'">'+M(r.c.sp)+(r.p?ar3(r.c.sp,r.p.sp,false):'')+'</td>'
+    +'<td style="'+TD7+'">'+M(r.c.val)+'</td>'
+    +'<td style="'+TD7+';font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.on?((r.d>=0?'+':'−')+M(Math.abs(r.d))):'new')+'</td>'
+    +'<td style="'+TD7+';font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×</td>'
+    +'<td style="'+TD7+'">'+M(r.c.cpm)+(r.p?ar3(r.c.cpm,r.p.cpm,false):'')+'</td>'
+    +'<td style="'+TD7+'">'+(r.c.atcr*100).toFixed(2)+'%'+(r.p?ar3(r.c.atcr,r.p.atcr,true):'')+'</td>'
+    +'<td style="'+TD7+'">'+(r.c.cvr*100).toFixed(1)+'%'+(r.p?ar3(r.c.cvr,r.p.cvr,true):'')+'</td>'
+    +'<td style="'+TD7+'">'+M(r.c.aov)+(r.p?ar3(r.c.aov,r.p.aov,true):'')+'</td>'
+    +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:220px">'
+     +(!r.on?'<span style="color:var(--ink-3)">no delivery in the compare window — a start, not a move</span>'
+       :'<b>'+SH4[r.top.n][r.top.d>=0?0:1]+'</b> · '+FV2[r.top.n](r.top.from)+' → '+FV2[r.top.n](r.top.to)
+        +' <span style="font-weight:700;color:'+(r.top.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.top.d>=0?'+':'−')+M(Math.abs(r.top.d))+'</span>')+'</td></tr>';});
+  h+='</table></div>'
+   +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
+   +'<b style="color:var(--ink)">Click any row</b> to open its own value and spend waterfalls. Grain switches between the 14 campaigns, the 74 ad sets and the 123 ads without changing the arithmetic &mdash; a campaign is just the sum of its ads, decomposed after the sum rather than before it, which is why a campaign can move for a reason none of its ads shows on its own. '
+   +'Reading <b>'+ST.s+' → '+ST.e+'</b> against the window before it, from the '+W.n+'-day per-ad series. Value is Meta&rsquo;s claim at your attribution setting, not the ledger; the in-store leg is excluded here so the funnel stays one consistent chain.</div>';
+  pnlCard(g,'meta','Campaign, ad set or ad &mdash; what moved each one'
+   +INFO('Grouped from the same per-ad daily series, so every grain is exact. Click a row to expand the four-factor breakdown behind it.'),
+   'Thirty biggest movers at the grain you pick. Every row opens.',h);
+ })();}catch(e){}
 
  /* ---------- account totals over the last 7 vs the 7 before ---------- */
  const agg=(a,b)=>{let sp=0,im=0,rch=0,clk=0,pur=0,val=0;
@@ -19450,7 +19634,7 @@ function rGOOG(){
    return {a,c,p:p2,d:c.val-p2.val,ds:c.sp-p2.sp,top,live,ch};}).filter(Boolean);
   if(rows.length){
    rows.sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
-   const FF={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%','Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v)};
+   const FF={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%','Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v),'Cost per click':v=>M(v)};
    const SHORT={'Impressions':'fewer people saw it','Click-through rate':'the ad was clicked less','Conversion rate':'the clicks bought less','Average order value':'the baskets were smaller'};
    const SHORTUP={'Impressions':'more people saw it','Click-through rate':'the ad was clicked more','Conversion rate':'the clicks bought more','Average order value':'the baskets were bigger'};
    const arrow=(v,good)=>{if(v==null)return '<span style="color:var(--ink-3)">—</span>';
@@ -19463,7 +19647,11 @@ function rGOOG(){
     +'<th style="text-align:left">What moved it</th></tr>';
    rows.forEach(r=>{
     const ok=r.c.roas>=be5;
-    h+='<tr><td style="text-align:left;font-weight:650;color:var(--ink)">'+esc(String(r.a.n||r.a.id).slice(0,34))
+    const pl2=encodeURIComponent(JSON.stringify({name:String(r.a.n||r.a.id),sub:String(r.a.cmp||''),dv:r.d,ds:r.ds,
+      vid:'value = impressions × CTR × CVR × AOV', sid:'spend = impressions × CTR × CPC',
+      val:r.live?r.ch.map(x=>({n:x.n,d:x.d,f:FF[x.n](x.from),t:FF[x.n](x.to)})):[],
+      spd:r.live?dcmpChain([['Impressions',r.c.im,r.p.im],['Click-through rate',r.c.ctr/100,r.p.ctr/100],['Cost per click',r.c.cpc,r.p.cpc]]).map(x=>({n:x.n,d:x.d,f:(FF[x.n]||(v=>v))(x.from),t:(FF[x.n]||(v=>v))(x.to)})):[]}));
+    h+='<tr class="dxable" onclick="dxToggle(this,\''+pl2+'\')"><td style="text-align:left;font-weight:650;color:var(--ink)"><span class="dxCar">▸</span> '+esc(String(r.a.n||r.a.id).slice(0,34))
       +'<div style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:lowercase">'+String(r.a.cmp||'').replace(/_/g,' ').toLowerCase()+'</div></td>'
      +'<td class="num" style="text-align:right">'+M(r.c.sp)+'<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.sp,r.p.sp),false)+'</div></td>'
      +'<td class="num" style="text-align:right">'+M(r.c.val)+'</td>'
@@ -19598,7 +19786,11 @@ function rGOOG(){
     +'<th style="text-align:left">What moved the value</th><th style="text-align:left">What moved the spend</th></tr>';
    rows.forEach(r=>{
     const ok=r.c.roas>=be5;
-    h+='<tr><td style="text-align:left;font-weight:620;color:var(--ink);max-width:230px;white-space:normal">'+esc(String(r.x.n||'').slice(0,46))
+    const pl=encodeURIComponent(JSON.stringify({name:String(r.x.n||''),sub:String(r.x.cmp||''),dv:r.d,ds:r.ds,
+      vid:'value = impressions × CTR × CVR × AOV', sid:'spend = impressions × CTR × CPC',
+      val:r.on?dcmpChain([['Impressions',r.c.im,r.p.im],['Click-through rate',r.c.ctr,r.p.ctr],['Conversion rate',r.c.cvr,r.p.cvr],['Average order value',r.c.aov,r.p.aov]]).map(x=>({n:x.n,d:x.d,f:FF3[x.n](x.from),t:FF3[x.n](x.to)})):[],
+      spd:r.on?dcmpChain([['Impressions',r.c.im,r.p.im],['Click-through rate',r.c.ctr,r.p.ctr],['Cost per click',r.c.cpc,r.p.cpc]]).map(x=>({n:x.n,d:x.d,f:FF3[x.n](x.from),t:FF3[x.n](x.to)})):[]}));
+    h+='<tr class="dxable" onclick="dxToggle(this,\''+pl+'\')"><td style="text-align:left;font-weight:620;color:var(--ink);max-width:230px;white-space:normal"><span class="dxCar">▸</span> '+esc(String(r.x.n||'').slice(0,46))
       +'<div style="font-size:10px;font-weight:600;color:var(--ink-3)">'+esc(String(r.x.cmp||'').slice(0,34))+(r.x.mt?' · '+String(r.x.mt).toLowerCase():'')+'</div></td>'
      +'<td style="'+TD6+'">'+M(r.c.sp)+(r.p?ar2(r.c.sp,r.p.sp,false):'')+'</td>'
      +'<td style="'+TD6+'">'+M(r.c.cv)+'</td>'
@@ -19980,6 +20172,40 @@ function rGOOG(){
  try{qsweep('g32');}catch(e){}
 }
 function rTK(){if(TAB!=='tk')return;dCh();
+
+ /* v58 TIKTOK CANNOT BE DECOMPOSED, AND THE REASON IS NOT THE PAYLOAD.
+    Google and Meta both got campaign/ad-group/ad decomposition because both ship a
+    per-entity DAILY series. TikTok ships 30 rows of lifetime totals and no daily
+    array at all, so there is no second window to compare against -- and separately
+    there has been no spend since 2026-08-31, so there is nothing to compare even if
+    there were. I checked the source as well as the payload this time: the Marketing
+    API profile was rejected, so the collector cannot simply ask for more the way it
+    now does for Google. Saying so is the honest card; inventing a movement is not. */
+ /* deferred: rTK clears #g24 after this point, so appending synchronously here
+    put the card on the page and then wiped it. */
+ setTimeout(function(){try{(function(){
+  const g0=document.getElementById('g24'); if(!g0||TAB!=='tk')return;
+  const T=O.tads||[]; const daily=T.filter(x=>x&&x.d).length;
+  const fresh=((O.fresh||{}).tiktok)||'—';
+  let lag=null; try{lag=dDiff(fresh,cairoToday());}catch(e){}
+  pnlCard(g0,'tt','Why TikTok has no decomposition'
+   +INFO('Checked at the source, not only in the payload: TikTok ships lifetime totals per ad with no daily array, and the Marketing API profile was rejected, so the collector cannot pull a second window the way it does for Google.'),
+   'The other two platforms decompose every campaign, ad set and ad. This one cannot, for two separate reasons.',
+   '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:11px">'
+   +'<div style="flex:1;min-width:210px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+     +'<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700">No daily series</div>'
+     +'<div style="font-size:21px;font-weight:700;color:var(--ink);margin-top:3px">'+daily+' of '+T.length+'</div>'
+     +'<div style="font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45">ads carry a per-day array. Google and Meta carry one for every ad, which is what makes a second window possible at all.</div></div>'
+   +'<div style="flex:1;min-width:210px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+     +'<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700">Last day with spend</div>'
+     +'<div style="font-size:21px;font-weight:700;color:var(--neg);margin-top:3px">'+fresh+'</div>'
+     +'<div style="font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45">'+(lag!=null?lag+' days ago':'')+' &mdash; so even with a daily series there would be nothing to compare.</div></div>'
+   +'</div>'
+   +'<div style="padding:12px 14px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
+   +'<b style="color:var(--warn)">What would have to change.</b> For Google I was wrong to call its grains undecomposable &mdash; the API served both windows and the collector simply had not asked, so it now asks. '
+   +'TikTok is not that case: the dev profile was rejected for the Marketing API, so spend and conversion history cannot be pulled per day on demand. The feed that did exist came through an MCP bridge that stopped republishing on <b>'+fresh+'</b>. '
+   +'Restarting that bridge fixes the freshness; it does not by itself create the per-day history a decomposition needs. <b>Until one of those two changes, this tab can show levels and not movements</b>, and every blended MER on the tool is flattered by the missing spend.</div>');
+ })();}catch(e){}},0);
  const g=document.getElementById('g24');g.innerHTML='';
  const money=v=>Math.round(v).toLocaleString('en-US');
  const A=O.ad||{};if(!A.n){document.getElementById('bn24').innerHTML='No ad series in this sync.';return;}
@@ -20442,7 +20668,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-183313';
+const BUILD='20261002-184550';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
