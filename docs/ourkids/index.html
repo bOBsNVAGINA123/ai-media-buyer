@@ -8468,8 +8468,31 @@ function orderLadder(g,o){
     let br2=0;Object.keys(O.pos||{}).forEach(b3=>{const v3=O.pos[b3][bm];if(v3)br2+=v3[0]||0;});
     const wOn=(onR+br2)>0?onR/(onR+br2):0.2;
     return (onDirect+shared*wOn)/((PAm.o||1));}catch(e){return null;}})();
-  const net=aov-goods-courier+shipBack-fees-adPoShare-(opxPo||0);
+  /* ============================================================================
+     v62 · THE WHOLE AD BUDGET IS CHARGED TO THE WEBSTORE BY DEFAULT.
+     This line used to charge the webstore only Meta's measured web share (~58%),
+     on the reasoning that Meta's own value split says the rest worked in the shops.
+     Shavi's objection is the right one and it is about INTENT: the budget is bought
+     to drive the webstore, every pound of it. Discounting the webstore's ad cost by
+     an attribution artefact flatters the one number this card exists to be honest
+     about.
+     I re-ran the test before flipping it, because a note of mine claimed Meta spend
+     does not predict branch revenue at all. That note is WRONG on current data and
+     is corrected: over 399 days, branch till revenue against Meta spend with a trend
+     and day-of-week controls gives beta +21.9, t 14.9; with MONTH fixed effects
+     (seasonality removed) beta +20.8, t 11.2. So the association is real and is not
+     just August.
+     But the strict test is first differences -- does a CHANGE in spend move a CHANGE
+     in branch revenue -- and there it collapses to beta +6.1, se 3.0, t 2.01, barely
+     at the 5% line. Day-to-day, Meta spend explains very little of branch takings.
+     That is not strong enough to hand the webstore a 42% discount on its own ad bill.
+     So: FULL budget is the default and the headline. The share split stays on the card
+     as the alternative, with both numbers always visible, because the truth about how
+     much of this money the shops really owe is genuinely unsettled.
+     ========================================================================== */
+  const netShare=aov-goods-courier+shipBack-fees-adPoShare-(opxPo||0);
   const netFull=aov-goods-courier+shipBack-fees-adPo-(opxPo||0);
+  const net=netFull;
   const be=1/q.gpOn;
   const roasClaim=(o.broas&&o.broas[0])||0;
   let run=aov;
@@ -8478,7 +8501,7 @@ function orderLadder(g,o){
    ['Courier — full bill',-courier,null,'outbound + return legs + RTO'],
    ['Shipping the customer paid',+shipBack,null,'collected at checkout — covers part of the bill'],
    ['COD & payment fees',-fees,null,'Bosta collection + PayMob'],
-   ['Its share of ads',-adPoShare,null,'Google + TikTok whole, Meta at its measured '+Math.round(mShare*100)+'% web share — the same split the net-profit card uses'],
+   ['Ads — the whole budget',-adPo,null,'every pound of Meta, Google and TikTok, charged here. You buy this traffic for the webstore, so the webstore pays for all of it'],
    ['Its share of OpEx',-(opxPo||0),null,opxPo!=null?'packing, cargo, HQ share — last complete month per order':'(no complete month posted)']];
   let rows='';
   L.forEach((r,i)=>{run= i===0?r[1]:run+r[1];
@@ -8491,7 +8514,12 @@ function orderLadder(g,o){
    +'<span style="flex:1;font-size:14px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">ONE ORDER LEAVES</span>'
    +'<span style="font-size:27px;font-weight:800;color:'+(net>=0?'#0f6e56':'#a3271a')+'">'+(net>=0?'+':'−')+M(net)+'</span>'
    +'<span style="width:96px"></span></div>'
-   +'<div style="font-size:11.5px;color:#5b6478;padding:2px 4px 4px">Charge the <b>whole</b> budget to the webstore instead — every pound, including what worked in the branches — and one order leaves <b style="color:'+(netFull>=0?'#0f6e56':'#a3271a')+'">'+(netFull>=0?'+':'−')+M(netFull)+'</b> (ads −'+M(adPo)+'/order). The truth is between the two, and closer to the first: Meta&rsquo;s own value split says most of its money worked in the branches this window.</div>';
+   +'<div style="font-size:11.5px;color:#5b6478;padding:6px 4px 4px;line-height:1.6"><b>Why the whole budget, and what the alternative would say.</b> '
+   +'Meta attributes '+Math.round((1-mShare)*100)+'% of its value to the shops, and charging the webstore only its '+Math.round(mShare*100)+'% web share would leave <b>'+(netShare>=0?'+':'−')+M(netShare)+'</b> an order instead of '+(net>=0?'+':'−')+M(net)+' — a '+M(Math.abs(netShare-net))+' difference per order purely from how the ad bill is split. '
+   +'The default is the full budget because that is what you actually spend to bring someone to the webstore, and because the in-store claim is weaker than it looks: '
+   +'over 399 days branch revenue does track Meta spend with trend and seasonality controlled (beta +20.8, t 11.2), but on <b>first differences</b> — does a change in spend move a change in branch takings — it falls to <b>beta +6.1, t 2.01</b>, barely significant. '
+   +'That is not enough to discount the webstore&rsquo;s own ad bill by '+Math.round((1-mShare)*100)+'%. <b>Both numbers are shown so neither is hidden</b>; the honest position is that how much of this money the shops really owe is unsettled.</div>'
+   ;
   pnlCard(g,'blend','The economics of one order — '+ST.s+' → '+ST.e
    +INFO('Everything an average webstore order carries, one line each, computed on your selected days: real Odoo margin, the measured three-month courier and fee rates, this window\\u2019s actual spend per order, and the posted OpEx book per order from the last complete month.'),
    '<b>Platforms claim '+roasClaim.toFixed(2)+'× ROAS. The break-even they actually have to clear is '+BEBOTH(1)+'</b> — because after goods, the courier and the fees, only '+(q.gpOn*100).toFixed(1)+'% of each pound is real. This ladder is why.',
@@ -20936,7 +20964,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-200000';
+const BUILD='20261002-202933';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
