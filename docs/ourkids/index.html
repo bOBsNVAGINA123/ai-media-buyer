@@ -16259,77 +16259,162 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
       +'Both sides are computed by the same function over the same months, so the halves cannot be built differently. Branches carry no media here.</div></div>';
      return hh;})()+(flags.length?'<div class="ins" style="margin:4px 0 10px">'+flags.map(f2=>'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>'+f2+'</span></div>').join('')+'</div>':'');});
   /* ============================================================================
-     v64 · EVERY BRANCH IN ONE TABLE, ON THIS TAB.
-     The per-branch P&L below stacks one block per branch, months across -- which is the
-     right shape for reading ONE shop over time and the wrong shape for the question
-     "how do my shops compare". That answer existed only on a different tab, which is
-     the same as not existing. It is here now: lines down, every branch across, plus
-     ONLINE and the company TOTAL, over the months this tab is already showing.
-     Every figure is the same source the blocks below use -- this is an arrangement of
-     them, not a second calculation, so the two can never disagree.
+     v65 · EVERY BRANCH IN ONE TABLE, BY MONTH, WITH THE REAL EXPENSES.
+     v64 summed the whole range into one column per branch and showed three cost
+     lines. That hides every month inside the range and calls three of thirteen
+     GL accounts "expenses". This version:
+       - a MONTH picker (all months, or any single month in the tab's range);
+       - EVERY line clicks open into a month-by-month strip, always over the full
+         range, so the trend is one click from the comparison;
+       - the full posted OpEx underneath contribution, netted so nothing is
+         charged twice, with a reconciliation line against expTot().
+     TWO ACCOUNTS ARE DELIBERATELY NOT CHARGED AGAIN DOWN THERE:
+       "Payment & collection fees" is the bucket that CONTAINS the Bosta courier
+       bill, which is already charged as the courier line -- taking the bucket
+       whole bills Bosta twice; and Utilities/Maintenance are already allocated
+       to the branches on revenue share further up.
      ========================================================================== */
   try{(function(){
-   const MS=MSb; if(!MS.length)return;
-   const cols=names.map(n=>sumB(n,MS)).filter(c=>c.rev>0).sort((a,b)=>b.contrib-a.contrib);
-   if(!cols.length)return;
-   /* ONLINE on the same months, so the company line is complete */
-   let onRev=0,onGp=0,onOrd=0;
-   try{MS.forEach(m=>{const PA=(pnlAggShop().M||{})[m]; if(PA){onRev+=(PA.g||0)-(PA.r||0); onOrd+=PA.o||0;}});
-       onGp=onRev*GPQ().gpOnGross;}catch(e){}
-   /* v64b A line titled CONTRIBUTION that leaves out the whole ad bill is not a company
-      P&L, it is a flattering arrangement. Media is MEASURED here (total platform spend
-      over the same months) and charged to ONLINE, which is where ADS_ONLINE_FRAC puts it.
-      The delivery drag is charged too, from the same GPQ() rates the Online P&L uses --
-      otherwise ONLINE's contribution is shelf margin and the company TOTAL is fiction. */
-   let onMed=0; MS.forEach(m=>{const a2=A[m]; if(a2)onMed+=a2.s||0;});
-   const _q=GPQ(); const onDrag=onRev*(_q.drag||GPFB.drag);
-   const onCol={n:'ONLINE',rev:onRev,gp:onGp,ord:onOrd,sal:0,rent:0,util:0,nc:0,nrev:0,rrev:0,unr:0,
-                med:onMed,drag:onDrag,contrib:onGp-onDrag-onMed};
-   const TOT=(k)=>cols.reduce((a,c)=>a+(c[k]||0),0)+(onCol[k]||0);
-   const T={n:'TOTAL',rev:TOT('rev'),gp:TOT('gp'),ord:TOT('ord'),sal:TOT('sal'),rent:TOT('rent'),
-            util:TOT('util'),nc:TOT('nc'),nrev:TOT('nrev'),rrev:TOT('rrev'),unr:TOT('unr'),
-            med:TOT('med'),drag:TOT('drag'),contrib:TOT('contrib')};
-   const CC=cols.concat([onCol,T]);
+   if(!MSb.length)return;
+   const ALLM=MSb;
+   const selM=(ST.rpCombM&&ALLM.indexOf(ST.rpCombM)>=0)?ST.rpCombM:'';
+   const MS=selM?[selM]:ALLM;
+   /* column order is fixed by whole-range contribution so the columns do not
+      reshuffle when you step through months */
+   const ORDER=names.map(n=>sumB(n,ALLM)).filter(c=>c.rev>0)
+     .sort((a,b)=>b.contrib-a.contrib).map(c=>c.n);
+   if(!ORDER.length)return;
+
+   const SHOPM=(function(){try{return pnlAggShop().M||{};}catch(e){return {};}})();
+   const Q=GPQ();
+   const onFor=ms=>{let rev=0,ord=0;
+     ms.forEach(m=>{const p=SHOPM[m]; if(p){rev+=(p.g||0)-(p.r||0); ord+=p.o||0;}});
+     let med=0; ms.forEach(m=>{const a2=A[m]; if(a2)med+=a2.s||0;});
+     const gp=rev*(Q.gpOnGross||GPFB.gpOnGross), drag=rev*(Q.drag||GPFB.drag);
+     return {n:'ONLINE',rev:rev,gp:gp,ord:ord,sal:0,rent:0,util:0,nc:0,nrev:0,rrev:0,unr:0,
+             med:med,drag:drag,contrib:gp-drag-med};};
+
+   /* posted OpEx, minus what is already on the table above */
+   const SKIP=/^(Payment & collection fees|Utilities|Maintenance)/;
+   const findK=(o,re)=>Object.keys(o).find(k=>re.test(k));
+   const ovhFor=(ms,cs)=>{const o={};
+     ms.forEach(m=>{const E=O.exp&&O.exp[m]; if(!E)return;
+       for(const k in E){ if(k.indexOf('(memo)')>=0||SKIP.test(k))continue; o[k]=(o[k]||0)+E[k]; }});
+     const bSal=cs.reduce((a,c)=>a+(c.sal||0),0), bRent=cs.reduce((a,c)=>a+(c.rent||0),0);
+     const kP=findK(o,/^Payroll/), kR=findK(o,/^Rent\b.*branch/i);
+     if(kP)o[kP]=Math.max(0,o[kP]-bSal);
+     if(kR)o[kR]=Math.max(0,o[kR]-bRent);
+     return o;};
+
+   const KEYS=['rev','gp','ord','sal','rent','util','nc','nrev','rrev','unr','med','drag','contrib'];
+   const build=ms=>{
+     const cs=ORDER.map(n=>sumB(n,ms));
+     const on=onFor(ms);
+     const ov=ovhFor(ms,cs);
+     const ovK=Object.keys(ov).filter(k=>Math.abs(ov[k])>0.5).sort((a,b)=>ov[b]-ov[a]);
+     const ovTot=ovK.reduce((a,k)=>a+ov[k],0);
+     const all=cs.concat([on]);
+     const T={n:'TOTAL'}; KEYS.forEach(k=>T[k]=all.reduce((a,c)=>a+(c[k]||0),0));
+     let gl=0; ms.forEach(m=>{try{gl+=expTot(m);}catch(e){}});
+     return {cs:cs,on:on,T:T,ov:ov,ovK:ovK,ovTot:ovTot,gl:gl,
+             cols:cs.concat([on,T]), ebitda:T.contrib-ovTot};};
+
+   const base=build(MS);
+   /* every overhead line that exists anywhere in the range, so the row set is
+      stable whichever month you pick */
+   const OVALL=(function(){const b=build(ALLM);return b.ovK;})();
+
+   /* the running month is a part month and must never read as a whole one */
+   const NOWM=(O.today||'').slice(0,7), NOWD=+((O.today||'').slice(8,10))||0;
+   const partL=m=>m===NOWM?(' · part month, '+NOWD+'d'):'';
    const Mc=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
-   const SGc=v=>(v<0?'−':'+')+Mc(v);
+   const F={cur:v=>v==null?'—':Mc(v),
+            neg:v=>v==null?'—':'−'+Mc(v),
+            sgn:v=>v==null?'—':((v<0?'−':'+')+Mc(v)),
+            pct:v=>v==null?'—':v.toFixed(1)+'%',
+            num:v=>v==null?'—':Math.round(v).toLocaleString()};
+   const isOn=c=>c.n==='ONLINE', isT=c=>c.n==='TOTAL';
+
+   const LINES=[
+    {l:'Revenue (POS, actual)', g:c=>c.rev, f:'cur', b:1},
+    {l:'Gross profit (4% basis)', g:c=>c.gp, f:'cur', b:1},
+    {l:'GP margin', g:c=>c.rev?c.gp/c.rev*100:null, f:'pct', m:1},
+    {l:'Orders', g:c=>c.ord, f:'num'},
+    {l:'AOV', g:c=>c.ord?c.rev/c.ord:null, f:'cur'},
+    {l:'New customers', g:c=>c.nc||null, f:'num'},
+    {l:'New-customer revenue', g:c=>c.nrev||null, f:'cur'},
+    {l:'Returning revenue', g:c=>c.rrev||null, f:'cur'},
+    {l:'Unregistered revenue', g:c=>c.unr||null, f:'cur'},
+    {l:'Salaries (branch-tagged)', g:c=>isOn(c)?null:(c.sal||0), f:'neg'},
+    {l:'Rent (branch-tagged)', g:c=>isOn(c)?null:(c.rent||0), f:'neg'},
+    {l:'Utilities + maintenance (allocated)', g:c=>isOn(c)?null:(c.util||0), f:'neg'},
+    {l:'Courier + payment fees', g:c=>c.drag?c.drag:(isOn(c)?0:null), f:'neg'},
+    {l:'Media (whole ad budget)', g:c=>c.med||0, f:'neg', m:1},
+    {l:'CONTRIBUTION', g:c=>c.contrib, f:'sgn', b:1},
+    {l:'Contribution margin', g:c=>c.rev?c.contrib/c.rev*100:null, f:'pct', m:1}];
+   const OVSTART=LINES.length;
+   OVALL.forEach(k=>LINES.push({l:k, g:(c,X)=>isT(c)?(X.ov[k]||0):null, f:'neg', ov:1}));
+   LINES.push({l:'Company overhead not charged to a branch', g:(c,X)=>isT(c)?X.ovTot:null, f:'neg', b:1, ov:1});
+   LINES.push({l:'COMPANY EBITDA', g:(c,X)=>isT(c)?X.ebitda:null, f:'sgn', b:1, ov:1});
+   LINES.push({l:'EBITDA margin', g:(c,X)=>isT(c)&&c.rev?X.ebitda/c.rev*100:null, f:'pct', m:1, ov:1});
+
    const TDc='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
    const THc='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
-   const LINES=[
-    ['Revenue (POS, actual)',   c=>Mc(c.rev), 1, 0],
-    ['Gross profit (4% basis)', c=>Mc(c.gp),  1, 0],
-    ['GP margin',               c=>c.rev?(c.gp/c.rev*100).toFixed(1)+'%':'—', 0, 1],
-    ['Orders',                  c=>Math.round(c.ord).toLocaleString(), 0, 0],
-    ['AOV',                     c=>c.ord?Mc(c.rev/c.ord):'—', 0, 0],
-    ['New customers',           c=>c.nc?Math.round(c.nc).toLocaleString():'—', 0, 0],
-    ['New-customer revenue',    c=>c.nrev?Mc(c.nrev):'—', 0, 0],
-    ['Returning revenue',       c=>c.rrev?Mc(c.rrev):'—', 0, 0],
-    ['Unregistered revenue',    c=>c.unr?Mc(c.unr):'—', 0, 0],
-    ['Salaries',                c=>c.sal?'−'+Mc(c.sal):(c.n==='ONLINE'?'—':'−E£0'), 0, 0],
-    ['Rent',                    c=>c.n==='ONLINE'?'—':(c.rent?'−'+Mc(c.rent):'−E£0'), 0, 0],
-    ['Utilities + maintenance', c=>c.n==='ONLINE'?'—':'−'+Mc(c.util), 0, 0],
-    ['Courier + payment fees',  c=>c.drag?'−'+Mc(c.drag):(c.n==='ONLINE'?'−E£0':'—'), 0, 0],
-    ['Media (whole ad budget)',  c=>c.med?'−'+Mc(c.med):(c.n==='TOTAL'?'−E£0':'−E£0'), 0, 1],
-    ['CONTRIBUTION',            c=>SGc(c.contrib), 1, 0],
-    ['Contribution margin',     c=>c.rev?(c.contrib/c.rev*100).toFixed(1)+'%':'—', 0, 1]];
-   let ch='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-    +'<tr><th style="'+THc+';text-align:left">'+MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+'</th>'
-    +CC.map(c=>'<th style="'+THc+(c.n==='ONLINE'?';border-left:2px solid var(--line-2)':'')+(c.n==='TOTAL'?';border-left:2px solid var(--line-2)':'')+'">'+(c.n==='ONLINE'?'ONLINE (Shopify)':c.n)+'</th>').join('')+'</tr>';
-   LINES.forEach(L=>{
-    ch+='<tr'+(L[2]?' style="background:var(--surface-3);font-weight:800"':'')+'>'
-     +'<td style="'+TDc+';text-align:left;font-weight:'+(L[2]?'800':'620')+';color:var(--ink)">'+L[0]+'</td>'
-     +CC.map(c=>'<td style="'+TDc+(c.n==='ONLINE'||c.n==='TOTAL'?';border-left:2px solid var(--line-2)':'')
-        +(L[3]?';color:var(--ink-2)':'')+'">'+L[1](c)+'</td>').join('')+'</tr>';});
-   ch+='</table></div>'
-    +'<div style="margin-top:11px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
-    +'<b style="color:var(--ink)">This is the same data as the per-branch blocks below, arranged the other way.</b> Those answer &ldquo;how has this shop moved over the months&rdquo;; this answers &ldquo;how do my shops compare right now&rdquo;. The branch columns are the same figures, not a second calculation. '
-    +'The ONLINE column is new on this tab and is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
-    +'Summed over <b>'+MS.length+' month'+(MS.length===1?'':'s')+'</b> ('+MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+'), the range this tab is set to. '
+   const bd=c=>(isOn(c)||isT(c))?';border-left:2px solid var(--line-2)':'';
+   const cell=(L,c,X)=>{let v;try{v=L.g(c,X);}catch(e){v=null;} return F[L.f](v);};
+
+   /* month strips are only built for the line you opened */
+   const MCACHE={};
+   const mbuild=m=>MCACHE[m]||(MCACHE[m]=build([m]));
+
+   const xi=(typeof ST.rpCombX==='number')?ST.rpCombX:-1;
+   const msel='<select onchange="ST.rpCombM=this.value;rRetail()" '
+     +'style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:10px">'
+     +'<option value=""'+(selM?'':' selected')+'>All '+ALLM.length+' months</option>'
+     +ALLM.slice().reverse().map(m=>'<option value="'+m+'"'+(m===selM?' selected':'')+'>'+m+partL(m)+'</option>').join('')
+     +'</select>';
+
+   let ch='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel
+     +' <span style="margin-left:10px;color:var(--ink-3)">Click any line to break it down month by month.</span></div>'
+     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+     +'<tr><th style="'+THc+';text-align:left">'+(selM?(selM+partL(selM)):(MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+(MS.indexOf(NOWM)>=0?(' · incl. '+NOWD+'d of '+NOWM):'')))+'</th>'
+     +base.cols.map(c=>'<th style="'+THc+bd(c)+'">'+(isOn(c)?'ONLINE (Shopify)':c.n)+'</th>').join('')+'</tr>';
+
+   LINES.forEach((L,i)=>{
+    const open=(i===xi);
+    ch+='<tr style="cursor:pointer'+(L.b?';background:var(--surface-3);font-weight:800':'')+(L.ov&&!L.b?';background:var(--surface-2)':'')+'"'
+      +' onclick="ST.rpCombX='+(open?'null':i)+';rRetail()" title="Break this line down by month">'
+      +'<td style="'+TDc+';text-align:left;font-weight:'+(L.b?'800':'620')+';color:var(--ink)">'
+      +'<span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(open?'▾':'▸')+'</span>'+L.l+'</td>'
+      +base.cols.map(c=>'<td style="'+TDc+bd(c)+(L.m?';color:var(--ink-2)':'')+'">'+cell(L,c,base)+'</td>').join('')+'</tr>';
+    if(!open)return;
+    ALLM.forEach(m=>{const X=mbuild(m);
+      ch+='<tr style="background:var(--surface-2)"><td style="'+TDc+';text-align:left;padding-left:26px;font-size:11px;color:var(--ink-2)">'+m+(m===NOWM?('<span style="color:var(--warn);font-weight:700"> · '+NOWD+'d only</span>'):'')+'</td>'
+       +X.cols.map(c=>'<td style="'+TDc+bd(c)+';font-size:11px;color:var(--ink-2)">'+cell(L,c,X)+'</td>').join('')+'</tr>';});
+   });
+   ch+='</table></div>';
+
+   const gap=base.gl-(base.cs.reduce((a,c)=>a+c.sal+c.rent+c.util,0)+base.ovTot+base.T.drag);
+   ch+='<div style="margin-top:11px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
+    +'<b style="color:var(--ink)">This is the same data as the per-branch blocks below, arranged the other way.</b> '
+    +'The branch columns are the same figures, not a second calculation. '
+    +'The ONLINE column is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
     +'<b>Branches carry no media</b> &mdash; the whole ad budget is charged to the webstore, because that is what it is bought to do. '
-    +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((_q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget. Read branch against branch for a fair fight; read ONLINE to see what the two models really cost. '
-    +'<b>The TOTAL contribution is after every cost on this table</b>, media included &mdash; it is not shelf margin.</div>';
-   pnlCard(g,'odoo','Combined company P&L &mdash; every branch, the webstore and the total in one table'
-    +INFO('Lines down, columns across. Same sources as the per-branch blocks below: POS revenue and 4%-basis margin, analytic salaries and rent, utilities allocated on revenue share.'),
-    'The whole company side by side, over the months this tab is showing.',ch);
+    +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((Q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget.'
+    +'<br><br><b style="color:var(--ink)">The expense block is the posted ledger, charged once.</b> '
+    +'Branch salaries and rent come from the branch-tagged analytic ledger, so the GL payroll and branch-rent accounts are shown <b>net of what is already charged above</b>. '
+    +'<b>&ldquo;Payment &amp; collection fees&rdquo; is not listed</b>: that account is the bucket holding the Bosta courier bill, which is already the courier line &mdash; charging the bucket as well would bill Bosta twice. '
+    +'Utilities and maintenance are likewise not repeated, having been allocated to the branches above. '
+    +'Platform ads are the platform-reported spend, not the ad bills in the ledger (those are a memo account and excluded from the OpEx total), so they are counted once too.'
+    +'<br><br><b style="color:var(--ink)">Reconciliation.</b> Posted OpEx for '+(selM||'these '+MS.length+' months')+' is <b>'+Mc(base.gl)+'</b>; '
+    +'this table charges <b>'+Mc(base.gl-gap)+'</b> of it (branch salaries, rent and utilities + the overhead lines + the courier bill), leaving '
+    +(Math.abs(gap)<1?'<b>nothing</b> unaccounted for':'<b>'+(gap<0?'an excess of ':'a gap of ')+Mc(gap)+'</b> &mdash; '+(gap>0?'posted costs this arrangement does not reach':'modelled courier cost above what the ledger posted'))+'. '
+    +'COMPANY EBITDA is contribution less that overhead; it is not comparable to the all-channel EBITDA further down, which uses a wider revenue base.'
+    +'</div>';
+
+   pnlCard(g,'odoo','Combined company P&L &mdash; every branch, the webstore and the total, by month'
+    +INFO('Lines down, columns across, one row per posted expense. Same sources as the per-branch blocks below: POS revenue and 4%-basis margin, analytic salaries and rent, utilities allocated on revenue share, the rest of the ledger underneath contribution. Click any line for its month-by-month trend.'),
+    'Pick a month or read the whole range; click a line to open it by month.',ch);
   })();}catch(e){console.error('combined P&L card failed:',e);}
 
   pnlCard(g,'odoo','Retail &mdash; P&L per Branch (ACTUAL POS margin, salaries & rent)','Real POS gross profit per branch (report.pos.order), real salaries and rent from the branch-tagged analytic ledger, allocated utilities and Meta in-store spend. LTGP per acquired customer shown per branch.',h3);
@@ -21161,7 +21246,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-205819';
+const BUILD='20261002-211235';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
