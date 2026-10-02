@@ -16054,7 +16054,8 @@ function brWater(n){const PS=O.pos||{},BC=(O.bcost||{})[n]||{};const {A,names}=p
   rent+=(BC[m]&&BC[m].rent>0)?BC[m].rent:0;
   const e=O.exp&&O.exp[m];const tp=names.reduce((a2,x)=>a2+((PS[x]&&PS[x][m])?PS[x][m][0]:0),0);const sh2=tp?P[0]/tp:0;
   if(e)util+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*sh2;
-  const a=A[m];if(a&&a.ov)mkt+=a.ms*(a.io/a.ov)*sh2;});
+  /* v63 seventh and last ad-split site: the branch waterfall. */
+  const a=A[m];if(a&&a.ov)mkt+=a.ms*(1-ADS_ONLINE_FRAC)*(a.io/a.ov)*sh2;});
  const contrib=gp-sal-rent-util-mkt;
  wfall(n+' &mdash; profit waterfall',[
   {l:'Revenue (POS actual)',v:rev,t:'tot'},{l:'COGS (actual)',v:-(rev-gp),t:'out'},{l:'Gross profit',v:gp,t:'tot'},
@@ -16064,6 +16065,8 @@ function coWater(){const {M,A,names}=pnlAgg();const PS=O.pos||{};
  const mons2=Object.keys(O.exp||{}).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);
  let onNet=0,onGp=0,ret=0,retGp=0,ads=0;const EXS={};
  mons2.forEach(m=>{if(M[m]){onNet+=M[m].g-M[m].r;onGp+=M[m].gp*(M[m].g?1-M[m].r/M[m].g:1);}
+
+
   names.forEach(n=>{const P=PS[n]&&PS[n][m];if(P){ret+=P[0];retGp+=gpAdj(P[0],P[1]);}});
   if(A[m])ads+=A[m].s||0;
   const e=O.exp[m]||{};Object.keys(e).forEach(k=>EXS[k]=(EXS[k]||0)+e[k]);});
@@ -16124,6 +16127,27 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     .concat([{n:'Network',f:m=>names.reduce((a2,n)=>a2+posRev(n,m),0),fmt:POS,sh:1,b:1}]),bm);
   pnlCard(g,'odoo','Retail &mdash; Monthly Revenue by Branch (REAL POS)','Full history from the POS reporting feed &mdash; no more journal-stub months.',h2);
   const RB=O.rentB||{},PS=O.pos||{},BC=O.bcost||{};
+    /* v64 ONE summariser, two call sites: the combined table above and the compare
+     block inside each branch. Writing the line maths twice is how two halves of
+     the same page end up disagreeing. */
+  /* one month list for both call sites; MS is a param so nothing closes over a
+     variable that lives in only one of them. */
+  const MSb=(function(){const any=names.find(n=>PS[n]&&Object.keys(PS[n]).length);
+    if(!any)return [];return Object.keys(PS[any]).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);})();
+  const sumB=(n,MS)=>{MS=MS||MSb;let rev=0,gp=0,ord=0,sal=0,rent=0,util=0,nc=0,nrev=0,rrev=0,unr=0;
+    const BCn=(BC[n]||{});
+    MS.forEach(m=>{const P=(PS[n]||{})[m]; if(!P)return;
+     rev+=P[0]||0; gp+=gpAdj(P[0],P[1]); ord+=P[2]||0;
+     const sv=(BCn[m]&&BCn[m].sal>0)?BCn[m].sal:((FXB[n]||{}).payroll||0); sal+=sv||0;
+     const rv=(BCn[m]&&BCn[m].rent>0)?BCn[m].rent:(((RB[n]||{})[m]>0)?RB[n][m]:0); rent+=rv||0;
+     const e=O.exp&&O.exp[m];
+     const tp=names.reduce((a2,x)=>a2+(((PS[x]||{})[m])?PS[x][m][0]:0),0);
+     if(e&&tp)util+=((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*(P[0]/tp);
+     const b=(O.bnr&&O.bnr[n]&&O.bnr[n][m])||null;
+     if(b){nc+=b.nc||0; nrev+=b.nrev||0; rrev+=b.rrev||0;}
+     if(b&&P)unr+=Math.max(0,(P[0]||0)-(b.nrev||0)-(b.rrev||0));});
+    return {n,rev,gp,ord,sal,rent,util,nc,nrev,rrev,unr,contrib:gp-sal-rent-util};};
+
   const rAvg={};Object.keys(RB).forEach(n=>{const vs=Object.values(RB[n]).filter(v=>v>0);rAvg[n]=vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:0;});
   const noRent=names.filter(n=>!rAvg[n]&&!(BC[n]&&Object.values(BC[n]).some(x=>x.rent>0)));const unl=rAvg['(unlabelled)']||0;
   const nrTot=m=>noRent.reduce((a2,n)=>a2+((BM[m]&&BM[m][n])||0),0);
@@ -16141,7 +16165,8 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
    const rent=m=>{const v=BCn[m]&&BCn[m].rent>0?BCn[m].rent:((RB[n]||{})[m]>0?RB[n][m]:null);if(v!=null)return v;if(!cov(m)&&!P[m])return null;if(rAvg[n])return rAvg[n];if(noRent.indexOf(n)>=0&&unl&&nrTot(m))return unl*(((BM[m]&&BM[m][n])||0)/nrTot(m));return null;};
    const share=m=>{const tp=totPos(m);if(tp&&P[m])return P[m][0]/tp;return netRev(m)?((BM[m]&&BM[m][n])||0)/netRev(m):0;};
    const util=m=>{const e=O.exp&&O.exp[m];if(!e)return null;return ((e['Utilities (elec/water/gas)']||0)+(e['Maintenance']||0))*share(m);};
-   const mkt=m=>{const a=A[m];if(!a||!a.s)return null;return a.ms*(a.ov?a.io/a.ov:0)*share(m);};
+   /* v63 the sixth site. Branches carry no media -- see ADS_ONLINE_FRAC. */
+   const mkt=m=>{const a=A[m];if(!a||!a.s)return null;return a.ms*(1-ADS_ONLINE_FRAC)*(a.ov?a.io/a.ov:0)*share(m);};
    const contrib=m=>pgp(m)-(sal(m)||0)-(rent(m)||0)-(util(m)||0)-(mkt(m)||0);
    const bcols=(Object.keys(P).length?Object.keys(P).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1):(bmF.length?bmF:bm));
    const BL=[
@@ -16171,11 +16196,142 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     {n:'Salaries (ACTUAL analytic)',f:m=>sal(m)!=null?-sal(m):null,fmt:NEG,sh:1,mk:m=>(BCn[m]&&BCn[m].sal>0)?'':' <span style="font-size:10.5px;color:#a4561a;font-weight:800" title="No salary posting carries this branch&#39;s analytic tag for this month, so this is the June-2026 Excel payroll figure, not a posting.">EXCEL</span>',tt:'Salary ledger lines carrying this branch&rsquo;s analytic account. A cell marked EXCEL has no posting for that month and shows the baked June-2026 Excel payroll instead.'},
     {n:'Rent (ACTUAL analytic)',f:m=>rent(m)!=null?-rent(m):null,fmt:NEG,sh:1,mk:m=>((BCn[m]&&BCn[m].rent>0)||((RB[n]||{})[m]>0))?'':' <span style="font-size:10.5px;color:#a4561a;font-weight:800" title="No rent posting for this month — landlords here are paid by quarterly cheque, so the branch&#39;s 12-month average is charged instead of a fake zero.">AVG</span>',tt:'RENT Branches lines by analytic distribution. Cheques post quarterly, so a month with no posting is charged the branch&rsquo;s 12-month average and marked AVG — a zero would flatter every third month.'},
     {n:'Alloc. utilities + maintenance',f:m=>util(m)!=null?-util(m):null,fmt:NEG,sh:1,tt:'Actual accounting, allocated by revenue share'},
-    {n:'Alloc. Meta in-store spend',f:m=>mkt(m)!=null?-mkt(m):null,fmt:NEG,sh:1,tt:'Meta spend &times; in-store share of omni value &times; branch revenue share'},
+    {n:(ADS_ONLINE_FRAC>=1?'Media charged to this branch':'Alloc. Meta in-store spend'),f:m=>mkt(m)!=null?-mkt(m):null,fmt:NEG,sh:1,
+     tt:(ADS_ONLINE_FRAC>=1?'Zero by decision: the ad budget is bought to drive the webstore, so the whole bill is charged there and no branch carries any of it.':'Meta spend &times; in-store share of omni value &times; branch revenue share')},
     {n:'Contribution',f:m=>contrib(m),fmt:POS,sh:1,b:1},
     {n:'Contribution margin, %',f:m=>prv(m)?contrib(m)/prv(m)*100:null,fmt:PCT,sh:1}];
    const flags=(function(){const out=[];const ms2=bcols;if(ms2.length>=2){const lm=ms2[ms2.length-1],pm2=ms2[ms2.length-2];const gm=m=>P[m]&&P[m][0]?P[m][1]/P[m][0]*100:null;const g1=gm(lm),g0=gm(pm2);if(g1!=null&&g0!=null&&Math.abs(g1-g0)>3)out.push((g1<g0?'&#9660; GP margin fell ':'&#9650; GP margin rose ')+g0.toFixed(1)+'% &rarr; '+g1.toFixed(1)+'% MoM'+(g1<g0?' &mdash; check discounting + zero-cost SKUs':''));const r1=rent(lm),r0=rent(pm2);if(r1&&r0&&r1>r0*1.15)out.push('&#9650; Rent jumped +'+Math.round((r1/r0-1)*100)+'% MoM (E&pound; '+Math.round(r0).toLocaleString()+' &rarr; '+Math.round(r1).toLocaleString()+')');const hi=ms2.filter(m=>{const v=gm(m);return v!=null&&v>35;});if(hi.length)out.push('&#9432; Months with GP% &gt; 35% are pre-2025 costing artifacts (audit A-08: missing costs) &mdash; not real margin');}return out;})();
-   h3+='<div style="font-weight:800;font-size:14px;margin:14px 0 2px;cursor:pointer" onclick="brWater(\''+n.replace(/'/g,'')+'\')" title="Click for the profit waterfall">'+n+' <span style="color:#4a4bd8;font-size:11.5px">&#9662; waterfall</span>'+(LTG[n]?' <span class="cs" style="font-weight:600">&mdash; LTGP per acquired customer E&pound; '+LTG[n].toLocaleString()+' <span title="Lifetime gross profit per customer first acquired at this branch. From the report.pos.order partner crawl (186k offline customers), as of '+((FF.bltg||{}).asOf||'')+'.">&#9432;</span></span>':'')+'</div>'+T(BL,bcols)+(flags.length?'<div class="ins" style="margin:4px 0 10px">'+flags.map(f2=>'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>'+f2+'</span></div>').join('')+'</div>':'');});
+   /* v64 COMPARE INSIDE THIS BLOCK. The block answers "how has this shop moved"; the
+      question asked of it constantly is "against what". A VS picker adds a second
+      column set for any other branch, or the network, computed with the same line
+      functions so the two halves can never be built differently. */
+   const _vsKey='rpVs_'+n;
+   const _vs=ST[_vsKey]||'';
+   const _vsOpts=[''].concat(names.filter(x=>x!==n)).concat(['NETWORK']);
+   const _vsSel='<select onchange="ST[\''+_vsKey+'\']=this.value;rRetail()" onclick="event.stopPropagation()" '
+     +'style="font-size:11.5px;padding:3px 7px;border:1px solid var(--bd);border-radius:5px;font-weight:600;margin-left:8px">'
+     +_vsOpts.map(o=>'<option value="'+o+'"'+(o===_vs?' selected':'')+'>'+(o===''?'compare with…':('vs '+o))+'</option>').join('')+'</select>';
+   h3+='<div style="font-weight:800;font-size:14px;margin:14px 0 2px;cursor:pointer" onclick="brWater(\''+n.replace(/'/g,'')+'\')" title="Click for the profit waterfall">'+n+' <span style="color:#4a4bd8;font-size:11.5px">&#9662; waterfall</span>'+_vsSel+(LTG[n]?' <span class="cs" style="font-weight:600">&mdash; LTGP per acquired customer E&pound; '+LTG[n].toLocaleString()+' <span title="Lifetime gross profit per customer first acquired at this branch. From the report.pos.order partner crawl (186k offline customers), as of '+((FF.bltg||{}).asOf||'')+'.">&#9432;</span></span>':'')+'</div>'+T(BL,bcols)+(function(){
+     if(!_vs)return '';
+     /* both sides on bcols -- the months this block's header claims */
+     const A1=sumB(n,bcols);
+     const B1=(_vs==='NETWORK')
+       ? (function(){const o={n:'NETWORK',rev:0,gp:0,ord:0,sal:0,rent:0,util:0,nc:0,nrev:0,rrev:0,unr:0,contrib:0};
+           names.forEach(x=>{const t=sumB(x,bcols);Object.keys(o).forEach(k=>{if(k!=='n')o[k]+=t[k]||0;});});return o;})()
+       : sumB(_vs,bcols);
+     if(!A1||!B1||!B1.rev)return '';
+     const Mv=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+     const LN=[['Revenue',a=>a.rev,'cur',1],['Gross profit',a=>a.gp,'cur',1],
+       ['GP margin',a=>a.rev?a.gp/a.rev*100:null,'pct',1],['Orders',a=>a.ord,'num',1],
+       ['AOV',a=>a.ord?a.rev/a.ord:null,'cur',1],
+       ['Salaries',a=>a.sal,'cur',0],['Salaries % of revenue',a=>a.rev?a.sal/a.rev*100:null,'pct',0],
+       ['Rent',a=>a.rent,'cur',0],['Rent % of revenue',a=>a.rev?a.rent/a.rev*100:null,'pct',0],
+       ['Rent + salaries % of revenue',a=>a.rev?(a.rent+a.sal)/a.rev*100:null,'pct',0],
+       ['Contribution',a=>a.contrib,'cur',1],
+       ['Contribution margin',a=>a.rev?a.contrib/a.rev*100:null,'pct',1]];
+     const f=(v,k)=>v==null?'—':(k==='pct'?v.toFixed(1)+'%':(k==='num'?Math.round(v).toLocaleString():Mv(v)));
+     const TDx='padding:5px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+     let rw=0,rt=0;
+     let hh='<div style="margin:8px 0 14px;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;background:var(--surface)">'
+      +'<div style="padding:9px 12px;font-size:12px;font-weight:700;color:var(--ink);background:var(--surface-2);border-bottom:1px solid var(--line)">'
+      +n+' against '+(_vs==='NETWORK'?'the whole network':_vs)+' &mdash; '+bcols.length+' month'+(bcols.length===1?'':'s')+'</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+      +'<tr><th style="'+TDx+';text-align:left;font-size:10px;color:var(--ink-3);text-transform:uppercase">Line</th>'
+      +'<th style="'+TDx+';font-size:10px;color:var(--ink-3);text-transform:uppercase">'+n+'</th>'
+      +'<th style="'+TDx+';font-size:10px;color:var(--ink-3);text-transform:uppercase">'+(_vs==='NETWORK'?'Network':_vs)+'</th>'
+      +'<th style="'+TDx+';font-size:10px;color:var(--ink-3);text-transform:uppercase">Gap</th>'
+      +'<th style="'+TDx+';text-align:left;font-size:10px;color:var(--ink-3);text-transform:uppercase">Points to</th></tr>';
+     LN.forEach(L=>{const va=L[1](A1), vb=L[1](B1);
+      if(va==null&&vb==null)return;
+      const gap=(va!=null&&vb!=null)?va-vb:null;
+      const good=gap==null?null:((gap>=0)===!!L[3]);
+      if(L[2]==='pct'&&gap!=null){rt++; if(good)rw++;}
+      const strong=/Contribution|margin|% of revenue/.test(L[0]);
+      hh+='<tr'+(strong?' style="background:var(--surface-3)"':'')+'>'
+       +'<td style="'+TDx+';text-align:left;font-weight:'+(strong?'800':'620')+';color:var(--ink)">'+L[0]+'</td>'
+       +'<td style="'+TDx+'">'+f(va,L[2])+'</td><td style="'+TDx+'">'+f(vb,L[2])+'</td>'
+       +'<td style="'+TDx+';font-weight:800;color:'+(good==null?'var(--ink-3)':(good?'var(--pos)':'var(--neg)'))+'">'
+         +(gap==null?'—':((gap>=0?'+':'−')+f(Math.abs(gap),L[2])))+'</td>'
+       +'<td style="'+TDx+';text-align:left;font-size:11px;color:var(--ink-2)">'
+         +(good==null?'—':('<b>'+(good?n:(_vs==='NETWORK'?'the network':_vs))+'</b>'+(L[2]==='pct'?' on the rate':'')))+'</td></tr>';});
+     hh+='</table></div><div style="padding:9px 12px;font-size:11px;line-height:1.55;color:var(--ink-2);border-top:1px solid var(--line)">'
+      +'<b>'+n+' takes '+rw+' of the '+rt+' rate lines.</b> Money lines mostly say which shop is bigger; the rate lines say which is the better business per pound it turns over, and a smaller shop often wins them. '
+      +'Both sides are computed by the same function over the same months, so the halves cannot be built differently. Branches carry no media here.</div></div>';
+     return hh;})()+(flags.length?'<div class="ins" style="margin:4px 0 10px">'+flags.map(f2=>'<div class="row"><span class="dot" style="background:'+C.orange+'"></span><span>'+f2+'</span></div>').join('')+'</div>':'');});
+  /* ============================================================================
+     v64 · EVERY BRANCH IN ONE TABLE, ON THIS TAB.
+     The per-branch P&L below stacks one block per branch, months across -- which is the
+     right shape for reading ONE shop over time and the wrong shape for the question
+     "how do my shops compare". That answer existed only on a different tab, which is
+     the same as not existing. It is here now: lines down, every branch across, plus
+     ONLINE and the company TOTAL, over the months this tab is already showing.
+     Every figure is the same source the blocks below use -- this is an arrangement of
+     them, not a second calculation, so the two can never disagree.
+     ========================================================================== */
+  try{(function(){
+   const MS=MSb; if(!MS.length)return;
+   const cols=names.map(n=>sumB(n,MS)).filter(c=>c.rev>0).sort((a,b)=>b.contrib-a.contrib);
+   if(!cols.length)return;
+   /* ONLINE on the same months, so the company line is complete */
+   let onRev=0,onGp=0,onOrd=0;
+   try{MS.forEach(m=>{const PA=(pnlAggShop().M||{})[m]; if(PA){onRev+=(PA.g||0)-(PA.r||0); onOrd+=PA.o||0;}});
+       onGp=onRev*GPQ().gpOnGross;}catch(e){}
+   /* v64b A line titled CONTRIBUTION that leaves out the whole ad bill is not a company
+      P&L, it is a flattering arrangement. Media is MEASURED here (total platform spend
+      over the same months) and charged to ONLINE, which is where ADS_ONLINE_FRAC puts it.
+      The delivery drag is charged too, from the same GPQ() rates the Online P&L uses --
+      otherwise ONLINE's contribution is shelf margin and the company TOTAL is fiction. */
+   let onMed=0; MS.forEach(m=>{const a2=A[m]; if(a2)onMed+=a2.s||0;});
+   const _q=GPQ(); const onDrag=onRev*(_q.drag||GPFB.drag);
+   const onCol={n:'ONLINE',rev:onRev,gp:onGp,ord:onOrd,sal:0,rent:0,util:0,nc:0,nrev:0,rrev:0,unr:0,
+                med:onMed,drag:onDrag,contrib:onGp-onDrag-onMed};
+   const TOT=(k)=>cols.reduce((a,c)=>a+(c[k]||0),0)+(onCol[k]||0);
+   const T={n:'TOTAL',rev:TOT('rev'),gp:TOT('gp'),ord:TOT('ord'),sal:TOT('sal'),rent:TOT('rent'),
+            util:TOT('util'),nc:TOT('nc'),nrev:TOT('nrev'),rrev:TOT('rrev'),unr:TOT('unr'),
+            med:TOT('med'),drag:TOT('drag'),contrib:TOT('contrib')};
+   const CC=cols.concat([onCol,T]);
+   const Mc=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+   const SGc=v=>(v<0?'−':'+')+Mc(v);
+   const TDc='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+   const THc='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+   const LINES=[
+    ['Revenue (POS, actual)',   c=>Mc(c.rev), 1, 0],
+    ['Gross profit (4% basis)', c=>Mc(c.gp),  1, 0],
+    ['GP margin',               c=>c.rev?(c.gp/c.rev*100).toFixed(1)+'%':'—', 0, 1],
+    ['Orders',                  c=>Math.round(c.ord).toLocaleString(), 0, 0],
+    ['AOV',                     c=>c.ord?Mc(c.rev/c.ord):'—', 0, 0],
+    ['New customers',           c=>c.nc?Math.round(c.nc).toLocaleString():'—', 0, 0],
+    ['New-customer revenue',    c=>c.nrev?Mc(c.nrev):'—', 0, 0],
+    ['Returning revenue',       c=>c.rrev?Mc(c.rrev):'—', 0, 0],
+    ['Unregistered revenue',    c=>c.unr?Mc(c.unr):'—', 0, 0],
+    ['Salaries',                c=>c.sal?'−'+Mc(c.sal):(c.n==='ONLINE'?'—':'−E£0'), 0, 0],
+    ['Rent',                    c=>c.n==='ONLINE'?'—':(c.rent?'−'+Mc(c.rent):'−E£0'), 0, 0],
+    ['Utilities + maintenance', c=>c.n==='ONLINE'?'—':'−'+Mc(c.util), 0, 0],
+    ['Courier + payment fees',  c=>c.drag?'−'+Mc(c.drag):(c.n==='ONLINE'?'−E£0':'—'), 0, 0],
+    ['Media (whole ad budget)',  c=>c.med?'−'+Mc(c.med):(c.n==='TOTAL'?'−E£0':'−E£0'), 0, 1],
+    ['CONTRIBUTION',            c=>SGc(c.contrib), 1, 0],
+    ['Contribution margin',     c=>c.rev?(c.contrib/c.rev*100).toFixed(1)+'%':'—', 0, 1]];
+   let ch='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<tr><th style="'+THc+';text-align:left">'+MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+'</th>'
+    +CC.map(c=>'<th style="'+THc+(c.n==='ONLINE'?';border-left:2px solid var(--line-2)':'')+(c.n==='TOTAL'?';border-left:2px solid var(--line-2)':'')+'">'+(c.n==='ONLINE'?'ONLINE (Shopify)':c.n)+'</th>').join('')+'</tr>';
+   LINES.forEach(L=>{
+    ch+='<tr'+(L[2]?' style="background:var(--surface-3);font-weight:800"':'')+'>'
+     +'<td style="'+TDc+';text-align:left;font-weight:'+(L[2]?'800':'620')+';color:var(--ink)">'+L[0]+'</td>'
+     +CC.map(c=>'<td style="'+TDc+(c.n==='ONLINE'||c.n==='TOTAL'?';border-left:2px solid var(--line-2)':'')
+        +(L[3]?';color:var(--ink-2)':'')+'">'+L[1](c)+'</td>').join('')+'</tr>';});
+   ch+='</table></div>'
+    +'<div style="margin-top:11px;padding:12px 14px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.65;color:var(--ink-2)">'
+    +'<b style="color:var(--ink)">This is the same data as the per-branch blocks below, arranged the other way.</b> Those answer &ldquo;how has this shop moved over the months&rdquo;; this answers &ldquo;how do my shops compare right now&rdquo;. The branch columns are the same figures, not a second calculation. '
+    +'The ONLINE column is new on this tab and is <b>Shopify only</b> &mdash; marketplace revenue (Noon, Amazon, Homzmart) is excluded because it carries neither our courier bill nor the ad budget, so this TOTAL is smaller than the all-channel company P&amp;L further down. '
+    +'Summed over <b>'+MS.length+' month'+(MS.length===1?'':'s')+'</b> ('+MS[0]+(MS.length>1?(' → '+MS[MS.length-1]):'')+'), the range this tab is set to. '
+    +'<b>Branches carry no media</b> &mdash; the whole ad budget is charged to the webstore, because that is what it is bought to do. '
+    +'<b>ONLINE is not like-for-like</b>: it pays no rent, its revenue is net of refunds against VAT-inclusive till money, and it carries both the courier bill ('+((_q.drag||GPFB.drag)*100).toFixed(2)+'% of revenue, measured) and the entire ad budget. Read branch against branch for a fair fight; read ONLINE to see what the two models really cost. '
+    +'<b>The TOTAL contribution is after every cost on this table</b>, media included &mdash; it is not shelf margin.</div>';
+   pnlCard(g,'odoo','Combined company P&L &mdash; every branch, the webstore and the total in one table'
+    +INFO('Lines down, columns across. Same sources as the per-branch blocks below: POS revenue and 4%-basis margin, analytic salaries and rent, utilities allocated on revenue share.'),
+    'The whole company side by side, over the months this tab is showing.',ch);
+  })();}catch(e){console.error('combined P&L card failed:',e);}
+
   pnlCard(g,'odoo','Retail &mdash; P&L per Branch (ACTUAL POS margin, salaries & rent)','Real POS gross profit per branch (report.pos.order), real salaries and rent from the branch-tagged analytic ledger, allocated utilities and Meta in-store spend. LTGP per acquired customer shown per branch.',h3);
   // ---- 5 · COMPANY P&L — ACTUAL OPEX ----
   const cmb=mons.filter(m=>(BM[m]||names.some(n=>PS[n]&&PS[n][m]))&&O.exp&&O.exp[m]);
@@ -21005,7 +21161,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261002-203712';
+const BUILD='20261002-205819';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
