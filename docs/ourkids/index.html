@@ -18214,7 +18214,17 @@ function vcohCard(g){
  const HZ=V.hz||[0,30,60,90,180,365,730];
  const lbl=h=>h===0?'First purchase':(h+'d');
  const key=ST.vcohK||'mult';
- const mult=r=>{const a=r.cur[0],b=r.cur[HZ.indexOf(365)];return (a&&b&&a>0)?b/a:null;};
+ /* v73 the multiple comes from the collector now, computed on ONE customer set (the ones
+    who have completed 365 days, their own day-0 against their own 365d). Dividing the day-0
+    column by the 365d column would compare 982 customers with 343 and is not a repeat rate.
+    Columns are MEDIANS: the POS partner table fuses many real people into single partners,
+    so a mean per-customer figure is dragged up by a fat tail. */
+ /* a multiple on a handful of matured customers is noise, and it was topping the default
+    sort: 14.40x on TWO people. It needs the same floor as the rest of the card, so below
+    MINP matured customers the multiple is withheld rather than ranked. */
+ const MINP=25;
+ const mult=r=>((r.mult!=null&&(r.pn||0)>=MINP)?r.mult:null);
+ const thin=r=>(r.mult!=null&&(r.pn||0)<MINP);
  const rows=V.rows.slice().sort((x,y)=>{
    if(key==='mult')return (mult(y)||0)-(mult(x)||0);
    if(key==='n')return y.n-x.n;
@@ -18235,12 +18245,14 @@ function vcohCard(g){
    +HZ.map((x,i)=>{const v=r.cur[i],m=r.mat[i]||0;
      return '<td style="'+TD+'"'+(m?(' title="'+m.toLocaleString()+' customers have completed '+lbl(x)+'"'):'')+'>'
       +(v==null||!m?'\u2014':('E\u00a3'+Math.round(v).toLocaleString()))+'</td>';}).join('')
-   +'<td style="'+TD+';font-weight:800">'+(mult(r)!=null?mult(r).toFixed(2)+'\u00d7':'\u2014')+'</td></tr>';});
+   +'<td style="'+TD+';font-weight:800"'+(r.pn?(' title="on the '+r.pn.toLocaleString()+' customers who have completed a full year: median E\u00a3'+Math.round(r.p0||0).toLocaleString()+' on day one, E\u00a3'+Math.round(r.p365||0).toLocaleString()+' by 365d"'):'')+'>'
+   +(mult(r)!=null?mult(r).toFixed(2)+'\u00d7':(thin(r)?('<span style="color:var(--ink-3);font-weight:600" title="only '+r.pn+' of this vendor\u2019s customers have completed a full year \u2014 too few to read a multiple from">'+r.pn+' too few</span>'):'\u2014'))+'</td></tr>';});
  h+='</table></div><div class="rtNote">'
   +'<b>Every column is per customer the vendor acquired, measured from that customer\u2019s own first purchase</b>, so a vendor is never credited for its customers simply being older. '
-  +'A customer counts at a horizon only once that horizon has actually elapsed for them, which is why the customer count behind each column falls as the window lengthens \u2014 hover a cell for it. '
-  +'<b>365d \u00f7 first</b> divides out the size of the first basket and leaves the repeat behaviour: 1.00\u00d7 means they never came back, 3.00\u00d7 means a year was worth three first baskets. '
-  +'Vendors with fewer than '+V.minN+' acquired customers are not listed. Measured '+(V.asOf||'')+'.'
+  +'A customer counts at a horizon only once that horizon has actually elapsed for them, which is why the customer count behind each column falls as the window lengthens \u2014 hover a cell for it. <b>Each column is therefore a different group of customers, so a longer window can read LOWER than a shorter one</b> (an older, smaller group behaving differently); that is composition, not a fall in value. The multiple is the figure immune to this, because it uses one group throughout. '
+  +'<b>Every figure is a MEDIAN</b>, not a mean: the POS partner table fuses many real people into single partners, so an average per customer is pulled up by a fat tail \u2014 the same reason the acquisition-hook card reports a median. '
+  +'<b>365d \u00f7 first</b> is computed on <b>one customer set</b> \u2014 those who have completed a full year, their own day one against their own 365th day \u2014 so it is a real repeat multiple and not one column divided by another over a different population. 1.00\u00d7 means they never came back; 3.00\u00d7 means a year was worth three first baskets. Hover it for the customers behind it. '
+  +'Vendors with fewer than '+V.minN+' acquired customers are not listed, and the multiple is withheld unless at least '+MINP+' of that vendor\u2019s customers have completed a full year \u2014 a multiple on a handful of people is noise, not a habit. Measured '+(V.asOf||'')+'.'
   +'</div>';
  pnlCard(g,'odoo','Vendor LTV \u2014 what the customers a vendor ACQUIRED are worth, at a fixed age'
   +INFO('Gross profit per acquired customer at 0/30/60/90/180/365/730 days from their own first purchase. Unlike lifetime value this cannot be inflated by a vendor whose customers started earlier.'),
@@ -21497,7 +21509,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261003-020157';
+const BUILD='20261003-125138';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
