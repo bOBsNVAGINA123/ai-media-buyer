@@ -2970,6 +2970,12 @@ def pull_pos_customers():
                 _pm2 = {}
                 for _pid, _d, _br, _mg, _oid, _rv, _qy in rows:
                     _pm2.setdefault(_pid, []).append((_d, _mg))
+                # MEDIAN, not mean: the POS partner table fuses many real people into single
+                # partners (and carries a walk-in partner), so a mean per-customer figure is
+                # dragged up by a fat tail -- the same reason hookV above reports a median.
+                # And the multiple is computed on ONE customer set: those who have completed
+                # 365 days, comparing THEIR day-0 with THEIR 365d, because averaging 982
+                # customers at day 0 against 343 at a year is not a repeat rate at all.
                 _vc = {}
                 for p in _all:
                     _f = first.get(p)
@@ -2987,19 +2993,37 @@ def pull_pos_customers():
                         if _dd < 0: continue
                         for i in _ok:
                             if _dd <= _HZ[i]: _acc[i] += _mg
+                    _i365 = _HZ.index(365)
+                    _has365 = _i365 in _ok
                     for _v in _vs:
-                        e = _vc.setdefault(_v, {"n": 0, "g": [0.0] * len(_HZ), "mat": [0] * len(_HZ)})
+                        e = _vc.setdefault(_v, {"n": 0, "s": [None] * len(_HZ), "pair": []})
+                        if e["s"][0] is None:
+                            e["s"] = [[] for _ in _HZ]
                         e["n"] += 1
                         for i in _ok:
-                            e["mat"][i] += 1; e["g"][i] += _acc[i]
+                            e["s"][i].append(_acc[i])
+                        if _has365:
+                            e["pair"].append((_acc[0], _acc[_i365]))
+                def _med(xs):
+                    if not xs: return None
+                    xs = sorted(xs); k = len(xs)
+                    return xs[k // 2] if k % 2 else (xs[k // 2 - 1] + xs[k // 2]) / 2.0
                 _vout = []
                 for _v, e in _vc.items():
                     if e["n"] < 25: continue
+                    _pa = [x for x, _y in e["pair"]]; _pb = [_y for _x, _y in e["pair"]]
+                    _m0, _m365 = _med(_pa), _med(_pb)
                     _vout.append({"v": _v, "nm": (VNM.get(_v) or _v)[:40], "n": e["n"],
-                                  "cur": [round(e["g"][i] / e["mat"][i], 1) if e["mat"][i] else None
+                                  "cur": [round(_med(e["s"][i]), 1) if e["s"][i] else None
                                           for i in range(len(_HZ))],
-                                  "mat": e["mat"]})
-                _vout.sort(key=lambda x: -(x["cur"][3] or x["cur"][1] or 0))
+                                  "mean": [round(sum(e["s"][i]) / len(e["s"][i]), 1) if e["s"][i] else None
+                                           for i in range(len(_HZ))],
+                                  "mat": [len(e["s"][i]) for i in range(len(_HZ))],
+                                  "pn": len(e["pair"]),
+                                  "p0": round(_m0, 1) if _m0 is not None else None,
+                                  "p365": round(_m365, 1) if _m365 is not None else None,
+                                  "mult": round(_m365 / _m0, 3) if (_m0 and _m365) else None})
+                _vout.sort(key=lambda x: -(x["mult"] or 0))
                 XTRA["vcoh"] = {"hz": _HZ, "rows": _vout[:60], "asOf": END.isoformat(), "minN": 25}
                 log("vendor LTV cohorts", len(_vout), "vendors >=25 acquired customers, 7 horizons")
             except Exception as _e:
@@ -6655,8 +6679,11 @@ def build():
                 return "vendor cash/consignment GP split missing (cashG/consG)"
             # same trap, cohort edition: g0/g60/g730 ride on the heavy cohort pulls, so
             # without a gate line the LTGP horizon columns serve forever from cached prev.
-            if not ((pv.get("vcoh") or {}).get("rows")):
+            _vr2 = (pv.get("vcoh") or {}).get("rows") or []
+            if not _vr2:
                 return "vendor LTV cohorts missing (vcoh)"
+            if not any(r.get("mult") is not None or r.get("pn") is not None for r in _vr2):
+                return "vendor LTV cohorts are the mean/mixed-set shape (need median + pn/mult)"
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
