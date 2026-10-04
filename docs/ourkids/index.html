@@ -9824,7 +9824,23 @@ function mdScore(r,gpOn,be){
  const aov=r.pur?(r.web+r.off)/r.pur:null, pAov=(P&&P.pur)?((P.web+P.off)/P.pur):null;
  const ctr=r.imp?r.clk/r.imp:null, pCtr=(P&&P.imp)?P.clk/P.imp:null;
  const dn=(c,p,t)=>(c!=null&&p!=null&&p>0&&(c/p-1)<=-t);
- if(v==='CUT'||v==='TRIM'){
+ /* v82 the reason was picked by threshold -- "did CVR fall more than 25%" -- in a fixed order,
+    so the factor NAMED was the first one past a bar, not the one that actually moved the most
+    money. Same identity the rest of the tool uses (value = impressions x CTR x CVR x AOV),
+    valued sequentially so it closes exactly; the biggest term is the reason, with its money. */
+ let drv=null;
+ if(P&&P.imp>0&&P.clk>0&&P.pur>0&&r.imp>0&&r.clk>0&&r.pur>0){
+  try{const ch=dcmpChain([['Impressions',r.imp,P.imp],['CTR',ctr,pCtr],['CVR',cvr,pCvr],['AOV',aov,pAov]]);
+   const top=ch.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d))[0];
+   if(top&&isFinite(top.d))drv=top;}catch(e){}}
+ const drvTxt=(function(){ if(!drv)return null;
+   const money='E£'+Math.round(Math.abs(drv.d)).toLocaleString();
+   const fmt=n=>drv.n==='Impressions'?Math.round(n).toLocaleString()
+            :drv.n==='AOV'?('E£'+Math.round(n).toLocaleString()):((n*100).toFixed(2)+'%');
+   return '<b>'+drv.n+'</b> moved it most: '+fmt(drv.from)+' → '+fmt(drv.to)
+     +' , worth '+(drv.d>=0?'+':'−')+money+' of the value change.';})();
+ if(drvTxt){why=drvTxt;}
+ else if(v==='CUT'||v==='TRIM'){
   if(offShare>=0.6)why='Most of its value is in-store matching, which carries the 0.217 haircut — it looks profitable on the platform number and is not.';
   else if(dn(cvr,pCvr,0.25))why='Clicks stopped converting: click→buy '+(pCvr*100).toFixed(1)+'% → '+(cvr*100).toFixed(1)+'%.';
   else if(dn(aov,pAov,0.20))why='Basket shrank: E£'+Math.round(pAov).toLocaleString()+' → E£'+Math.round(aov).toLocaleString()+' per order.';
@@ -11871,11 +11887,20 @@ function _rFOCUS(){
   const fold=c=>String(c||'Various').replace(/\s*\(Consignment\)\s*/,'').trim()||'Various';
   const cats={};
   (VD||[]).forEach(r=>{const c=fold(r.cat);
-   const e=cats[c]||(cats[c]={rev:0,gp:0,pRev:0,life:0,lifeOn:0,n:0});
-   e.rev+=wRev(r,cur); e.gp+=wGp(r,cur); e.pRev+=wRev(r,prev);
+   /* v82 prior GP was never accumulated, so gross profit carried no comparison at all and the
+      move could not be split. Both sides now, which also lets volume and margin be separated. */
+   const e=cats[c]||(cats[c]={rev:0,gp:0,pRev:0,pGp:0,life:0,lifeOn:0,n:0});
+   e.rev+=wRev(r,cur); e.gp+=wGp(r,cur); e.pRev+=wRev(r,prev); e.pGp+=wGp(r,prev);
    e.life+=r.r||0; e.lifeOn+=r.orev||0; e.n++;});
-  const L3=Object.entries(cats).map(([c,v])=>({c,...v,mg:v.rev?v.gp/v.rev*100:0,
-    dp:v.pRev>0?(v.rev/v.pRev-1)*100:null,onSh:(v.life+v.lifeOn)>0?v.lifeOn/(v.life+v.lifeOn)*100:0}))
+  const L3=Object.entries(cats).map(([c,v])=>{
+    const mNow=v.rev?v.gp/v.rev:0, mPrev=v.pRev?v.pGp/v.pRev:0;
+    let vol=null,mar=null;
+    if(v.pRev>0&&v.rev>0){try{const ch=dcmpChain([['Volume',v.rev,v.pRev],['Margin',mNow,mPrev]]);
+      vol=ch[0].d; mar=ch[1].d;}catch(e){}}
+    return {c,...v,mg:v.rev?v.gp/v.rev*100:0,
+      dp:v.pRev>0?(v.rev/v.pRev-1)*100:null,
+      dg:v.pGp>0?(v.gp/v.pGp-1)*100:null, dGp:v.gp-v.pGp, vol:vol, mar:mar,
+      onSh:(v.life+v.lifeOn)>0?v.lifeOn/(v.life+v.lifeOn)*100:0};})
    .filter(x=>x.rev>0).sort((a,b)=>b.rev-a.rev);
   if(!L3.length)return;
   const tot3=L3.reduce((a,x)=>a+x.rev,0);
@@ -11887,8 +11912,11 @@ function _rFOCUS(){
       +'<div style="width:130px;height:13px;border-radius:4px;background:#eef0f5;overflow:hidden"><div style="width:'+sh.toFixed(1)+'%;height:100%;background:#4a4bd8"></div></div>'
       +'<b style="min-width:40px">'+sh.toFixed(1)+'%</b></div></td>'
     +'<td style="'+TD+';font-weight:800">'+M(x.rev)+'</td>'
-    +'<td style="'+TD+'">'+M(x.gp)+'<div style="font-size:10.5px;color:'+(x.mg>=28?'#0f6e56':x.mg<20?'#a3271a':'#5f6a7d')+'">'+x.mg.toFixed(1)+'%</div></td>'
-    +'<td style="'+TD+'">'+(x.dp==null?'<span style="color:var(--ink-3)">new</span>':'<b style="color:'+(x.dp>=0?'#0f6e56':'#a3271a')+'">'+(x.dp>=0?'+':'−')+Math.abs(x.dp).toFixed(0)+'%</b>')+'</td>'
+    +'<td style="'+TD+'">'+M(x.gp)+'<div style="font-size:10.5px;color:'+(x.mg>=28?'#0f6e56':x.mg<20?'#a3271a':'#5f6a7d')+'">'+x.mg.toFixed(1)+'%</div>'
+      +(x.dg==null?'<div style="font-size:10px;color:var(--ink-3)">no prior</div>'
+        :'<div style="font-size:10px;font-weight:700;color:'+(x.dg>=0?'#0f6e56':'#a3271a')+'">'+(x.dg>=0?'▲':'▼')+Math.abs(x.dg).toFixed(0)+'%</div>')+'</td>'
+    +'<td style="'+TD+'">'+(x.dp==null?'<span style="color:var(--ink-3)">new</span>':'<b style="color:'+(x.dp>=0?'#0f6e56':'#a3271a')+'">'+(x.dp>=0?'+':'−')+Math.abs(x.dp).toFixed(0)+'%</b>')
+      +(x.vol==null?'':'<div style="font-size:10px;color:#5f6a7d;font-weight:600">GP '+(x.dGp>=0?'+':'−')+M(Math.abs(x.dGp))+' = vol '+(x.vol>=0?'+':'−')+M(Math.abs(x.vol))+' , margin '+(x.mar>=0?'+':'−')+M(Math.abs(x.mar))+'</div>')+'</td>'
     +'<td style="'+TD+'"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'
       +'<div style="width:110px;height:13px;border-radius:4px;overflow:hidden;display:flex">'
        +'<div style="width:'+x.onSh.toFixed(1)+'%;background:#3a3bd0" title="online"></div>'
@@ -20067,9 +20095,9 @@ function rMETA(){
      +'<span class="dxCar">▸</span> '+esc(String(r.n||'').slice(0,46))
      +(r.sub?'<div style="font-size:10px;font-weight:600;color:var(--ink-3)">'+esc(String(r.sub).slice(0,40))+'</div>':'')+'</td>'
     +'<td style="'+TD7+'">'+M(r.c.sp)+(r.p?ar3(r.c.sp,r.p.sp,false):'')+'</td>'
-    +'<td style="'+TD7+'">'+M(r.c.val)+'</td>'
+    +'<td style="'+TD7+'">'+M(r.c.val)+(r.p?ar3(r.c.val,r.p.val,true):'')+'</td>'
     +'<td style="'+TD7+';font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.on?((r.d>=0?'+':'−')+M(Math.abs(r.d))):'new')+'</td>'
-    +'<td style="'+TD7+';font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×</td>'
+    +'<td style="'+TD7+';font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×'+((r.p&&r.p.sp)?ar3(r.c.roas,(r.p.val/r.p.sp),true):'')+'</td>'
     +'<td style="'+TD7+'">'+M(r.c.cpm)+(r.p?ar3(r.c.cpm,r.p.cpm,false):'')+'</td>'
     +'<td style="'+TD7+'">'+(r.c.atcr*100).toFixed(2)+'%'+(r.p?ar3(r.c.atcr,r.p.atcr,true):'')+'</td>'
     +'<td style="'+TD7+'">'+(r.c.cvr*100).toFixed(1)+'%'+(r.p?ar3(r.c.cvr,r.p.cvr,true):'')+'</td>'
@@ -20197,7 +20225,9 @@ function rMETA(){
   const launch=wk.find(w=>w.sp>0&&w.im>500)||wk[0];
   const now=wk[wk.length-1];
   const sc=rvScore(bestCtr,now.ctr,now.freq,launch.cpm,now.cpm);
-  rows.push({a,wk,now,bestCtr,launch,sc,spendAll,weeks:wk.length,enough:wk.length>=1&&now.sp>0&&now.im>500});
+  /* v82 every metric gets the week before it, so nothing on this card is a bare number */
+  const prevW=wk.length>=2?wk[wk.length-2]:null;
+  rows.push({a,wk,now,prevW,bestCtr,launch,sc,spendAll,weeks:wk.length,enough:wk.length>=1&&now.sp>0&&now.im>500});
  });
  rows.sort((x,y)=>y.sc.s-x.sc.s);
  /* break-even for this tab's own verdict guard -- creativeFatigue() on the Money desk has
@@ -20237,6 +20267,11 @@ function rMETA(){
   pv*=fON;fv*=fOFF;
   return {sp:sp,on:pv*_gpF.gpOn-sp,both:pv*_gpF.gpOn+fv*_gpF.gpSt-sp};};
  const pasCell=function(v){return '<td style="'+TD+';font-weight:800;color:'+(v>=0?'#0f6e56':'#a3271a')+'">'+(v>=0?'+':'&minus;')+M(Math.abs(v))+'</td>';};
+ /* v82 one arrow helper for this card: current against the week before, direction-aware */
+ const arF=function(c,p2,good){
+  if(p2==null||!isFinite(p2)||!p2||c==null||!isFinite(c))return '<div style="font-size:10px;color:var(--ink-3)">no prior week</div>';
+  const d=(c/p2-1)*100, up=d>=0, ok=(up===!!good);
+  return '<div style="font-size:10px;font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
  let body='';
  rows.slice(0,26).forEach(r=>{
   const _pp=fatPas(r.a);
@@ -20261,11 +20296,11 @@ function rMETA(){
    +'<td style="'+TD+';text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis"><b>'
      +(_lnk?'<a href="'+_lnk+'" target="_blank" rel="noopener" style="color:#3a3bd0;text-decoration:none" title="Open this exact ad in Ads Manager to view or edit">'+esc(r.a.n||'')+'</a>':esc(r.a.n||''))+'</b>'
      +'<div style="font-size:10.5px;color:#5f6a7d">'+esc(r.a.cmp||'')+'</div></td>'
-   +'<td style="'+TD+'">'+M(r.spendAll)+'</td>'
-   +'<td style="'+TD+'">'+r.now.ctr.toFixed(2)+'%<div style="font-size:10.5px;color:#5f6a7d">best '+r.bestCtr.toFixed(2)+'%</div></td>'
-   +'<td style="'+TD+'">'+r.now.freq.toFixed(1)+'×</td>'
-   +'<td style="'+TD+'">'+M(r.now.cpm)+'<div style="font-size:10.5px;color:#5f6a7d">from '+M(r.launch.cpm)+'</div></td>'
-   +'<td style="'+TD+'">'+(r.now.roas?r.now.roas.toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD+'">'+M(r.spendAll)+arF(r.now.sp,r.prevW&&r.prevW.sp,true)+'</td>'
+   +'<td style="'+TD+'">'+r.now.ctr.toFixed(2)+'%<div style="font-size:10.5px;color:#5f6a7d">best '+r.bestCtr.toFixed(2)+'%</div>'+arF(r.now.ctr,r.prevW&&r.prevW.ctr,true)+'</td>'
+   +'<td style="'+TD+'">'+r.now.freq.toFixed(1)+'×'+arF(r.now.freq,r.prevW&&r.prevW.freq,false)+'</td>'
+   +'<td style="'+TD+'">'+M(r.now.cpm)+'<div style="font-size:10.5px;color:#5f6a7d">from '+M(r.launch.cpm)+'</div>'+arF(r.now.cpm,r.prevW&&r.prevW.cpm,false)+'</td>'
+   +'<td style="'+TD+'">'+(r.now.roas?r.now.roas.toFixed(2)+'×':'—')+arF(r.now.roas,r.prevW&&r.prevW.roas,true)+'</td>'
    +pasCell(_pp.on)+pasCell(_pp.both)
    +'<td style="'+TD+'">'+(r.enough?bar(r.sc.s):'<span style="color:var(--ink-3)">—</span>')+'</td>'
    +'<td style="'+TD+';text-align:left"><b style="color:'+st[1]+';font-size:11.5px">'+st[0]+'</b>'
@@ -20599,8 +20634,13 @@ function ggCampaigns(g){
  if(W&&W.start&&W.n){
   const half=Math.floor(W.n/2);
   DS.forEach(c=>{const d=c.d||{}; const sum=(k,a,b)=>{let t=0;for(let i=a;i<=b;i++)t+=(d[k]||[])[i]||0;return t;};
-   prior[c.n]={cur:{sp:sum('sp',W.n-half,W.n-1),v:sum('pv',W.n-half,W.n-1)},
-               prev:{sp:sum('sp',W.n-half*2,W.n-half-1),v:sum('pv',W.n-half*2,W.n-half-1)},days:half};});}
+   /* v82 carry the funnel too, so the ROAS move can be decomposed rather than just arrowed:
+      value = impressions x CTR x CVR x AOV, which is the same identity the keyword and
+      search-term cards use, so the three agree. */
+   const pack=(a2,b2)=>{const sp=sum('sp',a2,b2), v=sum('pv',a2,b2),
+     im=sum('imp',a2,b2), ck=sum('clk',a2,b2), pu=sum('pur',a2,b2);
+     return {sp:sp,v:v,im:im,ck:ck,pu:pu, ctr:im?ck/im:0, cvr:ck?pu/ck:0, aov:pu?v/pu:0};};
+   prior[c.n]={cur:pack(W.n-half,W.n-1), prev:pack(W.n-half*2,W.n-half-1), days:half};});}
  const spOf={}; (O.gads||[]).forEach(c=>spOf[c.n]=c.sp||0);
  const rows=GA.campaigns.map(c=>{const L=leg[c.n]||{on:0,off:0,onN:0,offN:0};
    const sp=c.sp||spOf[c.n]||0; if(!sp)return null;
@@ -20625,6 +20665,13 @@ function ggCampaigns(g){
  rows.forEach(r=>{
   const isOpen=(open===r.n);
   const cR=(r.p&&r.p.cur.sp)?r.p.cur.v/r.p.cur.sp:null, pR=(r.p&&r.p.prev.sp)?r.p.prev.v/r.p.prev.sp:null;
+  /* what actually moved the value, exact and sequential */
+  let drv=null;
+  if(r.p&&r.p.prev.im>0&&r.p.prev.ck>0&&r.p.prev.pu>0){
+   const ch=dcmpChain([['Impressions',r.p.cur.im,r.p.prev.im],['CTR',r.p.cur.ctr,r.p.prev.ctr],
+                       ['CVR',r.p.cur.cvr,r.p.prev.cvr],['AOV',r.p.cur.aov,r.p.prev.aov]]);
+   const top=ch.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d))[0];
+   if(top)drv={n:top.n,d:top.d,from:top.from,to:top.to};}
   h+='<tr style="cursor:pointer" onclick="ST.ggOpen='+(isOpen?"''":JSON.stringify(r.n).replace(/"/g,'&quot;'))+';rGOOG()">'
    +'<td style="'+TD+';text-align:left"><span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(isOpen?'▾':'▸')+'</span><b>'+String(r.n).replace(/</g,'&lt;')+'</b>'
    +'<div style="font-size:10px;color:var(--ink-3);padding-left:16px">'+(r.t||'')+'</div></td>'
@@ -20634,7 +20681,9 @@ function ggCampaigns(g){
    +'<td style="'+TD+'">'+(r.off?M(r.off):'<span style="color:var(--ink-3)">—</span>')+'</td>'
    +'<td style="'+TD+'">'+(r.off?X(r.sp?r.off/r.sp:null):'<span style="color:var(--ink-3)">—</span>')+'</td>'
    +'<td style="'+TD+';font-weight:800;background:var(--surface-3)">'+X(r.sp?r.comb/r.sp:null)+'</td>'
-   +'<td style="'+TD+'">'+(cR!=null?(X(cR)+' '+arrow(cR,pR)):'<span style="color:var(--ink-3)">—</span>')+'</td></tr>';
+   +'<td style="'+TD+'">'+(cR!=null?(X(cR)+' '+arrow(cR,pR)):'<span style="color:var(--ink-3)">—</span>')
+     +(drv?('<div style="font-size:10px;color:var(--ink-3);font-weight:600">'+drv.n+' '+(drv.d>=0?'+':'−')+M(Math.abs(drv.d))+'</div>'):'')
+     +'</td></tr>';
   if(isOpen){
    const ks=KW.filter(k=>k.cmp===r.n).sort((a,b)=>b.sp-a.sp).slice(0,40);
    if(ks.length){
@@ -21842,7 +21891,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-021621';
+const BUILD='20261005-022651';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
