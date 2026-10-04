@@ -2144,7 +2144,7 @@ function trAdBlock(p){const ads=trAdsFor(p);
  return '<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:7px">'
  +'<div style="font-size:11.5px;font-weight:800;color:#c43d2f;margin-bottom:3px">'+ads.length+' Meta ad'+(ads.length>1?'s':'')+' send'+(ads.length>1?'':'s')+' traffic here &middot; E&pound; '+Math.round(sp).toLocaleString('en-US')+' spent (60d)</div>'
  +ads.slice(0,8).map(a=>'<div style="display:flex;gap:8px;align-items:center;padding:2px 0;font-size:11.5px">'
-   +(a.th||a.im?'<img src="'+(a.th||a.im)+'" loading="lazy" style="width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid #e5e9f2">':'')
+   +(thIsPlaceholder(a)?thCatTile(26):(a.th||a.im?'<img src="'+(a.th||a.im)+'" loading="lazy" style="width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid #e5e9f2">':''))
    +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+String(a.n||'').replace(/"/g,'&quot;')+'">'+(a.n||a.id)+'</span>'
    +'<span style="font-family:ui-monospace,monospace;white-space:nowrap">E&pound; '+Math.round(a.sp||0).toLocaleString('en-US')+'</span>'
    +'<span style="white-space:nowrap">'+amLink('ad',a.id,a.acct,'edit')+'</span></div>').join('')
@@ -10202,11 +10202,16 @@ function fatigueScore(a,W){
  return {score,cls,band,sig,A,B,now,prv,parts:live};
 }
 function creativeFatigue(g){
- const ADS=(O.mads||[]).filter(a=>a.d&&a.sp>0);
- if(!ADS.length)return;
  const W=O.madsW||{n:60};
  /* the same window fatigueScore uses per ad, so the card can name the period it measured */
  const _pw=(typeof pfWin==='function')?pfWin(W):null;
+ /* v81 a.sp is LIFETIME spend, so picking L7D still listed ads that last ran months ago --
+    they came through with CTR 0.00%, CPM E£0 and "ALREADY OFF", which is noise occupying the
+    top of the card. An ad belongs in a windowed view only if it spent IN that window. */
+ const _wsp=a=>{const d=(a.d||{}).sp; if(!d)return 0; if(!_pw)return a.sp||0;
+   let t=0; for(let i=Math.max(0,_pw.a);i<=Math.min(d.length-1,_pw.b);i++)t+=d[i]||0; return t;};
+ const ADS=(O.mads||[]).filter(a=>a.d&&_wsp(a)>0);
+ if(!ADS.length)return;
  const half=_pw?_pw.n:14;
  const scored=ADS.map(a=>({a, f:fatigueScore(a,W)})).filter(x=>x.f);
  if(!scored.length){pnlCard(g,'meta','Creative fatigue','No ad has enough spend in both halves of the window to judge.','');return;}
@@ -10545,7 +10550,7 @@ function creMatrix(g){
   winners.forEach(w=>{
    body+='<div style="border:1px solid #e6e9f0;border-left:3px solid #0f7a55;border-radius:8px;padding:9px 11px;margin:7px 0;background:#f3fbf7">'
     +'<div style="display:flex;gap:10px;align-items:flex-start">'
-    +(w.a.th?'<img src="'+w.a.th+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto" alt="">':'')
+    +(thIsPlaceholder(w.a)?thCatTile(52):(w.a.th?'<img src="'+w.a.th+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto" alt="">':''))
     +'<div style="flex:1"><div style="font-size:12.5px;font-weight:800;color:#0F172A">'+w.a.n+'</div>'
     +'<div style="font-size:11.5px;color:#5b6478">'+M(w.sp)+' spend · '+w.roas.toFixed(2)+'× incremental · CTR '+w.ctr.toFixed(2)+'% · '
     +(w.cvr>20?'<span title="a conversation objective: the reported click is a message thread, not a site visit, so a click-to-buy rate is not the same unit here">click→buy n/a (conversation objective)</span>':'click→buy '+w.cvr.toFixed(1)+'%')
@@ -14446,7 +14451,7 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
   let h3='<div class="adg">'+SH.map(a=>{const io=IOF(a);
    let f0=-1;if(W&&a.d&&a.d.sp){for(let k=0;k<W.n;k++){if((a.d.sp[k]||0)>0){f0=k;break;}}}
    const vd=verdict(a);const src=a.im||a.th;
-   const img=src?'<img src="'+src+'" loading="lazy" style="image-rendering:auto"/>':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>';
+   const img=thIsPlaceholder(a)?'<div class="ph" title="Catalogue / dynamic ad — the creative is chosen per product at delivery, so Meta serves no single image for it" style="background:repeating-linear-gradient(45deg,var(--surface-3),var(--surface-3) 6px,var(--surface-2) 6px,var(--surface-2) 12px);font-size:11px;font-weight:800;color:var(--ink-3)">CATALOGUE AD<br><span style="font-weight:600;font-size:10px">creative is per product</span></div>':(src?'<img src="'+src+'" loading="lazy" style="image-rendering:auto"/>':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>');
    return '<div class="adc" style="border-top:3px solid '+vd[1]+'">'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener" title="Open the real ad preview on Facebook">'+img+'</a>':img)+'<div style="margin-top:6px"><span class="tg" style="background:'+vd[1]+'22;color:'+vd[1]+'">'+vd[0]+'</span>'+((f0>=1&&f0>=W.n-21)?' <span class="tg" style="background:#4a4bd822;color:#4a4bd8">NEW</span>':'')+'</div>'+
    '<div class="an" title="'+(a.n||'').replace(/"/g,'&quot;')+'">'+(a.n||'').slice(0,44)+'</div>'+((a.acct||a.cmp)?'<div style="font-size:10.5px;color:#5f6a7d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+((a.acct||'')+(a.cmp?' \u00b7 '+a.cmp:''))+'">'+((a.acct||'')+(a.cmp&&LVL==='ad'?' \u00b7 '+a.cmp:''))+'</div>':'')+
    '<div class="ak"><span>Spend</span><b>E&pound; '+money(a.sp)+'</b></div>'+
@@ -18869,7 +18874,25 @@ function adEdit(a){return a?amURL('ad',a.id,a.acct,{cid:a.cid,asid:a.asid}):null
 function adSee(a){return (a&&a.pl)?a.pl:null;}
 /* 44x44 creative thumb; fbcdn urls expire between syncs, so a failed load collapses to
    initials rather than leaving a broken-image box in the middle of a table */
-function adThumb(a,px){const s2=(a&&(a.im||a.th))||null,n2=String((a&&a.n)||'?');
+/* v81 CATALOGUE ADS HAVE NO CREATIVE, AND META SAYS SO WITH A GREY SQUARE. A dynamic/catalogue
+   ad picks its image per product at delivery, so the API returns ONE generic placeholder PNG for
+   every such ad -- measured here: 13 ads share a single asset id. Rendering that same empty grey
+   tile thirteen times reads as a broken image, which is what it was reported as. Detect it (by
+   Meta's own asset id, and by any thumbnail shared across many ads) and label it instead. */
+const TH_SHARED=(function(){const c={};try{(O.mads||[]).forEach(x=>{if(!x.th)return;
+  const k=String(x.th).split('?')[0]; c[k]=(c[k]||0)+1;});}catch(e){} return c;})();
+function thIsPlaceholder(a){const u=a&&(a.im||a.th); if(!u)return false;
+  const k=String(u).split('?')[0];
+  return /75341531_494485104475166/.test(k) || (TH_SHARED[k]||0)>=5;}
+function thCatTile(px,label){const w=px||40;
+  return '<div title="Catalogue / dynamic ad \u2014 the creative is chosen per product at delivery, so Meta serves no single image for it" '
+   +'style="width:'+w+'px;height:'+w+'px;border-radius:7px;background:repeating-linear-gradient(45deg,var(--surface-3),var(--surface-3) 4px,var(--surface-2) 4px,var(--surface-2) 8px);'
+   +'border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex:0 0 auto;'
+   +'font-size:'+(w>=52?'9.5':'8')+'px;font-weight:800;color:var(--ink-3);text-align:center;line-height:1.1;padding:2px">'
+   +(w>=52?'CATALOGUE':'CAT')+'</div>';}
+window.thIsPlaceholder=thIsPlaceholder; window.thCatTile=thCatTile;
+function adThumb(a,px){ if(thIsPlaceholder(a))return thCatTile(px);
+ const s2=(a&&(a.im||a.th))||null,n2=String((a&&a.n)||'?');
  const w=px||40, ini=n2.replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'?';
  const fb='<div style=\"width:'+w+'px;height:'+w+'px;border-radius:7px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:var(--ink-3);flex:0 0 auto\">'+ini+'</div>';
  if(!s2)return fb;
@@ -19312,7 +19335,9 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     (bench&&x.roas>=bench*1.15&&x.pas>0?['STRONG START','#0f7a55']:
     (bench&&x.roas<=bench*0.6?['WEAK — KILL WATCH','#c4203f']:['NORMAL RAMP','#286db5'])));
    const src=a.im||a.th;
-   const img=src?'<img src="'+src+'" loading="lazy" style="image-rendering:auto"/>':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>';
+   const img=thIsPlaceholder(a)
+     ? '<div class="ph" title="Catalogue / dynamic ad — the creative is chosen per product at delivery, so Meta serves no single image for it" style="background:repeating-linear-gradient(45deg,var(--surface-3),var(--surface-3) 6px,var(--surface-2) 6px,var(--surface-2) 12px);font-size:11px;font-weight:800;color:var(--ink-3)">CATALOGUE AD<br><span style="font-weight:600;font-size:10px">creative is per product</span></div>'
+     : (src?'<img src="'+src+'" loading="lazy" style="image-rendering:auto"/>':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>');
    let strip='<div style="display:flex;gap:1px;margin-top:5px">';
    for(let k=x.f0;k<=today&&k<x.f0+21;k++){const sp=a.d.sp[k]||0,v=sp?((a.d.pv[k]||0)*fON+(a.d.fv[k]||0)*fOFF)/sp:null;
     const c2=v==null?'#eef0f5':v>=6?'#0f7a55':v>=4?'#7cc98f':v>=2.5?'#ffd166':v>=1?'#a6592a':'#c4203f';
@@ -20001,10 +20026,13 @@ function rMETA(){
   ads.forEach(a=>{const k=keyOf[LV](a); if(k==null)return; (grp[k]=grp[k]||{n:nameOf[LV](a),sub:subOf[LV](a),list:[]}).list.push(a);});
   const FV2={'Impressions':v=>N(v),'Add-to-cart rate':v=>(v*100).toFixed(2)+'%',
              'Cart → purchase':v=>(v*100).toFixed(1)+'%','Average order value':v=>M(v),'CPM':v=>M(v)};
-  const SH4={'Impressions':['more people saw it','fewer people saw it'],
-             'Add-to-cart rate':['more of them added to cart','fewer of them added to cart'],
-             'Cart → purchase':['more carts converted','fewer carts converted'],
-             'Average order value':['the baskets were bigger','the baskets were smaller']};
+  /* v81 NAME THE METRIC, NOT THE STORY. "more people saw it" is a restatement of the number
+     next to it, not a reason -- the reason is the metric that produced it. Impressions are not
+     a lever: they are spend divided by CPM, so that row says which of the two moved. */
+  const SH4={'Impressions':['Impressions up','Impressions down'],
+             'Add-to-cart rate':['ATC rate up','ATC rate down'],
+             'Cart → purchase':['Cart→buy rate up','Cart→buy rate down'],
+             'Average order value':['AOV up','AOV down']};
   const rows=Object.keys(grp).map(k=>{
    const G=grp[k], c=met(G.list,PW.a,PW.b), p2=PW.ok?met(G.list,PW.pa,PW.pb):null;
    if(c.sp<50&&(!p2||p2.sp<50))return null;
@@ -20049,6 +20077,9 @@ function rMETA(){
     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:220px">'
      +(!r.on?'<span style="color:var(--ink-3)">no delivery in the compare window — a start, not a move</span>'
        :'<b>'+SH4[r.top.n][r.top.d>=0?0:1]+'</b> · '+FV2[r.top.n](r.top.from)+' → '+FV2[r.top.n](r.top.to)
+         +((r.top.n==='Impressions'&&r.p&&r.p.sp&&r.c.cpm&&r.p.cpm)
+            ? (' <span style="color:var(--ink-3)">— spend '+((r.c.sp/r.p.sp-1)*100>=0?'+':'−')+Math.abs((r.c.sp/r.p.sp-1)*100).toFixed(0)
+               +'% at CPM '+((r.c.cpm/r.p.cpm-1)*100>=0?'+':'−')+Math.abs((r.c.cpm/r.p.cpm-1)*100).toFixed(0)+'%</span>') : '')
         +' <span style="font-weight:700;color:'+(r.top.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.top.d>=0?'+':'−')+M(Math.abs(r.top.d))+'</span>')+'</td></tr>';});
   h+='</table></div>'
    +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
@@ -20148,7 +20179,15 @@ function rMETA(){
 
  /* ---------- 3. the fatigue score ---------- */
  const rows=[];
+ /* v81 spendAll is the whole 60-day feed, so picking L7D still listed ads that last ran weeks
+    ago -- they arrived with CTR 0.00%, CPM E£0 and "ALREADY OFF", which is noise at the top of
+    the card. An ad belongs in a windowed view only if it spent IN the window. (The Money desk's
+    creativeFatigue() has the same guard; the two functions do not share scope.) */
+ const _fw=(typeof pfWin==='function')?pfWin(W):null;
+ const _fsp=a=>{const d=(a.d||{}).sp; if(!d||!_fw)return a.sp||0; let t=0;
+   for(let i=Math.max(0,_fw.a);i<=Math.min(d.length-1,_fw.b);i++)t+=d[i]||0; return t;};
  ads.forEach(a=>{
+  if(_fsp(a)<=0)return;
   const wk=rvWeeks(a,W); if(!wk.length)return;
   const live=wk.reduce((n,w)=>n+(w.sp>0?7:0),0);
   const spendAll=wk.reduce((t,w)=>t+w.sp,0);
@@ -21803,7 +21842,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-015854';
+const BUILD='20261005-021621';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22522,7 +22561,7 @@ function rMB(){if(TAB!=='mb')return;dCh();const g=document.getElementById('g19')
  let wg='';
  if(nW.length){
   wg='<div class="adg">'+nW.sort((x,y)=>y.mult-x.mult).map(r=>{const a=r.a;const src=a.im||a.th;
-   const img=src?'<img loading="lazy" src="'+src+'">':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>';
+   const img=thIsPlaceholder(a)?'<div class="ph" title="Catalogue / dynamic ad — the creative is chosen per product at delivery, so Meta serves no single image for it" style="background:repeating-linear-gradient(45deg,var(--surface-3),var(--surface-3) 6px,var(--surface-2) 6px,var(--surface-2) 12px);font-size:11px;font-weight:800;color:var(--ink-3)">CATALOGUE AD<br><span style="font-weight:600;font-size:10px">creative is per product</span></div>':(src?'<img loading="lazy" src="'+src+'">':'<div class="ph">'+(a.n||'?').slice(0,2).toUpperCase()+'</div>');
    return '<div class="adc" style="border-top:3px solid #0f7a55">'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener">'+img+'</a>':img)
     +'<div style="margin-top:6px"><span class="tg" style="background:#0f7a5522;color:#0f7a55">WINNER &middot; '+r.mult.toFixed(1)+'&times; median</span></div>'
     +'<div class="an" title="'+(a.n||'')+'">'+(a.n||a.id)+'</div>'
