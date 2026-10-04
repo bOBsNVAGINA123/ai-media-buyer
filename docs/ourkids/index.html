@@ -9840,6 +9840,64 @@ function mdScore(r,gpOn,be){
  const sig=(r._ent&&r._W)?mdSignif(r._ent,r._W,r.pf,iroas):null;
  return {roas,iroas,gp,thin,v,pRoas,dRoas,dGp,why,offShare,sig};
 }
+/* v75 WHAT FLIPPED. Lifted from the old audience-intel tool's "Was Good -> Bad" idea, which was
+   the one thing here that genuinely did not exist: the desk tells you today's verdict, never that
+   an ad was PUMP last week and is CUT now, and a state CHANGE is the only thing that needs a
+   decision today. The old tool's maths is not reused -- it flipped on raw ROAS against a sliding
+   account mean, with E£50 spend floors and no noise test, so a bad week for the whole account lit
+   up every row as "went bad". This runs on the desk's own economics (incremental ROAS after the
+   0.217 offline haircut, the ledger's real breakeven, the same spend and purchase floors) and adds
+   the control the old one lacked: every move is also stated RELATIVE to how the whole account
+   moved, so the tide is separated from the swimmer. Ranked on gross profit, never on the ratio. */
+function mdFlips(g,graded,be,M,SG,VC){
+ const band=x=>(x==null||!isFinite(x))?null:(x>=be*1.35?'PUMP':x>=be*1.05?'HOLD':x>=be*0.75?'TRIM':'CUT');
+ const ORD={CUT:0,TRIM:1,HOLD:2,PUMP:3};
+ let cs=0,ci=0,ps=0,pi=0;
+ graded.forEach(r=>{cs+=r.sp||0; ci+=r.inc||0;
+  if(r.prev&&r.prev.sp){ps+=r.prev.sp; pi+=r.prevInc||0;}});
+ const accCur=cs?ci/cs:null, accPrev=ps?pi/ps:null;
+ const accMove=(accPrev>0&&accCur!=null)?(accCur/accPrev-1):null;
+ const fl=graded.map(r=>{
+   const pv=band(r.pRoas); if(!pv||!r.v||pv===r.v)return null;
+   if(!(r.prev&&r.prev.sp>=MD_MIN_SP*0.5&&(r.prev.pur||0)>=Math.max(2,MD_MIN_PUR*0.4)))return null;
+   const own=(r.pRoas>0&&r.iroas!=null)?(r.iroas/r.pRoas-1):null;
+   return {r:r, pv:pv, dir:ORD[r.v]-ORD[pv], own:own,
+           rel:(own!=null&&accMove!=null)?(own-accMove):null};
+ }).filter(Boolean).sort((a,b)=>Math.abs(b.r.dGp||0)-Math.abs(a.r.dGp||0));
+ if(!fl.length)return;
+ const fell=fl.filter(x=>x.dir<0), rose=fl.filter(x=>x.dir>0);
+ const cost=fell.reduce((a,x)=>a+(x.r.dGp||0),0), gain=rose.reduce((a,x)=>a+(x.r.dGp||0),0);
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const pill=v=>'<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:800;color:#fff;background:'+(VC[v]||'#5f6a7d')+'">'+v+'</span>';
+ const pct=x=>x==null?'—':((x>=0?'+':'−')+Math.abs(x*100).toFixed(0)+'%');
+ const tbl=(list,lbl)=>{ if(!list.length)return '';
+  let h='<div style="font-weight:800;font-size:13px;margin:14px 0 6px">'+lbl+' <span style="color:var(--ink-3);font-weight:600;font-size:11.5px">'+list.length+' entit'+(list.length===1?'y':'ies')+'</span></div>'
+   +'<div style="overflow-x:auto"><table class="bt" style="width:100%"><tr>'
+   +'<th style="'+TH+';text-align:left">Entity</th><th style="'+TH+'">Was → now</th>'
+   +'<th style="'+TH+'">Incremental ROAS</th><th style="'+TH+'">Its own move</th>'
+   +'<th style="'+TH+'">vs the account</th><th style="'+TH+'">Gross profit</th><th style="'+TH+'">Change</th></tr>';
+  list.slice(0,12).forEach(x=>{const r=x.r;
+   h+='<tr><td style="'+TD+';text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis"><b>'+String(r.n||'').replace(/</g,'&lt;')+'</b>'
+    +'<div style="font-size:10.5px;color:var(--ink-3)">'+String(r.cmp||'').replace(/</g,'&lt;').slice(0,60)+'</div></td>'
+    +'<td style="'+TD+'">'+pill(x.pv)+' <span style="color:var(--ink-3)">→</span> '+pill(r.v)+'</td>'
+    +'<td style="'+TD+'">'+(r.pRoas!=null?r.pRoas.toFixed(2):'—')+'× → <b>'+(r.iroas!=null?r.iroas.toFixed(2):'—')+'×</b></td>'
+    +'<td style="'+TD+'">'+pct(x.own)+'</td>'
+    +'<td style="'+TD+';font-weight:700;color:'+(x.rel==null?'var(--ink-3)':(x.rel>=0?'var(--grn)':'var(--red)'))+'">'+pct(x.rel)+'</td>'
+    +'<td style="'+TD+'">'+(r.dGp!=null?(M((r.gp||0)-(r.dGp||0))+' → '+M(r.gp||0)):'—')+'</td>'
+    +'<td style="'+TD+';font-weight:800;color:'+((r.dGp||0)>=0?'var(--grn)':'var(--red)')+'">'+SG(r.dGp||0)+'</td></tr>';});
+  return h+'</table></div>';};
+ const note='<div class="rtNote">'
+  +'<b>A verdict change is the only thing that needs a decision today</b> — the desk above ranks what is good and bad now; this is what <i>became</i> so, against the window immediately before, of equal length. '
+  +'Verdicts use the same bands, the same incremental ROAS after the measured in-store haircut, and the same breakeven of <b>'+be.toFixed(2)+'×</b> as the desk, so the two can never disagree. '
+  +'<b>vs the account</b> is the column that matters: the whole account moved '+pct(accMove)+' between these windows, so an entity that fell by less than that did not actually get worse — it just moved with the tide. Only a negative number here is the entity\u2019s own doing. '
+  +'Entities below the desk\u2019s floors (E£'+MD_MIN_SP.toLocaleString()+' spend, '+MD_MIN_PUR+' purchases) are excluded at both ends, so a flip cannot be two purchases of noise.'
+  +'</div>';
+ pnlCard(g,'ins','What flipped &mdash; what changed verdict since the window before'
+  +INFO('Entities whose verdict differs from the equal-length window immediately before, ranked on the gross profit the change is worth. Economics are the desk\u2019s own: incremental ROAS after the 0.217 in-store haircut, against the ledger breakeven.'),
+  (fell.length?('Fell: '+SG(cost)+' of gross profit'):'')+(fell.length&&rose.length?' · ':'')+(rose.length?('Rose: '+SG(gain)+''):''),
+  tbl(fell,'Was better, now worse')+tbl(rose,'Was worse, now better')+note);
+}
 function moneyDesk(g){
  const {rows,gpOn,W,noWin,noWinSp,ttHeld,ttSp,partial}=mdRows();
  if(!rows.length){pnlCard(g,'ins','Money desk','No ad entities in this sync.','');return;}
@@ -9849,6 +9907,7 @@ function moneyDesk(g){
  const SG=v=>(v>=0?'+':'−')+M(v);
  const VC={PUMP:'#0f7a55',HOLD:'#286db5',TRIM:'#a6592a',CUT:'#c4203f','INSUFFICIENT DATA':'#5f6a7d'};
  const graded=R.filter(r=>!r.thin), thin=R.filter(r=>r.thin);
+ try{mdFlips(g,graded,be,M,SG,VC);}catch(e){console.error('what-flipped card failed:',e);}
  /* Rank on money AND unusualness. Money alone re-lists the same volatile ads every week; a break
     that is both expensive and far outside that entity's own normal is the one worth the morning.
     An entity with too little history to test keeps a neutral 1.0 multiplier so it is neither
@@ -21538,7 +21597,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-010733';
+const BUILD='20261005-011910';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
