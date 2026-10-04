@@ -1256,11 +1256,31 @@ function winStamp(t){try{
   el.innerHTML='<span style="font-weight:750;color:var(--warn);white-space:nowrap;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;padding-top:1px">Own window</span>'
    +'<span><b style="color:var(--ink)">This tab reads '+d.label+'</b>, not the '+box+' in the date box above. '+(d.why||'')+'</span>';
   /* dim the picker that does nothing here */
+  /* v74 DIMMING A STICKY BAR IS WHY THE HEADER READ AS DOUBLED TEXT. The intent is right --
+     on a tab with its own window the range picker drives nothing, so say so -- but setting
+     opacity on the CONTAINER made a 93px half-transparent sheet that stays pinned to the top
+     and lets every card scroll visibly through it. Two changes: fade the CONTROLS, never the
+     bar (so its background still covers), and un-stick it, because pinning a control that
+     does nothing to the top of the screen forever is the opposite of helpful -- let it scroll
+     away and give the space back to the data. */
   const bar=pane.querySelector('.bar');
-  if(bar&&!bar.dataset.dim){bar.dataset.dim='1';bar.style.opacity='.45';bar.style.pointerEvents='none';bar.title='This tab sets its own window — the range picker does not drive it.';}
+  if(bar&&!bar.dataset.dim){bar.dataset.dim='1';
+   bar.style.position='static'; bar.style.pointerEvents='none';
+   bar.style.background='var(--surface-2)'; bar.style.borderStyle='dashed';
+   [].forEach.call(bar.children,function(c){if(!c.dataset.dimKeep)c.style.opacity='.5';});
+   if(!bar.querySelector('[data-dimtag]')){
+    const tg=document.createElement('span'); tg.dataset.dimtag='1'; tg.dataset.dimKeep='1';
+    tg.style.cssText='margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--warn);white-space:nowrap';
+    tg.textContent='not used on this tab'; bar.appendChild(tg);}
+   bar.title='This tab sets its own window — the range picker does not drive it.';}
  }else{
   const bar=pane.querySelector('.bar');
-  if(bar&&bar.dataset.dim){bar.dataset.dim='';bar.style.opacity='';bar.style.pointerEvents='';bar.title='';}
+  if(bar&&bar.dataset.dim){bar.dataset.dim='';
+   bar.style.opacity=''; bar.style.position=''; bar.style.pointerEvents='';
+   bar.style.background=''; bar.style.borderStyle='';
+   [].forEach.call(bar.children,function(c){c.style.opacity='';});
+   const tg=bar.querySelector('[data-dimtag]'); if(tg)tg.remove();
+   bar.title='';}
   el.style.cssText='display:flex;gap:8px;align-items:center;margin:0 0 10px;padding:6px 11px;'
    +'border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-m);font-size:11.5px;color:var(--ink-3)';
   el.innerHTML='<span style="font-weight:700;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px">Window</span>'
@@ -3601,7 +3621,16 @@ function syncBars(){
   ['cl0_','c0_','cl1_','c1_'].forEach(pfx=>{const e=document.getElementById(pfx+t);if(e)e.classList.toggle('hide',sh);});
   const c0=document.getElementById('c0_'+t),c1=document.getElementById('c1_'+t),gg0=document.getElementById('c0'),gg1=document.getElementById('c1');
   if(c0&&gg0)c0.value=gg0.value;if(c1&&gg1)c1.value=gg1.value;
-  const lb=document.getElementById('cw_'+t);if(lb)lb.textContent=span(ST.s,ST.e)+' days · '+cwl;});}
+  /* v74 "MTD" that silently stops short is a number you will misread. Every range here ends
+     at the last COMPLETE day, so on any day the sync has already run, today is excluded --
+     correct, but the label has to say it or E£827k over three days reads as the whole month
+     so far. State the end date and what is missing. */
+  const lb=document.getElementById('cw_'+t);
+  if(lb){const _t=(O.today||''), _gap=(_t&&ST.e<_t)?span(addD(ST.e,1),_t):0;
+   lb.textContent=span(ST.s,ST.e)+' days · '+cwl;
+   if(_gap>0){lb.textContent+=' · to '+ST.e+', today'+(_gap>1?(' and '+(_gap-1)+' more day'+(_gap>2?'s':'')):'')+' not counted';
+    lb.title='Ranges end at the last complete day. '+_t+' is excluded because the sync ran during it, so it would understate the day.';}
+   else lb.removeAttribute('title');}});}
 /* RDR = render whatever tab is on screen, then re-sync every date bar. */
 let _ALLM=null;
 function _allM(){if(_ALLM)return _ALLM;const a=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);if(a[a.length-1]!==m)a.push(m);}return _ALLM=a;}
@@ -21509,7 +21538,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261003-125138';
+const BUILD='20261005-010733';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
