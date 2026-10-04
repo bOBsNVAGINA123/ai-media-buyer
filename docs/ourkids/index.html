@@ -10032,8 +10032,17 @@ function prodContrib(g){
  const nm=s=>String(s||'').replace(/^\[(\d+)\]\s*/,'').replace(/^\[(\d+)\]\s*/,'').trim();
  const idOf=s=>{const m=String(s||'').match(/^\[(\d+)\]/);return m?m[1]:null;};
  const rows=P.map(r=>{const a=(r.mon||{})[m1]||[0,0], b=(r.mon||{})[m0]||[0,0];
+   /* v79 the card flagged margin QUALITY but never said how much of the profit move was volume
+      and how much was margin -- the sibling supplier/product cards on the Vendors tab have done
+      that exact split since v56. Same identity, same sequential chain, so it closes exactly:
+      gross profit = revenue x margin, volume valued first, margin on the revenue already moved. */
+   const _cm=(a[0]?a[1]/a[0]:0), _pm=(b[0]?b[1]/b[0]:0);
+   let _vol=null,_mar=null;
+   if(b[0]>0&&a[0]>0){const _ch=dcmpChain([['Volume',a[0],b[0]],['Margin',_cm,_pm]]);
+     _vol=_ch[0].d; _mar=_ch[1].d;}
    return {n:nm(r.n), id:idOf(r.n), vn:r.vn, cat:r.cat, rNow:a[0]||0, rPrev:b[0]||0, gNow:a[1]||0, gPrev:b[1]||0,
-           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0), st:r.st||null, url:r.url||null};})
+           dR:(a[0]||0)-(b[0]||0), dG:(a[1]||0)-(b[1]||0), vol:_vol, mar:_mar,
+           mNow:_cm, mPrev:_pm, st:r.st||null, url:r.url||null};})
   .filter(r=>r.rNow||r.rPrev);
  if(!rows.length)return;
  const tR=rows.reduce((a,r)=>a+r.dR,0), tG=rows.reduce((a,r)=>a+r.dG,0);
@@ -10066,7 +10075,7 @@ function prodContrib(g){
    +(note?'<div style="font-size:11.5px;color:#646e83;margin-bottom:4px">'+note+'</div>':'')
    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
    +'<tr><th style="'+TH+';text-align:left">Product</th><th style="'+TH+'">Gross profit '+m1+'</th><th style="'+TH+'">'+m0+'</th>'
-   +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th><th style="'+TH+'">Stock</th></tr>';
+   +'<th style="'+TH+'">Change</th><th style="'+TH+'">Share</th><th style="'+TH+'">Volume / margin</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">Margin</th><th style="'+TH+'">Stock</th></tr>';
   list.slice(0,12).forEach(r=>{
    const mg=mrg(r), mgP=r.rPrev?r.gPrev/r.rPrev:null;
    h+='<tr><td style="'+TD+';text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis"><b>'+pLink(r.n,r.url)+'</b>'
@@ -10074,6 +10083,9 @@ function prodContrib(g){
     +'<td style="'+TD+'">'+M(r.gNow)+'</td><td style="'+TD+';color:#5f6a7d">'+M(r.gPrev)+'</td>'
     +'<td style="'+TD+';font-weight:800;color:'+(r.dG<0?'#c4203f':'#0f7a55')+'">'+SG(r.dG)+'</td>'
     +'<td style="'+TD+';font-weight:700">'+(base?Math.abs(r.dG/base*100).toFixed(0)+'%':'—')+'</td>'
+    +'<td style="'+TD+'">'+((r.vol==null)?'<span style="color:var(--ink-3)">—</span>'
+      :('<span style="color:'+(r.vol<0?'#c4203f':'#0f7a55')+';font-weight:700">'+SG(r.vol)+'</span>'
+        +'<div style="font-size:10px;color:#5b6478">margin '+(r.mar<0?'−':'+')+M(r.mar)+'</div>'))+'</td>'
     +'<td style="'+TD+'">'+M(r.rNow)+' <span style="color:#5b6478;font-size:11.5px">'+PC(r.rNow,r.rPrev)+'</span></td>'
     +'<td style="'+TD+';color:'+((mg!=null&&mgP!=null&&mg<mgP-0.03)?'#c4203f':'#334155')+'">'+(mg!=null?(mg*100).toFixed(0)+'%':'—')
     +' <span style="color:#5b6478;font-size:11.5px">'+(mgP!=null?'was '+(mgP*100).toFixed(0)+'%':'')+'</span></td>'
@@ -19531,6 +19543,62 @@ function okRevCard(g,pf,tabKey){
    dates so no card can name a window it did not measure.
 
    Falls back to last-7-vs-prior-7 only when the date box is empty. */
+/* v80 ONE HEADLINE ROW, SAME ORDER, EVERY AD TAB. Each platform tab opened on whatever that
+   platform happened to have -- Meta on a bleed alert, Google on decisions -- so you could not
+   read spend, return, basket and conversion across them without hunting. This renders the same
+   six numbers in the same order at the top of each, every one against the window immediately
+   before, so the tabs are comparable and the page descends from headline to detail instead of
+   starting in the detail. Entities carry daily series, so the window is the date box.
+   kpiStrip(container, entities, W, {label, offKey}) -- offKey names the in-store value field
+   where the platform reports one, so the online leg is never silently blended with it. */
+function kpiStrip(g,ents,W,opt){
+ opt=opt||{};
+ if(!W||!W.n||!ents||!ents.length)return;
+ const P=pfWin(W); if(!P)return;
+ const a0=P.a,a1=P.b,b0=P.pa,b1=P.pb;
+ const sum=(k,i0,i1)=>{let t=0;ents.forEach(e=>{const d=(e.d||{})[k];if(!d)return;
+   for(let i=Math.max(0,i0);i<=Math.min(d.length-1,i1);i++)t+=d[i]||0;});return t;};
+ const win=(i0,i1)=>{if(i1<i0||i0<0)return null;
+   const sp=sum('sp',i0,i1), v=sum(opt.vKey||'pv',i0,i1), off=opt.offKey?sum(opt.offKey,i0,i1):0;
+   const pu=sum('pu',i0,i1)||sum('pur',i0,i1), im=sum('im',i0,i1)||sum('imp',i0,i1);
+   const ck=opt.ckKey?sum(opt.ckKey,i0,i1):(sum('clk',i0,i1)||sum('ck',i0,i1));
+   return {sp,v,off,pu,im,ck, roas:sp?v/sp:null, aov:pu?v/pu:null, cvr:ck?pu/ck:null,
+           cpa:pu?sp/pu:null, cpc:ck?sp/ck:null};};
+ const c=win(a0,a1), p=(b0!=null&&b0>=0)?win(b0,b1):null;
+ if(!c||!c.sp)return;
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const X=v=>(v==null||!isFinite(v))?'—':v.toFixed(2)+'×';
+ const PCT=v=>(v==null||!isFinite(v))?'—':(v*100).toFixed(2)+'%';
+ const delta=(cur,prv,good)=>{
+   if(prv==null||!prv||cur==null||!isFinite(cur))return '<span style="font-size:11px;color:var(--ink-3)">no prior window</span>';
+   const d=(cur/prv-1)*100, up=d>=0, ok=(up===(good!==false));
+   return '<span style="font-size:11px;font-weight:800;color:'+(ok?'var(--pos)':'var(--neg)')+'">'
+     +(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>';};
+ const K=[['Spend',M(c.sp),c.sp,p&&p.sp,false],
+          ['Value'+(opt.offKey?' (online)':''),M(c.v),c.v,p&&p.v,true],
+          ['ROAS',X(c.roas),c.roas,p&&p.roas,true],
+          ['Orders',Math.round(c.pu).toLocaleString(),c.pu,p&&p.pu,true],
+          ['AOV',M(c.aov),c.aov,p&&p.aov,true],
+          ['CVR',PCT(c.cvr),c.cvr,p&&p.cvr,true],
+          ['CPA',M(c.cpa),c.cpa,p&&p.cpa,false]];
+ let h='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+ K.forEach(k=>{h+='<div style="flex:1;min-width:118px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+   +'<div style="font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em">'+k[0]+'</div>'
+   +'<div style="font-size:19px;font-weight:800;color:var(--ink);line-height:1.15;margin:2px 0 1px">'+k[1]+'</div>'
+   +delta(k[2],k[3],k[4])+'</div>';});
+ h+='</div>';
+ if(opt.offKey&&c.off>0){
+  h+='<div style="margin-top:8px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface-2);font-size:11.5px;color:var(--ink-2)">'
+   +'<b>In-store leg kept separate:</b> '+M(c.off)+' of claimed value, which would read '
+   +X(c.sp?(c.v+c.off)/c.sp:null)+' combined against '+X(c.roas)+' online. It is matching rather than lift, so judge on the online figure.</div>';}
+ h+='<div class="rtNote">Reading <b>'+(P.lbl||(ST.s+' → '+ST.e))+'</b> against the equal-length window immediately before'
+  +(p?'':' — which this feed does not reach, so the arrows are blank')+'. '
+  +'ROAS is the platform&rsquo;s claimed value over spend, not the ledger. CVR is purchases per click, AOV is claimed value per purchase.</div>';
+ pnlCard(g,opt.a||'ins',(opt.label||'Headline')+' &mdash; the whole account first'
+  +INFO('The same six figures in the same order on every ad tab, each against the window immediately before, so the platforms can be read side by side before you descend into campaigns, ad sets and terms.'),
+  'Start here. Everything below this card is the detail behind it.',h);
+}
+window.kpiStrip=kpiStrip;
 function pfWin(W){
  const N=(W&&W.n)||60, last=N-1;
  let a=Math.max(0,last-6), b=last, ranged=false;
@@ -20566,6 +20634,7 @@ function rGOOG(){
  const W=O.gadsW, ads=(O.gads||[]).filter(a=>a.d), S=O.searchIntel||{};
  const PW=pfWin(W);
  if(!W||!ads.length){bn.innerHTML='Google per-campaign daily series missing — this tab fills on the next sync.';return;}
+ try{kpiStrip(g,ads,W,{label:'Google',a:'google',vKey:'pv'});}catch(e){console.error('google kpi strip failed:',e);}
  try{ggCampaigns(g);}catch(e){console.error('google campaign card failed:',e);}
  const fG=af('google');
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -21734,7 +21803,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-014446';
+const BUILD='20261005-015854';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22199,6 +22268,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
  try{rActions(g);}catch(e){}try{platformTree(g);}catch(e){}try{googleChain(g);}catch(e){}try{gadsNewRet(g);}catch(e){}try{gAudObs(g);}catch(e){}try{metaAud(g);}catch(e){}try{gPlumbing(g);}catch(e){}try{clFrict(g);}catch(e){}budgetBoard(g);
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
+ try{kpiStrip(g,ADS,W,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
  document.getElementById('bn23').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>What to do next, computed from your own history</b> &mdash; not a template. Hooks are ranked on how well a FIRST purchase of that thing creates a customer who comes back (repeat %, days to the 2nd order, orders/yr, lifetime gross profit). Ad calls come from the real per-ad 60-day series at the attribution window you have selected elsewhere.';
  const SRC=[['ven','stores &middot; supplier'],['cat','stores &middot; category'],['venON','online &middot; supplier'],['catON','online &middot; category']];
