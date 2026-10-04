@@ -14272,7 +14272,8 @@ function pnlBar(g,extra){const allM=[];for(let i=0;i<O.fin.n;i++){const m=DD[i].
  if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
- ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><span class="chip" onclick="pnlQuick(&quot;mtd&quot;)">MTD</span><span class="chip" onclick="pnlQuick(3)">L3M</span><span class="chip" onclick="pnlQuick(6)">L6M</span><span class="chip" onclick="pnlQuick(13)">L13M</span><span class="chip" onclick="pnlQuick(&quot;all&quot;)">All</span><label>From</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Show</label><select onchange="pnlCtl(&quot;pnlPct&quot;,this.value)">'
+ ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><span class="chip" onclick="pnlQuick(&quot;mtd&quot;)">MTD</span><span class="chip" onclick="pnlQuick(3)">L3M</span><span class="chip" onclick="pnlQuick(6)">L6M</span><span class="chip" onclick="pnlQuick(13)">L13M</span><span class="chip" onclick="pnlQuick(&quot;all&quot;)">All</span><label>From</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label class="xtl" style="font-weight:800" title="The running day is always incomplete, so every range stops at the last complete day. Untick to include today and see it part-formed."><input type="checkbox" onchange="setEXT(this.checked)"'+((window.EXT!==false)?' checked':'')+' style="width:auto;margin-right:4px">excl. today</label>'
+   +'<span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Show</label><select onchange="pnlCtl(&quot;pnlPct&quot;,this.value)">'
    +[['both','E\u00a3 + %'],['pct','% only'],['money','E\u00a3 only']].map(o=>'<option value="'+o[0]+'"'+((ST.pnlPct||'both')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')
    +'</select><span style="width:1px;height:20px;background:#dfe4ee;margin:0 4px"></span><label style="font-weight:800">Attr</label>'+attrBar()+(extra||'')+'<div class="sp"></div><span class="cs">Month filter + attribution window apply to every card on this tab.</span></div>';
  g.appendChild(ctl);}
@@ -19375,15 +19376,26 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><span class="tg" style="background:'+vd[1]+'22;color:'+vd[1]+';font-weight:800">'+vd[0]+'</span><span class="tg" style="background:#4a4bd822;color:#4a4bd8">NEW · '+aD2(W,x.f0).slice(5)+'</span></div>'+
     '<div class="an" title="'+(a.n||'').replace(/"/g,'&quot;')+'">'+(a.n||'').slice(0,44)+'</div>'+
     '<div style="font-size:10.5px;color:#5f6a7d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(a.acct||'')+(a.cmp?' · '+a.cmp:'')+'</div>'+
+    /* v83 THE CARD WAS TEN ROWS AT ONE WEIGHT, SO NOTHING READ FIRST. These cards answer one
+       question -- keep it, watch it, or kill it -- and the number that answers it is profit
+       after ad spend. Lead with that and the return beside it; the rest is evidence and now
+       sits behind a disclosure instead of competing with the answer. */
+    '<div style="display:flex;gap:8px;align-items:baseline;padding:7px 9px;margin:6px 0 4px;border-radius:8px;background:'+(x.pas>=0?'#eefaf4':'#fdeef2')+'">'
+     +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:'+(x.pas>=0?'#0f7a55':'#c4203f')+'">Profit after ad spend</div>'
+     +'<div style="font-size:19px;font-weight:800;line-height:1.1;color:'+(x.pas>=0?'#0f7a55':'#c4203f')+'">'+(x.pas>=0?'+':'&minus;')+'E&pound; '+money(Math.abs(x.pas))+'</div></div>'
+     +'<div style="margin-left:auto;text-align:right"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#5f6a7d">Total ROAS</div>'
+     +'<div style="font-size:15px;font-weight:800;line-height:1.1;color:'+vd[1]+'">'+x.roas.toFixed(2)+'x'+(bench?'<span style="font-weight:600;font-size:11px;color:#5f6a7d"> / '+bench.toFixed(2)+'x</span>':'')+'</div></div>'
+     +'</div>'+
     '<div class="ak"><span>Days live · Spend</span><b>'+x.days+'d · E&pound; '+money(x.sp)+'</b></div>'+
     ((x.im&&(O.mads||[]).some(q=>q.vv>0))?'<div class="ak"><span>Hook rate (3s/impr)</span><b>'+(x.vv?(x.vv/x.im*100).toFixed(1)+'%':'&mdash;')+'</b></div>':'')+
+    '<details style="margin-top:2px"><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--brand);list-style:none;padding:3px 0">the numbers behind it</summary>'+
     '<div class="ak" style="background:#f4f6ff"><span>WEBSITE value · ROAS</span><b>E&pound; '+money(x.pv)+' · '+(x.sp?(x.pv/x.sp).toFixed(2):'0')+'x</b></div>'+
     '<div class="ak" style="background:#f2fbf7"><span>STORE value · ROAS</span><b>E&pound; '+money(x.fv)+' · '+(x.sp?(x.fv/x.sp).toFixed(2):'0')+'x</b></div>'+
     '<div class="ak"><span>TOTAL ROAS vs acct</span><b style="color:'+vd[1]+'">'+x.roas.toFixed(2)+'x'+(bench?' <span style="font-weight:600;color:#5f6a7d">/ '+bench.toFixed(2)+'x</span>':'')+'</b></div>'+
     '<div class="ak" style="background:'+(x.pas>=0?'#eefaf4':'#fdeef2')+'"><span>PROFIT after ad spend</span><b style="color:'+(x.pas>=0?'#0f7a55':'#c4203f')+'">'+(x.pas>=0?'':'&minus;')+'E&pound; '+money(Math.abs(x.pas))+'</b></div>'+
     '<div class="ak"><span>CPP (website)</span><b>'+(x.cpp?'E&pound; '+money(x.cpp)+' <span style="font-weight:600;color:#5f6a7d">('+money(x.pu)+' pur)</span>':'&mdash;')+'</b></div>'+
     '<div class="ak"><span>Cost / in-store conv.</span><b>'+(x.cpo?'E&pound; '+money(x.cpo)+' <span style="font-weight:600;color:#5f6a7d">('+money(x.op)+' conv)</span>':'&mdash;')+'</b></div>'+
-    (NCLIVE2?'<div class="ak"><span>NC store value</span><b>E&pound; '+money(x.ncv)+'</b></div>':'')+
+    (NCLIVE2?'<div class="ak"><span>NC store value</span><b>E&pound; '+money(x.ncv)+'</b></div>':'')+'</details>'+
     '<div class="ak" style="border:0"><span>'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener" style="color:var(--brand);font-size:11.5px">preview &rarr;</a>':'')+'</span><b>'+amLink('ad',a.id,a.acct,'edit')+'</b></div>'+
     strip+'</div>';}).join('');
   pnlCard(g,'meta','New launches &mdash; '+L.length+' ad'+(L.length===1?'':'s')+' that went live '+LWLBL(LWIN),'Every ad whose FIRST delivery day falls inside '+LWLBL(LWIN)+', over E&pound;'+(LWIN<=3?'150':(LWIN<=7?'400':'1,000'))+' spent &mdash; the floor scales with the window so a one-day view is not emptied by it. Website and store legs separated, each on its own measured attribution ladder ('+String((O.attr&&O.attr.labels&&O.attr.labels[AK])||AK).replace(/<[^>]*>/g,'')+'). Verdict = since-launch TOTAL ROAS vs the account&rsquo;s last-14d blend: STRONG START &ge;115%, KILL WATCH &le;60%. Strip = daily ROAS since launch.',attSel+lbar+'<div class="adg">'+cards+'</div>');
@@ -21409,6 +21421,35 @@ function rTK(){if(TAB!=='tk')return;dCh();
  setTimeout(function(){try{(function(){
   const g0=document.getElementById('g24'); if(!g0||TAB!=='tk')return;
   const T=O.tads||[]; const daily=T.filter(x=>x&&x.d).length;
+  /* v83 the headline row the other ad tabs open on. TikTok has no daily series, so there is no
+     prior window to compare against -- the six numbers are lifetime totals and every arrow would
+     be blank. Render the figures, say plainly that they are lifetime and why there is no
+     comparison, rather than leave the tab as the only one without a headline. */
+  try{(function(){
+   const t=T.reduce((a2,x)=>({sp:a2.sp+(x.sp||0), v:a2.v+(x.pv||x.ov||0), off:a2.off+(x.ofv||0),
+     pur:a2.pur+(x.pur||0), imp:a2.imp+(x.imp||0), clk:a2.clk+(x.clk||0)}),
+     {sp:0,v:0,off:0,pur:0,imp:0,clk:0});
+   if(!t.sp)return;
+   const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+   const X=v=>(v==null||!isFinite(v))?'—':v.toFixed(2)+'×';
+   const K=[['Spend',M(t.sp)],['Value',M(t.v)],['ROAS',X(t.sp?t.v/t.sp:null)],
+            ['Orders',Math.round(t.pur).toLocaleString()],
+            ['AOV',t.pur?M(t.v/t.pur):'—'],
+            ['CVR',t.clk?(t.pur/t.clk*100).toFixed(2)+'%':'—'],
+            ['CPA',t.pur?M(t.sp/t.pur):'—']];
+   let h='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+   K.forEach(k=>{h+='<div style="flex:1;min-width:118px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)">'
+     +'<div style="font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em">'+k[0]+'</div>'
+     +'<div style="font-size:19px;font-weight:800;color:var(--ink);line-height:1.15;margin:2px 0 1px">'+k[1]+'</div>'
+     +'<div style="font-size:11px;color:var(--ink-3)">lifetime</div></div>';});
+   h+='</div><div class="rtNote"><b>These are LIFETIME totals, not your date range, and they carry no prior period.</b> '
+    +'TikTok ships '+T.length+' rows of per-ad totals with no daily array, so there is no second window to compare against and the date box cannot cut them. '
+    +'The other two tabs show the same six figures against the window before; this one cannot, and a blank arrow on every row would say less than this sentence. '
+    +'Spend stopped on '+(((O.fresh||{}).tiktok)||'—')+', so these are a closed book rather than a live account.</div>';
+   pnlCard(g0,'tt','TikTok &mdash; the whole account first'
+    +INFO('The same six figures the Meta and Google tabs open on, from per-ad lifetime totals. No daily series exists, so no prior-period comparison is possible.'),
+    'Lifetime totals. Everything below explains why there is no comparison.',h);
+  })();}catch(e){console.error('tiktok kpi strip failed:',e);}
   const fresh=((O.fresh||{}).tiktok)||'—';
   let lag=null; try{lag=dDiff(fresh,cairoToday());}catch(e){}
   pnlCard(g0,'tt','Why TikTok has no decomposition'
@@ -21891,7 +21932,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-022651';
+const BUILD='20261005-024408';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
