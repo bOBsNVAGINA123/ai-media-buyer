@@ -20467,6 +20467,98 @@ function rMETA(){
 
    So the same question order as Meta, answered with Google's own instruments:
    the four inputs -> where the auction was lost -> which campaigns earn -> which terms leak. */
+/* v78 START WITH CAMPAIGNS, AND SAY WHICH TILL THE MONEY LANDED IN. Two things were wrong with
+   reading this tab top-down. First, every Google card showed ONE value and called it value, when
+   the account books two different things: website purchases (conversion actions of type WEBPAGE)
+   and STORE-SALE UPLOADS (type UPLOAD_CLICKS) -- the branch sales pushed back into Google. The
+   campaign feed carries only the online leg (ofv is zero on every campaign), so the in-store money
+   was not blended, it was MISSING, and nothing said so. Second, there was no structure: the tab
+   jumped to search terms and keywords with no campaign level above them to drill from.
+   This card is the campaign level, with the three legs separated, ROAS on each, every figure
+   against the window before, and each campaign opening into its own keywords. */
+function ggCampaigns(g){
+ const GA=O.gattr; if(!GA||!GA.campaigns||!GA.campaigns.length)return;
+ const AC=GA.actions||[], CA=GA.cmpAct||[], KW=GA.kw||[];
+ const meta={}; AC.forEach(a=>meta[a.n]=a);
+ const leg={};
+ CA.forEach(x=>{const m=meta[x.a]; if(!m||!m.pri)return;
+   const o=leg[x.cmp]||(leg[x.cmp]={on:0,off:0,onN:0,offN:0});
+   if(m.t==='UPLOAD_CLICKS'){o.off+=x.cv||0;o.offN+=x.cn||0;} else {o.on+=x.cv||0;o.onN+=x.cn||0;}});
+ /* the online leg also has a daily series, so it alone can be read against the prior window;
+    the in-store leg comes from the fixed conversion-action pull and has no prior, which is
+    stated rather than faked. */
+ const DS=(O.gads||[]).filter(c=>c&&c.d), W=O.gadsW;
+ const prior={};
+ if(W&&W.start&&W.n){
+  const half=Math.floor(W.n/2);
+  DS.forEach(c=>{const d=c.d||{}; const sum=(k,a,b)=>{let t=0;for(let i=a;i<=b;i++)t+=(d[k]||[])[i]||0;return t;};
+   prior[c.n]={cur:{sp:sum('sp',W.n-half,W.n-1),v:sum('pv',W.n-half,W.n-1)},
+               prev:{sp:sum('sp',W.n-half*2,W.n-half-1),v:sum('pv',W.n-half*2,W.n-half-1)},days:half};});}
+ const spOf={}; (O.gads||[]).forEach(c=>spOf[c.n]=c.sp||0);
+ const rows=GA.campaigns.map(c=>{const L=leg[c.n]||{on:0,off:0,onN:0,offN:0};
+   const sp=c.sp||spOf[c.n]||0; if(!sp)return null;
+   return {n:c.n,t:c.t,sp:sp,on:L.on,off:L.off,onN:L.onN,offN:L.offN,
+           comb:L.on+L.off, p:prior[c.n]||null};}).filter(Boolean)
+   .sort((a,b)=>b.sp-a.sp);
+ if(!rows.length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const X=v=>(v==null||!isFinite(v))?'—':v.toFixed(2)+'×';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const arrow=(c,p2)=>{if(p2==null||!p2||!isFinite(c))return '<span style="color:var(--ink-3);font-size:10px">—</span>';
+   const d=(c/p2-1)*100; const up=d>=0;
+   return '<span style="font-size:10px;font-weight:700;color:'+(up?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>';};
+ const open=ST.ggOpen||'';
+ const T=rows.reduce((a,r)=>({sp:a.sp+r.sp,on:a.on+r.on,off:a.off+r.off}),{sp:0,on:0,off:0});
+ let h='<div style="overflow-x:auto"><table class="bt" style="width:100%"><tr>'
+  +'<th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Spend</th>'
+  +'<th style="'+TH+'">Online value</th><th style="'+TH+'">Online ROAS</th>'
+  +'<th style="'+TH+'">In-store value</th><th style="'+TH+'">In-store ROAS</th>'
+  +'<th style="'+TH+'">Combined ROAS</th><th style="'+TH+'">Online ROAS vs before</th></tr>';
+ rows.forEach(r=>{
+  const isOpen=(open===r.n);
+  const cR=(r.p&&r.p.cur.sp)?r.p.cur.v/r.p.cur.sp:null, pR=(r.p&&r.p.prev.sp)?r.p.prev.v/r.p.prev.sp:null;
+  h+='<tr style="cursor:pointer" onclick="ST.ggOpen='+(isOpen?"''":JSON.stringify(r.n).replace(/"/g,'&quot;'))+';rGOOG()">'
+   +'<td style="'+TD+';text-align:left"><span style="color:var(--ink-3);font-size:10px;margin-right:5px">'+(isOpen?'▾':'▸')+'</span><b>'+String(r.n).replace(/</g,'&lt;')+'</b>'
+   +'<div style="font-size:10px;color:var(--ink-3);padding-left:16px">'+(r.t||'')+'</div></td>'
+   +'<td style="'+TD+'">'+M(r.sp)+'</td>'
+   +'<td style="'+TD+'">'+M(r.on)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+X(r.sp?r.on/r.sp:null)+'</td>'
+   +'<td style="'+TD+'">'+(r.off?M(r.off):'<span style="color:var(--ink-3)">—</span>')+'</td>'
+   +'<td style="'+TD+'">'+(r.off?X(r.sp?r.off/r.sp:null):'<span style="color:var(--ink-3)">—</span>')+'</td>'
+   +'<td style="'+TD+';font-weight:800;background:var(--surface-3)">'+X(r.sp?r.comb/r.sp:null)+'</td>'
+   +'<td style="'+TD+'">'+(cR!=null?(X(cR)+' '+arrow(cR,pR)):'<span style="color:var(--ink-3)">—</span>')+'</td></tr>';
+  if(isOpen){
+   const ks=KW.filter(k=>k.cmp===r.n).sort((a,b)=>b.sp-a.sp).slice(0,40);
+   if(ks.length){
+    h+='<tr style="background:var(--surface-2)"><td colspan="8" style="padding:0 0 0 26px">'
+     +'<div style="font-size:11px;font-weight:800;color:var(--ink-2);padding:7px 0 3px">Keywords in '+String(r.n).replace(/</g,'&lt;')+' &mdash; '+ks.length+' of '+KW.filter(k=>k.cmp===r.n).length+'</div>'
+     +'<table style="width:100%;border-collapse:collapse">'
+     +'<tr><th style="'+TH+';text-align:left">Keyword</th><th style="'+TH+'">Match</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Value</th><th style="'+TH+'">ROAS</th><th style="'+TH+'">Conv</th></tr>';
+    ks.forEach(k=>{h+='<tr><td style="'+TD+';text-align:left">'+String(k.t).replace(/</g,'&lt;')+'</td>'
+      +'<td style="'+TD+';font-size:10px;color:var(--ink-3)">'+(k.mt||'')+'</td>'
+      +'<td style="'+TD+'">'+M(k.sp)+'</td><td style="'+TD+'">'+M(k.cv)+'</td>'
+      +'<td style="'+TD+';font-weight:700;color:'+((k.sp&&k.cv/k.sp>=3.48)?'var(--grn)':'var(--red)')+'">'+X(k.sp?k.cv/k.sp:null)+'</td>'
+      +'<td style="'+TD+'">'+(k.cn||0).toFixed(0)+'</td></tr>';});
+    h+='</table></div></td></tr>';
+   } else {
+    h+='<tr style="background:var(--surface-2)"><td colspan="8" style="padding:8px 26px;font-size:11.5px;color:var(--ink-2)">'
+     +'<b>No keywords.</b> '+(/SHOPPING|PERFORMANCE_MAX/.test(r.t||'')?'Shopping and Performance Max bid on the product feed, not on keywords &mdash; there is nothing at this level to open. Use the search-term card below for what people actually typed.':'This campaign served no keyword-targeted ad groups in the window.')
+     +'</td></tr>';}
+  }});
+ h+='</table></div>';
+ h+='<div class="rtNote">'
+  +'<b>Online and in-store are two different tills and Google books both.</b> Website purchases arrive as WEBPAGE conversion actions; the in-store column is <b>store-sale uploads</b> (UPLOAD_CLICKS) &mdash; branch sales pushed back into Google and credited to the click. '
+  +'Across the account that is <b>'+M(T.off)+'</b> against <b>'+M(T.on)+'</b> online, so <b>'+(T.on+T.off?((T.off/(T.on+T.off))*100).toFixed(1):'0')+'%</b> of Google&rsquo;s claimed value is in-store. '
+  +'<b>Every other Google card on this tab shows the online leg only</b> &mdash; the campaign feed carries zero in-store value &mdash; so this is the only place the combined number appears. '
+  +'<b>Treat the in-store leg the way you treat Meta&rsquo;s:</b> it is overwhelmingly matching rather than lift, so a campaign that only clears breakeven once its in-store column is added has not been shown to pay. '
+  +'<br><br>The in-store leg comes from the fixed conversion-action pull ('+(GA.win?GA.win[0]+' → '+GA.win[1]:'60 days')+') and has no prior window, so the <b>vs before</b> column is the <b>online</b> ROAS only, measured on the daily series over the two halves of that window. Click any campaign to open its keywords.'
+  +'</div>';
+ pnlCard(g,'google','Campaigns &mdash; online, in-store and combined'
+  +INFO('Every campaign with spend, its website value and its store-sale upload value kept apart, ROAS on each leg, and the online leg against the window before. Click a row for its keywords.'),
+  'Start here, then open the campaign you want to understand.',h);
+}
+window.ggCampaigns=ggCampaigns;
 function rGOOG(){
  if(TAB!=='gg')return; dCh();
  const g=document.getElementById('g32'); g.innerHTML='';
@@ -20474,6 +20566,7 @@ function rGOOG(){
  const W=O.gadsW, ads=(O.gads||[]).filter(a=>a.d), S=O.searchIntel||{};
  const PW=pfWin(W);
  if(!W||!ads.length){bn.innerHTML='Google per-campaign daily series missing — this tab fills on the next sync.';return;}
+ try{ggCampaigns(g);}catch(e){console.error('google campaign card failed:',e);}
  const fG=af('google');
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
  const N=v=>Math.round(Math.abs(v)).toLocaleString();
@@ -20716,6 +20809,7 @@ function rGOOG(){
              'Conversion rate':['the clicks bought more','the clicks bought less'],
              'Average order value':['the baskets were bigger','the baskets were smaller']};
   const TD6='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+  const GG_ROWS=80;   /* v78 was 25 -- the long tail is where the leaks are */
   const build=(list,label,sub2)=>{
    const rows=list.map(x=>{
     const c=met(x.d,a0,a1), p2=live?met(x.d,b0,b1):null;
@@ -20727,7 +20821,7 @@ function rGOOG(){
     const top=ch?ch.slice().sort((u,v)=>Math.abs(v.d)-Math.abs(u.d))[0]:null;
     const stop=sch?sch.slice().sort((u,v)=>Math.abs(v.d)-Math.abs(u.d))[0]:null;
     return {x,c,p:p2,on,top,stop,d:c.cv-(p2?p2.cv:0),ds:c.sp-(p2?p2.sp:0)};})
-    .filter(Boolean).sort((u,v)=>Math.abs(v.d)-Math.abs(u.d)).slice(0,25);
+    .filter(Boolean).sort((u,v)=>Math.abs(v.d)-Math.abs(u.d)).slice(0,GG_ROWS);
    if(!rows.length)return '';
    const ar2=(c,pv,good)=>{if(!pv)return '<div style="font-size:10px;color:var(--ink-3)">—</div>';
     const d=(c/pv-1)*100,up=d>=0;
@@ -20809,7 +20903,7 @@ function rGOOG(){
   const NETSP=(GA.net||[]).reduce((a,n)=>a+(n.sp||0),0);
   const KW=(GA.kw||[]);
   if(KW.length){
-   const mx=Math.max.apply(null,KW.map(k=>k.sp))||1, top=KW.slice(0,15);
+   const mx=Math.max.apply(null,KW.map(k=>k.sp))||1, top=KW.slice(0,60);  /* v78 was 15 */
    const tsp=KW.reduce((a,k)=>a+k.sp,0), tcv=KW.reduce((a,k)=>a+k.cv,0);
    pnlCard(g,'google','Keywords &mdash; where the click money goes'+INFO('Paid keywords from keyword_view, ranked by cost. Only keyword-targeted Search ad groups appear here at all: Shopping bids on product groups and PMax bids on nothing you can name, so most of the account has no keyword to rank. That is a property of the account structure, not a gap in this table.'),
     'Last '+wlbl+', fixed &mdash; not the date box. '+KW.length+' keywords took '+M(tsp)+' and returned '+M(tcv)+' ('+(tsp?(tcv/tsp).toFixed(2):'0')+'&times; reported)'+(NETSP?' &mdash; that is '+(tsp/NETSP*100).toFixed(0)+'% of the '+M(NETSP)+' the account spent. The other '+(100-tsp/NETSP*100).toFixed(0)+'% went through Shopping product groups and PMax, where there is no keyword to rank.':'.'),
@@ -21640,7 +21734,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-013342';
+const BUILD='20261005-014446';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
