@@ -11008,7 +11008,27 @@ function merDaily(g){
 function metaAud(g){
  const A=(O.audMix&&O.audMix.tot)?O.audMix:null;
  if(!A||!A.tot)return;
- const T=A.tot, W=A.win||{};
+ const W=A.win||{};
+ /* v76 THE WARM LAYER WAS NOT MISSING, IT WAS MISFILED. The collector classifies an ad set from
+    its targeting spec, but Meta's spec carries no rule or subtype, so every set that INCLUDES a
+    custom audience lands in "already bought". Measured: all six REMARKETING VC-or-ATC sets --
+    content viewers and cart abandoners who have never purchased -- were counted as existing
+    buyers, which is why the engaged row read zero sets and E£0 while the account plainly runs
+    retargeting. Mixing them also flattered the buyer row. Reclassified here by ad-set name,
+    which is a heuristic and is labelled as one, with the moved sets listed so it can be checked.
+    Ad-set names are the only engagement signal in the payload; the fix belongs in the collector
+    with resolved audience names, and until then this is stated, not silent. */
+ const _ENG=/\b(vc|view ?content|viewcontent|atc|add ?to ?cart|cart|ico|initiate|checkout|engag|viewer|video ?view|wsv|warm|remarket|retarget)\b/i;
+ const _BUY=/\b(purchas|buyer|customer ?file|all buyers|offline|existing customers|repeat|retention)\b/i;
+ const _moved=[];
+ const T=(function(){
+   const sets=A.sets||[]; if(!sets.length)return A.tot;
+   const acc={new:{sp:0,rch:0,imp:0,pur:0,val:0,sets:0},engaged:{sp:0,rch:0,imp:0,pur:0,val:0,sets:0},existing:{sp:0,rch:0,imp:0,pur:0,val:0,sets:0}};
+   sets.forEach(x=>{let c=x.cls||'new';
+     if(c==='existing'&&_ENG.test(x.n||'')&&!_BUY.test(x.n||'')){c='engaged';_moved.push(x);}
+     const t=acc[c]||acc.new;
+     t.sp+=x.sp||0; t.rch+=x.rch||0; t.imp+=x.imp||0; t.pur+=x.pur||0; t.val+=x.val||0; t.sets++;});
+   return acc;})();
  const CLS=[['new','Never bought from you','#0f7a55','Prospecting &mdash; broad, interest and lookalike sets, and sets that exclude your buyers.'],
              ['engaged','Warm, no purchase yet','#a6592a','Sets built on viewers, cart-abandoners and page engagers who have not bought.'],
              ['existing','Already bought','#4a4bd8','Sets that include a buyer, customer-file or offline-winner audience.']];
@@ -11088,6 +11108,20 @@ function metaAud(g){
   +'<b>Reach here is a sum of ad-set reach, not unique people.</b> Meta deduplicates within an ad set and not between them, so anyone hit by several prospecting sets is counted several times. '
   +'Spend, impressions and purchases are exact. The audience of a set is read from the custom audiences it INCLUDES: a lookalike of your buyers counts as prospecting, because the people in it have not bought.'
   +(cov?' This covers <b>'+Math.round(cov*100)+'%</b> of Meta spend in the window &mdash; the rest sits in ad sets the targeting pull could not return.':'')
+  +(_moved.length?('<br><br><b style="color:var(--warn)">'+_moved.length+' ad set'+(_moved.length===1?'':'s')+' moved out of &ldquo;already bought&rdquo; into warm.</b> '
+    +'Meta&rsquo;s targeting spec carries no rule or subtype, so the collector files every set that includes a custom audience as an existing buyer. '
+    +'These target content viewers and cart abandoners who have <b>never purchased</b>, so counting them as buyers both hid the warm layer entirely and flattered the buyer row: '
+    +_moved.map(x=>'<b>'+String(x.n).replace(/</g,'&lt;')+'</b>').join(', ')+'. '
+    +'The move is made on the ad-set NAME, which is a heuristic &mdash; the real fix is resolving audience names in the collector, and until that ships this is stated rather than silent.'):'')
+  +(function(){const e=T.engaged||{},x=T.existing||{},n2=T['new']||{};
+    if(!(e.sp>0&&x.sp>0&&n2.sp>0))return '';
+    const cpa=o=>o.pur?o.sp/o.pur:null, ce=cpa(e),cx=cpa(x),cn=cpa(n2);
+    if(ce==null||cx==null)return '';
+    return '<br><br><b style="color:var(--ink)">What this says.</b> Warm is <b>'+(e.sp/tsp*100).toFixed(1)+'%</b> of the classified spend '
+     +'and costs <b>'+M(ce)+'</b> a purchase against <b>'+M(cx)+'</b> on existing buyers and <b>'+M(cn)+'</b> on cold &mdash; '
+     +(ce>cx?('about '+(ce/cx).toFixed(1)+'\u00d7 the buyer cost. '):'')
+     +'There is almost no middle funnel here, and the little that runs is the most expensive place to buy a purchase. '
+     +'<b>These are platform-reported values</b>, not the incremental basis the money desk uses, so they are not comparable with the ROAS figures there.';})()
   +'</div>';
 
  pnlCard(g,'meta','New audience vs warm vs existing &mdash; spend and reach'+INFO('Meta spend, reach, purchases and ROAS split by whether the ad set targets people who have never bought, warm non-buyers, or your existing customers. Reach is summed across ad sets, so the same person can appear more than once.'),
@@ -21597,7 +21631,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-011910';
+const BUILD='20261005-012954';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
