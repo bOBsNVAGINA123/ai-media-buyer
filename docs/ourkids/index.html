@@ -18515,12 +18515,21 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
  })();}catch(e){}
 
  // ---------- 4. branch index matrix ----------
+ /* v77 THE BASELINE WAS ON A DIFFERENT CLOCK TO THE CELLS. Each cell is that supplier's till
+    revenue at that branch SINCE AUG 2024 -- r.br has no monthly series, so it cannot be re-cut --
+    but the expected share was built from r.r, which IS re-cut to the date box. A lifetime number
+    was therefore divided by an expectation derived from a recent window, so any supplier whose
+    recent share differs from its lifetime share came out wrong at EVERY branch in the same
+    direction. That is why whole rows read -70% or +130% across the board, which an index against
+    a network share can never legitimately do, and why the row cells did not sum to the printed
+    total. Both sides are lifetime now, and the total column is the row's own sum so it adds up. */
  const brTot={};BRS.forEach(b=>brTot[b]=V.reduce((a,r)=>a+((r.br&&r.br[b])?r.br[b][0]:0),0));
- const netRet=V.reduce((a,r)=>a+r.r,0);
+ const lifeOf=r=>BRS.reduce((a,b)=>a+((r.br&&r.br[b])?r.br[b][0]:0),0);
+ const netRet=V.reduce((a,r)=>a+lifeOf(r),0);
  const M=V.slice().sort((a,b)=>b.r-a.r).slice(0,24);
  let mh='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:5px 7px;font-size:10.5px;font-weight:800;color:var(--ink-3);border-bottom:2px solid #e6e9f2">Supplier</th>'
   +BRS.map(b=>'<th style="text-align:center;padding:5px 5px;font-size:10.5px;font-weight:800;color:var(--ink-3);border-bottom:2px solid #e6e9f2">'+b+'</th>').join('')+'<th style="text-align:right;padding:5px 7px;font-size:10.5px;font-weight:800;color:var(--ink-3);border-bottom:2px solid #e6e9f2">Retail total</th></tr></thead><tbody>';
- M.forEach(r=>{const share=netRet?r.r/netRet:0;
+ M.forEach(r=>{const _life=lifeOf(r); const share=netRet?_life/netRet:0;
   mh+='<tr><td style="padding:4px 7px;font-size:11.5px;font-weight:700;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis">'+r.n+'</td>';
   BRS.forEach(b=>{const bv=(r.br&&r.br[b])?r.br[b][0]:0,exp=share*(brTot[b]||0);
    const ix=exp?bv/exp*100:0;
@@ -18538,10 +18547,10 @@ function rVend(){if(TAB!=='vl')return;dCh();const g=document.getElementById('g12
       +'<div style="font-size:11.5px;font-weight:800;line-height:1.15">'+E+money(bv)+'</div>'
       +'<div style="font-size:10.5px;font-weight:700;color:'+subc+';line-height:1.15">'+sub+'</div></div>')
      :'<span style="color:var(--ink-3)">&mdash;</span>')+'</td>';});
-  mh+='<td style="text-align:right;padding:4px 7px;font-size:11.5px;font-weight:800;white-space:nowrap">'+E+money(r.r)+'</td></tr>';});
+  mh+='<td style="text-align:right;padding:4px 7px;font-size:11.5px;font-weight:800;white-space:nowrap">'+E+money(_life)+'</td></tr>';});
  mh+='</tbody></table></div>';
  pnlCard(g,'ins','Which supplier over-performs at which branch'+INFO('Index = that supplier actual revenue at that branch, divided by what it would have sold there if it held exactly the same share of that branch as it holds of the whole network. 100 = exactly on par. 150 = it sells half as much again as its network share implies.'),
-  'Top 24 suppliers by retail revenue. <b>The number in every cell is real money</b> &mdash; that supplier&rsquo;s till revenue at that branch since Aug 2024. The colour and the line underneath are the comparison: how that branch&rsquo;s take compares with what it would be if the branch sold this supplier in exactly the proportion the whole network does. Green = the catchment over-buys it, red = under-buys it.',
+  'Top 24 suppliers by retail revenue. <b>This card is lifetime and the date box does not move it</b> &mdash; per-branch revenue has no monthly series, so it cannot be re-cut; the row total is the sum of its own cells. <b>The number in every cell is real money</b> &mdash; that supplier&rsquo;s till revenue at that branch since Aug 2024. The colour and the line underneath are the comparison: how that branch&rsquo;s take compares with what it would be if the branch sold this supplier in exactly the proportion the whole network does. Green = the catchment over-buys it, red = under-buys it.',
   mh+'<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.grn+'"></span><span><b>Green cells are your allocation instructions.</b> A supplier indexing 140 at one branch and 60 at another is not a coincidence of stock &mdash; it is a real difference in what that catchment buys. Shift depth toward the green cells and thin the red ones before you negotiate a single extra unit with the supplier. The commercial version of this: take your next reorder, and split it by these indices rather than by branch revenue.</span></div>'
   +'<div class="row"><span class="dot" style="background:'+C.red+'"></span><span><b>Read a red cell twice before you cut.</b> An index near zero can mean the branch never received the stock, not that the catchment rejected it. Cross-check against whether that branch carried the range at all in the period &mdash; a dash means literally no till line for that supplier at that branch since Aug 2024, which is almost always a distribution decision rather than a demand signal.</span></div></div>');
  // ---------- 5. planning quadrant ----------
@@ -21631,7 +21640,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-012954';
+const BUILD='20261005-013342';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
