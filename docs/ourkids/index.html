@@ -2340,6 +2340,59 @@ function otruthCard(g){
   +'<td style="'+TD+'">'+((tO-tN)?M((tV-tNV)/(tO-tN)):'—')+'</td></tr></table></div>';
  /* the Google Ads campaign rows join on campaign ID, so they are the only place in this tool
     where a CAMPAIGN carries an unmodelled new-customer share. Name them where the id is known. */
+ /* ===== v92.7 what a first-time customer COST on each paid channel ====================
+    "Google is only 19.1% of new customers" reads as a Google problem and is not one: the
+    denominator is every first-time buyer the store got, Meta and direct and organic
+    included. Against its own budget share Google is the cheaper of the two. The card has to
+    put the two numbers side by side or the share alone misleads.
+    Spend comes from the account series over the SAME DAYS as the order pull. Meta cannot be
+    split FB vs IG vs untagged on the spend side (one account, one budget), so the paid rows
+    are rolled up to platform. */
+ (function(){
+  const A=O.ad; if(!A||!A.start||!T.since||!T.pulled) return;
+  const as=Date.parse(A.start);
+  const d0=Date.parse(T.since), d1=Date.parse(String(T.pulled).slice(0,10));
+  if(isNaN(as)||isNaN(d0)||isNaN(d1)) return;
+  const i0=Math.round((d0-as)/864e5), i1=Math.round((d1-as)/864e5);
+  const SP=k=>{const ser=A[k]||[]; let t=0;
+   for(let i=Math.max(0,i0);i<=Math.min(ser.length-1,i1);i++)t+=ser[i]||0; return t;};
+  const nOf=ks=>ks.reduce((a,k)=>a+((B[k]||{}).n||0),0);
+  const vOf=ks=>ks.reduce((a,k)=>a+((B[k]||{}).nv||0),0);
+  const PR=[{n:'Meta', sp:SP('mspend'), ks:['META - FACEBOOK','META - INSTAGRAM','META UNTAGGED']},
+            {n:'Google paid', sp:SP('gspend'), ks:['GOOGLE PAID']},
+            {n:'TikTok', sp:SP('tspend'), ks:['TIKTOK']}]
+   .map(x=>Object.assign(x,{nc:nOf(x.ks), ncv:vOf(x.ks)}))
+   .filter(x=>x.sp>0||x.nc>0);
+  if(!PR.length) return;
+  const tSP=PR.reduce((a,x)=>a+x.sp,0);
+  const paidNC=PR.reduce((a,x)=>a+x.nc,0);
+  h+='<div style="margin-top:12px;font-size:11.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">'
+   +'What a first-time customer cost <span style="font-weight:600;text-transform:none;color:var(--ink-3)">— budget share beside new-customer share, because the share alone misleads</span></div>'
+   +'<div style="overflow-x:auto;margin-top:4px"><table class="bt heat" data-hc="1,2,3,4,5" data-hcinv="5" data-hcx="1"><tr>'
+   +'<th style="'+TH+';text-align:left">Paid channel</th><th style="'+TH+'">Spend, same days</th>'
+   +'<th style="'+TH+'">Share of paid spend</th><th style="'+TH+'">New customers</th>'
+   +'<th style="'+TH+'">Share of ALL new</th><th style="'+TH+'">Cost per new customer</th>'
+   +'<th style="'+TH+'">New value per E£ of spend</th></tr>'
+   +PR.sort((a,b)=>b.nc-a.nc).map(x=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+x.n+'</td>'
+     +'<td style="'+TD+'">'+M(x.sp)+'</td>'
+     +'<td style="'+TD+'">'+P(tSP?x.sp/tSP:null)+'</td>'
+     +'<td style="'+TD+'">'+N(x.nc)+'</td>'
+     +'<td style="'+TD+';font-weight:800">'+P(tN?x.nc/tN:null)+'</td>'
+     /* a dead channel with zero spend and a few residual last-click orders read "E£0 per
+        new customer", which is the cheapest CAC in the table and completely meaningless */
+     +'<td style="'+TD+';font-weight:800">'+((x.nc&&x.sp)?M(x.sp/x.nc):'<span style="color:var(--ink-3);font-weight:600">no spend</span>')+'</td>'
+     +'<td style="'+TD+'">'+(x.sp?(x.ncv/x.sp).toFixed(2)+'×':'—')+'</td></tr>').join('')
+   +'<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD+';text-align:left">NOT BOUGHT — direct, organic, other</td>'
+   +'<td style="'+TD+'">—</td><td style="'+TD+'">—</td>'
+   +'<td style="'+TD+'">'+N(tN-paidNC)+'</td>'
+   +'<td style="'+TD+'">'+P(tN?(tN-paidNC)/tN:null)+'</td>'
+   +'<td style="'+TD+'">—</td><td style="'+TD+'">—</td></tr>'
+   +'</table></div>'
+   +'<div style="font-size:11px;color:var(--ink-3);margin-top:5px">'
+   +'<b>Read the first two number columns together.</b> A channel on a fifth of the budget cannot deliver half the new customers, so a low share of ALL new is not by itself a verdict on the channel &mdash; cost per new customer is. '
+   +'<b>This is LAST CLICK and it is not incrementality.</b> A Google click that closed a sale Meta started is counted here as Google&rsquo;s and nothing in this table can see that; the blackout tests on this account put off-season Google incremental value at a fraction of its claim, so treat these as the cheapest honest accounting of who touched the order last, not as what each channel caused. '
+   +'<b>Meta spend is not split online versus in-store here</b> &mdash; one budget works on both, so Meta&rsquo;s cost per ONLINE first-time customer is overstated by whatever share of its budget was aimed at the shops.'
+   +'</div>';})();
  /* ===== v92.6 new customers BY CAMPAIGN, and by campaign TYPE =========================
     "how much does branding do vs shopping" cannot be answered from a new-% WITHIN each
     campaign -- a campaign can be 70% new and still buy almost nobody. The question is each
@@ -22502,7 +22555,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-202544';
+const BUILD='20261005-212519';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
