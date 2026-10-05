@@ -21128,6 +21128,27 @@ function rGOOG(){
   const KW=(GA.kw||[]);
   if(KW.length){
    const mx=Math.max.apply(null,KW.map(k=>k.sp))||1, top=KW.slice(0,60);  /* v78 was 15 */
+   /* v85 this card read the FIXED keyword pull, which carries one window and no prior, so 84
+      numbers sat here with nothing to compare them to. The daily keyword series exists in
+      O.ggrain.kw (same keywords, 60 days) and the "keyword against keyword" card already uses
+      it, so the prior was available all along -- join on the keyword name and sum both halves
+      of the window. Keywords present in one feed and not the other say "no prior" rather than
+      borrowing a number from a different window. */
+   const _GR=(O.ggrain&&O.ggrain.kw)?O.ggrain.kw:null;
+   const _GW=(O.ggrain&&O.ggrain.n)?{n:O.ggrain.n,start:O.ggrain.start}:null;
+   const _GP=(_GW&&typeof pfWin==='function')?pfWin(_GW):null;
+   const _kprev={};
+   if(_GR&&_GP&&_GP.pa!=null&&_GP.pa>=0){
+    const sum=(d,i0,i1)=>{let t=0;if(!d)return 0;
+      for(let i=Math.max(0,i0);i<=Math.min(d.length-1,i1);i++)t+=d[i]||0;return t;};
+    _GR.forEach(k=>{const d=k.d||{};
+      _kprev[(k.n||'').toLowerCase()]={
+        cur:{sp:sum(d.sp,_GP.a,_GP.b), cv:sum(d.cv,_GP.a,_GP.b), ck:sum(d.clk,_GP.a,_GP.b)},
+        prv:{sp:sum(d.sp,_GP.pa,_GP.pb), cv:sum(d.cv,_GP.pa,_GP.pb), ck:sum(d.clk,_GP.pa,_GP.pb)}};});}
+   const _ar=(c,p2,good)=>{
+    if(p2==null||!isFinite(p2)||!p2||c==null||!isFinite(c))return '<div style="font-size:10px;color:var(--ink-3)">no prior</div>';
+    const dd=(c/p2-1)*100, up=dd>=0, ok=(up===!!good);
+    return '<div style="font-size:10px;font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(dd).toFixed(0)+'%</div>';};
    const tsp=KW.reduce((a,k)=>a+k.sp,0), tcv=KW.reduce((a,k)=>a+k.cv,0);
    pnlCard(g,'google','Keywords &mdash; where the click money goes'+INFO('Paid keywords from keyword_view, ranked by cost. Only keyword-targeted Search ad groups appear here at all: Shopping bids on product groups and PMax bids on nothing you can name, so most of the account has no keyword to rank. That is a property of the account structure, not a gap in this table.'),
     'Last '+wlbl+', fixed &mdash; not the date box. '+KW.length+' keywords took '+M(tsp)+' and returned '+M(tcv)+' ('+(tsp?(tcv/tsp).toFixed(2):'0')+'&times; reported)'+(NETSP?' &mdash; that is '+(tsp/NETSP*100).toFixed(0)+'% of the '+M(NETSP)+' the account spent. The other '+(100-tsp/NETSP*100).toFixed(0)+'% went through Shopping product groups and PMax, where there is no keyword to rank.':'.'),
@@ -21138,12 +21159,16 @@ function rGOOG(){
       +'<b style="font-weight:700">'+esc(k.t)+'</b> <span style="font-size:10.5px;color:var(--ink-3)">'+k.mt+'</span></td>'
       +'<td style="'+TD2+';position:relative">'
        +'<div style="position:absolute;left:4px;top:5px;bottom:5px;width:'+(k.sp/mx*100).toFixed(1)+'%;background:#dbe4ff;border-radius:4px"></div>'
-       +'<span style="position:relative;font-weight:700">'+M(k.sp)+'</span></td>'
-      +'<td style="'+TD2+'">'+N(k.ck)+'</td>'
+       +'<span style="position:relative;font-weight:700">'+M(k.sp)+'</span>'
+       +(function(){const q=_kprev[(k.t||'').toLowerCase()];return q?_ar(q.cur.sp,q.prv.sp,false):'';})()+'</td>'
+      +'<td style="'+TD2+'">'+N(k.ck)+(function(){const q=_kprev[(k.t||'').toLowerCase()];return q?_ar(q.cur.ck,q.prv.ck,true):'';})()+'</td>'
       +'<td style="'+TD2+'">'+(k.im?pct(k.ck/k.im*100):'&mdash;')+'</td>'
       +'<td style="'+TD2+'">'+(k.ck?M(k.sp/k.ck):'&mdash;')+'</td>'
       +'<td style="'+TD2+'">'+(k.cn||0)+'</td>'
-      +'<td style="'+TD2+';font-weight:800;color:'+(ro>=2?'#0f6e56':(ro>0?'#a35d1a':'#a3271a'))+'">'+(k.sp?ro.toFixed(2)+'&times;':'&mdash;')+'</td></tr>';}).join('')
+      +'<td style="'+TD2+';font-weight:800;color:'+(ro>=2?'#0f6e56':(ro>0?'#a35d1a':'#a3271a'))+'">'+(k.sp?ro.toFixed(2)+'&times;':'&mdash;')
+       +(function(){const q=_kprev[(k.t||'').toLowerCase()];
+         if(!q||!q.prv.sp||!q.cur.sp)return '<div style="font-size:10px;color:var(--ink-3)">no prior</div>';
+         return _ar(q.cur.cv/q.cur.sp,q.prv.cv/q.prv.sp,true);})()+'</td></tr>';}).join('')
     +'</table></div>'
     +(KW.length>15?'<div style="font-size:10.5px;color:#5f6a7d;margin-top:6px">Top 15 of '+KW.length+' by cost.</div>':''));
   }
@@ -21987,7 +22012,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-030020';
+const BUILD='20261005-033407';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
