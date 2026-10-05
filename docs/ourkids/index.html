@@ -1917,7 +1917,7 @@ function ltPortfolio(h){
  return h!=null?('<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Compare customer portfolios \u2014 branch vs branch vs Shopify</div><div class="cs">Tick the scopes you want side by side, then rank them by whichever number you are actually deciding on. AOV and UPT are the last 3 complete months ('+(B0.ms||[]).join(', ')+') from the real till and order lines; APF and repeat rate are lifetime order history.</div></div></div>'
  +'<div style="padding:2px 12px 6px;display:flex;flex-wrap:wrap;gap:5px">'+chips+'</div>'
  +'<div style="padding:0 12px 8px;display:flex;flex-wrap:wrap;gap:5px;align-items:center"><span style="font-size:10.5px;color:#5f6a7d;font-weight:800;letter-spacing:.3px">RANK BY</span>'+mchips+'</div>'
- +'<table class="bt heat" data-hc="1,2,3,4,6,7,8,9,10,11" data-hcx="1" data-hcinv="2,6"><tr><th>Portfolio</th><th>Customers</th><th>CAC</th><th>LTGP @'+h+'d</th><th>LTGP : CAC</th><th style="text-align:left">&nbsp;</th><th>Payback</th><th>AOV</th><th>UPT</th><th>APF / yr</th><th>Repeat %</th><th>Revenue / mo</th></tr>'
+ +'<table class="bt heat" data-hc="1,2,3,4,6,7,8,9,10,11,12" data-hcx="1" data-hcinv="2,6"><tr><th>Portfolio</th><th>Customers</th><th>CAC</th><th>LTGP @'+h+'d</th><th>LTGP : CAC</th><th style="text-align:left">&nbsp;</th><th>Payback</th><th>AOV</th><th>UPT</th><th>APF / yr</th><th>Repeat %</th><th>Repeat 30d</th><th>Revenue / mo</th></tr>'
  +rows.map(function(r){
    const _nm=ltNoMedia(r.sc);
    return '<tr><td style="font-weight:800">'+r.sc+(_nm?(' '+LT_NM):'')+'</td>'
@@ -1927,11 +1927,17 @@ function ltPortfolio(h){
    +'<td style="text-align:left;min-width:110px"><div style="background:'+(mode==='ratio'?ltCol(r.r):'var(--indigo)')+';height:8px;border-radius:4px;width:'+Math.round(100*kf(r)/mx)+'%;opacity:.85"></div></td>'
    +'<td>'+(r.pay!=null?'day '+r.pay:'<span style="color:var(--red);font-weight:800">never</span>')+'</td>'
    +'<td>'+(r.aov!=null?rtF(r.aov):'\u2014')+'</td><td>'+num(r.upt)+'</td>'
+   /* v89 Repeat % is LIFETIME, so it rises with nothing but time on the books and a long-
+      standing scope always wins it. RT_REP30 is the share of each scope's customers who bought
+      again WITHIN 30 DAYS of their first order -- same clock for everyone, so it is the
+      tenure-free version of the same question and belongs beside it rather than in a caveat. */
    +'<td>'+num(r.apf)+'</td><td>'+(r.rep!=null?r.rep+'%':'\u2014')+'</td>'
+   +'<td>'+(function(){const v=(typeof RT_REP30!=='undefined'&&RT_REP30)?RT_REP30[r.sc]:null;
+      return v==null?'<span style="color:var(--ink-3)">\u2014</span>':('<b>'+v.toFixed(1)+'%</b>');})()+'</td>'
    +'<td>'+(r.rev?rtF(r.rev):'\u2014')+'</td></tr>';}).join('')
  +'</table><div class="rtNote">'
  +(ADS_ONLINE_FRAC>=1?('<b style="color:var(--warn)">\u26a0 LTGP : CAC is not comparable across these rows.</b> The whole ad budget is charged to the webstore by decision, so every in-store scope is divided by a CAC that is near zero by construction &mdash; measured today, SHOPIFY E\u00a3384 against ALL STORES E\u00a32.73. That, not customer quality, is what makes the branch ratios run into the hundreds. <b>Rank the shops against each other on LTGP, AOV, APF or repeat rate; use LTGP : CAC only for Shopify and BLENDED.</b><br><br>'):'')
- +'<b>AOV</b> = revenue \u00F7 transactions. <b>UPT</b> = units \u00F7 transactions (from <code>product_qty</code> on the POS report and the Shopify order lines \u2014 a dash means that scope has not been re-crawled since UPT was added). <b>APF</b> = orders per customer per year from their own order history, so it is a real repeat rate, not revenue \u00F7 customers. A portfolio with a high AOV and a low APF is a one-off shop; the opposite is a habit \u2014 and only the second one compounds against CAC. <br><br><b>On tenure.</b> LTGP is already measured at a fixed horizon, so it is comparable; APF per year and revenue per month are rates, so they are too. <b>Repeat % is lifetime</b> and therefore rises with how long a scope&rsquo;s customers have been on the books \u2014 read it alongside APF, not instead of it. For the same question asked of suppliers, with tenure divided out entirely, see <b>Vendor LTV</b> on Products \u2192 Vendors &amp; products LTV.</div></div>'):'';}
+ +'<b>AOV</b> = revenue \u00F7 transactions. <b>UPT</b> = units \u00F7 transactions (from <code>product_qty</code> on the POS report and the Shopify order lines \u2014 a dash means that scope has not been re-crawled since UPT was added). <b>APF</b> = orders per customer per year from their own order history, so it is a real repeat rate, not revenue \u00F7 customers. A portfolio with a high AOV and a low APF is a one-off shop; the opposite is a habit \u2014 and only the second one compounds against CAC. <br><br><b>On tenure.</b> LTGP is already measured at a fixed horizon, so it is comparable; APF per year and revenue per month are rates, so they are too. <b>Repeat % is lifetime</b> and therefore rises with how long a scope&rsquo;s customers have been on the books. <b>Repeat 30d beside it is the tenure-free version</b>: the share who bought again within thirty days of their FIRST order, the same clock for every scope, so it can be compared directly. Where the two disagree, the 30d column is the one about customer quality and the lifetime one is mostly about age. For the same question asked of suppliers, with tenure divided out entirely, see <b>Vendor LTV</b> on Products \u2192 Vendors &amp; products LTV.</div></div>'):'';}
 function rLT(){if(TAB!=='lt')return;dCh();
  const g=document.getElementById('g21');
  const M=rtM();if(!M.length||typeof RT_LT==='undefined'){g.innerHTML='';document.getElementById('bn21').innerHTML='No monthly data in this sync.';return;}
@@ -22040,7 +22046,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-050401';
+const BUILD='20261005-053224';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
