@@ -17506,7 +17506,11 @@ function rLag(g){
  h+='</table></div>';
  const med=A2=>{if(!A2)return null;for(let i=0;i<A2.length;i++)if(A2[i].c>=50)return lbl[i];return lbl[14];};
  pnlCard(g,'odoo','Time between orders &mdash; 10-day buckets, % of all gaps',
-  'Every pair of consecutive purchase DAYS by the same registered customer, all time. Half of store repeat gaps fall inside <b>'+(med(P2)||'&mdash;')+'</b> days'+(S2?'; half of Shopify gaps inside <b>'+(med(S2)||'&mdash;')+'</b> days':'')+'. The cumulative row is your replenishment clock: set your email/SMS winback and Meta retargeting windows where it crosses ~60–70%, because beyond that the customer is statistically gone shopping elsewhere.',h);}
+  'Every pair of consecutive purchase DAYS by the same registered customer, all time. '
+  +(P2?('Half of store repeat gaps fall inside <b>'+(med(P2)||'&mdash;')+'</b> days')
+      :'<b>The stores half has not arrived in this payload</b> — the POS customer pull is skipped on a sync where the branch window already reaches today, so only Shopify is below')
+  +(S2?(P2?'; half of Shopify gaps inside <b>'+(med(S2)||'&mdash;')+'</b> days':'. Half of Shopify gaps fall inside <b>'+(med(S2)||'&mdash;')+'</b> days')
+      :'')+'. The cumulative row is your replenishment clock: set your email/SMS winback and Meta retargeting windows where it crosses ~60–70%, because beyond that the customer is statistically gone shopping elsewhere.',h);}
 function unmSel(v){ST.unm=v;rViz();}
 function bmSel(v){ST.bmet=v;rViz();}
 function aoRk(v){ST.aoR=v;rAds();}
@@ -22408,7 +22412,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-200256';
+const BUILD='20261005-200759';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
