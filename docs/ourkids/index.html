@@ -18814,6 +18814,69 @@ function aoLv(v){ST.aoLvl=v;rAds();}
 function aoAc(v){ST.aoAcct=v;rAds();}
 function _jbars(arr,lab,fmt){const money=v=>Math.round(v).toLocaleString();const f=fmt||money;const mx=Math.max.apply(null,arr.concat([1]));
  return arr.map((v,i)=>'<div style="display:flex;align-items:center;gap:8px;margin:2px 0"><div style="width:150px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+lab(i)+'">'+lab(i)+'</div><div style="flex:1;background:#eef0f5;border-radius:5px;height:14px"><div style="width:'+(v/mx*100).toFixed(1)+'%;background:#4a4bd8;height:14px;border-radius:5px"></div></div><div style="width:100px;font-size:11.5px;text-align:right">'+f(v)+'</div></div>').join('');}
+/* v91 A SECOND INSTRUMENT ON EVERY AD. O.ga4ads has been pulled on every sync and read by
+   NOTHING -- 17KB of GA4's own count of what each ad produced, keyed on utm_content, which is
+   the only independent check on Meta marking its own homework. Joined to the Meta ads by name
+   over the SAME 60-day window (summing the whole daily series, not the date box, because the
+   GA4 pull is fixed at 60 days).
+   The two SHOULD differ: Meta is 7-day-click/1-day-view and credits a view; GA4 is last-click
+   and session-scoped, so it cannot see a purchase that arrived through a different final click.
+   The number worth reading is therefore not the gap but WHICH ADS ARE OUTLIERS -- an ad Meta
+   rates far above GA4 is being carried by view-through and offline matching, and that is the
+   one to distrust when it is also the one you are scaling. */
+function ga4Check(g){
+ const G=O.ga4ads; if(!G||!G.ads)return;
+ const A=G.ads, M=(O.mads||[]).filter(a=>a.d&&a.pf==='meta');
+ if(!M.length)return;
+ const norm=x=>String(x||'').toLowerCase().trim().slice(0,80);
+ const sumAll=(d,k)=>{const a2=(d||{})[k]; if(!a2)return 0; let t=0; for(let i=0;i<a2.length;i++)t+=a2[i]||0; return t;};
+ const rows=[];
+ let joined=0, jSp=0, allSp=0;
+ M.forEach(a=>{
+  const sp=sumAll(a.d,'sp'); allSp+=sp; if(sp<2000)return;
+  const k=norm(a.n), g4=A[k];
+  if(!g4){rows.push({n:a.n,sp,miss:1}); return;}
+  joined++; jSp+=sp;
+  const mPur=sumAll(a.d,'pu'), mVal=sumAll(a.d,'pv');
+  rows.push({n:a.n, sp, mPur, mVal, gSess:g4[0]||0, gTx:g4[1]||0, gRev:g4[2]||0,
+             rPur:(g4[1]?mPur/g4[1]:null), rVal:(g4[2]?mVal/g4[2]:null)});});
+ const hit=rows.filter(r=>!r.miss);
+ if(!hit.length)return;
+ const M$=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const tM=hit.reduce((a2,r)=>a2+r.mVal,0), tG=hit.reduce((a2,r)=>a2+r.gRev,0);
+ const tMP=hit.reduce((a2,r)=>a2+r.mPur,0), tGP=hit.reduce((a2,r)=>a2+r.gTx,0);
+ hit.sort((x,y)=>(y.rVal||0)-(x.rVal||0));
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const RX=v=>v==null?'—':(v.toFixed(2)+'×');
+ let h='<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3,4,5,6" data-hcx="1" data-hcinv="6" style="width:100%"><tr>'
+  +'<th style="'+TH+';text-align:left">Ad</th><th style="'+TH+'">Spend 60d</th>'
+  +'<th style="'+TH+'">Meta purchases</th><th style="'+TH+'">GA4 transactions</th>'
+  +'<th style="'+TH+'">Meta value</th><th style="'+TH+'">GA4 revenue</th>'
+  +'<th style="'+TH+'">Meta ÷ GA4</th></tr>';
+ hit.slice(0,30).forEach(r=>{
+  const bad=r.rVal!=null&&r.rVal>=3;
+  h+='<tr><td style="'+TD+';text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis"><b>'+String(r.n).replace(/</g,'&lt;')+'</b></td>'
+   +'<td style="'+TD+'">'+M$(r.sp)+'</td>'
+   +'<td style="'+TD+'">'+N(r.mPur)+'</td><td style="'+TD+'">'+N(r.gTx)+'</td>'
+   +'<td style="'+TD+'">'+M$(r.mVal)+'</td><td style="'+TD+'">'+M$(r.gRev)+'</td>'
+   +'<td style="'+TD+';font-weight:800;color:'+(bad?'var(--red)':'var(--ink)')+'">'+RX(r.rVal)+'</td></tr>';});
+ h+='</table></div>';
+ const cov=allSp?(jSp/allSp*100):0;
+ h+='<div class="rtNote">'
+  +'<b>Meta claims '+M$(tM)+' across these ads; GA4 counted '+M$(tG)+'</b> over the same days &mdash; '
+  +(tG?('<b>'+(tM/tG).toFixed(2)+'×</b>'):'—')+' . On purchases it is '+N(tMP)+' against '+N(tGP)+'. '
+  +'<b>They are supposed to disagree.</b> Meta is 7-day-click and 1-day-view and will credit someone who only saw the ad; GA4 is last-click and session-scoped and cannot see a sale that arrived through a different final click. Neither is the truth on its own. '
+  +'<b>What the column is for is the outliers:</b> an ad far above the account ratio is being carried by view-through rather than clicks, so treat its reported return as the weakest evidence in the table &mdash; especially if it is one you are scaling. '
+  +'Joined on utm_content, so only ads whose link tag matches their name appear: <b>'+joined+' of '+rows.length+' ads over E£2,000</b>, '+cov.toFixed(0)+'% of Meta spend. GA4 is Egypt-only and this is its fixed 60-day window ('+(G.win?G.win[0]+' → '+G.win[1]:'60d')+'), not your date box.'
+  +'</div>';
+ pnlCard(g,'meta','Meta&rsquo;s claim against GA4&rsquo;s own count &mdash; per ad'
+  +INFO('GA4 measures each ad independently through utm_content. Meta is 7d-click/1d-view, GA4 is last-click: they must differ, so read the outliers, not the gap.'),
+  'The only second opinion in the tool on what each ad actually did.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.ga4Check=ga4Check;
 /* v90 HOW MANY CUSTOMERS BOUGHT ONCE, TWICE, TEN TIMES -- AND WHAT EACH TIER IS WORTH.
    Two distributions the tool held in the payload and never drew: O.jour.scopes[].opy (how many
    customers sit at each order count) and O.decB (how many sit in each lifetime-spend band,
@@ -22133,7 +22196,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-141355';
+const BUILD='20261005-161445';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22599,6 +22662,7 @@ function rAB(){if(TAB!=='ab')return;dCh();const g=document.getElementById('g23')
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{},W=O.madsW,ADS=(O.mads||[]).filter(a=>a.d);
  try{kpiStrip(g,ADS,W,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+ try{ga4Check(g);}catch(e){console.error('ga4 cross-check card failed:',e);}
  const fON=af('meta'),fOFF=afo();const {gpOn,gpSt}=_gpPct();
  document.getElementById('bn23').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>What to do next, computed from your own history</b> &mdash; not a template. Hooks are ranked on how well a FIRST purchase of that thing creates a customer who comes back (repeat %, days to the 2nd order, orders/yr, lifetime gross profit). Ad calls come from the real per-ad 60-day series at the attribution window you have selected elsewhere.';
  const SRC=[['ven','stores &middot; supplier'],['cat','stores &middot; category'],['venON','online &middot; supplier'],['catON','online &middot; category']];
