@@ -2393,26 +2393,29 @@ function otruthCard(g){
    +'<b>This is LAST CLICK and it is not incrementality.</b> A Google click that closed a sale Meta started is counted here as Google&rsquo;s and nothing in this table can see that; the blackout tests on this account put off-season Google incremental value at a fraction of its claim, so treat these as the cheapest honest accounting of who touched the order last, not as what each channel caused. '
    +'<b>Meta spend is not split online versus in-store here</b> &mdash; one budget works on both, so Meta&rsquo;s cost per ONLINE first-time customer is overstated by whatever share of its budget was aimed at the shops.'
    +'</div>';})();
- /* ===== v92.6 new customers BY CAMPAIGN, and by campaign TYPE =========================
-    "how much does branding do vs shopping" cannot be answered from a new-% WITHIN each
-    campaign -- a campaign can be 70% new and still buy almost nobody. The question is each
-    campaign's share of ALL the new customers the business got, so that is the column the
-    table is sorted on. Type is read from O.gads[].cmp (SHOPPING / PERFORMANCE_MAX / SEARCH
-    / ...), and BRAND is split out of SEARCH and PMAX by name, because a brand campaign
-    harvests demand that already exists and a shopping campaign does not -- averaging the
-    two is what hides the brand leak. The classifying rule is printed on the card so it can
-    be argued with. */
+ /* ===== v92.8 new customers by campaign, priced ======================================
+    v92.6 led on "share of ALL new customers" and that was the wrong headline: it moves when
+    DIRECT traffic moves, which has nothing to do with the campaign, so it is a denominator
+    artefact and not a verdict. The number that judges an acquisition campaign is what a
+    first-time customer COST, so that is the column, and per-campaign spend was already in
+    the payload (O.gads[].d.sp / O.mads[].d.sp over the order-pull window). Joined spend
+    reconciles to 99.8% of account Google spend, which is why the CAC is trustworthy.
+    Share of all new is kept as a small column -- it answers "how much of the business does
+    this campaign touch", which is a different and lesser question. */
  const GC=T.googlePaidByCampaign||{};
  const BC=T.byCampaign||{};
- const gk=Object.keys(GC);
- const gmeta=id=>{let nm=null,ty=null;
-  try{(O.gads||[]).forEach(a=>{if(String(a.id)===String(id)){nm=nm||a.n;ty=ty||a.cmp;}});}catch(e){}
-  return {nm:nm||null, ty:ty||null};};
- /* resolve a Meta utm_campaign, which may be an id OR a name depending on how the URL
-    parameters were set up on each ad set. Try id first, then accept the raw string. */
- const mmeta=cid=>{let nm=null;
-  try{(O.mads||[]).forEach(a=>{if(String(a.cid)===String(cid))nm=nm||a.cmp;});}catch(e){}
-  return nm||String(cid);};
+ const AM=(O.audMix&&O.audMix.cmp)||{};
+ const _d0=Date.parse(T.since), _d1=Date.parse(String(T.pulled).slice(0,10));
+ /* window the per-campaign daily spend onto the ORDER-PULL days, not the feed's own 60 */
+ const spanOf=(ent,W)=>{
+  if(!ent||!ent.d||!ent.d.sp||!W||!W.start)return null;
+  const w0=Date.parse(W.start); if(isNaN(w0)||isNaN(_d0)||isNaN(_d1))return null;
+  const a0=Math.round((_d0-w0)/864e5), a1=Math.round((_d1-w0)/864e5);
+  const ser=ent.d.sp; let t=0;
+  for(let i=Math.max(0,a0);i<=Math.min(ser.length-1,a1);i++)t+=ser[i]||0;
+  return t;};
+ const gEnt=id=>(O.gads||[]).find(a=>String(a.id)===String(id))||null;
+ const mEnt=cid=>(O.mads||[]).filter(a=>String(a.cid)===String(cid));
  const TYPEOF=(nm,ty)=>{
   const s2=String(nm||'');
   if(/\bbrand\b|brand name|pshift/i.test(s2)) return 'BRAND';
@@ -2422,22 +2425,15 @@ function otruthCard(g){
   if(ty==='SEARCH') return 'SEARCH — non-brand';
   if(ty) return String(ty).replace(/_/g,' ');
   return 'UNKNOWN TYPE';};
- /* Meta has no campaign TYPE that answers "brand or shopping" -- the objective is BUY on
-    nearly all of them. The same question there is harvest-versus-create, and O.audMix.cmp
-    already answers it per campaign id from the actual AD SET TARGETING: {n,e,x} are the
-    spend fractions on new audiences, engaged/warm and existing-customer lists. Measured
-    2026-10-05: 16 campaigns, coverage 1.01, and the split is near-binary -- most sit at
-    n=1 and a few at x=1. That is the number to classify on.
-    A campaign name is only consulted when audMix has never seen the campaign, and the row
-    then says so, because four of six real Meta names ("Back2school s26", "EVER GREEN
-    CONTENT", "Partnership ads", "SHAFI NEW ABO CREATIVE TESTING") say nothing about who
-    they target and guessing from them would be inventing the answer. */
- const AM=(O.audMix&&O.audMix.cmp)||{};
+ /* Meta has no type that answers brand-versus-shopping (the objective is BUY on nearly all
+    of them). O.audMix.cmp carries the AD SET TARGETING split per campaign id -- {n,e,x}
+    spend fractions on new / warm / existing audiences -- so the split is measured. A name is
+    consulted only when the targeting pull has never seen the campaign, because four of six
+    real Meta names say nothing about who they target. */
  const MTYPE=(nm,chn,cid)=>{
   if(/TIKTOK/i.test(chn)) return 'TIKTOK';
   const a=AM[String(cid)];
-  if(a){
-   const n2=a.n||0,e2=a.e||0,x2=a.x||0;
+  if(a){const n2=a.n||0,e2=a.e||0,x2=a.x||0;
    if(x2>=0.6) return 'META — existing / retargeting';
    if(n2>=0.6) return 'META — new audience (prospecting)';
    if(e2>=0.6) return 'META — warm / engaged';
@@ -2446,63 +2442,86 @@ function otruthCard(g){
   if(/existing|retarget|\brtg\b|remarket|\bwarm\b|\bdpa\b/i.test(s2)) return 'META — existing / retargeting (from name)';
   if(/broad|prospect|\bcold\b|scaling|volume|\bbz\b/i.test(s2)) return 'META — new audience (from name)';
   return 'META — targeting not known';};
- if(gk.length||Object.keys(BC).length){
-  const cr=[];
-  gk.forEach(id=>{const v=GC[id]||{},g2=gmeta(id),n=v.n||0,r=v.r||0;
-   cr.push({ch:'GOOGLE PAID', id, nm:g2.nm||('campaign '+id), ty:TYPEOF(g2.nm,g2.ty),
-            n, r, nv:v.nv||0, rv:v.rv||0, ord:n+r, val:(v.nv||0)+(v.rv||0)});});
-  Object.keys(BC).forEach(chn=>{ if(/^GOOGLE PAID$/.test(chn))return;
-   if(!/^(META|TIKTOK)/i.test(chn))return;
-   Object.keys(BC[chn]||{}).forEach(cid=>{const v=BC[chn][cid]||{},n=v.n||0,r=v.r||0;
-    const _nm=mmeta(cid);
-    cr.push({ch:chn, id:cid, nm:_nm, ty:MTYPE(_nm,chn,cid), n, r, nv:v.nv||0, rv:v.rv||0,
-             ord:n+r, val:(v.nv||0)+(v.rv||0)});});});
-  const cN=cr.reduce((a,x)=>a+x.n,0), cNV=cr.reduce((a,x)=>a+x.nv,0);
-  /* share of ALL new customers the business got, not just of the campaigns listed here --
-     a campaign table that normalises to itself hides how much of the business it misses */
-  const shN=x=>tN?x.n/tN:null, shV=x=>tNV?x.nv/tNV:null;
-  const TYH='<tr><th style="'+TH+';text-align:left">Campaign type</th><th style="'+TH+'">Orders</th>'
-   +'<th style="'+TH+'">New customers</th><th style="'+TH+'">New % within type</th>'
-   +'<th style="'+TH+'">New value</th><th style="'+TH+'">Share of ALL new customers</th>'
-   +'<th style="'+TH+'">Share of ALL new value</th></tr>';
+ const cr=[];
+ Object.keys(GC).forEach(id=>{const v=GC[id]||{},e=gEnt(id),n=v.n||0,r=v.r||0;
+  cr.push({ch:'GOOGLE PAID', id, nm:(e&&e.n)||('campaign '+id), ty:TYPEOF(e&&e.n,e&&e.cmp),
+           sp:spanOf(e,O.gadsW), n, r, nv:v.nv||0, rv:v.rv||0, ord:n+r});});
+ Object.keys(BC).forEach(chn=>{ if(/^GOOGLE PAID$/.test(chn))return;
+  if(!/^(META|TIKTOK)/i.test(chn))return;
+  Object.keys(BC[chn]||{}).forEach(cid=>{const v=BC[chn][cid]||{},n=v.n||0,r=v.r||0;
+   const ents=mEnt(cid), nm=(ents[0]&&ents[0].cmp)||String(cid);
+   /* a Meta CAMPAIGN's spend is the sum of its ads in the feed. The feed covers ~99% of the
+      account after v92.1, and the coverage line above this says what it is. */
+   let sp=0, got=false;
+   ents.forEach(a=>{const x=spanOf(a,O.madsW); if(x!=null){sp+=x;got=true;}});
+   cr.push({ch:chn, id:cid, nm, ty:MTYPE(nm,chn,cid), sp:got?sp:null, n, r,
+            nv:v.nv||0, rv:v.rv||0, ord:n+r});});});
+ if(cr.length){
+  const CAC=x=>(x.n&&x.sp)?x.sp/x.n:null;
+  const RPE=x=>x.sp?x.nv/x.sp:null;
+  const cN=cr.reduce((a,x)=>a+x.n,0);
+  const cSP=cr.reduce((a,x)=>a+(x.sp||0),0);
+  const blended=cN?cSP/cN:null;
+  const TH2=TH, TD2=TD;
+  const cacCell=x=>{const c2=CAC(x);
+   if(c2==null)return '<td style="'+TD2+';color:var(--ink-3)">'+(x.sp==null?'spend not joined':'no spend')+'</td>';
+   const dear=blended&&c2>=blended*2;
+   return '<td style="'+TD2+';font-weight:800'+(dear?';color:var(--neg)':'')+'">'+M(c2)+(dear?' <span style="font-size:10px;font-weight:700">2×+</span>':'')+'</td>';};
+  const HDR='<tr><th style="'+TH2+';text-align:left">Campaign</th><th style="'+TH2+';text-align:left">What it targets</th>'
+   +'<th style="'+TH2+'">Spend</th><th style="'+TH2+'">New customers</th>'
+   +'<th style="'+TH2+'">Cost per new customer</th><th style="'+TH2+'">New-customer revenue</th>'
+   +'<th style="'+TH2+'">NC revenue per E£</th><th style="'+TH2+'">New % of its orders</th>'
+   +'<th style="'+TH2+'">Share of ALL new</th></tr>';
   const byType={};
-  cr.forEach(x=>{const t2=byType[x.ty]||(byType[x.ty]={ty:x.ty,n:0,r:0,nv:0,rv:0,ord:0,val:0,k:0});
-   t2.n+=x.n;t2.r+=x.r;t2.nv+=x.nv;t2.rv+=x.rv;t2.ord+=x.ord;t2.val+=x.val;t2.k++;});
+  cr.forEach(x=>{const t2=byType[x.ty]||(byType[x.ty]={ty:x.ty,n:0,r:0,nv:0,rv:0,ord:0,sp:0,k:0,nosp:0});
+   t2.n+=x.n;t2.r+=x.r;t2.nv+=x.nv;t2.rv+=x.rv;t2.ord+=x.ord;t2.k++;
+   if(x.sp==null)t2.nosp++; else t2.sp+=x.sp;});
   const tr=Object.values(byType).sort((a,b)=>b.n-a.n);
+  const row=(x,lbl,extra)=>'<tr><td style="'+TD2+';text-align:left;font-weight:700">'+lbl+'</td>'
+   +'<td style="'+TD2+';text-align:left;font-size:10.5px;color:var(--ink-3)">'+(extra||'')+'</td>'
+   +'<td style="'+TD2+'">'+(x.sp?M(x.sp):'<span style="color:var(--ink-3)">—</span>')+'</td>'
+   +'<td style="'+TD2+';font-weight:800">'+N(x.n)+'</td>'
+   +cacCell(x)
+   +'<td style="'+TD2+'">'+M(x.nv)+'</td>'
+   +'<td style="'+TD2+'">'+(RPE(x)!=null?RPE(x).toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD2+'">'+P(x.ord?x.n/x.ord:null)+'</td>'
+   +'<td style="'+TD2+';color:var(--ink-3)">'+P(tN?x.n/tN:null)+'</td></tr>';
   h+='<div style="margin-top:12px;font-size:11.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">'
-   +'New customers by campaign type <span style="font-weight:600;text-transform:none;color:var(--ink-3)">— ranked on share of ALL new customers, not on new % within the campaign</span></div>'
-   +'<div style="overflow-x:auto;margin-top:4px"><table class="bt heat" data-hc="1,2,3,4,5,6" data-hcx="1">'+TYH
-   +tr.map(x=>'<tr><td style="'+TD+';text-align:left;font-weight:700">'+x.ty
-     +' <span style="font-size:10px;color:var(--ink-3);font-weight:600">'+x.k+(x.k===1?' campaign':' campaigns')+'</span></td>'
-     +'<td style="'+TD+'">'+N(x.ord)+'</td><td style="'+TD+'">'+N(x.n)+'</td>'
-     +'<td style="'+TD+'">'+P(x.ord?x.n/x.ord:null)+'</td>'
-     +'<td style="'+TD+'">'+M(x.nv)+'</td>'
-     +'<td style="'+TD+';font-weight:800">'+P(shN(x))+'</td>'
-     +'<td style="'+TD+'">'+P(shV(x))+'</td></tr>').join('')
-   +'<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD+';text-align:left">ALL TAGGED CAMPAIGNS</td>'
-   +'<td style="'+TD+'">'+N(cr.reduce((a,x)=>a+x.ord,0))+'</td><td style="'+TD+'">'+N(cN)+'</td>'
-   +'<td style="'+TD+'">—</td><td style="'+TD+'">'+M(cNV)+'</td>'
-   +'<td style="'+TD+'">'+P(tN?cN/tN:null)+'</td><td style="'+TD+'">'+P(tNV?cNV/tNV:null)+'</td></tr>'
+   +'What a first-time customer cost, by campaign type</div>'
+   +'<div style="overflow-x:auto;margin-top:4px"><table class="bt heat" data-hc="2,3,4,5,6,7,8" data-hcinv="4" data-hcx="1">'+HDR
+   +tr.map(x=>row(x,x.ty,x.k+(x.k===1?' campaign':' campaigns')+(x.nosp?', '+x.nosp+' without joined spend':''))).join('')
+   +'<tr style="background:var(--surface-3);font-weight:800">'
+   +'<td style="'+TD2+';text-align:left">ALL TAGGED CAMPAIGNS</td><td style="'+TD2+'"></td>'
+   +'<td style="'+TD2+'">'+M(cSP)+'</td><td style="'+TD2+'">'+N(cN)+'</td>'
+   +'<td style="'+TD2+'">'+(blended?M(blended):'—')+'</td>'
+   +'<td style="'+TD2+'">'+M(cr.reduce((a,x)=>a+x.nv,0))+'</td>'
+   +'<td style="'+TD2+'">'+(cSP?(cr.reduce((a,x)=>a+x.nv,0)/cSP).toFixed(2)+'×':'—')+'</td>'
+   +'<td style="'+TD2+'">—</td><td style="'+TD2+'">'+P(tN?cN/tN:null)+'</td></tr>'
+   +'</table></div>';
+  const cs=cr.slice().sort((a,b)=>b.n-a.n);
+  /* ranking the dear ones by CAC named joie Shopping (E£5,313 on 2 customers, E£9,751 of
+     excess) and said nothing about PMax, which is E£30,412 of excess across two campaigns at
+     a CAC under the 2x bar. A ratio is not a quantity: rank on the MONEY the dearness costs,
+     which is spend minus what those customers would have cost at the blended rate. */
+  const EXC=x=>(CAC(x)!=null&&blended)?(x.sp-x.n*blended):null;
+  const dear=cs.filter(x=>EXC(x)!=null&&EXC(x)>0).sort((a,b)=>EXC(b)-EXC(a));
+  const cheap=cs.filter(x=>CAC(x)!=null&&x.n>=20).sort((a,b)=>CAC(a)-CAC(b))[0];
+  h+='<details style="margin-top:9px" open><summary style="cursor:pointer;font-size:11.5px;font-weight:800;color:var(--ink-2)">Every campaign, priced ('+cs.length+')</summary>'
+   +'<div style="overflow-x:auto;margin-top:6px"><table class="bt heat" data-hc="2,3,4,5,6,7,8" data-hcinv="4" data-hcx="1">'+HDR
+   +cs.map(x=>row(x,String(x.nm).slice(0,46).replace(/</g,'&lt;'),x.ty)).join('')
    +'</table></div>'
-   +'<div style="font-size:11px;color:var(--ink-3);margin-top:5px"><b>How a campaign is classified, so you can argue with it:</b> on Google, BRAND is split out of SEARCH and PMAX on the campaign NAME (brand, brand name, pshift) and DSA likewise, because a brand campaign harvests demand that already exists while a shopping campaign creates it &mdash; averaging the two is what hides a brand leak; everything else is the type Google reports. On Meta there is no type that answers the same question (the objective is BUY on nearly all of them), so the split is harvest-versus-create taken from the <b>ad set targeting</b> &mdash; the spend fractions on new audiences, warm lists and existing-customer lists, which is a measurement and not a reading of the campaign name. A campaign the targeting pull has never seen falls back to its name and the row says <i>(from name)</i>; one whose name says nothing either reads <i>targeting not known</i> rather than being quietly counted as prospecting. '
-   +'The last row is every campaign that carried a readable utm, so the gap between it and 100% is traffic no campaign can be credited with.</div>';
-  const cs=cr.sort((a,b)=>b.n-a.n);
-  h+='<details style="margin-top:9px"><summary style="cursor:pointer;font-size:11.5px;font-weight:800;color:var(--ink-2)">Every campaign &mdash; unmodelled new customers ('+cs.length+')</summary>'
-   +'<div style="overflow-x:auto;margin-top:6px"><table class="bt heat" data-hc="2,3,4,5,6,7" data-hcx="1"><tr>'
-   +'<th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+';text-align:left">Type</th>'
-   +'<th style="'+TH+'">Orders</th><th style="'+TH+'">New customers</th>'
-   +'<th style="'+TH+'">New % within campaign</th><th style="'+TH+'">New value</th>'
-   +'<th style="'+TH+'">Share of ALL new customers</th><th style="'+TH+'">Repeat value</th></tr>'
-   +cs.map(x=>'<tr><td style="'+TD+';text-align:left">'+String(x.nm).slice(0,54).replace(/</g,'&lt;')+'</td>'
-     +'<td style="'+TD+';text-align:left;font-size:10.5px;color:var(--ink-3)">'+x.ty+'</td>'
-     +'<td style="'+TD+'">'+N(x.ord)+'</td><td style="'+TD+'">'+N(x.n)+'</td>'
-     +'<td style="'+TD+'">'+P(x.ord?x.n/x.ord:null)+'</td>'
-     +'<td style="'+TD+'">'+M(x.nv)+'</td>'
-     +'<td style="'+TD+';font-weight:800">'+P(shN(x))+'</td>'
-     +'<td style="'+TD+'">'+M(x.rv)+'</td></tr>').join('')
-   +'</table></div>'
-   +(Object.keys(BC).length?'':'<div style="font-size:11px;color:var(--warn);margin-top:5px">Only Google campaigns are listed: the per-campaign split for Meta and TikTok is collected from the next sync onward. bucket() always read their utm_campaign, the aggregation simply never kept it.</div>')
-   +'</details>';}
+   +(Object.keys(BC).length?'':'<div style="font-size:11px;color:var(--warn);margin-top:5px">Google only: the per-campaign split for Meta and TikTok lands on the next sync. bucket() always read their utm_campaign, the aggregation simply never kept it.</div>')
+   +'</details>'
+   +'<div class="rtNote" style="margin-top:8px">'
+   +'<b>Cost per new customer is the column, not share of all new.</b> A campaign&rsquo;s share of every first-time buyer in the business moves when DIRECT traffic moves &mdash; it is a denominator artefact, so it is kept small and to the right. '
+   +(blended?('Blended across every tagged campaign: <b>'+M(blended)+'</b> per first-time customer. '):'')
+   +(dear.length?('<b>Ranked on what the dearness COSTS</b>, not on the ratio &mdash; '
+      +dear.slice(0,3).map(x=>String(x.nm).slice(0,34)+' is '+M(EXC(x))+' above blended ('+M(CAC(x))+' for '+N(x.n)+' new)').join('; ')
+      +'. A campaign with a frightening CAC on two customers costs less than a middling CAC on sixty, so that order is the order to cut in. '):'')
+   +(cheap?('Cheapest at real volume is <b>'+String(cheap.nm).slice(0,34)+'</b> at '+M(CAC(cheap))+'. '):'')
+   +'<b>A cheap CAC on a BRAND campaign is not proof brand is a good buy</b> &mdash; it is demand that may well have arrived anyway, and the only test that settles it is a brand holdout, which has not been run. The same caution applies to every row: this is last click from Shopify&rsquo;s checkout, not incrementality. '
+   +'Spend is each campaign&rsquo;s own daily series summed over exactly the order-pull days, so it is the same window as the customers beside it.'
+   +'</div>';}
  /* comparing META - FACEBOOK against DIRECT / NONE and calling it "the same pound spent"
     is nonsense -- nobody buys direct traffic. Only rank channels there is a budget for. */
  const PAID=x=>/^(META|GOOGLE PAID|TIKTOK)/i.test(x.k)&&!/UNTAGGED/i.test(x.k);
@@ -22555,7 +22574,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-212519';
+const BUILD='20261005-214245';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
