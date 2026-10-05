@@ -2299,6 +2299,99 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
    Every other new-customer figure in this tool is either modelled (Google can only label a
    conversion when it identifies the customer) or in-store only (Meta's nc/ncv). This one is
    neither, which makes it the thing to check the others against. */
+/* ===== v92.9 what each campaign actually bought ========================================
+   The campaign rows priced a first-time customer and stopped there, so "PMax costs twice
+   what Shopping does" had no next click. O.gkids already carries the two things that answer
+   it and nothing was reading them for this: .prod[campaignName] is the PRODUCTS a shopping
+   or PMax campaign spent on, and .term is search terms keyed BY TERM, which inverts to the
+   keywords per search campaign. Both carry the current and the prior window in the same
+   tuple, so the drill gets its own vs-prior for free.
+
+   .cov is the part that has to be printed rather than hidden: Shopping - All Products has
+   11,169 products of which 68 are kept, and those 68 are E£9,097 of E£100,873 -- 9% of the
+   campaign's spend. A drill that silently showed 9% of the money as if it were the campaign
+   would be worse than no drill.
+
+   Tuple layout, same as the existing term drill: [spend, impressions, clicks, conv, value]. */
+function otDrill(el,nm){
+ const tr=el.closest('tr'); if(!tr)return;
+ const nx=tr.nextElementSibling;
+ if(nx&&nx.classList&&nx.classList.contains('otRow')){nx.remove();tr.classList.remove('dxOpen');return;}
+ const host=tr.closest('table');
+ if(host){host.querySelectorAll('tr.otRow').forEach(x=>x.remove());host.querySelectorAll('tr.dxOpen').forEach(x=>x.classList.remove('dxOpen'));}
+ tr.classList.add('dxOpen');
+ const name=decodeURIComponent(nm);
+ const G=O.gkids||{};
+ const sp2=Math.abs(span(ST.s,ST.e)||30);
+ const pk=sp2>=16?'30':'7';
+ const PR=((G.pairs||{})[pk])||null;
+ const M9=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N9=v=>Math.round(Math.abs(v||0)).toLocaleString();
+ /* products for a shopping/PMax campaign; otherwise invert the term map onto this campaign */
+ /* PMax returns ONE row with an empty product id and a real spend -- the inventory it will
+    not attribute to a listing (search, display, video asset groups). Rendering it as a blank
+    line hid E£1,223 of AR PMax Volume. Name it instead; it is the part of PMax you cannot
+    see into, which is the thing worth knowing about PMax. */
+ let kind='products', items=((G.prod||{})[name]||[]).map(p=>({
+   n:(p.n&&String(p.n).trim())?p.n:'— no product behind this spend (PMax inventory Google will not attribute: search, display, video)',
+   id:p.id, p:p.p, noprod:!(p.n&&String(p.n).trim())}));
+ if(!items.length){
+  kind='search terms'; items=[];
+  Object.keys(G.term||{}).forEach(t=>{(G.term[t]||[]).forEach(c=>{
+   if(c.n===name)items.push({n:t,id:null,p:c.p});});});}
+ const rows=items.map(x=>{const a=((x.p||{})[pk])||[[],[]];
+   const c=a[0]||[], p=a[1]||[];
+   return {n:x.n, noprod:!!x.noprod, sp:c[0]||0, im:c[1]||0, ck:c[2]||0, cn:c[3]||0, v:c[4]||0,
+           psp:p[0]||0, pv:p[4]||0, pcn:p[3]||0};})
+  .filter(x=>x.sp>0||x.psp>0).sort((a,b)=>b.sp-a.sp);
+ const cv=((G.cov||{})[name])||null;
+ const row=document.createElement('tr'); row.className='otRow';
+ const td=document.createElement('td'); td.colSpan=tr.cells.length;
+ td.style.cssText='padding:0 10px 12px;background:var(--surface-2)';
+ const TD9='padding:4px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11px';
+ const D9=(c2,p2,good)=>{
+  if(!p2||c2==null||!isFinite(c2/p2))return '<span style="font-size:10px;color:var(--ink-3)">no prior</span>';
+  const d=(c2/p2-1)*100, up=d>=0, ok=(up===(good!==false));
+  return '<span style="font-size:10px;font-weight:800;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>';};
+ const tsp=rows.reduce((a,x)=>a+x.sp,0), tv=rows.reduce((a,x)=>a+x.v,0);
+ /* the share of the campaign's OWN spend these rows represent -- the whole point of cov */
+ const campSp=cv?(cv['sp'+pk]||0):0, keptSp=cv?(cv['kept'+pk]||0):tsp;
+ const shr=campSp?keptSp/campSp:null;
+ td.innerHTML='<div style="padding-top:9px">'
+  +'<div style="font-size:12.5px;font-weight:700;color:var(--ink)">'+esc(name)+' &mdash; '+rows.length+' '+kind+'</div>'
+  +'<div style="font-size:11px;color:var(--ink-3);margin:1px 0 7px">'
+   +(PR?('last '+pk+' days, '+PR.cur[0]+' → '+PR.cur[1]+', against '+PR.prev[0]+' → '+PR.prev[1]+'. '):'')
+   +(cv?('<b style="color:'+((shr!=null&&shr<0.5)?'var(--warn)':'var(--ink-3)')+'">These '+rows.length+' of '+N9(cv.n)+' carry '
+      +(shr!=null?(shr*100).toFixed(0)+'%':'—')+' of the campaign&rsquo;s '+M9(campSp)+'</b> &mdash; '
+      +(shr!=null&&shr<0.5?'the rest is spread so thin that Google&rsquo;s own report drops it, so read this as the head of the tail and not as the campaign.'
+                          :'enough of it to read as the campaign.'))
+     :('These rows sum '+M9(tsp)+'. <b>This feed publishes no coverage figure for search terms</b>, so how much of the campaign&rsquo;s spend is missing from them is not known from here &mdash; Google withholds terms below a volume floor, and PMax withholds most of its own by design.'))
+  +'</div>'
+  +(rows.length?('<table style="width:100%;border-collapse:collapse">'
+   +'<thead><tr><th style="'+TD9+';text-align:left">'+(kind==='products'?'Product':'Search term')+'</th>'
+   +'<th style="'+TD9+'">Spend</th><th style="'+TD9+'">Clicks</th><th style="'+TD9+'">Conv.</th>'
+   +'<th style="'+TD9+'">Value</th><th style="'+TD9+'">ROAS</th><th style="'+TD9+'">vs prior value</th></tr></thead><tbody>'
+   +rows.slice(0,25).map(x=>'<tr><td style="'+TD9+';text-align:left'+(x.noprod?';color:var(--warn);font-weight:700':'')+'" dir="auto">'+esc(String(x.n).slice(0,96))+'</td>'
+     +'<td style="'+TD9+'">'+M9(x.sp)+'<br>'+D9(x.sp,x.psp,false)+'</td>'
+     +'<td style="'+TD9+'">'+N9(x.ck)+'</td>'
+     +'<td style="'+TD9+'">'+(x.cn?x.cn.toFixed(1):'—')+'</td>'
+     +'<td style="'+TD9+'">'+M9(x.v)+'</td>'
+     +'<td style="'+TD9+';font-weight:800">'+(x.sp?(x.v/x.sp).toFixed(2)+'×':'—')+'</td>'
+     +'<td style="'+TD9+'">'+D9(x.v,x.pv,true)+'</td></tr>').join('')
+   +'<tr style="font-weight:800;background:var(--surface-3)"><td style="'+TD9+';text-align:left">THESE '+Math.min(25,rows.length)+'</td>'
+   +'<td style="'+TD9+'">'+M9(rows.slice(0,25).reduce((a,x)=>a+x.sp,0))+'</td>'
+   +'<td style="'+TD9+'">'+N9(rows.slice(0,25).reduce((a,x)=>a+x.ck,0))+'</td>'
+   +'<td style="'+TD9+'">'+rows.slice(0,25).reduce((a,x)=>a+x.cn,0).toFixed(1)+'</td>'
+   +'<td style="'+TD9+'">'+M9(rows.slice(0,25).reduce((a,x)=>a+x.v,0))+'</td>'
+   +'<td style="'+TD9+'">'+(function(){const s9=rows.slice(0,25).reduce((a,x)=>a+x.sp,0),v9=rows.slice(0,25).reduce((a,x)=>a+x.v,0);return s9?(v9/s9).toFixed(2)+'×':'—';})()+'</td>'
+   +'<td style="'+TD9+'">—</td></tr></tbody></table>'
+   +(rows.length>25?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Top 25 by spend of '+rows.length+'.</div>':''))
+   :'<div style="font-size:11.5px;color:var(--ink-3)">Google reports no product or search-term rows for this campaign. PMax hides most of its terms by design, and a campaign below the reporting floor gets nothing at all.</div>')
+  +'</div>';
+ row.appendChild(td);
+ tr.parentNode.insertBefore(row,tr.nextSibling);
+}
+window.otDrill=otDrill;
 function otruthCard(g){
  const T=O.otruth; if(!T||!T.byChannel)return;
  const B=T.byChannel, names=Object.keys(B);
@@ -2508,7 +2601,10 @@ function otruthCard(g){
   const cheap=cs.filter(x=>CAC(x)!=null&&x.n>=20).sort((a,b)=>CAC(a)-CAC(b))[0];
   h+='<details style="margin-top:9px" open><summary style="cursor:pointer;font-size:11.5px;font-weight:800;color:var(--ink-2)">Every campaign, priced ('+cs.length+')</summary>'
    +'<div style="overflow-x:auto;margin-top:6px"><table class="bt heat" data-hc="2,3,4,5,6,7,8" data-hcinv="4" data-hcx="1">'+HDR
-   +cs.map(x=>row(x,String(x.nm).slice(0,46).replace(/</g,'&lt;'),x.ty)).join('')
+   +cs.map(x=>row(x, (x.ch==='GOOGLE PAID'
+        ? '<span onclick="otDrill(this,\''+encodeURIComponent(x.nm)+'\')" style="cursor:pointer;border-bottom:1px dashed var(--ink-3)" title="what this campaign actually spent on">'
+          +String(x.nm).slice(0,46).replace(/</g,'&lt;')+' <span style="font-size:10px;color:var(--ink-3)">▾</span></span>'
+        : String(x.nm).slice(0,46).replace(/</g,'&lt;')), x.ty)).join('')
    +'</table></div>'
    +(Object.keys(BC).length?'':'<div style="font-size:11px;color:var(--warn);margin-top:5px">Google only: the per-campaign split for Meta and TikTok lands on the next sync. bucket() always read their utm_campaign, the aggregation simply never kept it.</div>')
    +'</details>'
@@ -22574,7 +22670,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-214245';
+const BUILD='20261005-220309';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
