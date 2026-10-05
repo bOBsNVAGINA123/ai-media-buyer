@@ -2275,9 +2275,64 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
  h+='</table>';
  if(rows.length>400)h+='<div class="rtNote">Showing the top 400 of '+rows.length+' — narrow it with the search box.</div>';
  return h;}
+/* v84 WHERE THE TRAFFIC ACTUALLY COMES FROM, INCLUDING DIRECT. The collector has pulled a
+   correct channel split for some time (pull_ga4_touch) and nothing on the page rendered it, so
+   the one question "how much is direct / organic / paid" had no answer anywhere in the tool.
+   It is NOT GA4's defaultChannelGroup, which is unusable on this property: Meta stamps
+   utm_medium with the PLACEMENT name (Facebook_Mobile_Feed, Instagram_Stories), so GA4 files
+   the bulk of paid social as "Organic Social". This classifies on SOURCE instead -- fb/ig are
+   paid Meta whatever the medium, and facebook.com referrals are kept separate as dark social,
+   because treating them as paid would credit the ads with traffic they did not buy. */
+function trChannels(g){
+ const T=O.touch; if(!T||!T.last)return;
+ const MODE=(ST.trTouch==='first'&&T.first)?'first':'last';
+ const D=T[MODE]||{};
+ const rows=Object.keys(D).map(k=>{const v=D[k]||[];
+   return {n:k, s:v[0]||0, ord:v[1]||0, rev:v[2]||0, atc:v[3]||0};})
+  .filter(r=>r.s>0).sort((a,b)=>b.rev-a.rev);
+ if(!rows.length)return;
+ const tS=rows.reduce((a,r)=>a+r.s,0), tR=rows.reduce((a,r)=>a+r.rev,0), tO=rows.reduce((a,r)=>a+r.ord,0);
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const P=v=>(v==null||!isFinite(v))?'—':(v*100).toFixed(2)+'%';
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const chip=(k,t)=>'<span class="chip" style="'+(MODE===k?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ST.trTouch=\''+k+'\';rTR()">'+t+'</span>';
+ let h='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Attribution '+chip('last','Last touch')+' '+chip('first','First touch')+'</div>'
+  +'<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3,4,5,6" data-hcx="1"><tr>'
+  +'<th style="'+TH+';text-align:left">Channel</th><th style="'+TH+'">Sessions</th><th style="'+TH+'">Share</th>'
+  +'<th style="'+TH+'">Orders</th><th style="'+TH+'">CVR</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">AOV</th></tr>';
+ rows.forEach(r=>{
+  h+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.n+'</td>'
+   +'<td style="'+TD+'">'+N(r.s)+'</td>'
+   +'<td style="'+TD+'">'+(tS?(r.s/tS*100).toFixed(1)+'%':'—')+'</td>'
+   +'<td style="'+TD+'">'+N(r.ord)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+P(r.s?r.ord/r.s:null)+'</td>'
+   +'<td style="'+TD+'">'+M(r.rev)+'</td>'
+   +'<td style="'+TD+'">'+(r.ord?M(r.rev/r.ord):'—')+'</td></tr>';});
+ h+='<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD+';text-align:left">TOTAL</td>'
+  +'<td style="'+TD+'">'+N(tS)+'</td><td style="'+TD+'">100.0%</td><td style="'+TD+'">'+N(tO)+'</td>'
+  +'<td style="'+TD+'">'+P(tS?tO/tS:null)+'</td><td style="'+TD+'">'+M(tR)+'</td>'
+  +'<td style="'+TD+'">'+(tO?M(tR/tO):'—')+'</td></tr></table></div>';
+ const dir=rows.find(r=>r.n==='Direct'), dark=rows.find(r=>r.n==='Dark social');
+ h+='<div class="rtNote">'
+  +'<b>This is not GA4&rsquo;s channel grouping, and it must not be.</b> Meta stamps utm_medium with the placement name, so GA4 files most of your paid social as Organic Social. These rows are classified on the <b>source</b>: fb and ig are paid Meta whatever the medium. '
+  +'<b>Dark social</b> is kept separate from Meta&rsquo;s paid rows &mdash; it is facebook.com and instagram.com <i>referrals</i>, people pasting links, not traffic the ads bought; folding it into Meta would credit the budget with it. '
+  +(dir?('<b>Direct is '+(dir.s/tS*100).toFixed(1)+'% of sessions</b> and converts at '+P(dir.s?dir.ord/dir.s:null)+' against '+P(tS?tO/tS:null)+' overall. '):'')
+  +(dark?('Dark social adds another '+(dark.s/tS*100).toFixed(1)+'% that no platform will claim. '):'')
+  +'<b>Last touch</b> credits the final click; <b>first touch</b> credits what originally found them &mdash; switch above and watch Direct move, because the gap between the two is the traffic that was acquired elsewhere and came back on its own. '
+  +'Egypt only, '+(T.win?(T.win[0]+' → '+T.win[1]):'a fixed 60-day window')+', and this card does not follow the date box.'
+  +'</div>';
+ pnlCard(g,'ins','Where the traffic comes from &mdash; direct, organic, paid and dark social'
+  +INFO('Sessions, orders, conversion rate and revenue by channel, classified on source rather than GA4 default channel grouping, which is wrong on this property. Egypt only, fixed 60-day window, first or last touch.'),
+  'The channel question, answered without the tagging bug.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.trChannels=trChannels;
 function rTR(){try{const a=trAuto();if(a&&TRS.win!==a&&!TRS._pin)TRS.win=a;}catch(e){}
 if(TAB!=='tr')return;dCh();
  const g=document.getElementById('g22'),M=trModel();
+
  if(!M){document.getElementById('bn21x')&&0;
   document.getElementById('bn22').innerHTML='&#8635; <b>TRAFFIC ROUTING</b> — no CVR routing data in this sync yet. The collector pulls it from Shopify (ShopifyQL, sessions by landing page); it appears after the next successful run.';
   g.innerHTML='';return;}
@@ -2325,7 +2380,7 @@ if(TAB!=='tr')return;dCh();
    +trKpi('Wasted traffic',trN(wasted),wp.toFixed(0)+'% of sessions hit dead pages')+'</div>'
    +'<div class="rtNote" style="padding-left:12px">The site converts at <b>'+trPct(SC.siteCVR)+'</b>. <b>'+wp.toFixed(0)+'%</b> of traffic ('+trN(wasted)+' sessions) lands on pages that convert near zero. Fix the amber ones first — the buyer intent is already there. Then move spend onto the green and off the red.'+(TRS.grouped?' Products are grouped, so locale and collection URLs for the same product count together.':'')+'</div>'
    +trBar('pages',null)+'</div>';
-  g.innerHTML=h;
+  g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}
   trCharts(g);
   const sec=(t,c,d,arr,pre,showAds)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+' Sorted by '+RK[key][0].toLowerCase()+'.'+(TRS.minS?' Pages under '+TRS.minS+' sessions hidden.':'')+'</div></div></div>'
    +trBar('pages',arr.length)
@@ -2340,7 +2395,7 @@ if(TAB!=='tr')return;dCh();
  } else if(TRS.view==='PRODUCTS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Products</div><div class="cs">Every product landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Product','Product')+'</div>';
  } else if(TRS.view==='COLLECTIONS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Collections</div><div class="cs">Every collection landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Collection','Collection')+'</div>';
  } else {h+='</div>'+trBI(U,SC);}
- g.innerHTML=h;}
+ g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}}
 function trBI(U,SC){
  const B={SCALE:0,FEED:0,HOLD:0,FIX:0,INVESTIGATE:0,IGNORE:0};
  SC.dest.forEach(p=>B[p.verdict]+=p.sessions);
@@ -21932,7 +21987,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-024408';
+const BUILD='20261005-030020';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
