@@ -2289,6 +2289,106 @@ function trTable(type,label){const all=trU().filter(p=>p.type===type);
    the bulk of paid social as "Organic Social". This classifies on SOURCE instead -- fb/ig are
    paid Meta whatever the medium, and facebook.com referrals are kept separate as dark social,
    because treating them as paid would credit the ads with traffic they did not buy. */
+/* ===== v92.5 ORDER TRUTH -- Shopify's own checkout, no modelling anywhere in it ========
+   O.otruth was carried on every sync and NOTHING on the page read it. That is the seventh
+   time this session the fix was "the data was already there". What it holds is the only
+   UNMODELLED new-versus-repeat split by channel in the whole payload: Shopify sets
+   customerOrderIndex on every order (1 = first ever), so the new/repeat call needs no
+   identity match and no modelling, and the visit's utm parameters give the channel. On this
+   pull: 5,566 orders, 1 unlabelled.
+   Every other new-customer figure in this tool is either modelled (Google can only label a
+   conversion when it identifies the customer) or in-store only (Meta's nc/ncv). This one is
+   neither, which makes it the thing to check the others against. */
+function otruthCard(g){
+ const T=O.otruth; if(!T||!T.byChannel)return;
+ const B=T.byChannel, names=Object.keys(B);
+ if(!names.length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const rows=names.map(k=>{const v=B[k]||{};
+   const n=v.n||0, r=v.r||0, nv=v.nv||0, rv=v.rv||0;
+   return {k, n, r, nv, rv, ord:n+r, val:nv+rv,
+           nsh:(n+r)?n/(n+r):null, vsh:(nv+rv)?nv/(nv+rv):null,
+           aN:n?nv/n:null, aR:r?rv/r:null};})
+  .filter(x=>x.ord>0).sort((a,b)=>b.val-a.val);
+ const tO=rows.reduce((a,x)=>a+x.ord,0), tV=rows.reduce((a,x)=>a+x.val,0);
+ const tN=rows.reduce((a,x)=>a+x.n,0), tNV=rows.reduce((a,x)=>a+x.nv,0);
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const P=v=>(v==null||!isFinite(v))?'—':(v*100).toFixed(1)+'%';
+ let h='<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3,4,5,6,7,8" data-hcx="1"><tr>'
+  +'<th style="'+TH+';text-align:left">Channel at checkout</th><th style="'+TH+'">Orders</th>'
+  +'<th style="'+TH+'">New</th><th style="'+TH+'">New % of orders</th>'
+  +'<th style="'+TH+'">New value</th><th style="'+TH+'">New % of value</th>'
+  +'<th style="'+TH+'">Repeat value</th><th style="'+TH+'">AOV new</th><th style="'+TH+'">AOV repeat</th></tr>';
+ rows.forEach(x=>{
+  const untag=/UNTAGGED|NONE|OTHER/i.test(x.k);
+  h+='<tr><td style="'+TD+';text-align:left;font-weight:700'+(untag?';color:var(--warn)':'')+'">'+String(x.k).replace(/</g,'&lt;')+'</td>'
+   +'<td style="'+TD+'">'+N(x.ord)+'</td>'
+   +'<td style="'+TD+'">'+N(x.n)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+P(x.nsh)+'</td>'
+   +'<td style="'+TD+'">'+M(x.nv)+'</td>'
+   +'<td style="'+TD+'">'+P(x.vsh)+'</td>'
+   +'<td style="'+TD+'">'+M(x.rv)+'</td>'
+   +'<td style="'+TD+'">'+(x.aN==null?'—':M(x.aN))+'</td>'
+   +'<td style="'+TD+'">'+(x.aR==null?'—':M(x.aR))+'</td></tr>';});
+ h+='<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD+';text-align:left">TOTAL</td>'
+  +'<td style="'+TD+'">'+N(tO)+'</td><td style="'+TD+'">'+N(tN)+'</td>'
+  +'<td style="'+TD+'">'+P(tO?tN/tO:null)+'</td><td style="'+TD+'">'+M(tNV)+'</td>'
+  +'<td style="'+TD+'">'+P(tV?tNV/tV:null)+'</td><td style="'+TD+'">'+M(tV-tNV)+'</td>'
+  +'<td style="'+TD+'">'+(tN?M(tNV/tN):'—')+'</td>'
+  +'<td style="'+TD+'">'+((tO-tN)?M((tV-tNV)/(tO-tN)):'—')+'</td></tr></table></div>';
+ /* the Google Ads campaign rows join on campaign ID, so they are the only place in this tool
+    where a CAMPAIGN carries an unmodelled new-customer share. Name them where the id is known. */
+ const GC=T.googlePaidByCampaign||{};
+ const gk=Object.keys(GC);
+ if(gk.length){
+  /* O.gads[].n is the campaign NAME and .cmp is its TYPE -- reading cmp first printed
+     "SEARCH" twice and "SHOPPING" once instead of naming anything. Match on .id. */
+  const nameOf=id=>{let nm=null,ty=null;
+   try{(O.gads||[]).forEach(a=>{if(String(a.id)===String(id)){nm=nm||a.n;ty=ty||a.cmp;}});}catch(e){}
+   return nm?(String(nm).slice(0,54).replace(/</g,'&lt;')+(ty?' <span style="font-size:10px;color:var(--ink-3)">'+String(ty).replace(/_/g,' ')+'</span>':'')):('campaign '+id);};
+  const gr=gk.map(id=>{const v=GC[id]||{};const n=v.n||0,r=v.r||0;
+    return {id,nm:nameOf(id),n,r,nv:v.nv||0,rv:v.rv||0,ord:n+r,val:(v.nv||0)+(v.rv||0),nsh:(n+r)?n/(n+r):null};})
+   .filter(x=>x.ord>0).sort((a,b)=>b.val-a.val);
+  h+='<details style="margin-top:9px"><summary style="cursor:pointer;font-size:11.5px;font-weight:800;color:var(--ink-2)">Google Ads campaigns — unmodelled new-customer share ('+gr.length+')</summary>'
+   +'<div style="overflow-x:auto;margin-top:6px"><table class="bt heat" data-hc="1,2,3,4,5" data-hcx="1"><tr>'
+   +'<th style="'+TH+';text-align:left">Campaign</th><th style="'+TH+'">Orders</th><th style="'+TH+'">New</th>'
+   +'<th style="'+TH+'">New % of orders</th><th style="'+TH+'">New value</th><th style="'+TH+'">Repeat value</th></tr>'
+   +gr.map(x=>'<tr><td style="'+TD+';text-align:left">'+x.nm+'</td>'
+     +'<td style="'+TD+'">'+N(x.ord)+'</td><td style="'+TD+'">'+N(x.n)+'</td>'
+     +'<td style="'+TD+';font-weight:800">'+P(x.nsh)+'</td>'
+     +'<td style="'+TD+'">'+M(x.nv)+'</td><td style="'+TD+'">'+M(x.rv)+'</td></tr>').join('')
+   +'</table></div></details>';}
+ /* comparing META - FACEBOOK against DIRECT / NONE and calling it "the same pound spent"
+    is nonsense -- nobody buys direct traffic. Only rank channels there is a budget for. */
+ const PAID=x=>/^(META|GOOGLE PAID|TIKTOK)/i.test(x.k)&&!/UNTAGGED/i.test(x.k);
+ const buyable=rows.filter(x=>PAID(x)&&x.ord>=30);
+ const best=buyable.slice().sort((a,b)=>(b.nsh||0)-(a.nsh||0))[0];
+ const worst=buyable.slice().sort((a,b)=>(a.nsh||0)-(b.nsh||0))[0];
+ const untagRows=rows.filter(x=>/UNTAGGED/i.test(x.k));
+ const untagV=untagRows.reduce((a,x)=>a+x.val,0), untagO=untagRows.reduce((a,x)=>a+x.ord,0);
+ h+='<div class="rtNote">'
+  +'<b>This is the only new-versus-repeat split in the tool that is not modelled.</b> Shopify sets '
+  +'<code>customerOrderIndex</code> on every order it takes — 1 means first ever — so the call needs no identity match, '
+  +'no consent, and no inference. '+N(T.orders||tO)+' orders'+(T.unlabelled!=null?(', '+N(T.unlabelled)+' unlabelled'):'')+'. '
+  +'Google can only label a conversion new or returning when it identifies the customer, and Meta&rsquo;s nc/ncv are in-store only — '
+  +'so when those disagree with this table, this is the one to believe on WHO, and the platforms are still the ones to believe on WHICH AD. '
+  +(best&&worst&&best.k!==worst.k
+    ?('<b>'+best.k+' buys the most first-time customers</b> at '+P(best.nsh)+' of its orders, against '+P(worst.nsh)+' for '+worst.k
+      +' — the same pound spent on those two buys different things, so a blended CAC hides it. ')
+    :'')
+  +(untagO?('<b>'+N(untagO)+' orders worth '+M(untagV)+' arrived UNTAGGED</b> — the visit carried no usable utm, so no platform can be credited or blamed for them. That is a tagging job, not an attribution one. '):'')
+  +'Last click from Shopify&rsquo;s own journey summary, so it will not match a platform&rsquo;s view-through claim and is not meant to. '
+  +'<b>A FIXED window from the order pull'+(T.since?(', '+T.since+' → '+(T.pulled?String(T.pulled).slice(0,10):'today')):'')
+  +', not your date box</b>, and there is no prior window behind it, so these are levels and not a trend.'
+  +'</div>';
+ pnlCard(g,'shop','Who actually bought — new versus repeat, from the checkout itself'
+  +INFO('Shopify customerOrderIndex per order joined to the visit utm. Unmodelled, so it is the check on every other new-customer figure in the tool. Fixed window from the order pull, last click.'),
+  'The unmodelled answer to who each channel brings in.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.otruthCard=otruthCard;
 function trChannels(g){
  const T=O.touch; if(!T||!T.last)return;
  const MODE=(ST.trTouch==='first'&&T.first)?'first':'last';
@@ -2410,7 +2510,7 @@ if(TAB!=='tr')return;dCh();
    +trKpi('Wasted traffic',trN(wasted),wp.toFixed(0)+'% of sessions hit dead pages')+'</div>'
    +'<div class="rtNote" style="padding-left:12px">The site converts at <b>'+trPct(SC.siteCVR)+'</b>. <b>'+wp.toFixed(0)+'%</b> of traffic ('+trN(wasted)+' sessions) lands on pages that convert near zero. Fix the amber ones first — the buyer intent is already there. Then move spend onto the green and off the red.'+(TRS.grouped?' Products are grouped, so locale and collection URLs for the same product count together.':'')+'</div>'
    +trBar('pages',null)+'</div>';
-  g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}
+  g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}try{otruthCard(g);}catch(e){console.error('order truth card failed:',e);}
   trCharts(g);
   const sec=(t,c,d,arr,pre,showAds)=>'<div class="card full" data-a="odoo"><div class="chead"><div><div class="ct"><span style="display:inline-block;width:10px;height:14px;background:'+c+';border-radius:2px;margin-right:6px"></span>'+t+'</div><div class="cs">'+d+' Sorted by '+RK[key][0].toLowerCase()+'.'+(TRS.minS?' Pages under '+TRS.minS+' sessions hidden.':'')+'</div></div></div>'
    +trBar('pages',arr.length)
@@ -2425,7 +2525,7 @@ if(TAB!=='tr')return;dCh();
  } else if(TRS.view==='PRODUCTS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Products</div><div class="cs">Every product landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Product','Product')+'</div>';
  } else if(TRS.view==='COLLECTIONS'){h+='</div><div class="card full" data-a="odoo"><div class="chead"><div><div class="ct">Collections</div><div class="cs">Every collection landing page over the last '+(C.days||14)+' days</div></div></div>'+trTable('Collection','Collection')+'</div>';
  } else {h+='</div>'+trBI(U,SC);}
- g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}}
+ g.innerHTML=h;try{trChannels(g);}catch(e){console.error('traffic channel card failed:',e);}try{otruthCard(g);}catch(e){console.error('order truth card failed:',e);}}
 function trBI(U,SC){
  const B={SCALE:0,FEED:0,HOLD:0,FIX:0,INVESTIGATE:0,IGNORE:0};
  SC.dest.forEach(p=>B[p.verdict]+=p.sessions);
@@ -22308,7 +22408,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-191211';
+const BUILD='20261005-200256';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
