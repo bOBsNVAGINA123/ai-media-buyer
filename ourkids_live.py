@@ -4084,10 +4084,20 @@ def pull_meta_ads(tok):
                         for cid2 in allnc:
                             D["nc"][i] += cca.get(cid2, 0.0); D["ncv"][i] += ccv.get(cid2, 0.0)
                     url = (d.get("paging") or {}).get("next")
+        # v92: measured 2026-10-05 -- for the week 28 Sep to 4 Oct the account spend series
+        # read E#198,386 while the sum of this feed's ads read E#156,155, a 21.3% shortfall.
+        # Cause is mechanical and local: the E#1000/60d floor below plus the flat top-120 cap
+        # further down, both binding at once (the 120th kept ad spent E#1,020). Every rollup
+        # built by summing ads therefore understated spend and overstated ROAS. Floor drops
+        # to E#150 and the cap becomes coverage-driven below.
+        _allsp = {}
+        for a in A.values():
+            _k0 = a.get("acct") or "?"
+            _allsp[_k0] = _allsp.get(_k0, 0.0) + sum(a["d"]["sp"])
         ads = []
         for a in A.values():
             D = a["d"]; sp = sum(D["sp"])
-            if sp < 1000: continue
+            if sp < 150: continue
             a.update({"sp": round(sp), "pv": round(sum(D["pv"])), "ofv": round(sum(D["fv"])),
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
@@ -4101,15 +4111,28 @@ def pull_meta_ads(tok):
         # slot (its smallest still outspent everything on Basic), so the Basic account
         # vanished from Top Ads / Creative Benchmarks entirely and looked "not synced".
         # Cap PER ACCOUNT so a small account always gets its own shelf.
+        # v92: the flat top-120 is now a FLOOR on what is kept, not a ceiling. Keep taking
+        # ads top-down by spend past 120 until the kept set covers COV of that account's own
+        # ad-level spend, hard-capped at MAXAD so the payload cannot run away. Self-tuning:
+        # an account with a short head stops early, one with a long tail keeps going.
+        _MINAD, _MAXAD, _COV = 120, 400, 0.97
         ads.sort(key=lambda a: -a["sp"])
         _per = {}
+        _cum = {}
         _keep = []
         for a in ads:
             k = a.get("acct") or "?"
-            _per[k] = _per.get(k, 0) + 1
-            if _per[k] <= 120: _keep.append(a)
+            n = _per.get(k, 0)
+            if n >= _MAXAD: continue
+            if n >= _MINAD and _cum.get(k, 0.0) >= (_allsp.get(k) or 0.0) * _COV: continue
+            _per[k] = n + 1; _cum[k] = _cum.get(k, 0.0) + a["sp"]; _keep.append(a)
         ads = _keep
-        log("meta ads :: kept per account", {k: v for k, v in _per.items()})
+        XTRA["madsCov"] = {k: {"n": _per.get(k, 0), "sp": round(_cum.get(k, 0.0)),
+                               "spAll": round(_allsp.get(k) or 0.0),
+                               "pct": round(100.0 * (_cum.get(k, 0.0) / (_allsp.get(k) or 1.0)), 1)}
+                           for k in sorted(_allsp)}
+        log("meta ads :: kept per account", {k: v for k, v in _per.items()},
+            ":: 60d coverage", {k: str(v["pct"]) + "%" for k, v in XTRA["madsCov"].items()})
         lastday = max([max((i for i in range(60) if a["d"]["sp"][i] > 0), default=0) for a in ads] or [0])
         if lastday < 55:
             log("meta ads :: PARTIAL PULL -- newest spend day is index", lastday, "of 60 ::",
