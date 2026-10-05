@@ -1744,22 +1744,30 @@ def pull_cohorts():
         except Exception as e:
             log("online cube fail", str(e)[:120])
         # v8.3 ONLINE journey profile (categories need order lines; POS journeys carry the mix)
-        d2o = []; hist = [0] * 13; opy = [0] * 6; toto = 0; yrs = 0.0; ltg2 = 0.0; ltv2 = 0.0
+        OPY_N = 11                      # v90, see the scope profiles below
+        d2o = []; hist = [0] * 13; opy = [0] * OPY_N; toto = 0; yrs = 0.0; ltg2 = 0.0; ltv2 = 0.0
+        opyAge = [0.0] * OPY_N; opyRev = [0.0] * OPY_N; opyGp = [0.0] * OPY_N
         for pid, f in first.items():
             ds = sorted({d for d, _a, _m in by_p[pid]})
             if len(ds) >= 2:
                 g = (datetime.date.fromisoformat(ds[1]) - datetime.date.fromisoformat(ds[0])).days
                 d2o.append(g); hist[min(g // 30, 12)] += 1
             span = max(30, (END - datetime.date.fromisoformat(f)).days) / 365.0
-            c = len(ds); toto += c; yrs += span; opy[min(max(c, 1), 6) - 1] += 1
-            ltv2 += sum(a2 for _d, a2, _m in by_p[pid]); ltg2 += sum(m2 for _d, _a, m2 in by_p[pid])
+            c = len(ds); toto += c; yrs += span
+            _b = min(max(c, 1), OPY_N) - 1
+            opy[_b] += 1; opyAge[_b] += span
+            _rv = sum(a2 for _d, a2, _m in by_p[pid]); _gp = sum(m2 for _d, _a, m2 in by_p[pid])
+            opyRev[_b] += _rv; opyGp[_b] += _gp
+            ltv2 += _rv; ltg2 += _gp
         if first:
             n = len(first)
             XTRA.setdefault("jour", {}).setdefault("scopes", {})["ONLINE"] = {
                 "n": n, "rep": round(len(d2o) / n * 100, 1),
                 "med2": int(statistics.median(d2o)) if d2o else None,
                 "oyr": round(toto / yrs, 2) if yrs else 0, "ltgp": round(ltg2 / n), "ltv": round(ltv2 / n),
-                "h2": hist, "opy": opy, "cat": [], "ven": []}
+                "h2": hist, "opy": opy,
+                "opyAge": [round(x, 2) for x in opyAge],
+                "opyRev": [round(x) for x in opyRev], "opyGp": [round(x) for x in opyGp], "cat": [], "ven": []}
         nr = {}
         seen = set()
         for pid, d, amt, mg in sorted(orders, key=lambda o: (o[1], o[0])):
@@ -3078,18 +3086,28 @@ def pull_pos_customers():
             reps = [D2[p] for p in pids if p in D2]
             hist = [0] * 13
             for g in reps: hist[min(g // 30, 12)] += 1
-            opy = [0] * 6
+            # v90 opy capped at 6, so "how many customers bought 7, 8, 9, 10+ times" could not be
+            # asked at all, and the customer AGE behind each bucket was summed into one rate and
+            # thrown away. 11 buckets (1..10, then 10+) and, per bucket, total customer-years and
+            # revenue/GP, so each repeat tier carries its own tenure and its worth.
+            OPY_N = 11
+            opy = [0] * OPY_N
+            opyAge = [0.0] * OPY_N; opyRev = [0.0] * OPY_N; opyGp = [0.0] * OPY_N
             yrs = 0.0; tot_o = 0
             for p in pids:
                 span = max(30, (END - datetime.date.fromisoformat(first[p][0])).days) / 365.0
                 c = CNT.get(p, 0); tot_o += c; yrs += span
-                opy[min(max(c, 1), 6) - 1] += 1
+                _b = min(max(c, 1), OPY_N) - 1
+                opy[_b] += 1; opyAge[_b] += span
+                opyRev[_b] += LREV.get(p, 0); opyGp[_b] += LTG.get(p, 0)
             return {"n": n, "rep": round(len(reps) / n * 100, 1),
                     "med2": int(statistics.median(reps)) if reps else None,
                     "oyr": round(tot_o / yrs, 2) if yrs else 0,
                     "ltgp": round(sum(LTG.get(p, 0) for p in pids) / n),
                     "ltv": round(sum(LREV.get(p, 0) for p in pids) / n),
-                    "h2": hist, "opy": opy}
+                    "h2": hist, "opy": opy,
+                    "opyAge": [round(x, 2) for x in opyAge],
+                    "opyRev": [round(x) for x in opyRev], "opyGp": [round(x) for x in opyGp]}
         def _jprof(pids):
             base = _jcore(pids, d2, cnt, ltg, lrev)
             if base is None: return None
@@ -3361,17 +3379,23 @@ def pull_shop_lines():
             reps = [d2oX[p] for p in pids if p in d2oX]
             hist = [0] * 13
             for g2 in reps: hist[min(g2 // 30, 12)] += 1
-            opy = [0] * 6; yrs = 0.0; tot_o = 0
+            OPY_N = 11
+            opy = [0] * OPY_N; yrs = 0.0; tot_o = 0
+            opyAge = [0.0] * OPY_N; opyRev = [0.0] * OPY_N; opyGp = [0.0] * OPY_N
             for p in pids:
                 span = max(30, (END - datetime.date.fromisoformat(first_o[p])).days) / 365.0
                 c2 = ocX.get(p, 0); tot_o += c2; yrs += span
-                opy[min(max(c2, 1), 6) - 1] += 1
+                _b = min(max(c2, 1), OPY_N) - 1
+                opy[_b] += 1; opyAge[_b] += span
+                opyRev[_b] += revX.get(p, 0.0); opyGp[_b] += gpX.get(p, 0.0)
             return {"n": n, "rep": round(len(reps) / n * 100, 1),
                     "med2": int(statistics.median(reps)) if reps else None,
                     "oyr": round(tot_o / yrs, 2) if yrs else 0,
                     "ltgp": round(sum(gpX.get(p, 0.0) for p in pids) / n),
                     "ltv": round(sum(revX.get(p, 0.0) for p in pids) / n),
-                    "h2": hist, "opy": opy}
+                    "h2": hist, "opy": opy,
+                    "opyAge": [round(x, 2) for x in opyAge],
+                    "opyRev": [round(x) for x in opyRev], "opyGp": [round(x) for x in opyGp]}
         def _jp(pids):
             base = _jp0(pids)
             if base is None: return None
@@ -3384,17 +3408,23 @@ def pull_shop_lines():
             reps = [d2o[p] for p in pids if p in d2o]
             hist = [0] * 13
             for g2 in reps: hist[min(g2 // 30, 12)] += 1
-            opy = [0] * 6; yrs = 0.0; tot_o = 0
+            OPY_N = 11
+            opy = [0] * OPY_N; yrs = 0.0; tot_o = 0
+            opyAge = [0.0] * OPY_N; opyRev = [0.0] * OPY_N; opyGp = [0.0] * OPY_N
             for p in pids:
                 span = max(30, (END - datetime.date.fromisoformat(first_o[p])).days) / 365.0
                 c2 = oc.get(p, 0); tot_o += c2; yrs += span
-                opy[min(max(c2, 1), 6) - 1] += 1
+                _b = min(max(c2, 1), OPY_N) - 1
+                opy[_b] += 1; opyAge[_b] += span
+                opyRev[_b] += agg[p][0]; opyGp[_b] += agg[p][1]
             return {"n": n, "rep": round(len(reps) / n * 100, 1),
                     "med2": int(statistics.median(reps)) if reps else None,
                     "oyr": round(tot_o / yrs, 2) if yrs else 0,
                     "ltgp": round(sum(agg[p][1] for p in pids) / n),
                     "ltv": round(sum(agg[p][0] for p in pids) / n),
-                    "h2": hist, "opy": opy}
+                    "h2": hist, "opy": opy,
+                    "opyAge": [round(x, 2) for x in opyAge],
+                    "opyRev": [round(x) for x in opyRev], "opyGp": [round(x) for x in opyGp]}
         def _jm(pids, key, topn=8):
             ag2 = {}
             for p in pids:
@@ -6684,6 +6714,14 @@ def build():
                 return "vendor LTV cohorts missing (vcoh)"
             if not any(r.get("mult") is not None or r.get("pn") is not None for r in _vr2):
                 return "vendor LTV cohorts are the mean/mixed-set shape (need median + pn/mult)"
+            # v90 the repeat-frequency buckets went 6 -> 11 and gained age/revenue per
+            # bucket; without a gate the old 6-wide shape serves forever from cached prev.
+            _js = ((pv.get("jour") or {}).get("scopes") or {})
+            for _sv in _js.values():
+                if isinstance(_sv, dict) and _sv.get("opy") is not None:
+                    if len(_sv.get("opy") or []) < 11 or _sv.get("opyAge") is None:
+                        return "repeat-frequency buckets are the old 6-wide shape (need 11 + opyAge)"
+                    break
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
