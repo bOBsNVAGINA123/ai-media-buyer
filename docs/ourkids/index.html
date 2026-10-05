@@ -2455,7 +2455,21 @@ function trBI(U,SC){
   return '<div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:9px 12px;margin-bottom:7px;font-size:12.5px"><span style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+c+'22;color:'+c+';flex-shrink:0">'+l+'</span><span>'+f[1]+'</span></div>';}).join('')
  +'</div></div>';
  return h;}
-function boot(){O=window.O;FF=window.F;isoDates();SORTON();try{ltRebuild();}catch(e){}renderTabs();if(O.rtCohPack&&O.rtCohPack.coh){RT_COH=O.rtCohPack.coh;RT_PULL=O.rtCohPack.pulled||RT_PULL;if(O.rtCohPack.delRate)RT_DELRATE=O.rtCohPack.delRate;if(O.rtCohPack.bwalk)BWALK=O.rtCohPack.bwalk;}
+function boot(){O=window.O;FF=window.F;
+ /* v92: O.ad.mclk is Meta's `clicks` -- EVERY click, including likes, comments, profile
+    taps and image expands. The per-ad feed (O.mads[].d.oc) has always used outbound_clicks,
+    so the Actions Board was printing two different Meta CVRs from the same window with
+    nothing saying why: 0.74% from the account series against 1.13% from the ad cards, and
+    CPC E£1.63 against E£2.37, measured for 28 Sep to 4 Oct. NOT the feed coverage gap --
+    clicks were 54.2% of the account where spend was 78.7%, so the two parted by definition.
+    Every click site on this page is a CPC, a CVR or a "clicks fell, why" diagnostic, and all
+    three want the clicks that actually reached the site. Alias once here rather than at the
+    five call sites, so there is one click definition tool-wide; the all-clicks series stays
+    on mclkAll for anything that ever needs it. */
+ try{const _A=O.ad;
+  if(_A&&_A.moclk&&_A.moclk.some&&_A.moclk.some(v=>v>0)){_A.mclkAll=_A.mclk;_A.mclk=_A.moclk;_A.mclkDef='outbound';}
+  else if(_A)_A.mclkDef='all';}catch(e){}
+ isoDates();SORTON();try{ltRebuild();}catch(e){}renderTabs();if(O.rtCohPack&&O.rtCohPack.coh){RT_COH=O.rtCohPack.coh;RT_PULL=O.rtCohPack.pulled||RT_PULL;if(O.rtCohPack.delRate)RT_DELRATE=O.rtCohPack.delRate;if(O.rtCohPack.bwalk)BWALK=O.rtCohPack.bwalk;}
  /* OUTLIER CLAMP — Meta's offline last-touch lottery can dump a whole store-day onto one ad
     (verified: one E£150/day ad credited E£1.77M = ~a full network day). Cap each ad-day's
     offline value at 6x that ad's own median non-zero day (floor E£60k); subtract the clipped
@@ -9491,7 +9505,11 @@ function platformTree(g){
  const notes=[['#a6592a','<b>Not every incremental figure here is a measurement.</b> '+PFDEF.map(P=>'<b>'+P.n+'</b>: '+incrSrc(P.at).tag).join(' &middot; ')+'. '+incrSrc('google').note],
   ['#c4203f','<b>Judged on incremental, not reported.</b> Breakeven here is '+BEBOTH(1)+' on your DELIVERED online margin of '+(gpOn*100).toFixed(1)+'% (goods, courier both ways, COD &amp; payment fees all charged). The incremental multipliers are the measured ones on this account, so a platform can clear breakeven on its own number and still lose money on yours.'],
   ['#646e83','<b>Value = clicks × click→buy rate × basket.</b> The three contributions are a Shapley split, so they sum exactly to the actual move and no factor gets credit for being considered first. Spend sits outside that split — it is what the move cost, not part of it.'],
-  ['#646e83','Each platform is measured on the value <i>it</i> claims, so these do not add up to Shopify revenue and are not meant to. Cross-platform double-counting is the whole reason the ledger view exists.']];
+  ['#646e83','Each platform is measured on the value <i>it</i> claims, so these do not add up to Shopify revenue and are not meant to. Cross-platform double-counting is the whole reason the ledger view exists.'],
+  ['#646e83','<b>Clicks here are '+((O.ad&&O.ad.mclkDef==='all')?'Meta&rsquo;s <i>all</i> clicks':'OUTBOUND clicks')+'.</b> '
+    +((O.ad&&O.ad.mclkDef==='all')
+      ?'Meta counts likes, comments, profile taps and image expands as clicks, so the CPC and click&rarr;buy rate on the Meta row are not the same measure as the per-ad cards above, which use outbound clicks only. Measured on 28 Sep &rarr; 4 Oct: 0.74% here against 1.13% there, CPC E\u00a31.63 against E\u00a32.37. The outbound series is now collected and this row switches to it on the next sync.'
+      :'The same measure as the per-ad cards above &mdash; only the clicks that left for the site. Google and TikTok count ad clicks, which are outbound by definition.')]];
  pnlCard(g,'ins','Platform diagnosis — what each channel did, and what to do'+INFO('Per-platform funnel decomposition. Attributed value is split into clicks, click-to-buy rate and basket size by closed-form Shapley, then each platform is judged on incremental value against the real breakeven from the ledger.'),
   'Meta, Google and TikTok each on their own funnel, '+s+' &rarr; '+e+' against '+pw[0]+' &rarr; '+pw[1]+' ('+days+' days).',
   tb+det+'<div class="ins" style="margin-top:10px">'+notes.map(r=>'<div class="row"><span class="dot" style="background:'+r[0]+'"></span><span>'+r[1]+'</span></div>').join('')+'</div>');
@@ -19903,7 +19921,9 @@ function kpiStrip(g,ents,W,opt){
  }catch(e){}
  h+='<div class="rtNote">Reading <b>'+(P.lbl||(ST.s+' → '+ST.e))+'</b> against the equal-length window immediately before'
   +(p?'':' — which this feed does not reach, so the arrows are blank')+'. '
-  +'ROAS is the platform&rsquo;s claimed value over spend, not the ledger. CVR is purchases per click, AOV is claimed value per purchase.</div>';
+  +'ROAS is the platform&rsquo;s claimed value over spend, not the ledger. CVR is purchases per '
+  +(opt.ckKey==='oc'?'OUTBOUND click &mdash; the ones that left for the site, not likes or profile taps':'click')
+  +', AOV is claimed value per purchase.</div>';
  pnlCard(g,opt.a||'ins',(opt.label||'Headline')+' &mdash; the whole account first'
   +INFO('The same six figures in the same order on every ad tab, each against the window immediately before, so the platforms can be read side by side before you descend into campaigns, ad sets and terms.'),
   'Start here. Everything below this card is the detail behind it.',h);
@@ -22217,7 +22237,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-164350';
+const BUILD='20261005-184739';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
