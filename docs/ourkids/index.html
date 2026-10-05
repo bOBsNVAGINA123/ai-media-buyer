@@ -15079,8 +15079,12 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
  const row=(x,bold)=>'<tr'+(bold?' style="background:#f7f8fc;font-weight:800"':'')+'>'
   +'<td style="'+TD+';text-align:left;font-weight:800">'+(x.c?chip(x.n.toUpperCase(),x.c):x.n)+(x.c?'':'')+'</td>'
   +'<td style="'+TD+'">'+cur(x.sp)+dsub(x.sp,x.p&&x.p.sp,0)+'</td>'
-  +'<td style="'+TD+'">'+(x.imp?money(x.imp):'&mdash;')+'</td>'
-  +'<td style="'+TD+'">'+(x.clk?money(x.clk):'&mdash;')+'</td>'
+  /* v92.3: impressions and clicks were the only two volume columns with no move printed,
+     and the prior was already computed for them -- PP[k].imp / .clk have always existed.
+     Impressions are neutral (more of them on a flat budget is cheaper reach, not better
+     or worse on their own); clicks higher is better. */
+  +'<td style="'+TD+'">'+(x.imp?money(x.imp):'&mdash;')+dsub(x.imp,x.p&&x.p.imp,0)+'</td>'
+  +'<td style="'+TD+'">'+(x.clk?money(x.clk):'&mdash;')+dsub(x.clk,x.p&&x.p.clk,1)+'</td>'
   +'<td style="'+TD+'">'+(x.cpm==null?'&mdash;':'E&pound; '+x.cpm.toFixed(1))+dsub(x.cpm,x.p&&x.p.cpm,-1)+'</td>'
   +'<td style="'+TD+'">'+(x.ctr==null?'&mdash;':d2(x.ctr)+'%')+dsub(x.ctr,x.p&&x.p.ctr,1)+'</td>'
   +'<td style="'+TD+'">'+(x.cvr==null?'&mdash;':d2(x.cvr)+'%')+dsub(x.cvr,x.p&&x.p.cvr,1)+'</td>'
@@ -15098,9 +15102,10 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
        (A.cmpAct||[]).forEach(r=>{const m=M[r.a]; if(m&&m.pri&&m.t==='UPLOAD_CLICKS')v+=r.cv||0;});}catch(e){}
      if(!v)return '<span style="color:var(--ink-3)">none reported</span>';
      return '<span style="color:var(--warn);font-weight:600" title="Google books in-store value as store-sale uploads (UPLOAD_CLICKS), but only in the fixed 60-day conversion-action pull - not in the daily campaign feed this table reads, where ofv is zero on every campaign. Shown per campaign on the Google tab.">not in this feed</span>'
-       +'<div style="font-size:10px;color:var(--ink-3)">'+cur(v)+' over the fixed 60d pull</div>';})())+'</td>'
+       +'<div style="font-size:10px;color:var(--ink-3)">'+cur(v)+' over the fixed 60d pull</div>';})())
+     +(x.off?dsub(x.off,x.p&&x.p.off,1):'')+'</td>'
   +'<td style="'+TD+'">'+(x.ro==null?'&mdash;':d2(x.ro)+'x')+dsub(x.ro,x.p&&x.p.ro,1)+'</td>'
-  +'<td style="'+TD+';color:'+((x.rot||0)>=(x.ro||0)?'#0f7a55':'#0F172A')+'">'+(x.rot==null?'&mdash;':d2(x.rot)+'x')+'</td></tr>';
+  +'<td style="'+TD+';color:'+((x.rot||0)>=(x.ro||0)?'#0f7a55':'#0F172A')+'">'+(x.rot==null?'&mdash;':d2(x.rot)+'x')+dsub(x.rot,x.p&&x.p.rot,1)+'</td></tr>';
  const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:6px">'
   +'<tr><th style="'+TH+';text-align:left">Platform</th><th style="'+TH+'">Spend</th><th style="'+TH+'">Impr.</th><th style="'+TH+'">Clicks</th>'
   +'<th style="'+TH+'">CPM</th><th style="'+TH+'">CTR</th><th style="'+TH+'">CVR</th><th style="'+TH+'">CPC</th>'
@@ -22274,7 +22279,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-190150';
+const BUILD='20261005-190541';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
