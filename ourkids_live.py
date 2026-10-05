@@ -6826,9 +6826,26 @@ def build():
         safe(pull_shop_lines)
         safe(pull_meta_driven_cross)
     vinv = (safe(pull_vendor_inventory) if heavy else None) or prev.get("vinv", {})
+    # v92.5: `XTRA.get(k) or prev.get(k)` looks safe and is not. A dict that only HALF
+    # filled this run is still truthy, so the whole carried-forward half is thrown away.
+    # Measured 2026-10-05: pull_pos_customers() is skipped whenever the bnrD window already
+    # reaches today ("pos customers carried forward" in the log), so XTRA["lag"] held only
+    # {"shop": ...} -- the Stores rows disappeared from "Time between orders" and its own
+    # subtitle printed "half of store repeat gaps fall inside - days" with a dash. cube and
+    # jour had each already been hand-patched for exactly this; merge per key, once, so the
+    # next key added does not have to learn it again.
+    def _xm(_k, _d=None):
+        _n = XTRA.get(_k); _p = prev.get(_k)
+        if isinstance(_n, dict) and isinstance(_p, dict):
+            _o = dict(_p)
+            _o.update({_k2: _v2 for _k2, _v2 in _n.items() if _v2 not in (None, {}, [])})
+            return _o
+        if _n: return _n
+        if _p: return _p
+        return {} if _d is None else _d
     # v6.5 -- deciles / lag / unregistered revenue / vendor+product monthly, with carry-forward
-    dec = XTRA.get("dec") or prev.get("dec", {})
-    lag = XTRA.get("lag") or prev.get("lag", {})
+    dec = _xm("dec")
+    lag = _xm("lag")
     bunr = {b: {m: round(v) for m, v in ms.items()} for b, ms in XTRA.get("bunr", {}).items()} or prev.get("bunr", {})
     mreach = XTRA.get("mreach") or prev.get("reach", {})
     xchan = XTRA.get("xchan") or prev.get("xchan", {})
@@ -7133,14 +7150,14 @@ def build():
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
-              "madsCov": XTRA.get("madsCov") or prev.get("madsCov"),
+              "madsCov": _xm("madsCov"),
               "touch": safe(pull_ga4_touch) or prev.get("touch") or {},
               "ga4ads": safe(pull_ga4_ads) or prev.get("ga4ads") or {},
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
               "bev": bev, "cre": cre, "jour": jour,
               "cvr": _cvr_with_stock_hist(XTRA.get("cvr") or prev.get("cvr") or {}, prev),
               "ga4": XTRA.get("ga4") or prev.get("ga4") or None,
-              "metaCC": XTRA.get("metaCC") or prev.get("metaCC") or {},
+              "metaCC": _xm("metaCC"),
               "mcross": XTRA.get("mcross") or prev.get("mcross") or {},
               "cube": (lambda _n, _p: {"scopes": {**(_p.get("scopes") or {}), **(_n.get("scopes") or {})},
                                         "ven": (_n.get("ven") or _p.get("ven") or {}),
