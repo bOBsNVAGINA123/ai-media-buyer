@@ -2293,10 +2293,27 @@ function trChannels(g){
  const T=O.touch; if(!T||!T.last)return;
  const MODE=(ST.trTouch==='first'&&T.first)?'first':'last';
  const D=T[MODE]||{};
+ /* v92.1: this was a FIXED 60-day aggregate -- it ignored the date box and no prior period
+    was computable from it, so 54 numeric cells sat here with nothing to compare them to.
+    The collector now sends four DAILY series per channel, so the window is the page's and
+    the prior is the equal-length window immediately before. The flat shape is still read,
+    because the page ships before the sync that fills the new one. */
+ const DLY=!!(T.daily&&T.start&&T.n);
+ const PW=DLY?pfWin({start:T.start,n:T.n}):null;
+ const cut=(v,i0,i1)=>{if(!v)return 0;let t=0;for(let i=Math.max(0,i0);i<=Math.min(v.length-1,i1);i++)t+=v[i]||0;return t;};
  const rows=Object.keys(D).map(k=>{const v=D[k]||[];
-   return {n:k, s:v[0]||0, ord:v[1]||0, rev:v[2]||0, atc:v[3]||0};})
+   if(!DLY||!PW)return {n:k, s:v[0]||0, ord:v[1]||0, rev:v[2]||0, atc:v[3]||0, p:null};
+   const cu={s:cut(v[0],PW.a,PW.b), ord:cut(v[1],PW.a,PW.b), rev:cut(v[2],PW.a,PW.b), atc:cut(v[3],PW.a,PW.b)};
+   const pr=(PW.pa!=null&&PW.pa>=0&&PW.pb>=PW.pa)
+     ?{s:cut(v[0],PW.pa,PW.pb), ord:cut(v[1],PW.pa,PW.pb), rev:cut(v[2],PW.pa,PW.pb), atc:cut(v[3],PW.pa,PW.pb)}:null;
+   return {n:k, s:cu.s, ord:cu.ord, rev:cu.rev, atc:cu.atc, p:pr};})
   .filter(r=>r.s>0).sort((a,b)=>b.rev-a.rev);
  if(!rows.length)return;
+ const DT=(cur,prv,good)=>{
+  if(prv==null||!prv||cur==null||!isFinite(cur/prv))return '<span style="font-size:10px;color:var(--ink-3)">no prior</span>';
+  const d=(cur/prv-1)*100, up=d>=0, ok=(up===(good!==false));
+  return '<span style="font-size:10px;font-weight:800;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>';};
+
  const tS=rows.reduce((a,r)=>a+r.s,0), tR=rows.reduce((a,r)=>a+r.rev,0), tO=rows.reduce((a,r)=>a+r.ord,0);
  const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
  const N=v=>Math.round(v||0).toLocaleString();
@@ -2309,17 +2326,22 @@ function trChannels(g){
   +'<th style="'+TH+';text-align:left">Channel</th><th style="'+TH+'">Sessions</th><th style="'+TH+'">Share</th>'
   +'<th style="'+TH+'">Orders</th><th style="'+TH+'">CVR</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">AOV</th></tr>';
  rows.forEach(r=>{
+  const p=r.p, pc=p&&p.s?p.ord/p.s:null, pa=p&&p.ord?p.rev/p.ord:null;
   h+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+r.n+'</td>'
-   +'<td style="'+TD+'">'+N(r.s)+'</td>'
+   +'<td style="'+TD+'">'+N(r.s)+'<br>'+DT(r.s,p&&p.s,true)+'</td>'
    +'<td style="'+TD+'">'+(tS?(r.s/tS*100).toFixed(1)+'%':'—')+'</td>'
-   +'<td style="'+TD+'">'+N(r.ord)+'</td>'
-   +'<td style="'+TD+';font-weight:700">'+P(r.s?r.ord/r.s:null)+'</td>'
-   +'<td style="'+TD+'">'+M(r.rev)+'</td>'
-   +'<td style="'+TD+'">'+(r.ord?M(r.rev/r.ord):'—')+'</td></tr>';});
+   +'<td style="'+TD+'">'+N(r.ord)+'<br>'+DT(r.ord,p&&p.ord,true)+'</td>'
+   +'<td style="'+TD+';font-weight:700">'+P(r.s?r.ord/r.s:null)+'<br>'+DT(r.s?r.ord/r.s:null,pc,true)+'</td>'
+   +'<td style="'+TD+'">'+M(r.rev)+'<br>'+DT(r.rev,p&&p.rev,true)+'</td>'
+   +'<td style="'+TD+'">'+(r.ord?M(r.rev/r.ord):'—')+'<br>'+DT(r.ord?r.rev/r.ord:null,pa,true)+'</td></tr>';});
+ const pS=rows.reduce((a,r)=>a+((r.p&&r.p.s)||0),0), pO=rows.reduce((a,r)=>a+((r.p&&r.p.ord)||0),0),
+       pR=rows.reduce((a,r)=>a+((r.p&&r.p.rev)||0),0);
  h+='<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD+';text-align:left">TOTAL</td>'
-  +'<td style="'+TD+'">'+N(tS)+'</td><td style="'+TD+'">100.0%</td><td style="'+TD+'">'+N(tO)+'</td>'
-  +'<td style="'+TD+'">'+P(tS?tO/tS:null)+'</td><td style="'+TD+'">'+M(tR)+'</td>'
-  +'<td style="'+TD+'">'+(tO?M(tR/tO):'—')+'</td></tr></table></div>';
+  +'<td style="'+TD+'">'+N(tS)+'<br>'+DT(tS,pS,true)+'</td><td style="'+TD+'">100.0%</td>'
+  +'<td style="'+TD+'">'+N(tO)+'<br>'+DT(tO,pO,true)+'</td>'
+  +'<td style="'+TD+'">'+P(tS?tO/tS:null)+'<br>'+DT(tS?tO/tS:null,pS?pO/pS:null,true)+'</td>'
+  +'<td style="'+TD+'">'+M(tR)+'<br>'+DT(tR,pR,true)+'</td>'
+  +'<td style="'+TD+'">'+(tO?M(tR/tO):'—')+'<br>'+DT(tO?tR/tO:null,pO?pR/pO:null,true)+'</td></tr></table></div>';
  const dir=rows.find(r=>r.n==='Direct'), dark=rows.find(r=>r.n==='Dark social');
  h+='<div class="rtNote">'
   +'<b>This is not GA4&rsquo;s channel grouping, and it must not be.</b> Meta stamps utm_medium with the placement name, so GA4 files most of your paid social as Organic Social. These rows are classified on the <b>source</b>: fb and ig are paid Meta whatever the medium. '
@@ -2327,10 +2349,12 @@ function trChannels(g){
   +(dir?('<b>Direct is '+(dir.s/tS*100).toFixed(1)+'% of sessions</b> and converts at '+P(dir.s?dir.ord/dir.s:null)+' against '+P(tS?tO/tS:null)+' overall. '):'')
   +(dark?('Dark social adds another '+(dark.s/tS*100).toFixed(1)+'% that no platform will claim. '):'')
   +'<b>Last touch</b> credits the final click; <b>first touch</b> credits what originally found them &mdash; switch above and watch Direct move, because the gap between the two is the traffic that was acquired elsewhere and came back on its own. '
-  +'Egypt only, '+(T.win?(T.win[0]+' → '+T.win[1]):'a fixed 60-day window')+', and this card does not follow the date box.'
+  +'Egypt only. '
+  +(DLY?('Reading <b>'+(PW&&PW.lbl?PW.lbl:(ST.s+' → '+ST.e))+'</b> against the equal-length window immediately before'+((PW&&PW.pa!=null&&PW.pa>=0)?'':' — which the 60-day feed does not reach, so the arrows read "no prior"')+'.')
+        :('A FIXED '+(T.win?(T.win[0]+' → '+T.win[1]):'60-day')+' window that does not follow the date box, and with no daily series behind it there is nothing to compare against. The collector now sends this daily; the window and the prior arrive on the next sync.'))
   +'</div>';
  pnlCard(g,'ins','Where the traffic comes from &mdash; direct, organic, paid and dark social'
-  +INFO('Sessions, orders, conversion rate and revenue by channel, classified on source rather than GA4 default channel grouping, which is wrong on this property. Egypt only, fixed 60-day window, first or last touch.'),
+  +INFO('Sessions, orders, conversion rate and revenue by channel, classified on source rather than GA4 default channel grouping, which is wrong on this property. Egypt only, first or last touch.'),
   'The channel question, answered without the tagging bug.',h);
  try{applyHeat(g);}catch(e){}
 }
@@ -22237,7 +22261,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-184739';
+const BUILD='20261005-185529';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
