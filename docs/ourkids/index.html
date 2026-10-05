@@ -10127,6 +10127,12 @@ function moneyDesk(g){
 }
 function rMD(){if(TAB!=='md')return;dCh();const g=document.getElementById('g25');g.innerHTML='';
  document.getElementById('bn25').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. <b>One question: where should the money be?</b> Every entity is scored on gross profit left after the ad is paid for &mdash; platform value discounted to its measured incremental rate, then costed at your real gross margin. Nothing is called a loser without enough spend and purchases behind it.';
+
+ /* v92.4: the same headline row the other ad tabs open with — spend, value, ROAS, orders,
+    AOV, CVR, CPA, each against the window immediately before, plus how much of the account
+    this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
+    were still starting straight into detail. */
+ try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
  try{prodContrib(g);}catch(e){}
  try{creativeFatigue(g);}catch(e){}
  try{moneyDesk(g);}catch(e){g.innerHTML='<div style="padding:12px;color:#c4203f">Money desk failed: '+e.message+'</div>';}
@@ -20299,6 +20305,12 @@ function rMETA(){
  const today=W.n-1;
  bn.innerHTML='<b>META</b> — scored on the RevUp <i>Paid Media Mastery</i> framework. '
   +'Reading <b>'+PW.lbl+'</b>'+(PW.ranged?'':' (date box empty — last 7 days)')+'. Fatigue is each ad against <b>its own</b> best week, never an account average.';
+ /* v92.4: the same headline row the other ad tabs open with — spend, value, ROAS, orders,
+    AOV, CVR, CPA, each against the window immediately before, plus how much of the account
+    this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
+    were still starting straight into detail. */
+ try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+
 
  /* ---- v58 SCOREBOARD + DECOMPOSITION, at campaign / ad set / ad ---- */
  try{(function(){
@@ -22279,7 +22291,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-190541';
+const BUILD='20261005-191019';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22403,6 +22415,12 @@ function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28')
  const A=O.mads||[],W=O.madsW;
  document.getElementById('bn28').innerHTML='&#8635; <b>CAMPAIGNS</b> — every campaign, ad set and ad on the window YOU pick, with the change against the compare window. Meta per-ad daily feed'+(W?' ('+W.start+' → '+aD2(W,W.n-1)+')':'')+'; revenue legs scale with the attribution selector. Reach is summed daily reach (Meta dedupes within a day, not across days) — read CPMR as a directional cost, CPM as exact.';
  if(!A.length||!W){pnlCard(g,'meta','Campaigns','Per-ad daily feed arrives on the next sync.','');return;}
+ /* v92.4: the same headline row the other ad tabs open with — spend, value, ROAS, orders,
+    AOV, CVR, CPA, each against the window immediately before, plus how much of the account
+    this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
+    were still starting straight into detail. */
+ try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+
  const t0=new Date(W.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
  const pw=cmpWr(ST.s,ST.e);
  const R1=[Math.max(0,ix(ST.s)),Math.min(W.n-1,ix(ST.e))],R0=[Math.max(0,ix(pw[0])),Math.min(W.n-1,ix(pw[1]))];
