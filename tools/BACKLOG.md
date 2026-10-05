@@ -146,9 +146,37 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
       widening the keep cannot find it. Those need opposite fixes, so they are named apart.
 - 46 tabs rendered in sequence after all of the above: zero console errors, zero throws.
 
+- [x] O.otruth was carried on every sync and read by NOTHING — DONE v92.5. Seventh time this
+      session the fix was "the data was already there". It is the only UNMODELLED
+      new-versus-repeat split in the payload: Shopify sets customerOrderIndex on every order
+      it takes (1 = first ever), so the call needs no identity match, no consent and no
+      modelling, and the visit utm gives the channel. 5,566 orders, 1 unlabelled. Every other
+      new-customer figure in the tool is either modelled (Google can only label a conversion
+      when it identifies the customer) or in-store only (Meta nc/ncv), so this is the one
+      that checks the others. Rendered on Traffic Routing, with the Google Ads campaign rows
+      (which join on campaign ID) as a drill. What it says, measured:
+        META - FACEBOOK  1,699 orders  69.9% new   vs  GOOGLE PAID  1,126 orders  55.0% new
+        672 orders worth E£853,453 arrived UNTAGGED — no platform can be credited or blamed
+      Two bugs in my own first version, both caught by clicking rather than by reading:
+      O.gads[].cmp is the campaign TYPE not its name, so the drill printed "SEARCH" twice and
+      named nothing (match on .id, read .n); and the verdict compared META - FACEBOOK against
+      DIRECT / NONE as "the same pound spent on those two" — nobody buys direct traffic, so
+      the ranking is now restricted to channels there is a budget for.
+- [x] A half-filled carry-forward dict was dropping the other half — DONE v92.5.
+      `XTRA.get(k) or prev.get(k)` reads as "this run's value, else last run's" and is not:
+      a dict that only half filled this run is still truthy. pull_pos_customers() is skipped
+      whenever the branch window already reaches today ("pos customers carried forward" in the
+      run log), so XTRA["lag"] held only {"shop": ...} — the Stores rows vanished from "Time
+      between orders" and its own subtitle printed "half of store repeat gaps fall inside
+      — days". cube and jour had each already been hand-patched for exactly this, which is how
+      you know it recurs, so the fix is one _xm() helper merging per key, applied to lag, dec
+      and metaCC. tools/carry.js committed: a key XTRA writes at more than one site may never
+      fall back with `or`. The card also now says WHY the stores half is absent.
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
 - node tools/adsplit.js
 - node --check on both inline scripts
 - node tools/coverage.js okv/data.js 7,30   (spend/value/orders/clicks vs the account series, >=95%)
+- node tools/carry.js             (multi-site XTRA keys merged per key, not with `or`)
