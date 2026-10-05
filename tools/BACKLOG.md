@@ -173,6 +173,34 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
       and metaCC. tools/carry.js committed: a key XTRA writes at more than one site may never
       fall back with `or`. The card also now says WHY the stores half is absent.
 
+- [x] New customers BY CAMPAIGN and by campaign TYPE — DONE v92.6, asked for directly
+      ("how much does branding do vs shopping, of all"). The first version answered the wrong
+      question: it printed new % WITHIN each campaign, and a campaign can be 70% new and still
+      buy almost nobody. The column that answers it is each campaign's share of ALL the new
+      customers the business got, so that is what the table sorts on.
+      Measured Sep 5 → Oct 5 2026, of 3,243 new customers in total (Google only so far):
+        SHOPPING          6 campaigns   361 new   58.3% new within type   11.1% of ALL new
+        BRAND             1 campaign    121 new   49.8% within            3.7% of ALL new
+        PERFORMANCE MAX   2 campaigns   102 new   53.4% within            3.1% of ALL new
+        SEARCH — DSA      1 campaign     33 new   46.5% within            1.0% of ALL new
+        SEARCH non-brand  1 campaign      2 new  100.0% within            0.1% of ALL new
+        ALL TAGGED                      619 new                         19.1% of ALL new
+      So shopping buys 3.0x the first-time customers brand does. Brand also has the lowest
+      new-share of any real spender, which is CONSISTENT WITH brand harvesting demand that
+      already exists — not proof of it; the falsifying test is a brand holdout and there
+      has not been one. See [[gads-pmax-brand-leak]].
+      Two collector/page gaps closed on the way:
+      * bucket() in pull_order_truth has ALWAYS returned the utm campaign for Meta and TikTok
+        and the aggregation kept it only for Google, so the one unmodelled new-customer figure
+        in the payload existed per Google campaign and nowhere else. Now byCampaign[channel].
+      * Meta has no campaign type that answers brand-vs-shopping (the objective is BUY on
+        nearly all of them). Classifying from the NAME was guessing: four of six real names
+        ("Back2school s26", "EVER GREEN CONTENT", "Partnership ads", "SHAFI NEW ABO CREATIVE
+        TESTING") say nothing about who they target. O.audMix.cmp already carries the ad set
+        TARGETING split per campaign id ({n,e,x} spend fractions, 16 campaigns, coverage 1.01),
+        so the split is measured; a campaign absent from it falls back to its name and the row
+        says "(from name)", and one whose name says nothing reads "targeting not known".
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
