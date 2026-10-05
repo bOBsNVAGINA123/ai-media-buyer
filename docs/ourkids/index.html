@@ -10491,6 +10491,8 @@ function rMD(){if(TAB!=='md')return;dCh();const g=document.getElementById('g25')
     this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
  try{prodContrib(g);}catch(e){}
  try{creativeFatigue(g);}catch(e){}
  try{moneyDesk(g);}catch(e){g.innerHTML='<div style="padding:12px;color:#c4203f">Money desk failed: '+e.message+'</div>';}
@@ -20268,6 +20270,147 @@ function okRevCard(g,pf,tabKey){
    starting in the detail. Entities carry daily series, so the window is the date box.
    kpiStrip(container, entities, W, {label, offKey}) -- offKey names the in-store value field
    where the platform reports one, so the online leg is never silently blended with it. */
+/* ===== v93 MOMENTUM: two horizons at once, each against its own prior ===================
+   Asked for directly: L3D vs prior 3D and L7D vs prior 7D, on ROAS, CVR and cost per
+   purchase. The tool only ever showed ONE window -- whatever the date box said -- and its
+   prior, so "is this ad turning" needed two visits and a memory.
+
+   Three things this gets right that a naive version would not:
+
+   1. BOTH WINDOWS END ON THE LAST COMPLETE DAY. O.partial is 2026-10-05 and O.fullEnd is
+      2026-10-04, and the part day carried E£21,691 against ~E£30,000 on the full days before
+      it. Ending on the part day would dilute every rate and read as a fall on every ad at
+      once. (O.fullEnd was carried on every sync and read by nothing until this card.)
+
+   2. IT DOES NOT PRETEND A 3-DAY MOVE IS EVIDENCE. Per ad, three days is a handful of
+      purchases; under PMIN the arrows are replaced with the count, because a rate built on
+      four conversions cannot distinguish an improvement from a coin toss.
+
+   3. The maturation question was TESTED, not assumed. The house rule says never judge data
+      younger than four days because conversions land late. On this feed, six consecutive
+      3-day blocks read ROAS 5.89 / 5.46 / 4.86 / 4.84 / 5.31 / 3.99 from newest to oldest --
+      the NEWEST is the highest, which is the opposite of what a maturation drag predicts.
+      So the drag is not demonstrable here and is not claimed; what IS still true is that
+      the newest window has had the least time to settle, so a 3-day move is a question and
+      the 7-day move is the answer. */
+function adMomentum(g,opt){
+ opt=opt||{};
+ const feed=opt.feed||'mads', W=O[opt.win||'madsW'];
+ const ads=(O[feed]||[]).filter(a=>a.d&&a.d.sp&&(opt.pf?a.pf===opt.pf:true));
+ if(!W||!W.n||!ads.length)return;
+ /* last COMPLETE day, never the part day */
+ let last=W.n-1;
+ try{if(O.fullEnd&&W.start){const i=Math.round((Date.parse(O.fullEnd)-Date.parse(W.start))/864e5);
+  if(isFinite(i)&&i>=0&&i<W.n)last=i;}}catch(e){}
+ const dayOf=i=>new Date(Date.parse(W.start)+i*864e5).toISOString().slice(0,10);
+ const HZ=[{n:3,k:'h3'},{n:7,k:'h7'}];
+ const ok=HZ.every(h=>last-(2*h.n)+1>=0);
+ if(!ok)return;
+ const S=(a,k,i0,i1)=>{const d=a.d[k]||[];let t=0;
+  for(let i=Math.max(0,i0);i<=Math.min(d.length-1,i1);i++)t+=d[i]||0;return t;};
+ const vK=opt.vKey||'pv', ckK=opt.ckKey||'oc';
+ const blk=(a,i0,i1)=>{const sp=S(a,'sp',i0,i1), v=S(a,vK,i0,i1),
+   pu=S(a,'pu',i0,i1)||S(a,'pur',i0,i1), ck=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);
+  return {sp,v,pu,ck, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
+ const PMIN=opt.pmin||10;
+ /* MEASURED before choosing a default: the median AD takes 3 purchases in a 3-day window,
+    the median ad set 7, the median CAMPAIGN 26. At ad level only 9 of 62 entities clear ten
+    conversions on both sides of the 3-day comparison, so an ad-level 3-day rate is mostly
+    unreadable and the first build of this card printed "0 climbing, 0 fading" for 58 of 62
+    rows. The horizon is fine; the grain was wrong. Default to campaign, keep ad available. */
+ const LVK='momLvl_'+(opt.a||'x');
+ /* the Google feed's entities ARE campaigns and its .cmp is the campaign TYPE, not a name --
+    the same trap that made an earlier drill print "SEARCH" twice. So Google has one grain and
+    keys on .id / .n; only Meta has ad / ad set / campaign under it. */
+ const LEVELS=opt.levels||['campaign','adset','ad'];
+ let LVL=ST[LVK]||opt.level||LEVELS[0];
+ if(LEVELS.indexOf(LVL)<0)LVL=LEVELS[0];
+ const flat=LEVELS.length===1;
+ const keyOf=a=>flat?(a.id||a.n):(LVL==='ad'?(a.id||a.n):(LVL==='adset'?(a.asid||a.as):(a.cid||a.cmp)));
+ const nameOf=a=>flat?(a.n||a.id):(LVL==='ad'?(a.n||a.id):(LVL==='adset'?(a.as||a.asid):(a.cmp||a.cid)));
+ const grp={};
+ ads.forEach(a=>{const k=keyOf(a); if(k==null||k==='')return;
+  const e=grp[k]||(grp[k]={nm:nameOf(a),ents:[]}); e.ents.push(a);});
+ const gblk=(ents,i0,i1)=>{let sp=0,v=0,pu=0,ck=0;
+  ents.forEach(a=>{sp+=S(a,'sp',i0,i1); v+=S(a,vK,i0,i1);
+   pu+=S(a,'pu',i0,i1)||S(a,'pur',i0,i1); ck+=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);});
+  return {sp,v,pu,ck, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
+ const rows=Object.keys(grp).map(k=>{const o={nm:grp[k].nm};
+  HZ.forEach(h=>{const b=last, a0=b-h.n+1, pb=a0-1, pa=pb-h.n+1;
+   o[h.k]={c:gblk(grp[k].ents,a0,b), p:gblk(grp[k].ents,pa,pb)};});
+  o.sp7=o.h7.c.sp; o.n=grp[k].ents.length; return o;})
+  .filter(o=>o.sp7>=(opt.minSp||500))
+  .sort((x,y)=>y.sp7-x.sp7);
+ if(!rows.length)return;
+ const LVLBL={campaign:'Campaign',adset:'Ad set',ad:'Ad'};
+ const medPu=Math.round(rows.map(o=>o.h3.c.pu).sort((a,b)=>a-b)[Math.floor(rows.length/2)]||0);
+ const lvlBar='<div style="display:flex;gap:6px;align-items:center;padding:0 0 9px;flex-wrap:wrap">'
+  +(flat?'':'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">GRAIN</span>'
+    +LEVELS.map(k=>'<span class="chip" style="'+(LVL===k?'background:var(--brand);color:#fff;border-color:var(--brand)':'')
+      +'" onclick="ST[\''+LVK+'\']=\''+k+'\';rTab()">'+LVLBL[k]+'</span>').join(''))
+  +'<span style="font-size:11px;color:var(--ink-3)'+(flat?'':';margin-left:4px')+'">a 3-day rate needs conversions behind it &mdash; the median '
+  +LVLBL[LVL].toLowerCase()+' here takes <b'+(medPu<PMIN?' style="color:var(--warn)"':'')+'>'+medPu
+  +'</b> purchases in three days'+(medPu<PMIN?', below the '+PMIN+' this card will draw an arrow on, so most 3-day cells show their counts instead':'')+'</span></div>';
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const PC=v=>(v==null||!isFinite(v))?'—':(v*100).toFixed(2)+'%';
+ const X=v=>(v==null||!isFinite(v))?'—':v.toFixed(2)+'×';
+ const TH='padding:6px 8px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;white-space:nowrap';
+ /* a move is only drawn as an arrow when BOTH sides cleared the conversion floor; otherwise
+    the reader is told how many conversions it rests on and nothing is implied */
+ const mv=(cur,prv,pc,pp,good)=>{
+  if(cur==null||prv==null||!prv||!isFinite(cur/prv))return '<span style="font-size:10px;color:var(--ink-3)">no prior</span>';
+  if(pc<PMIN||pp<PMIN)return '<span style="font-size:10px;color:var(--ink-3)" title="a rate on this few conversions cannot tell a real move from noise">'+Math.round(pc)+' vs '+Math.round(pp)+' conv</span>';
+  const d=(cur/prv-1)*100, up=d>=0, okd=(up===(good!==false));
+  return '<span style="font-size:10px;font-weight:800;color:'+(okd?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</span>';};
+ const cell=(o,hk,fld,fmt,good)=>{const B=o[hk];
+  return '<td style="'+TD+'">'+fmt(B.c[fld])+'<br>'+mv(B.c[fld],B.p[fld],B.c.pu,B.p.pu,good)+'</td>';};
+ /* the two horizons agreeing is the whole point of showing both */
+ const read=o=>{const r3=o.h3,r7=o.h7;
+  const d3=(r3.c.roas!=null&&r3.p.roas)?r3.c.roas/r3.p.roas-1:null;
+  const d7=(r7.c.roas!=null&&r7.p.roas)?r7.c.roas/r7.p.roas-1:null;
+  const thin=(r3.c.pu<PMIN||r3.p.pu<PMIN);
+  if(d7==null)return ['—','var(--ink-3)'];
+  if(thin)return ['7d only: '+(d7>=0?'up':'down')+', 3d too thin','var(--ink-3)'];
+  if(d3==null)return ['—','var(--ink-3)'];
+  if(d3>=0&&d7>=0)return ['climbing on both','var(--pos)'];
+  if(d3<0&&d7<0)return ['fading on both','var(--neg)'];
+  if(d3<0&&d7>=0)return ['7d up, last 3 down — turning','var(--warn)'];
+  return ['7d down, last 3 up — recovering','var(--warn)'];};
+ let h=lvlBar+'<div style="overflow-x:auto"><table class="bt heat" data-hc="1" data-hcx="1"><tr>'
+  +'<th style="'+TH+';text-align:left">'+LVLBL[LVL]+'</th><th style="'+TH+'">Spend 7d</th>'
+  +'<th style="'+TH+'">ROAS 3d</th><th style="'+TH+'">ROAS 7d</th>'
+  +'<th style="'+TH+'">CVR 3d</th><th style="'+TH+'">CVR 7d</th>'
+  +'<th style="'+TH+'">Cost per purchase 3d</th><th style="'+TH+'">Cost per purchase 7d</th>'
+  +'<th style="'+TH+';text-align:left">Reading</th></tr>';
+ rows.slice(0,opt.limit||30).forEach(o=>{const rd=read(o);
+  h+='<tr><td style="'+TD+';text-align:left;max-width:280px;overflow:hidden;text-overflow:ellipsis"><b>'+String(o.nm).slice(0,54).replace(/</g,'&lt;')+'</b>'
+   /* the Google feed's rows ARE campaigns, so "1 ad" under each one is a lie about the grain */
+   +((!flat&&LVL!=='ad')?' <span style="font-size:10px;color:var(--ink-3);font-weight:600">'+o.n+(o.n===1?' ad':' ads')+'</span>':'')+'</td>'
+   +'<td style="'+TD+'">'+M(o.sp7)+'</td>'
+   +cell(o,'h3','roas',X,true)+cell(o,'h7','roas',X,true)
+   +cell(o,'h3','cvr',PC,true)+cell(o,'h7','cvr',PC,true)
+   +cell(o,'h3','cpp',M,false)+cell(o,'h7','cpp',M,false)
+   +'<td style="'+TD+';text-align:left;font-size:10.5px;font-weight:700;color:'+rd[1]+'">'+rd[0]+'</td></tr>';});
+ h+='</table></div>';
+ const nBoth=rows.filter(o=>read(o)[0]==='fading on both').length;
+ const nUp=rows.filter(o=>read(o)[0]==='climbing on both').length;
+ const nTurn=rows.filter(o=>/turning/.test(read(o)[0])).length;
+ h+='<div class="rtNote">'
+  +'<b>3d is '+dayOf(last-2)+' → '+dayOf(last)+' against '+dayOf(last-5)+' → '+dayOf(last-3)+'. '
+  +'7d is '+dayOf(last-6)+' → '+dayOf(last)+' against '+dayOf(last-13)+' → '+dayOf(last-7)+'.</b> '
+  +'Both end on the last COMPLETE day'+(O.fullEnd?(' ('+O.fullEnd+')'):'')+' — today is still filling and including it would read as a fall on every ad at once. '
+  +'This card ignores the date box on purpose: the two horizons are the point. '
+  +'<b>Read the 7-day column and use the 3-day as the question, not the answer.</b> Where a window has fewer than '+PMIN+' conversions on either side the arrow is replaced by the counts, because a rate on four conversions cannot tell an improvement from a coin toss. '
+  +'<b>On the maturation drag:</b> the house rule is never to judge data younger than four days. It was tested on this feed rather than assumed — six consecutive 3-day blocks read ROAS 5.89, 5.46, 4.86, 4.84, 5.31, 3.99 newest to oldest, so the newest is the HIGHEST and a maturation drag is not visible. It is not claimed here. What remains true is that the newest window has had least time to settle. '
+  +'Of '+rows.length+' '+LVLBL[LVL].toLowerCase()+(rows.length===1?'':'s')+' over '+M(opt.minSp||500)+' in seven days: <b>'+nUp+' climbing on both horizons, '+nBoth+' fading on both</b>'+(nTurn?(', '+nTurn+' where the two horizons disagree — those are the ones to look at today'):'')+'.'
+  +'</div>';
+ pnlCard(g,opt.a||'meta',(opt.label||'Momentum')+' &mdash; two horizons, each against its own prior'
+  +INFO('L3D vs the 3 days before it and L7D vs the 7 days before it, on ROAS, CVR and cost per purchase. Both windows end on the last complete day. Arrows are suppressed where the conversion count is too small to carry a rate.'),
+  'Is it turning? The 7-day answers, the 3-day asks.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.adMomentum=adMomentum;
 function kpiStrip(g,ents,W,opt){
  opt=opt||{};
  if(!W||!W.n||!ents||!ents.length)return;
@@ -20689,6 +20832,8 @@ function rMETA(){
     this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
 
 
  /* ---- v58 SCOREBOARD + DECOMPOSITION, at campaign / ad set / ad ---- */
@@ -21448,6 +21593,7 @@ function rGOOG(){
  const PW=pfWin(W);
  if(!W||!ads.length){bn.innerHTML='Google per-campaign daily series missing — this tab fills on the next sync.';return;}
  try{kpiStrip(g,ads,W,{label:'Google',a:'google',vKey:'pv'});}catch(e){console.error('google kpi strip failed:',e);}
+ try{adMomentum(g,{label:'Google momentum',a:'google',feed:'gads',win:'gadsW',vKey:'pv',minSp:500,levels:['campaign']});}catch(e){console.error('google momentum failed:',e);}
  try{ggCampaigns(g);}catch(e){console.error('google campaign card failed:',e);}
  const fG=af('google');
  const M=v=>'E£'+Math.round(Math.abs(v)).toLocaleString();
@@ -22670,7 +22816,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-220309';
+const BUILD='20261006-012132';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22799,6 +22945,8 @@ function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28')
     this per-ad feed actually covers. Asked for tool-wide; three tabs that read the same feed
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
+
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
 
  const t0=new Date(W.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
  const pw=cmpWr(ST.s,ST.e);
