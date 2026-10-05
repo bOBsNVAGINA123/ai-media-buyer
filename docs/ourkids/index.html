@@ -15037,7 +15037,19 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
   +'<td style="'+TD+'">'+(x.cvr==null?'&mdash;':d2(x.cvr)+'%')+dsub(x.cvr,x.p&&x.p.cvr,1)+'</td>'
   +'<td style="'+TD+'">'+(x.cpc==null?'&mdash;':'E&pound; '+x.cpc.toFixed(1))+dsub(x.cpc,x.p&&x.p.cpc,-1)+'</td>'
   +'<td style="'+TD+'">'+cur(x.on)+dsub(x.on,x.p&&x.p.on,1)+'</td>'
-  +'<td style="'+TD+'">'+(x.off?cur(x.off):'<span style="color:var(--ink-3)">none reported</span>')+'</td>'
+  /* v87 "none reported" was a factual claim and it was false. Google DOES book in-store
+     value -- store-sale uploads arriving as UPLOAD_CLICKS conversion actions. It is absent
+     from THIS table because the table reads the daily ad feed, where Google's ofv is zero on
+     every campaign; the value lives only in the fixed 60-day conversion-action pull. Mixing a
+     fixed window into a date-box row would be worse than omitting it, so the omission stays
+     and the CLAIM is corrected: say where the money is, not that it does not exist. */
+  +'<td style="'+TD+'">'+(x.off?cur(x.off):(function(){
+     if(x.k!=='google')return '<span style="color:var(--ink-3)">none reported</span>';
+     let v=0; try{const A=O.gattr||{},M={};(A.actions||[]).forEach(a2=>{M[a2.n]=a2;});
+       (A.cmpAct||[]).forEach(r=>{const m=M[r.a]; if(m&&m.pri&&m.t==='UPLOAD_CLICKS')v+=r.cv||0;});}catch(e){}
+     if(!v)return '<span style="color:var(--ink-3)">none reported</span>';
+     return '<span style="color:var(--warn);font-weight:600" title="Google books in-store value as store-sale uploads (UPLOAD_CLICKS), but only in the fixed 60-day conversion-action pull - not in the daily campaign feed this table reads, where ofv is zero on every campaign. Shown per campaign on the Google tab.">not in this feed</span>'
+       +'<div style="font-size:10px;color:var(--ink-3)">'+cur(v)+' over the fixed 60d pull</div>';})())+'</td>'
   +'<td style="'+TD+'">'+(x.ro==null?'&mdash;':d2(x.ro)+'x')+dsub(x.ro,x.p&&x.p.ro,1)+'</td>'
   +'<td style="'+TD+';color:'+((x.rot||0)>=(x.ro||0)?'#0f7a55':'#0F172A')+'">'+(x.rot==null?'&mdash;':d2(x.rot)+'x')+'</td></tr>';
  const tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:6px">'
@@ -22027,7 +22039,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-040327';
+const BUILD='20261005-043416';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
