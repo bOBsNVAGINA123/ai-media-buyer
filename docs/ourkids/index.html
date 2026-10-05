@@ -11213,7 +11213,8 @@ function metaAud(g){
   +'</div>';
 
  pnlCard(g,'meta','New audience vs warm vs existing &mdash; spend and reach'+INFO('Meta spend, reach, purchases and ROAS split by whether the ad set targets people who have never bought, warm non-buyers, or your existing customers. Reach is summed across ad sets, so the same person can appear more than once.'),
-  (W.start?W.start+' &rarr; '+(W.end||'today')+'. ':'')+'Classified from each ad set’s included custom audiences. Reach is a sum of ad-set reach, not unique people.',
+  (W.start?('<b>'+W.start+' &rarr; '+(W.end||'today')+' &mdash; a FIXED window from the targeting pull, not your date box.</b> Picking a shorter range will not narrow these rows. '):'')
+  +'Classified from each ad set’s included custom audiences. Reach is a sum of ad-set reach, not unique people.',
   head+bar('sp','Share of spend')+bar('rch','Share of reach (summed)')+tbl+top+note);
 }
 
@@ -22039,7 +22040,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-043416';
+const BUILD='20261005-050401';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
