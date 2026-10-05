@@ -118,6 +118,34 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
       7d share and requires both coverages (99% / 98%), floor E£50, cap 400/account.
       Ads kept on Ourkids EGP: 120 → 164 after the first fix, re-measuring after this one.
 
+- [x] Prior period, the remaining genuine gaps — DONE v92.2–92.4. The browser sweep flagged
+      38 tables; a second filter (does the card SAY it is lifetime or a fixed-window pull?)
+      cut that to 5, and of those 3 were false positives whose prior lives in a COLUMN
+      ("Prior | Now | Change | %"), not in each cell. prior.js v3 encodes both rules so they
+      do not have to be re-read every sweep. The real finds:
+      * Channel split (Where the traffic comes from) was a FIXED 60-day GA4 aggregate — it
+        ignored the date box AND had no daily series behind it, so 54 cells had nothing to
+        compare to. Collector now sends four daily series per channel; the card windows to
+        the date box and carries a prior, and says which of the two it is doing.
+      * Paid performance (Meta vs Google vs TikTok): impressions, clicks, offline value and
+        total ROAS printed no move although PP[k].imp / .clk / .off / .rot were already
+        computed. Four columns, zero new data.
+      * Blended claim vs ledger: every row is a week, so the comparison sat one row up and
+        the reader did the arithmetic. Week-over-week now printed, and a part week is
+        suppressed on BOTH sides — a full week against a 2-day opening stub was reading +234%.
+      * Audiences in observation is a genuinely fixed 30-day Google pull with no series
+        behind it. It now says that, which was the agreed answer for this class.
+- [x] Headline row tool-wide — DONE v92.4. kpiStrip was on 2 of the tabs that read the per-ad
+      feed. Meta, Campaigns and Money desk opened straight into detail; all three now start
+      with the same seven figures in the same order, each against the prior window, with the
+      feed coverage stated underneath.
+- [x] Two shortfalls, two fixes — DONE v92.4. madsCov (what the collector KEPT of what it
+      PULLED) is now printed next to the page's own figure (what the kept set is of the
+      ACCOUNT). If the collector kept ~all of its pull and the page still reads short, the
+      money never arrived in the pull — rate limits or an abandoned account chunk — and
+      widening the keep cannot find it. Those need opposite fixes, so they are named apart.
+- 46 tabs rendered in sequence after all of the above: zero console errors, zero throws.
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
