@@ -20389,13 +20389,19 @@ function rMETA(){
   +'<b>A high score never means switch the money off on its own</b> — fatigue measures attention, not profit, so an ad still clearing break-even by half again reads <i>REFRESH — do not cut</i>. Replace the execution, keep the budget where it is earning.</div>');
 
  /* ---------- 4. budget split against the 4-campaign framework ---------- */
- const cmp={};
+ /* v86 two fixes. (1) This card followed the date box and still showed no prior, so a
+    share could move ten points between windows and the table looked identical. The same
+    daily feed covers the prior window, so both are summed. (2) It said "under by 11 points"
+    -- points are banned here: give the relative change and show both numbers instead. */
+ const cmp={}, cmpP={};
  ads.forEach(a=>{let sp=0;for(let k=PW.a;k<=PW.b;k++)sp+=(a.d.sp&&a.d.sp[k])||0;
+  let spP=0; if(PW.pa!=null&&PW.pa>=0){for(let k=PW.pa;k<=PW.pb;k++)spP+=(a.d.sp&&a.d.sp[k])||0;}
   const n=(a.cmp||'').toLowerCase();
   const b=/test/.test(n)?'Testing':/scal/.test(n)?'Scaling':/catalog|advantage|dpa|daba/.test(n)?'Catalog'
     :/sale|promo|b2s|school|ramadan|eid|bf|black/.test(n)?'Sale / promo':'Unclassified';
-  cmp[b]=(cmp[b]||0)+sp;});
+  cmp[b]=(cmp[b]||0)+sp; cmpP[b]=(cmpP[b]||0)+spP;});
  const totC=Object.values(cmp).reduce((a,b)=>a+b,0)||1;
+ const totP=Object.values(cmpP).reduce((a,b)=>a+b,0);
  const TARGET={'Testing':[40,60],'Scaling':[20,30],'Catalog':[15,20],'Sale / promo':[0,25],'Unclassified':[0,0]};
  const order=['Testing','Scaling','Catalog','Sale / promo','Unclassified'];
  let cb='';
@@ -20404,11 +20410,20 @@ function rMETA(){
   const ok=k==='Unclassified'?null:(shr>=t[0]&&shr<=t[1]);
   cb+='<tr><td style="'+TD+';text-align:left"><b>'+k+'</b></td>'
    +'<td style="'+TD+'">'+M(v)+'</td>'
-   +'<td style="'+TD+';font-weight:800">'+shr.toFixed(0)+'%</td>'
+   +'<td style="'+TD+';font-weight:800">'+shr.toFixed(0)+'%'
+     +(function(){if(!totP)return '<div style="font-size:10px;color:var(--ink-3)">no prior window</div>';
+       const ps=(cmpP[k]||0)/totP*100;
+       if(!ps)return '<div style="font-size:10px;color:var(--ink-3)">was 0%</div>';
+       const rel=(shr/ps-1)*100;
+       return '<div style="font-size:10px;font-weight:700;color:'+(rel>=0?'var(--pos)':'var(--neg)')+'">'
+         +(rel>=0?'▲':'▼')+Math.abs(rel).toFixed(0)+'% <span style="font-weight:600;color:var(--ink-3)">was '+ps.toFixed(0)+'%</span></div>';})()
+     +'</td>'
    +'<td style="'+TD+'">'+(k==='Unclassified'?'<span style="color:#5f6a7d">—</span>':t[0]+'–'+t[1]+'%')+'</td>'
    +'<td style="'+TD+';text-align:left">'+(ok==null?'<span style="color:#5f6a7d;font-size:11.5px">named so it cannot be matched to a role</span>'
       :ok?'<b style="color:#0f6e56;font-size:11.5px">on framework</b>'
-      :'<b style="color:#a3271a;font-size:11.5px">'+(shr<t[0]?'under':'over')+' by '+Math.abs(shr-(shr<t[0]?t[0]:t[1])).toFixed(0)+' points</b>')+'</td></tr>';});
+      :(function(){const lim=shr<t[0]?t[0]:t[1], rel=lim?((shr/lim-1)*100):0;
+         return '<b style="color:#a3271a;font-size:11.5px">'+Math.abs(rel).toFixed(0)+'% '+(shr<t[0]?'below':'above')+' the '
+           +(shr<t[0]?'floor':'ceiling')+'</b><span style="color:#5f6a7d;font-size:11px"> &mdash; '+shr.toFixed(0)+'% against '+lim+'%</span>';})())+'</td></tr>';});
  pnlCard(g,'meta','Where the budget sits against the 4-campaign framework'
    +INFO('Testing 40–60%, Scaling 20–30%, Catalog 15–20%. Campaigns are matched to a role by name, so anything named loosely lands in Unclassified.'),
   PW.lbl+' — '+M(totC)+' of Meta spend. The deck’s rule that surprises most people: <b>testing should be your biggest line, not scaling</b>.',
@@ -22012,7 +22027,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-033407';
+const BUILD='20261005-040327';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
