@@ -1158,14 +1158,21 @@ def pull_ga4_touch(days=60):
     prop = os.environ.get("GA4_PROPERTY", "297783390")
     end = END.isoformat(); start = (END - datetime.timedelta(days=days - 1)).isoformat()
     METS = ["sessions", "transactions", "purchaseRevenue", "addToCarts"]
+    _d0 = datetime.date.fromisoformat(start)
+    _di = {(_d0 + datetime.timedelta(days=i)).isoformat().replace("-", ""): i for i in range(days)}
 
+    # v92.1: DAILY, not one 60-day block. The channel-split card was a fixed 60-day
+    # aggregate, so it ignored the page's date box (picking L7D still returned 60 days)
+    # and no prior period was computable from it at all -- 54 numeric cells with nothing
+    # to compare them to. A date dimension is ~8 classes x 60 days x 4 metrics, under
+    # 2,000 numbers, so the window and the prior both become the page's business.
     def rep(dim):
         body = {"dateRanges": [{"startDate": start, "endDate": end}],
-                "dimensions": [{"name": dim}],
+                "dimensions": [{"name": dim}, {"name": "date"}],
                 "metrics": [{"name": m} for m in METS],
                 "dimensionFilter": {"filter": {"fieldName": "country",
                                                "stringFilter": {"value": "Egypt"}}},
-                "limit": 500}
+                "limit": 100000}
         req = urllib.request.Request(
             "https://analyticsdata.googleapis.com/v1beta/properties/%s:runReport" % prop,
             data=json.dumps(body).encode(),
@@ -1195,15 +1202,21 @@ def pull_ga4_touch(days=60):
         agg = {}
         for r in rows:
             c = cls((r["dimensionValues"][0].get("value") or ""))
+            ds = (r["dimensionValues"][1].get("value") or "")
+            i = _di.get(ds)
+            if i is None: continue
             v = [float(x.get("value") or 0) for x in r["metricValues"]]
-            a = agg.setdefault(c, [0.0, 0.0, 0.0, 0.0])
-            for i in range(4): a[i] += v[i]
-        out[tag] = {k: [round(x) for x in v] for k, v in agg.items()}
+            a = agg.setdefault(c, [[0.0] * days for _ in range(4)])
+            for k in range(4): a[k][i] += v[k]
+        out[tag] = {k: [[round(x) for x in ser] for ser in v] for k, v in agg.items()}
     if not (out.get("last") and out.get("first")):
         return None
-    log("ga4 touch :: last", {k: v[1] for k, v in out["last"].items()},
-        ":: first", {k: v[1] for k, v in out["first"].items()})
+    log("ga4 touch :: last", {k: round(sum(v[1])) for k, v in out["last"].items()},
+        ":: first", {k: round(sum(v[1])) for k, v in out["first"].items()})
     out["win"] = [start, end]
+    out["start"] = start
+    out["n"] = days
+    out["daily"] = 1
     return out
 
 
