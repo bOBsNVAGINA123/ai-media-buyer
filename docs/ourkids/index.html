@@ -18814,7 +18814,94 @@ function aoLv(v){ST.aoLvl=v;rAds();}
 function aoAc(v){ST.aoAcct=v;rAds();}
 function _jbars(arr,lab,fmt){const money=v=>Math.round(v).toLocaleString();const f=fmt||money;const mx=Math.max.apply(null,arr.concat([1]));
  return arr.map((v,i)=>'<div style="display:flex;align-items:center;gap:8px;margin:2px 0"><div style="width:150px;font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+lab(i)+'">'+lab(i)+'</div><div style="flex:1;background:#eef0f5;border-radius:5px;height:14px"><div style="width:'+(v/mx*100).toFixed(1)+'%;background:#4a4bd8;height:14px;border-radius:5px"></div></div><div style="width:100px;font-size:11.5px;text-align:right">'+f(v)+'</div></div>').join('');}
-function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16');g.innerHTML='';try{buyBehav(g);}catch(e){}
+/* v90 HOW MANY CUSTOMERS BOUGHT ONCE, TWICE, TEN TIMES -- AND WHAT EACH TIER IS WORTH.
+   Two distributions the tool held in the payload and never drew: O.jour.scopes[].opy (how many
+   customers sit at each order count) and O.decB (how many sit in each lifetime-spend band,
+   with their revenue and gross profit). Both were being carried on every sync and rendered
+   nowhere, so "what share of my customers ever come back a second time" had no answer here.
+   The repeat table reads whatever width opy has, so it shows 1-5 and 6+ on an old payload and
+   widens to 1-10 and 10+ once the v90 collector lands, without another edit. Age per tier is
+   the mean customer-years behind that bucket -- the honest guard against reading a fat 10+
+   bucket as loyalty when it is really just the oldest customers. */
+function custSeg(g){
+ const SC=(O.jour||{}).scopes||{};
+ const names=Object.keys(SC); if(!names.length)return;
+ const sc=(ST.csSeg&&SC[ST.csSeg])?ST.csSeg:(SC['BLENDED']?'BLENDED':(SC['ALL STORES']?'ALL STORES':names[0]));
+ const J=SC[sc]||{}; const opy=J.opy||[];
+ if(!opy.length)return;
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ const P=v=>(v==null||!isFinite(v))?'—':v.toFixed(1)+'%';
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ const pick='<select onchange="ST.csSeg=this.value;rCJ()" style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:8px">'
+   +names.map(n=>'<option value="'+n+'"'+(n===sc?' selected':'')+'>'+n+'</option>').join('')+'</select>';
+ const age=J.opyAge||null, rev=J.opyRev||null, gp=J.opyGp||null;
+ const tot=opy.reduce((a,b)=>a+b,0)||1;
+ const totR=rev?rev.reduce((a,b)=>a+b,0):0;
+ const LAST=opy.length-1;
+ let h='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Scope '+pick
+   +(age?'':'  <span style="color:var(--warn);font-weight:700">· age and value per tier arrive on the next heavy sync</span>')+'</div>'
+   +'<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2'+(rev?',4,5':'')+(age?',6':'')+'" data-hcx="1" style="width:100%"><tr>'
+   +'<th style="'+TH+';text-align:left">Orders placed</th><th style="'+TH+'">Customers</th><th style="'+TH+'">% of customers</th>'
+   +'<th style="'+TH+'">Cumulative</th>'
+   +(rev?'<th style="'+TH+'">Revenue</th><th style="'+TH+'">% of revenue</th>':'')
+   +(age?'<th style="'+TH+'">Mean age</th>':'')+'</tr>';
+ let cum=0;
+ opy.forEach((c,i)=>{ cum+=c;
+  const lbl=(i===LAST)?((i+1)+'+'):String(i+1);
+  h+='<tr'+(i===0?' style="background:var(--surface-3)"':'')+'>'
+   +'<td style="'+TD+';text-align:left;font-weight:'+(i===0?'800':'620')+'">'+lbl+(i===0?' <span style="font-weight:600;color:var(--ink-3)">— never came back</span>':'')+'</td>'
+   +'<td style="'+TD+'">'+N(c)+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+P(c/tot*100)+'</td>'
+   +'<td style="'+TD+';color:var(--ink-3)">'+P(cum/tot*100)+'</td>'
+   +(rev?('<td style="'+TD+'">'+M(rev[i])+'</td><td style="'+TD+';font-weight:700">'+(totR?P(rev[i]/totR*100):'—')+'</td>'):'')
+   +(age?('<td style="'+TD+'">'+(c?((age[i]/c).toFixed(1)+' yr'):'—')+'</td>'):'')
+   +'</tr>';});
+ h+='</table></div>';
+ /* ---- lifetime spend bands ---- */
+ const B=O.decB; let bandH='';
+ if(B&&B.win){
+  const winK=(ST.csBand&&B.win[ST.csBand])?ST.csBand:(B.win.life?'life':Object.keys(B.win)[0]);
+  const W=B.win[winK]||{};
+  const bsc=W[sc]?sc:(W['ALL STORES']?'ALL STORES':Object.keys(W)[0]);
+  const rows=W[bsc]||[];
+  if(rows.length){
+   const tc=rows.reduce((a,x)=>a+(x.c||0),0)||1, tr=rows.reduce((a,x)=>a+(x.r||0),0)||1;
+   const wk=['30','90','180','365','life'].filter(k=>B.win[k]);
+   const chip=k=>'<span class="chip" style="'+(k===winK?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ST.csBand=\''+k+'\';rCJ()">'+(k==='life'?'Lifetime':('Last '+k+'d'))+'</span>';
+   bandH='<div style="margin:16px 0 8px;font-weight:800;font-size:13px">What each customer has spent '+(bsc!==sc?('<span style="font-weight:600;color:var(--warn)">— '+bsc+', the nearest scope with band data</span>'):'')+'</div>'
+    +'<div style="margin-bottom:8px;font-size:11.5px;color:var(--ink-2)">Window '+wk.map(chip).join(' ')+'</div>'
+    +'<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3,4,5" data-hcx="1" style="width:100%"><tr>'
+    +'<th style="'+TH+';text-align:left">Spend band</th><th style="'+TH+'">Customers</th><th style="'+TH+'">% of customers</th>'
+    +'<th style="'+TH+'">Cumulative</th><th style="'+TH+'">Revenue</th><th style="'+TH+'">% of revenue</th></tr>';
+   let cc=0;
+   rows.forEach(x=>{cc+=(x.c||0);
+    const lab=x.hi?('E£'+N(x.lo)+' – '+N(x.hi)):('E£'+N(x.lo)+'+');
+    bandH+='<tr><td style="'+TD+';text-align:left;font-weight:620">'+lab+'</td>'
+     +'<td style="'+TD+'">'+N(x.c)+'</td><td style="'+TD+';font-weight:800">'+P((x.c||0)/tc*100)+'</td>'
+     +'<td style="'+TD+';color:var(--ink-3)">'+P(cc/tc*100)+'</td>'
+     +'<td style="'+TD+'">'+M(x.r)+'</td><td style="'+TD+';font-weight:700">'+P((x.r||0)/tr*100)+'</td></tr>';});
+   bandH+='</table></div>';}}
+ const once=opy[0]||0, twice=tot-once;
+ h+=bandH+'<div class="rtNote">'
+  +'<b>'+P(once/tot*100)+' of '+sc+'&rsquo;s customers have bought exactly once</b>'
+  +(rev&&totR?(' and they are '+P((rev[0]||0)/totR*100)+' of its revenue'):'')
+  +'; '+N(twice)+' have come back at least a second time. '
+  +'An order here is a distinct PURCHASE DAY, so two baskets on the same visit count once. '
+  +(age?'<b>Mean age</b> is how long that tier&rsquo;s customers have been on the books — read it before reading the top tier as loyalty, because the heaviest buyers are also usually the oldest. ':'')
+  +'The spend bands are each customer&rsquo;s TOTAL over the window, not basket size, so the top bands are few people carrying a lot. '
+  +'Both tables are customer counts from the Odoo order history, not sessions.'
+  +'</div>';
+ pnlCard(g,'odoo','How many times customers buy, and how much they spend'
+  +INFO('Two distributions from the real order history: customers by number of purchase days, and customers by total spend in the window. Both were already in the payload and drawn nowhere.'),
+  'The repeat ladder and the spend ladder, side by side.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.custSeg=custSeg;
+function rCJ(){if(TAB!=='cj')return;dCh();const g=document.getElementById('g16');g.innerHTML='';
+ try{custSeg(g);}catch(e){console.error('customer segmentation card failed:',e);}
+ try{buyBehav(g);}catch(e){}
  const money=v=>Math.round(v).toLocaleString();
  const J=O.jour||{};const SC=J.scopes||{};
  document.getElementById('bn16').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Customer journeys from the REAL Odoo order history: what a first purchase turns into &mdash; repeat odds, time to the 2nd order, orders per year, lifetime value and gross profit, and what those customers go on to buy. Store scopes = registered-customer POS crawl; SHOPIFY = Shopify order history. No modelling anywhere in this tab except where a ratio is labelled with its own formula.';
@@ -22046,7 +22133,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-053224';
+const BUILD='20261005-141355';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
