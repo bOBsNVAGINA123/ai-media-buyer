@@ -11353,7 +11353,7 @@ function gAudObs(g){
    +'. That restricts delivery to the list rather than just reporting on it, which is a very different thing from what observation does.</div>';
  else if(modes.length)body+='<div style="margin-top:10px;font-size:11.5px;color:#5b6478">All '+modes.length+' campaigns with an audience setting are on <b>observation</b>, so none of these lists is restricting who sees your ads.</div>';
  pnlCard(g,'google','Audiences in observation &mdash; what they can and cannot tell you'+INFO('Attached lists, whether each campaign observes or targets, and the value Google recognised as coming from list members in the last 30 days.'),
-  'Last 30 days. Observed value is the slice Google could identify as list members at serve time, which is not the same as your customer mix.',
+  'A FIXED last-30-days pull from Google, not your date box, and with no daily series behind it there is no prior period to compare against — the numbers here are a snapshot, not a trend. Observed value is the slice Google could identify as list members at serve time, which is not the same as your customer mix.',
   body);
 }
 
@@ -15149,23 +15149,36 @@ function rMeta(){if(TAB!=='mi')return;dCh();const g=document.getElementById('g10
   const TD2='padding:5px 8px;border-bottom:1px solid #eef0f5;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12.5px';
   const TH2='padding:5px 8px;border-bottom:2px solid #e2e6ef;font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right';
   const pill=(st,txt)=>'<span style="display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 7px;font-weight:800;'+st+'">'+txt+'</span>';
-  const fmtRow=(lbl,w,bold)=>{
+  /* v92.2: every row is a week, so the comparison was sitting one row up and the reader had
+     to do the arithmetic. The previous week is now printed on each cell. A short final week
+     is excluded from its own comparison -- 3 days against 7 is not a fall. */
+  const DW=(cur2,prv2,good,shortRow)=>{
+   /* a 3-day week against a 7-day one is not a fall, and a full week against a 2-day
+      opening stub is not a 234% rise -- suppress BOTH sides, not just this row's. */
+   if(shortRow)return '<span style="font-size:10px;color:#5f6a7d">part week</span>';
+   if(prv2==null||!prv2||cur2==null||!isFinite(cur2/prv2))return '<span style="font-size:10px;color:#5f6a7d">no prior week</span>';
+   const d9=(cur2/prv2-1)*100, up=d9>=0, ok=(up===(good!==false));
+   return '<span style="font-size:10px;font-weight:800;color:'+(ok?'#0f7a55':'#c4203f')+'">'+(up?'▲':'▼')+Math.abs(d9).toFixed(0)+'%</span>';};
+  const fmtRow=(lbl,w,bold,pv)=>{
    const bro=w.sp>0?w.cl/w.sp:null,mer=w.sp>0?w.rv/w.sp:null;
    const ov=w.rv>0?(w.cl-w.rv)/w.rv:null;
+   const pbro=(pv&&pv.sp>0)?pv.cl/pv.sp:null, pmer=(pv&&pv.sp>0)?pv.rv/pv.sp:null;
+   const part=!bold&&(((w.d||7)<7)||(pv&&(pv.d||7)<7));
    return '<tr'+(bold?' style="font-weight:800;background:#f7f8fc"':'')+'>'
     +'<td style="'+TD2+';text-align:left;font-weight:700">'+lbl+'</td>'
-    +'<td style="'+TD2+'">'+cur(w.sp)+'</td>'
-    +'<td style="'+TD2+'">'+cur(w.cl)+'</td>'
-    +'<td style="'+TD2+'">'+(bro==null?'&mdash;':d2(bro)+'x')+'</td>'
-    +'<td style="'+TD2+'">'+cur(w.rv)+'</td>'
-    +'<td style="'+TD2+'">'+(mer==null?'&mdash;':d2(mer)+'x')+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.sp)+(bold?'':'<br>'+DW(w.sp,pv&&pv.sp,false,part))+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.cl)+(bold?'':'<br>'+DW(w.cl,pv&&pv.cl,true,part))+'</td>'
+    +'<td style="'+TD2+'">'+(bro==null?'&mdash;':d2(bro)+'x')+(bold?'':'<br>'+DW(bro,pbro,true,part))+'</td>'
+    +'<td style="'+TD2+'">'+cur(w.rv)+(bold?'':'<br>'+DW(w.rv,pv&&pv.rv,true,part))+'</td>'
+    +'<td style="'+TD2+'">'+(mer==null?'&mdash;':d2(mer)+'x')+(bold?'':'<br>'+DW(mer,pmer,true,part))+'</td>'
     +'<td style="'+TD2+'">'+pill(eGrade(ov),ov==null?'&mdash;':(ov>=0?'+':'&minus;')+Math.abs(ov*100).toFixed(0)+'%')+'</td>'
     +'<td style="'+TD2+'">'+(bro&&mer?Math.min(100,mer/bro*100).toFixed(0)+'%':'&mdash;')+'</td></tr>';};
   let tb='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:6px">'
    +'<tr><th style="'+TH2+';text-align:left">Week</th><th style="'+TH2+'">Blended spend</th><th style="'+TH2+'">Platforms claim</th><th style="'+TH2+'">Blended ROAS</th><th style="'+TH2+'">Store really took</th><th style="'+TH2+'">Blended MER</th><th style="'+TH2+'">Error margin</th><th style="'+TH2+'">E&pound;1 claimed = real</th></tr>';
   const tot={sp:0,cl:0,rv:0,d:0};
-  ord.forEach(k=>{const w=wk[k];tot.sp+=w.sp;tot.cl+=w.cl;tot.rv+=w.rv;tot.d+=w.d;
-   tb+=fmtRow(w.a.slice(5)+' &rarr; '+w.b.slice(5)+(w.d<7?' <span style="font-size:10.5px;color:#5f6a7d">'+w.d+'d</span>':''),w);});
+  ord.forEach((k,wi)=>{const w=wk[k];tot.sp+=w.sp;tot.cl+=w.cl;tot.rv+=w.rv;tot.d+=w.d;
+   const pv=wi>0?wk[ord[wi-1]]:null;
+   tb+=fmtRow(w.a.slice(5)+' &rarr; '+w.b.slice(5)+(w.d<7?' <span style="font-size:10.5px;color:#5f6a7d">'+w.d+'d</span>':''),w,0,pv);});
   tb+=fmtRow('TOTAL',tot,1)+'</table></div>';
   const tOv=tot.rv>0?(tot.cl-tot.rv)/tot.rv:null;
   const tAcc=(tot.cl>0&&tot.rv>0)?Math.min(1,tot.rv/tot.cl):null;
@@ -22261,7 +22274,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261005-185529';
+const BUILD='20261005-190150';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
