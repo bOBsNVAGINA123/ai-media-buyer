@@ -675,7 +675,7 @@ def pull_meta_segments(win):
 
 def pull_meta(win):
     tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
-    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
+    ad = {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moclk", "moffv", "instoreOnsite"]}
     chunks = []
     a = datetime.date.fromisoformat(win[0]); endd = datetime.date.fromisoformat(win[-1])
     while a <= endd:
@@ -704,7 +704,7 @@ def pull_meta(win):
       for c0, c1 in chunks:
         p = {"level": "account", "time_increment": 1, "access_token": tok,
              "time_range": json.dumps({"since": c0, "until": c1}),
-             "fields": "spend,impressions,clicks,action_values,actions", "limit": 500,
+             "fields": "spend,impressions,clicks,outbound_clicks,action_values,actions", "limit": 500,
              "action_attribution_windows": json.dumps(["7d_click", "1d_click", "1d_view"])}
         d = http_json("%s/%s/insights?%s" % (GRAPH, acct, urllib.parse.urlencode(p)))
         for row in (d.get("data") or []):
@@ -713,6 +713,14 @@ def pull_meta(win):
             ad["mspend"][day] += float(row.get("spend") or 0)
             ad["mimp"][day] += float(row.get("impressions") or 0)
             ad["mclk"][day] += float(row.get("clicks") or 0)
+            # v92: `clicks` is EVERY click -- likes, comments, profile taps, image expands.
+            # The per-ad feed has always used outbound_clicks, so a CVR built from this
+            # account series read 0.74% for 28 Sep to 4 Oct where the per-ad cards on the
+            # same tab read 1.13%, and a CPC read E#1.63 against E#2.37. Measured, and NOT
+            # the coverage gap: clicks were 54.2% of the account while spend was 78.7%, so
+            # the two moved apart by definition, not by missing ads. Carry outbound clicks
+            # here too so both sides can speak the same language.
+            ad["moclk"][day] += _av(row.get("outbound_clicks"), ("outbound_click",))
             av = row.get("action_values") or []
             pixel = _av(av, ("offsite_conversion.fb_pixel_purchase",))
             omni = _av(av, ("omni_purchase",)) or pixel
@@ -4097,7 +4105,7 @@ def pull_meta_ads(tok):
         ads = []
         for a in A.values():
             D = a["d"]; sp = sum(D["sp"])
-            if sp < 150: continue
+            if sp < 50: continue
             a.update({"sp": round(sp), "pv": round(sum(D["pv"])), "ofv": round(sum(D["fv"])),
                       "ov": round(sum(D["pv"]) + sum(D["fv"])),
                       "pur": int(sum(D["pu"])), "opur": int(sum(D["op"])),
@@ -4115,21 +4123,44 @@ def pull_meta_ads(tok):
         # ads top-down by spend past 120 until the kept set covers COV of that account's own
         # ad-level spend, hard-capped at MAXAD so the payload cannot run away. Self-tuning:
         # an account with a short head stops early, one with a long tail keeps going.
-        _MINAD, _MAXAD, _COV = 120, 400, 0.97
-        ads.sort(key=lambda a: -a["sp"])
+        # v92.1: 97% of SIXTY-DAY spend bought only 90.7% of the trailing SEVEN days
+        # (measured: feed E#174,054 against account E#191,967 after the first fix). The tail
+        # the old cap cut is not evenly spread -- it is new and small ads, which weigh far
+        # more in a short window than in the 60-day total every dashboard window is short.
+        # So rank on BOTH shares and require BOTH coverages: an ad that is nothing over 60
+        # days but real last week now ranks on last week.
+        _MINAD, _MAXAD, _COV60, _COV7 = 120, 400, 0.99, 0.98
+        _all7 = {}
+        for a in A.values():
+            _k7 = a.get("acct") or "?"
+            _all7[_k7] = _all7.get(_k7, 0.0) + sum(a["d"]["sp"][-7:])
+        def _score(a2):
+            k2 = a2.get("acct") or "?"
+            s60 = a2["sp"] / (_allsp.get(k2) or 1.0)
+            s7 = sum(a2["d"]["sp"][-7:]) / (_all7.get(k2) or 1.0)
+            return -(s60 + s7)
+        ads.sort(key=_score)
         _per = {}
         _cum = {}
+        _cum7 = {}
         _keep = []
         for a in ads:
             k = a.get("acct") or "?"
             n = _per.get(k, 0)
             if n >= _MAXAD: continue
-            if n >= _MINAD and _cum.get(k, 0.0) >= (_allsp.get(k) or 0.0) * _COV: continue
-            _per[k] = n + 1; _cum[k] = _cum.get(k, 0.0) + a["sp"]; _keep.append(a)
+            if (n >= _MINAD
+                    and _cum.get(k, 0.0) >= (_allsp.get(k) or 0.0) * _COV60
+                    and _cum7.get(k, 0.0) >= (_all7.get(k) or 0.0) * _COV7): continue
+            _per[k] = n + 1
+            _cum[k] = _cum.get(k, 0.0) + a["sp"]
+            _cum7[k] = _cum7.get(k, 0.0) + sum(a["d"]["sp"][-7:])
+            _keep.append(a)
         ads = _keep
+        ads.sort(key=lambda a: -a["sp"])
         XTRA["madsCov"] = {k: {"n": _per.get(k, 0), "sp": round(_cum.get(k, 0.0)),
                                "spAll": round(_allsp.get(k) or 0.0),
-                               "pct": round(100.0 * (_cum.get(k, 0.0) / (_allsp.get(k) or 1.0)), 1)}
+                               "pct": round(100.0 * (_cum.get(k, 0.0) / (_allsp.get(k) or 1.0)), 1),
+                               "pct7": round(100.0 * (_cum7.get(k, 0.0) / (_all7.get(k) or 1.0)), 1)}
                            for k in sorted(_allsp)}
         log("meta ads :: kept per account", {k: v for k, v in _per.items()},
             ":: 60d coverage", {k: str(v["pct"]) + "%" for k, v in XTRA["madsCov"].items()})
@@ -6591,7 +6622,7 @@ def build():
     fin = safe(pull_odoo)
     bl = safe(pull_branches)
     prod = safe(pull_products) or []
-    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moffv", "instoreOnsite"]}
+    meta = safe(pull_meta, win) or {k: {d: 0.0 for d in win} for k in ["mspend", "mecomrev", "metaOmniValue", "instoreMeta", "metaOfflinePur", "mpur", "instoreNC", "mimp", "mclk", "moclk", "moffv", "instoreOnsite"]}
     mseg = safe(pull_meta_segments, win) or {}
     purch = safe(pull_purchases) or (prev.get("purch") or {})
     ap = safe(pull_ap) or (prev.get("ap") or {})
@@ -6974,7 +7005,8 @@ def build():
           "newcust": arr(shop, "newcust"), "retcust": arr(shop, "retcust"),
           "ncrev": arr(shop, "ncrev"), "rcrev": arr(shop, "rcrev"), "tpur": arr(tik, "tpur"),
           "ttOffValue": arr(tik, "ttOffValue"), "ttOffPur": arr(tik, "ttOffPur"),
-          "mimp": arr(meta, "mimp"), "mclk": arr(meta, "mclk"), "moffv": arr(meta, "moffv"),
+          "mimp": arr(meta, "mimp"), "mclk": arr(meta, "mclk"), "moclk": arr(meta, "moclk"),
+          "moffv": arr(meta, "moffv"),
           "gimp": arr(goog, "gimp"), "gclk": arr(goog, "gclk"),
           "timp": arr(tik, "timp"), "tclk": arr(tik, "tclk"),
           "ttShopRev": arr(tik, "ttShopRev"), "ttShopOrd": arr(tik, "ttShopOrd"),
@@ -7088,6 +7120,7 @@ def build():
               "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
+              "madsCov": XTRA.get("madsCov") or prev.get("madsCov"),
               "touch": safe(pull_ga4_touch) or prev.get("touch") or {},
               "ga4ads": safe(pull_ga4_ads) or prev.get("ga4ads") or {},
               "gadsW": XTRA.get("gadsW") or prev.get("gadsW"), "tadsW": XTRA.get("tadsW") or prev.get("tadsW"),
