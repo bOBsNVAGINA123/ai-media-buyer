@@ -2417,7 +2417,7 @@ def pull_order_truth(days=30, prev=None):
         if s2 == "direct" or not s2: return "DIRECT / NONE", ""
         return "OTHER", ""
 
-    ch, camp, unlab = {}, {}, 0
+    ch, camp, bycamp, unlab = {}, {}, {}, 0
     for n in rows:
         j = (n.get("customerJourneySummary") or {})
         idx = j.get("customerOrderIndex")
@@ -2436,14 +2436,28 @@ def pull_order_truth(days=30, prev=None):
             c = camp.setdefault(cid, {"n": 0, "nv": 0.0, "r": 0, "rv": 0.0})
             if isnew: c["n"] += 1; c["nv"] += amt
             else: c["r"] += 1; c["rv"] += amt
+        # v92.6: bucket() has ALWAYS returned the utm campaign for Meta and TikTok as well,
+        # and this loop threw it away for everything except Google -- so the one unmodelled
+        # new-customer number in the payload existed per Google campaign and nowhere else.
+        # Keep it per channel. The utm_campaign value is whatever the ad platform was told to
+        # stamp (an id on Google, usually a name on Meta), so the page resolves ids against
+        # the ad feeds and prints the raw string when it cannot.
+        if cid:
+            cc = bycamp.setdefault(k, {}).setdefault(cid, {"n": 0, "nv": 0.0, "r": 0, "rv": 0.0})
+            if isnew: cc["n"] += 1; cc["nv"] += amt
+            else: cc["r"] += 1; cc["rv"] += amt
     for d in (ch, camp):
         for v in d.values():
             v["nv"] = round(v["nv"]); v["rv"] = round(v["rv"])
+    for _cm in bycamp.values():
+        for v in _cm.values():
+            v["nv"] = round(v["nv"]); v["rv"] = round(v["rv"])
     out = {"pulled": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"),
            "since": since, "orders": len(rows), "unlabelled": unlab,
-           "byChannel": ch, "googlePaidByCampaign": camp}
+           "byChannel": ch, "googlePaidByCampaign": camp, "byCampaign": bycamp}
     log("order truth ok: %d orders, %d channels, %d google-paid campaigns, %d without an order index"
         % (len(rows), len(ch), len(camp), unlab))
+    log("order truth :: campaigns per channel " + str({k2: len(v2) for k2, v2 in bycamp.items()}))
     return out
 
 
