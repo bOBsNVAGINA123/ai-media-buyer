@@ -93,9 +93,34 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
       tools/coverage.js committed. ~30 sites iterate O.mads; patching each, or injecting a
       synthetic residual row into the shared array, would have been the symptom-scoped fix.
 
+- [x] Two different Meta CVRs on one tab — DONE v92.1. Fell out of extending the coverage
+      check to value/orders/clicks: spend, value, orders and impressions were all short by
+      about the same 22% (consistent with the dropped-ads tail), but CLICKS were short by 48%.
+      That is not coverage. Falsifying test, run before writing a cause: if the tail of
+      missing ads explained it, clicks/account would equal spend/account. Measured 54.2% vs
+      78.7% — so the two series part by DEFINITION, and the direction says which way.
+      MEASURED cause: the account series uses Meta's `clicks` (every click — likes, comments,
+      profile taps, image expands); the per-ad feed has always used `outbound_clicks`. Same
+      tab, same window, 28 Sep → 4 Oct:
+        account-series basis   Meta CVR 0.74%   CPC E£1.63
+        per-ad-feed basis      Meta CVR 1.13%   CPC E£2.37
+      Nothing on the page said which was which. Fixes:
+      1. Collector now also pulls account-level outbound clicks as `moclk`.
+      2. boot() aliases O.ad.mclk → O.ad.moclk once it syncs, keeping all-clicks on
+         O.ad.mclkAll. One line, so all five click sites switch at once; every one of them
+         is a CPC, a CVR or a "clicks fell, why" diagnostic and all three want the clicks
+         that reached the site. Patching the five call sites was the symptom-scoped version.
+      3. Both cards now name the definition they used, and say so while moclk is unsynced.
+- [x] Coverage keep must protect the SHORT window — DONE v92.1. The first fix targeted 97% of
+      SIXTY-DAY spend and bought only 90.7% of the trailing seven days (feed E£174,054 against
+      account E£191,967). The tail is not evenly spread: it is new and small ads, which weigh
+      far more in a 7-day window than in a 60-day total. The keep now ranks on 60d share PLUS
+      7d share and requires both coverages (99% / 98%), floor E£50, cap 400/account.
+      Ads kept on Ourkids EGP: 120 → 164 after the first fix, re-measuring after this one.
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
 - node tools/adsplit.js
 - node --check on both inline scripts
-- node tools/coverage.js okv/data.js 7,30   (feed vs account spend, >=95%)
+- node tools/coverage.js okv/data.js 7,30   (spend/value/orders/clicks vs the account series, >=95%)
