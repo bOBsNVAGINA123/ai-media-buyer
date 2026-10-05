@@ -18,26 +18,38 @@ global.window={};
 eval(fs.readFileSync(p,'utf8'));
 const O=window.O;
 const wins=(process.argv[3]||'7,30').split(',').map(Number);
-const FEEDS=[['meta','mads','madsW','mspend'],['google','gads','gadsW','gspend'],['tiktok','tads','tadsW',null]];
+/* Each row: platform, ad array, window, and the metrics to reconcile as
+   [label, per-ad daily key, account series key]. Clicks are checked against moclk
+   (outbound) NOT mclk: mclk is Meta's `clicks`, which counts likes, comments, profile
+   taps and image expands, and reconciling outbound clicks against it reads 52% and
+   looks like a coverage hole when it is a different metric. */
+const FEEDS=[
+ ['meta','mads','madsW',[['spend','sp','mspend'],['value','pv','mecomrev'],['orders','pu','mpur'],['clicks','oc','moclk']]],
+ ['google','gads','gadsW',[['spend','sp','gspend'],['value','pv','gecomrev']]],
+ ['tiktok','tads','tadsW',[['spend','sp','tspend']]]];
 const A=O.ad||{};
 let bad=0;
 wins.forEach(W=>{
  console.log('\n== trailing '+W+' days');
- FEEDS.forEach(([name,adsKey,winKey,accKey])=>{
+ FEEDS.forEach(([name,adsKey,winKey,metrics])=>{
   const ads=(O[adsKey]||[]).filter(a=>a&&a.d&&a.d.sp), w=O[winKey];
   if(!ads.length||!w||!w.start){console.log('  '+name+': no feed'); return;}
-  if(!accKey||!A[accKey]){console.log('  '+name+': no account series to check against'); return;}
   const n=w.n||60, b=n-1, a0=Math.max(0,b-(W-1));
-  let feed=0; ads.forEach(x=>{for(let i=a0;i<=b;i++)feed+=x.d.sp[i]||0;});
-  const as=Date.parse(A.start), ws=Date.parse(w.start), S=A[accKey];
-  const i0=Math.round((ws+a0*864e5-as)/864e5), i1=Math.round((ws+b*864e5-as)/864e5);
-  let acc=0,hit=0; for(let i=Math.max(0,i0);i<=Math.min(S.length-1,i1);i++){acc+=S[i]||0;hit++;}
-  if(hit!==(b-a0+1)){console.log('  '+name+': account series does not span the window'); return;}
-  const cov=acc?feed/acc:0, ok=cov>=MIN;
-  if(!ok)bad++;
-  console.log('  '+(ok?'ok  ':'SHORT')+' '+name.padEnd(7)+' feed E£'+Math.round(feed).toLocaleString()
-   +'  account E£'+Math.round(acc).toLocaleString()+'  coverage '+(cov*100).toFixed(1)+'%'
-   +(ok?'':'  <-- gap E£'+Math.round(acc-feed).toLocaleString()));
+  const as=Date.parse(A.start), ws=Date.parse(w.start);
+  metrics.forEach(([ml,adK,accK])=>{
+   const tag=(name+' '+ml).padEnd(16);
+   if(!A[accK]){console.log('  skip  '+tag+' no account series '+accK+' yet'); return;}
+   let feed=0; ads.forEach(x=>{const d=x.d[adK]; if(d)for(let i=a0;i<=b;i++)feed+=d[i]||0;});
+   const S=A[accK];
+   const i0=Math.round((ws+a0*864e5-as)/864e5), i1=Math.round((ws+b*864e5-as)/864e5);
+   let acc=0,hit=0; for(let i=Math.max(0,i0);i<=Math.min(S.length-1,i1);i++){acc+=S[i]||0;hit++;}
+   if(hit!==(b-a0+1)){console.log('  skip  '+tag+' account series does not span the window'); return;}
+   const cov=acc?feed/acc:0, ok=cov>=MIN;
+   if(!ok)bad++;
+   console.log('  '+(ok?'ok   ':'SHORT')+' '+tag+' feed '+Math.round(feed).toLocaleString().padStart(12)
+    +'  account '+Math.round(acc).toLocaleString().padStart(12)+'  coverage '+(cov*100).toFixed(1)+'%'
+    +(ok?'':'  <-- gap '+Math.round(acc-feed).toLocaleString()));
+  });
  });
 });
 console.log('\n'+(bad?bad+' feed/window pair(s) below '+(MIN*100)+'% coverage':'all feeds cover their account series'));
