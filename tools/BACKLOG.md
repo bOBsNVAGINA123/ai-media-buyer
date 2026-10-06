@@ -201,6 +201,37 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
         so the split is measured; a campaign absent from it falls back to its name and the row
         says "(from name)", and one whose name says nothing reads "targeting not known".
 
+- [x] Momentum: L3D vs prior 3D and L7D vs prior 7D — DONE v93, asked for directly. The tool
+      only ever showed ONE window (whatever the date box said) and its prior, so "is this
+      turning" took two visits and a memory. Three things the first build got wrong:
+      * GRAIN. Per-ad it printed "0 climbing, 0 fading" on 58 of 62 rows. Measured why: the
+        median AD takes 3 purchases in a 3-day window, the median ad set 7, the median
+        CAMPAIGN 26 — only 9 of 62 ads clear ten conversions on both sides. The horizon was
+        fine, the grain was wrong. Defaults to campaign with an Ad set / Ad toggle, and the
+        bar prints the median conversion count at the chosen grain.
+      * THE PART DAY. O.partial is 2026-10-05 and O.fullEnd is 2026-10-04; the part day held
+        E£21,691 against ~E£30,000 on full days, so ending there would have read as a fall on
+        every ad at once. Both windows end on fullEnd — another key carried on every sync and
+        read by nothing until now.
+      * THE MATURATION DRAG WAS TESTED, NOT ASSUMED. The house rule is never to judge data
+        younger than four days. Six consecutive 3-day blocks read ROAS 5.89 / 5.46 / 4.86 /
+        4.84 / 5.31 / 3.99 newest to oldest — the NEWEST is the highest, the opposite of what
+        a maturation drag predicts. So it is not claimed. Arrows are suppressed and replaced
+        by the conversion counts wherever either side is under 10.
+- [x] Online / in-store / combined ROAS separated — DONE v93.1. The momentum card read `pv`
+      only and never said so. Measured, Meta, last 7 complete days: online E£1,062,843 at
+      5.39x and IN-STORE E£936,796 at 4.75x — the in-store leg is 88% as large, so an
+      online-only ROAS halves the reported return, and the two legs move differently (over the
+      3-day pair online rose 28% while in-store rose 76%).
+      It changes verdicts, not just levels: SHAFI NEW ABO CREATIVE TESTING reads "climbing on
+      both" on online-only and "7d down, last 3 up — recovering" on combined (12.33x, down 23%).
+      Scope toggle online / in-store / combined, the ROAS column headers name the leg they are
+      showing, and ALL THREE legs are printed at account level underneath so the toggle cannot
+      hide one. Combined carries the matching-not-lift caution. Google has no toggle and says
+      why: its daily feed has no offline field at all (d holds only sp/pv/pur/imp/clk, ofv is 0
+      across the whole 60 days) — that money lives only in the fixed 60-day conversion-action
+      pull.
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
