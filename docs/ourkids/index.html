@@ -10492,7 +10492,7 @@ function rMD(){if(TAB!=='md')return;dCh();const g=document.getElementById('g25')
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
 
- try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',offKey:'fv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
  try{prodContrib(g);}catch(e){}
  try{creativeFatigue(g);}catch(e){}
  try{moneyDesk(g);}catch(e){g.innerHTML='<div style="padding:12px;color:#c4203f">Money desk failed: '+e.message+'</div>';}
@@ -20309,9 +20309,28 @@ function adMomentum(g,opt){
  const S=(a,k,i0,i1)=>{const d=a.d[k]||[];let t=0;
   for(let i=Math.max(0,i0);i<=Math.min(d.length-1,i1);i++)t+=d[i]||0;return t;};
  const vK=opt.vKey||'pv', ckK=opt.ckKey||'oc';
- const blk=(a,i0,i1)=>{const sp=S(a,'sp',i0,i1), v=S(a,vK,i0,i1),
-   pu=S(a,'pu',i0,i1)||S(a,'pur',i0,i1), ck=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);
-  return {sp,v,pu,ck, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
+ /* MEASURED 2026-10-06, Meta, last 7 complete days: online E£1,062,843 at 5.39x and IN-STORE
+    E£936,796 at 4.75x -- the in-store leg is 88% as big as the online one, so an online-only
+    ROAS halves the reported return. The two legs also move differently: over the 3-day pair
+    online rose 28% while in-store rose 86%. Showing one of them unlabelled was the defect.
+    Google's daily feed carries no offline field at all (its d has only sp/pv/pur/imp/clk and
+    ofv is 0 across the whole 60 days) -- that money exists only in the fixed 60-day
+    conversion-action pull -- so Google gets no toggle and says why. */
+ const offAvail=!!opt.offKey&&ads.some(a=>{const d=a.d[opt.offKey]||[];
+   for(let i=0;i<d.length;i++)if(d[i])return true; return false;});
+ const SCK='momScope_'+(opt.a||'x');
+ let SC=offAvail?(ST[SCK]||'online'):'online';
+ if(['online','instore','both'].indexOf(SC)<0)SC='online';
+ const fON=(function(){try{return af(opt.a==='google'?'google':'meta');}catch(e){return 1;}})();
+ const fOFF=(function(){try{return afo();}catch(e){return 1;}})();
+ const SCLBL={online:'online',instore:'in-store',both:'online + in-store'};
+ const blk=(a,i0,i1)=>{const sp=S(a,'sp',i0,i1);
+  const von=S(a,vK,i0,i1)*fON, voff=offAvail?S(a,opt.offKey,i0,i1)*fOFF:0;
+  const pon=S(a,'pu',i0,i1)||S(a,'pur',i0,i1), poff=offAvail?S(a,'op',i0,i1):0;
+  const v=SC==='online'?von:(SC==='instore'?voff:von+voff);
+  const pu=SC==='online'?pon:(SC==='instore'?poff:pon+poff);
+  const ck=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);
+  return {sp,v,pu,ck,von,voff,pon,poff, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
  const PMIN=opt.pmin||10;
  /* MEASURED before choosing a default: the median AD takes 3 purchases in a 3-day window,
     the median ad set 7, the median CAMPAIGN 26. At ad level only 9 of 62 entities clear ten
@@ -20331,10 +20350,14 @@ function adMomentum(g,opt){
  const grp={};
  ads.forEach(a=>{const k=keyOf(a); if(k==null||k==='')return;
   const e=grp[k]||(grp[k]={nm:nameOf(a),ents:[]}); e.ents.push(a);});
- const gblk=(ents,i0,i1)=>{let sp=0,v=0,pu=0,ck=0;
-  ents.forEach(a=>{sp+=S(a,'sp',i0,i1); v+=S(a,vK,i0,i1);
-   pu+=S(a,'pu',i0,i1)||S(a,'pur',i0,i1); ck+=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);});
-  return {sp,v,pu,ck, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
+ const gblk=(ents,i0,i1)=>{let sp=0,von=0,voff=0,pon=0,poff=0,ck=0;
+  ents.forEach(a=>{sp+=S(a,'sp',i0,i1); von+=S(a,vK,i0,i1)*fON;
+   if(offAvail)voff+=S(a,opt.offKey,i0,i1)*fOFF;
+   pon+=S(a,'pu',i0,i1)||S(a,'pur',i0,i1); if(offAvail)poff+=S(a,'op',i0,i1);
+   ck+=S(a,ckK,i0,i1)||S(a,'clk',i0,i1);});
+  const v=SC==='online'?von:(SC==='instore'?voff:von+voff);
+  const pu=SC==='online'?pon:(SC==='instore'?poff:pon+poff);
+  return {sp,v,pu,ck,von,voff,pon,poff, roas:sp?v/sp:null, cvr:ck?pu/ck:null, cpp:pu?sp/pu:null};};
  const rows=Object.keys(grp).map(k=>{const o={nm:grp[k].nm};
   HZ.forEach(h=>{const b=last, a0=b-h.n+1, pb=a0-1, pa=pb-h.n+1;
    o[h.k]={c:gblk(grp[k].ents,a0,b), p:gblk(grp[k].ents,pa,pb)};});
@@ -20344,6 +20367,14 @@ function adMomentum(g,opt){
  if(!rows.length)return;
  const LVLBL={campaign:'Campaign',adset:'Ad set',ad:'Ad'};
  const medPu=Math.round(rows.map(o=>o.h3.c.pu).sort((a,b)=>a-b)[Math.floor(rows.length/2)]||0);
+ const scopeBar='<div style="display:flex;gap:6px;align-items:center;padding:0 0 7px;flex-wrap:wrap">'
+  +'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">VALUE</span>'
+  +(offAvail
+    ?[['online','Online only'],['instore','In-store only'],['both','Online + in-store']]
+      .map(o=>'<span class="chip" style="'+(SC===o[0]?'background:var(--brand);color:#fff;border-color:var(--brand)':'')
+        +'" onclick="ST[\''+SCK+'\']=\''+o[0]+'\';rTab()">'+o[1]+'</span>').join('')
+    :'<span style="font-size:11px;color:var(--ink-3)">Online only &mdash; this feed carries no in-store value per entity. Google books store-sale uploads, but only in the fixed 60-day conversion-action pull, never in the daily campaign feed this card reads.</span>')
+  +'</div>';
  const lvlBar='<div style="display:flex;gap:6px;align-items:center;padding:0 0 9px;flex-wrap:wrap">'
   +(flat?'':'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-3)">GRAIN</span>'
     +LEVELS.map(k=>'<span class="chip" style="'+(LVL===k?'background:var(--brand);color:#fff;border-color:var(--brand)':'')
@@ -20377,9 +20408,10 @@ function adMomentum(g,opt){
   if(d3<0&&d7<0)return ['fading on both','var(--neg)'];
   if(d3<0&&d7>=0)return ['7d up, last 3 down — turning','var(--warn)'];
   return ['7d down, last 3 up — recovering','var(--warn)'];};
- let h=lvlBar+'<div style="overflow-x:auto"><table class="bt heat" data-hc="1" data-hcx="1"><tr>'
+ let h=scopeBar+lvlBar+'<div style="overflow-x:auto"><table class="bt heat" data-hc="1" data-hcx="1"><tr>'
   +'<th style="'+TH+';text-align:left">'+LVLBL[LVL]+'</th><th style="'+TH+'">Spend 7d</th>'
-  +'<th style="'+TH+'">ROAS 3d</th><th style="'+TH+'">ROAS 7d</th>'
+  +'<th style="'+TH+'">ROAS 3d<div style="font-weight:600;text-transform:none;color:var(--ink-3)">'+SCLBL[SC]+'</div></th>'
+  +'<th style="'+TH+'">ROAS 7d<div style="font-weight:600;text-transform:none;color:var(--ink-3)">'+SCLBL[SC]+'</div></th>'
   +'<th style="'+TH+'">CVR 3d</th><th style="'+TH+'">CVR 7d</th>'
   +'<th style="'+TH+'">Cost per purchase 3d</th><th style="'+TH+'">Cost per purchase 7d</th>'
   +'<th style="'+TH+';text-align:left">Reading</th></tr>';
@@ -20396,6 +20428,29 @@ function adMomentum(g,opt){
  const nBoth=rows.filter(o=>read(o)[0]==='fading on both').length;
  const nUp=rows.filter(o=>read(o)[0]==='climbing on both').length;
  const nTurn=rows.filter(o=>/turning/.test(read(o)[0])).length;
+ /* the toggle must not be able to hide the other two legs -- print all three at account
+    level on both horizons so the size of what the current scope leaves out is on the card */
+ const ALL=(i0,i1)=>{let sp=0,von=0,voff=0;
+  ads.forEach(a=>{sp+=S(a,'sp',i0,i1); von+=S(a,vK,i0,i1)*fON;
+   if(offAvail)voff+=S(a,opt.offKey,i0,i1)*fOFF;});
+  return {sp,von,voff};};
+ const legs=hz=>{const b=last,a0=b-hz+1,pb=a0-1,pa=pb-hz+1;
+  const c=ALL(a0,b), p=ALL(pa,pb);
+  const one=(cv,pv2,cs,ps)=>{const r=cs?cv/cs:null, pr=ps?pv2/ps:null;
+   return (r!=null?r.toFixed(2)+'×':'—')+(pr?' <span style="color:'+((r>=pr)?'var(--pos)':'var(--neg)')+';font-weight:800">'+((r/pr-1)>=0?'▲':'▼')+Math.abs((r/pr-1)*100).toFixed(0)+'%</span>':'');};
+  return {on:one(c.von,p.von,c.sp,p.sp), off:one(c.voff,p.voff,c.sp,p.sp),
+          both:one(c.von+c.voff,p.von+p.voff,c.sp,p.sp)};};
+ const L3=legs(3), L7=legs(7);
+ h+='<div style="margin-top:9px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface-2);font-size:11.5px;color:var(--ink-2)">'
+  +'<b>The whole account on all three legs, so the toggle cannot hide one:</b>'
+  +'<div style="overflow-x:auto;margin-top:5px"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+  +'<tr><th style="'+TH+';text-align:left">ROAS</th><th style="'+TH+'">3d vs prior 3d</th><th style="'+TH+'">7d vs prior 7d</th></tr>'
+  +'<tr><td style="'+TD+';text-align:left">Online only</td><td style="'+TD+'">'+L3.on+'</td><td style="'+TD+'">'+L7.on+'</td></tr>'
+  +(offAvail?('<tr><td style="'+TD+';text-align:left">In-store only</td><td style="'+TD+'">'+L3.off+'</td><td style="'+TD+'">'+L7.off+'</td></tr>'
+    +'<tr style="font-weight:800"><td style="'+TD+';text-align:left">Online + in-store</td><td style="'+TD+'">'+L3.both+'</td><td style="'+TD+'">'+L7.both+'</td></tr>'):'')
+  +'</table></div>'
+  +(offAvail?'<div style="font-size:11px;color:var(--ink-3);margin-top:5px">The in-store leg is Meta MATCHING a shop purchase to someone who saw the ad, not lift it proved. The combined figure is the right one for "what did Meta touch" and the wrong one for "what would I lose if I turned it off" &mdash; the blackout tests on this account are the only evidence for the second question.</div>':'')
+  +'</div>';
  h+='<div class="rtNote">'
   +'<b>3d is '+dayOf(last-2)+' → '+dayOf(last)+' against '+dayOf(last-5)+' → '+dayOf(last-3)+'. '
   +'7d is '+dayOf(last-6)+' → '+dayOf(last)+' against '+dayOf(last-13)+' → '+dayOf(last-7)+'.</b> '
@@ -20833,7 +20888,7 @@ function rMETA(){
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
 
- try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',offKey:'fv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
 
 
  /* ---- v58 SCOREBOARD + DECOMPOSITION, at campaign / ad set / ad ---- */
@@ -22816,7 +22871,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261006-012132';
+const BUILD='20261006-111148';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
@@ -22946,7 +23001,7 @@ function rCE(){if(TAB!=='ce')return;dCh();const g=document.getElementById('g28')
     were still starting straight into detail. */
  try{kpiStrip(g,(O.mads||[]).filter(a=>a.d&&a.pf==='meta'),O.madsW,{label:'Meta',a:'meta',vKey:'pv',offKey:'fv',ckKey:'oc'});}catch(e){console.error('meta kpi strip failed:',e);}
 
- try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
+ try{adMomentum(g,{label:'Meta momentum',a:'meta',feed:'mads',win:'madsW',pf:'meta',vKey:'pv',offKey:'fv',ckKey:'oc',minSp:500});}catch(e){console.error('meta momentum failed:',e);}
 
  const t0=new Date(W.start+'T00:00:00Z').getTime();const ix=d=>Math.round((new Date(d+'T00:00:00Z')-t0)/864e5);
  const pw=cmpWr(ST.s,ST.e);
