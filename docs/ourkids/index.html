@@ -3932,9 +3932,29 @@ function rTD(){
   if(rows.length){
    const top=rows.slice(0,6);
    const mx=Math.max.apply(null,top.map(r=>Math.abs(r.d)))||1;
+   /* v93.2: this card ranked on |move| and the drawer offered "share of the biggest move",
+      which is a share of the LARGEST ROW -- a denominator that guarantees the top row reads
+      100% and tells you nothing. Measured on 2 Oct → 4 Oct against the three days before:
+      the net company move was +E£490,330, built out of +E£548,519 of rises across 96
+      suppliers and −E£58,189 of falls across 47. The biggest single mover was 11% of the
+      net. So no row on this card is "what moved" and the card must stop implying one is.
+      A fall is shown against ALL falls and a rise against ALL rises -- same-direction
+      shares are always well behaved -- with the net underneath as the context. */
+   const allUp=rows.filter(x=>x.d>0).reduce((a,x)=>a+x.d,0);
+   const allDn=rows.filter(x=>x.d<0).reduce((a,x)=>a+x.d,0);
+   const netMv=allUp+allDn;
+   const nUp=rows.filter(x=>x.d>0).length, nDn=rows.filter(x=>x.d<0).length;
+   const shareOf=r=>{const den=r.d>=0?allUp:allDn; return den?(r.d/den):null;};
+   const topShare=top.reduce((a,r)=>a+Math.abs(r.d),0)/((allUp-allDn)||1);
    movers='<section style="margin-bottom:16px"><div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px">'
     +'<h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">What moved most</h2>'
     +'<span style="font-size:11.5px;color:var(--ink-3)">gross profit against the same '+W.span+' days before · suppliers</span></div>'
+    +'<div style="font-size:11.5px;color:var(--ink-2);margin:0 2px 8px;line-height:1.55">'
+     +'<b>The whole move was '+SM(netMv)+'</b> &mdash; '+M(allUp)+' of rises across '+nUp+' suppliers against '+M(Math.abs(allDn))+' of falls across '+nDn+'. '
+     +'These six are '+(topShare*100).toFixed(0)+'% of all the movement, and the biggest single one is '
+     +(Math.abs(allUp-allDn)?(Math.abs(top[0].d)/Math.abs(allUp-allDn)*100).toFixed(0):'—')+'% of it. '
+     +'<b>No row here is "what moved"</b> &mdash; the change is spread across '+(nUp+nDn)+' suppliers and this is the head of it.'
+    +'</div>'
     +'<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
     +top.map((r,i)=>{
       const pos=r.d>=0, c=pos?'var(--pos)':'var(--neg)';
@@ -3946,16 +3966,67 @@ function rTD(){
          +'<div style="flex:1 1 auto;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden">'
            +'<div style="height:100%;width:'+w.toFixed(1)+'%;background:'+c+';opacity:.8;border-radius:3px;transition:width var(--t-m) var(--ease)"></div></div>'
          +'<div class="num" style="flex:0 0 96px;text-align:right;font-size:12.5px;font-weight:700;color:'+c+'">'+SM(r.d)+'</div></div>'
+       +'<div class="num" style="flex:0 0 92px;text-align:right;font-size:11px;color:var(--ink-3)" title="this supplier as a share of every supplier moving the same way">'
+         +(shareOf(r)!=null?((shareOf(r)*100).toFixed(0)+'% of '+(r.d>=0?'rises':'falls')):'—')+'</div>'
        +'<div class="num" style="flex:0 0 146px;text-align:right;font-size:11.5px;color:var(--ink-3)">'+M(r.prev)+' → '+M(r.cur)+'</div>'
       +'</div>';}).join('')
     +'</div></section>';
+   /* v93.2: WHICH PRODUCTS inside the supplier moved. O.prodv carries 1,361 products with
+      the same 400-day [revenue, gross profit] series and the supplier name on each, so the
+      breakdown needs no new data. It is a SUBSET of the catalogue though, so the table says
+      how much of the supplier's own move its listed products actually account for -- a
+      product list that covers 40% of the move and does not say so is worse than none. */
+   const prodMove=(vendName)=>{
+    const PR=(O.prodv&&O.prodv.rows)||[], pst=(O.prodv&&O.prodv.dayStart)||null;
+    if(!PR.length||!pst)return '';
+    const pix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(pst+'T00:00:00Z'))/864e5);
+    const psum=(row,a,b)=>{if(!row.d||!row.d[1])return null;
+     let i0=pix(a),i1=pix(b);const n=row.d[1].length;
+     if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
+     let gg=0;for(let i=i0;i<=i1;i++)gg+=row.d[1][i]||0;return gg;};
+    const mine=PR.filter(x=>String(x.vn||'')===String(vendName));
+    if(!mine.length)return '<div style="font-size:11.5px;color:var(--ink-3);margin-top:10px">No product rows carry this supplier&rsquo;s name, so the move cannot be opened up from here.</div>';
+    const pr=mine.map(x=>{const c=psum(x,W.s,W.e), pv2=psum(x,W.ps,W.pe);
+      if(c==null||pv2==null)return null;
+      /* prodv.st is a STOCK OBJECT {u,n,oos,dead,sold,...}, not a status string -- printing
+         it gave "[object Object]" on every row. Units on hand is the useful part next to a
+         product that moved: a line that fell with nothing on the shelf fell for a reason the
+         supplier row cannot show. */
+      return {n:x.n, u:(x.st&&typeof x.st==='object')?x.st.u:null,
+              oos:(x.st&&typeof x.st==='object')?x.st.oos:null, c, p:pv2, d:c-pv2};}).filter(Boolean)
+     .filter(x=>Math.abs(x.d)>=1).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+    if(!pr.length)return '<div style="font-size:11.5px;color:var(--ink-3);margin-top:10px">This supplier&rsquo;s products show no movement over these days.</div>';
+    const vMove=r0Move[vendName]||0;
+    const pSum=pr.reduce((a,x)=>a+x.d,0);
+    const cov=vMove?pSum/vMove:null;
+    const TDp='padding:4px 7px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11px';
+    return '<div style="margin-top:12px">'
+     +'<div style="font-size:11.5px;font-weight:800;color:var(--ink-2)">Which products moved &mdash; '+pr.length+' of this supplier&rsquo;s lines</div>'
+     +'<div style="font-size:11px;color:'+((cov!=null&&Math.abs(cov)<0.6)?'var(--warn)':'var(--ink-3)')+';margin:2px 0 6px">'
+      +(cov!=null?('They account for <b>'+(cov*100).toFixed(0)+'%</b> of the supplier&rsquo;s '+SM(vMove)+' move'
+        +(Math.abs(cov)<0.6?' &mdash; the rest sits in lines the product feed does not carry, so this is part of the story and not all of it.':'.')):'')
+     +'</div>'
+     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+     +'<tr><th style="'+TDp+';text-align:left">Product</th><th style="'+TDp+'">Before</th><th style="'+TDp+'">After</th>'
+     +'<th style="'+TDp+'">Move</th><th style="'+TDp+'">Share of this supplier</th></tr>'
+     +pr.slice(0,12).map(x=>'<tr><td style="'+TDp+';text-align:left" dir="auto">'+esc(String(x.n).slice(0,54))
+       +(x.u!=null?' <span style="font-size:9.5px;color:'+((x.u<=0)?'var(--neg)':'var(--ink-3)')+'">'
+          +(x.u<=0?'out of stock':(Math.round(x.u).toLocaleString()+' on hand'))+'</span>':'')+'</td>'
+       +'<td style="'+TDp+'">'+M(x.p)+'</td><td style="'+TDp+'">'+M(x.c)+'</td>'
+       +'<td style="'+TDp+';font-weight:800;color:'+(x.d>=0?'var(--pos)':'var(--neg)')+'">'+SM(x.d)+'</td>'
+       +'<td style="'+TDp+'">'+(vMove?((x.d/vMove)*100).toFixed(0)+'%':'—')+'</td></tr>').join('')
+     +'</table></div>'
+     +(pr.length>12?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Top 12 by size of move, of '+pr.length+'.</div>':'')
+     +'</div>';};
+   const r0Move={}; top.forEach(r=>{r0Move[r.n]=r.d;});
    (function(){const R={};top.forEach(r=>{R[r.n]={title:String(r.n),tab:'vl',tabName:'Vendor Capital',rows:[
      ['Gross profit, this window',M(r.cur)],['Gross profit, prior window',M(r.prev)],
      ['Change',SM(r.d),r.d>=0?'var(--pos)':'var(--neg)'],
      ['Relative change',r.prev?((r.d/r.prev>=0?'+':'−')+Math.abs(r.d/r.prev*100).toFixed(1)+'%'):'—',r.d>=0?'var(--pos)':'var(--neg)'],
-     ['Share of the biggest move',((Math.abs(r.d)/mx)*100).toFixed(0)+'%']],
+     ['Share of every supplier moving the same way',(shareOf(r)!=null?(shareOf(r)*100).toFixed(1)+'% of '+(r.d>=0?M(allUp)+' of rises':M(Math.abs(allDn))+' of falls'):'—')],
+     ['Share of the whole net move',(netMv?((r.d/netMv)*100).toFixed(1)+'%':'—'),'var(--ink-3)']],
     foot:'Gross profit on the 4% basis, from this supplier&rsquo;s own daily series across the webstore and the tills. '
-     +'<b>A move is stated here, never explained.</b> A supplier can fall because it was discounted, because it went out of stock, because the mix inside its range moved, or because last window was its peak — this row cannot tell those apart, and neither can the Vendor Capital tab without a product-level cost history.'};});
+     +'<b>A move is stated here, never explained.</b> A supplier can fall because it was discounted, because it went out of stock, because the mix inside its range moved, or because last window was its peak — this row cannot tell those apart, and neither can the Vendor Capital tab without a product-level cost history.'+prodMove(r.n)};});
    window._tdD.mov={sub:'Supplier gross profit, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:R};})();
   }
  }catch(e){}
@@ -19997,10 +20068,23 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     'An ad counts as launched on its FIRST day of delivery. Nothing crossed the spend floor with a first day inside '+LWLBL(LWIN)+' &mdash; widen the window.',
     lwinBar());return;}
   // v9.7.2: the launch library gets its own filters + sort, same reason as everywhere else
-  const lq=String(bgG('lq','')).toLowerCase(),lac=bgG('lacct','ALL'),lvd=bgG('lvd','ALL'),lsrt=bgG('lsort','sp');
+  const lq=String(bgG('lq','')).toLowerCase(),lac=bgG('lacct','ALL'),lvd=bgG('lvd','ALL'),lsrt=bgG('lsort','sp'),lst=bgG('lstat','ALL');
+  /* v93.3: MEASURED -- 25 of the 66 ads on this board are already not running
+     (CAMPAIGN_PAUSED 97, ADSET_PAUSED 57, PAUSED 5 across the feed; only 98 of 258 are
+     ACTIVE), and the board was telling you to KILL ads that were switched off days ago.
+     A verdict is an instruction, so it has to know whether the thing is still on. */
+  const LIVEOF=a=>{const st=String(a.st||'').toUpperCase();
+   if(!st)return {live:null,lbl:'status unknown',c:'var(--ink-3)'};
+   if(st==='ACTIVE')return {live:true,lbl:'LIVE',c:'#0f7a55'};
+   if(st==='WITH_ISSUES')return {live:true,lbl:'LIVE — has issues',c:'#a6592a'};
+   if(st==='ADSET_PAUSED')return {live:false,lbl:'ad set paused',c:'#5f6a7d'};
+   if(st==='CAMPAIGN_PAUSED')return {live:false,lbl:'campaign paused',c:'#5f6a7d'};
+   if(st==='PAUSED')return {live:false,lbl:'paused',c:'#5f6a7d'};
+   return {live:false,lbl:st.toLowerCase().replace(/_/g,' ').slice(0,20),c:'#5f6a7d'};};
   const lbench=(x)=>x.days<3?'TOO EARLY':(x.pas<0&&x.days>=5?'BLEEDING':(bench&&x.roas>=bench*1.15&&x.pas>0?'STRONG':(bench&&x.roas<=bench*0.6?'WEAK':'NORMAL')));
   const laccts=[...new Set(L.map(x=>x.a.acct).filter(Boolean))];
   const LF=L.filter(x=>(lac==='ALL'||x.a.acct===lac)&&(lvd==='ALL'||lbench(x)===lvd)
+    &&(lst==='ALL'||(lst==='LIVE'?LIVEOF(x.a).live===true:LIVEOF(x.a).live===false))
     &&(!lq||String(x.a.n||'').toLowerCase().indexOf(lq)>=0||String(x.a.cmp||'').toLowerCase().indexOf(lq)>=0));
   const LK={sp:x=>x.sp,pas:x=>x.pas,roas:x=>x.roas,f0:x=>x.f0};
   LF.sort((x,y)=>(LK[lsrt]||LK.sp)(y)-(LK[lsrt]||LK.sp)(x));
@@ -20008,15 +20092,23 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
    +'<input placeholder="Search ad / campaign…" value="'+String(bgG('lq','')).replace(/"/g,'&quot;')+'" oninput="bgSet(\'lq\',this.value)" style="font-size:12.5px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;width:230px">'
    +bgSel('lacct','ALL',[['ALL','All accounts']].concat(laccts.map(a=>[a,a])),'ACCOUNT')
    +bgSel('lvd','ALL',[['ALL','All verdicts'],['STRONG','Strong start'],['NORMAL','Normal ramp'],['WEAK','Weak — kill watch'],['BLEEDING','Bleeding — kill'],['TOO EARLY','Too early']],'VERDICT')
+   +bgSel('lstat','ALL',[['ALL','Live and off'],['LIVE','Live only'],['OFF','Already off']],'STATUS')
    +bgSel('lsort','sp',[['sp','Most spent'],['pas','Most profit after spend'],['roas','Best ROAS'],['f0','Newest']],'SORT')
-   +'<span style="font-size:11.5px;color:#5f6a7d">'+LF.length+' of '+L.length+' shown</span></div>';
+   +'<span style="font-size:11.5px;color:#5f6a7d">'+LF.length+' of '+L.length+' shown &middot; <b>'
+     +L.filter(x=>LIVEOF(x.a).live===true).length+' still live</b>, '
+     +L.filter(x=>LIVEOF(x.a).live===false).length+' already off</span></div>';
   const NCLIVE2=(O.metaCC?O.metaCC.allNC>0:false);
   const cards=LF.slice(0,24).map(x=>{const a=x.a;
    // v9.2 verdict = does it make money AFTER paying Meta, then how it compares to the account
-   const vd=x.days<3?['TOO EARLY','#5f6a7d']:
+   const LV=LIVEOF(a);
+   let vd=x.days<3?['TOO EARLY','#5f6a7d']:
     (x.pas<0&&x.days>=5?['BLEEDING — KILL','#c4203f']:
     (bench&&x.roas>=bench*1.15&&x.pas>0?['STRONG START','#0f7a55']:
     (bench&&x.roas<=bench*0.6?['WEAK — KILL WATCH','#c4203f']:['NORMAL RAMP','#286db5'])));
+   /* an instruction to kill something already switched off is noise, and 25 of the 66 ads
+      here were in exactly that state. Keep the performance read, drop the instruction. */
+   if(LV.live===false)vd=(x.pas<0&&x.days>=5)?['LOST MONEY — ALREADY OFF','#5f6a7d']
+     :(bench&&x.roas>=bench*1.15&&x.pas>0?['WORKED — BUT ALREADY OFF','#a6592a']:['ALREADY OFF','#5f6a7d']);
    const src=a.im||a.th;
    const img=thIsPlaceholder(a)
      ? '<div class="ph" title="Catalogue / dynamic ad — the creative is chosen per product at delivery, so Meta serves no single image for it" style="background:repeating-linear-gradient(45deg,var(--surface-3),var(--surface-3) 6px,var(--surface-2) 6px,var(--surface-2) 12px);font-size:11px;font-weight:800;color:var(--ink-3)">CATALOGUE AD<br><span style="font-weight:600;font-size:10px">creative is per product</span></div>'
@@ -20027,7 +20119,10 @@ function rBG(){if(TAB!=='bg')return;dCh();const g=document.getElementById('g17')
     strip+='<div title="'+aD2(W,k).slice(5)+' · '+(v==null?'no spend':v.toFixed(1)+'x')+'" style="flex:1;height:12px;border-radius:2px;background:'+c2+'"></div>';}
    strip+='</div>';
    return '<div class="adc" style="border-top:3px solid '+vd[1]+'">'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener">'+img+'</a>':img)+
-    '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><span class="tg" style="background:'+vd[1]+'22;color:'+vd[1]+';font-weight:800">'+vd[0]+'</span><span class="tg" style="background:#4a4bd822;color:#4a4bd8">NEW · '+aD2(W,x.f0).slice(5)+'</span></div>'+
+    '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><span class="tg" style="background:'+vd[1]+'22;color:'+vd[1]+';font-weight:800">'+vd[0]+'</span>'
+    +'<span class="tg" style="background:'+LV.c+'1f;color:'+LV.c+';font-weight:800" title="Meta effective_status: '+String(a.st||'unknown')+'">'
+      +(LV.live===true?'● ':(LV.live===false?'○ ':''))+LV.lbl+'</span>'
+    +'<span class="tg" style="background:#4a4bd822;color:#4a4bd8">NEW · '+aD2(W,x.f0).slice(5)+'</span></div>'+
     '<div class="an" title="'+(a.n||'').replace(/"/g,'&quot;')+'">'+(a.n||'').slice(0,44)+'</div>'+
     '<div style="font-size:10.5px;color:#5f6a7d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(a.acct||'')+(a.cmp?' · '+a.cmp:'')+'</div>'+
     /* v83 THE CARD WAS TEN ROWS AT ONE WEIGHT, SO NOTHING READ FIRST. These cards answer one
@@ -22871,7 +22966,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261006-111148';
+const BUILD='20261008-164828';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
