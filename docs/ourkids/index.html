@@ -8872,7 +8872,9 @@ function beScen(g){
   +INFO('MEASURED: every MER above is the average of REAL days in that spend band across the last '+n+' qualifying days of this account, not an assumed elasticity. Spend here is the WEBSTORE’S share of the budget — Google and TikTok whole, Meta split by its own reported web-versus-store value — the same convention the net-profit tile uses, so the two agree. Sales = spend × that MER. Delivered GP = sales × '+(m*100).toFixed(1)+'%, the margin left after goods, courier, COD and payment fees. Profit = GP − ad spend − the webstore’s own fixed costs (E£'+Math.round(FX).toLocaleString()+'/day: packing plus its revenue share of head office, from '+fixedDay.bm+'; courier, COD and payment fees are NOT here because the delivered margin already nets them — charging both would count the courier twice). INFERRED: that the same relationship holds when you deliberately move spend.'),
   verdict,actTbl+tbl
   +'<div style="margin-top:9px;font-size:11.5px;color:#5b6478;line-height:1.55">'
-  +'<b>The measured curve:</b> '+binTxt+' · <b>r = '+rho.toFixed(2)+'</b> over '+n+' days. MER '+(rho<0?'falls':'rises')+' as daily spend rises'
+  /* v94: was "r = -0.38 over 212 days", which is not a number anyone acts on. Same fact
+     as a percentage: the higher-spending half of days against the lower-spending half. */
+  +'<b>The measured curve:</b> '+binTxt+' · over '+n+' days, MER '+(rho<0?'falls':'rises')+' as daily spend rises'
   +(Math.abs(rho)<0.45?', but loosely — the bands overlap heavily day to day, so one week at a new level proves nothing. Move in a single step, hold it a fortnight, then read this card again.':'.')
   +' <b>The counter-test:</b> if the relationship were flat the best row would simply be the highest spend on the table; it is not, which is what makes this an optimum rather than an artefact of the arithmetic.</div>');
 }
@@ -15466,7 +15468,8 @@ function hbar(g,title,sub,rows,opt){opt=opt||{};if(!rows||!rows.length)return;
    +'</div>'
    +'<div style="width:60px;text-align:right;font-size:10.5px;font-weight:800;color:#fff"><span style="background:'+r.c+';border-radius:5px;padding:2px 6px">'+r.b+'</span></div></div>';}).join('')+'</div>';
  pnlCard(g,'ins',title,sub,h+(opt.cmt&&opt.cmt.length?'<div class="ins" style="margin-top:8px">'+opt.cmt.map(x=>'<div class="row"><span class="dot" style="background:'+(x[0]||'#4a4bd8')+'"></span><span>'+x[1]+'</span></div>').join('')+'</div>':''));}
-function rverd(r){const a=Math.abs(r);return a>=0.7?'strong':a>=0.4?'moderate':'weak';}
+/* v94: rverd() graded a correlation as strong/moderate/weak and is gone with the last
+   coefficient this tool printed. Gaps are stated as percentages between two measured halves. */
 function trendPts(pts){const xs=pts.map(q=>q.x),ys=pts.map(q=>q.y),n2=xs.length;if(n2<3)return null;
  const sx=xs.reduce((a,b)=>a+b,0),sy=ys.reduce((a,b)=>a+b,0),sxx=xs.reduce((a,b)=>a+b*b,0),sxy=xs.reduce((a,x,i)=>a+x*ys[i],0);
  const den=n2*sxx-sx*sx;if(!den)return null;const sl=(n2*sxy-sx*sy)/den,ic=(sy-sl*sx)/n2;
@@ -16755,16 +16758,16 @@ function rViz(){if(TAB!=='vz')return;dCh();const g=document.getElementById('g8')
    const mx=xs.reduce((a,b)=>a+b,0)/xs.length,my=ys.reduce((a,b)=>a+b,0)/ys.length;
    const r=xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0)/Math.sqrt(xs.reduce((a,x)=>a+(x-mx)**2,0)*ys.reduce((a,y)=>a+(y-my)**2,0));
    const tl=trendPts(pts);
-   vzCard(g,'THE HIDDEN STORY &mdash; churn pressure vs customer value, per branch','Each dot is a branch: x = % of transactions from new customers (churn pressure), y = 90-day LTGP per customer. r = '+r.toFixed(2)+' ('+rverd(r)+').',null,
+   vzCard(g,'THE HIDDEN STORY &mdash; churn pressure vs customer value, per branch','Each dot is a branch: x = % of transactions from new customers (churn pressure), y = 90-day LTGP per customer. '+(function(){const hs=halfSplit(pts.map(q=>({x:q.x,y:q.y})));return hs?('Branches above the median new-customer share average <b>E£'+Math.round(hs.yHi).toLocaleString()+'</b> of 90-day LTGP per customer against <b>E£'+Math.round(hs.yLo).toLocaleString()+'</b> below it — <b>'+hs.txt+'</b> ('+hs.nHi+' branches against '+hs.nLo+').'):'';})(),null,
     [{l:'Branches',c:'#4a4bd8',d:pts.map(p2=>({x:p2.x,y:p2.y,n:p2.n,xl:p2.x.toFixed(0)+'% new-share'})),pc:pts.map(p2=>BCOL[p2.n]||'#4a4bd8')}].concat(tl?[{l:'trend',c:'#5f6a7d',t:'line',dash:1,w:1.5,pr:0,d:tl}]:[]),v=>'E£ '+Math.round(v),
     {type:'scatter',xt:'% of transactions from NEW customers',yt:'LTGP/customer at 90d (E£)',
      cmt:[[Math.abs(r)>=.4?(r>0?C.grn:C.red):C.blue,
       (Math.abs(r)<0.4
-        ? 'WEAK link (r='+r.toFixed(2)+'). Churn pressure barely explains value differences here &mdash; assortment and catchment do more. Do not act on this chart alone.'
+        ? 'WEAK link. Churn pressure barely explains the value differences here &mdash; the two halves of branches land close together, and assortment and catchment do more. Do not act on this chart alone.'
         : (r<0
-          ? 'NEGATIVE and '+rverd(r)+' (r='+r.toFixed(2)+'): the MORE a branch lives off brand-new faces, the LESS each customer is worth at 90 days. Loyalty is the value engine &mdash; capture-at-till and repeat offers beat buying more foot traffic.'
-          : 'POSITIVE and '+rverd(r)+' (r='+r.toFixed(2)+'): branches pulling the MOST new faces also produce the MOST valuable customers &mdash; the opposite of a churn problem. These are young, growing catchments where acquisition still compounds, so funding them is buying durable customers, not a leaky bucket. Watch for the day this flips negative: that is when growth turns into churn.'))
-      +' <b>How to read r:</b> it runs &minus;1 to +1. SIGN = direction (+ move together, &minus; move opposite). SIZE = how tightly. |r|&ge;0.7 strong &middot; 0.4&ndash;0.7 moderate &middot; &lt;0.4 weak. r is not proof of cause &mdash; with '+pts.length+' branches one outlier can swing it. Dashed line = least-squares trend.']]});}})();
+          ? 'The MORE a branch lives off brand-new faces, the LESS each customer is worth at 90 days. Loyalty is the value engine &mdash; capture-at-till and repeat offers beat buying more foot traffic.'
+          : 'Branches pulling the MOST new faces also produce the MOST valuable customers &mdash; the opposite of a churn problem. These are young, growing catchments where acquisition still compounds, so funding them is buying durable customers, not a leaky bucket. Watch for the day this flips negative: that is when growth turns into churn.'))
+      +' <b>How to read this:</b> the two figures are the average of each half of your branches, split at the median new-customer share, and the percentage is the gap between them. It is not proof of cause &mdash; with '+pts.length+' branches one outlier can swing it. Dashed line = least-squares trend.']]});}})();
  // ===== 7 · COMPANY =====
  (function(){const M2={};for(let i=0;i<O.fin.n;i++){const m=DD[i].slice(0,7);(M2[m]=M2[m]||{g:0,r:0,gp:0}).g+=O.fin.rev[i]*1000;M2[m].r+=FREF(i)*1000;M2[m].gp+=O.fin.gp[i]*1000;}
   const A3={};for(let i=0;i<O.ad.n;i++){const m=aD(i).slice(0,7);A3[m]=(A3[m]||0)+(O.ad.spend[i]||0);}
@@ -18961,6 +18964,23 @@ window.vSkus=function(tr,code){try{
    A gross-profit move is either "it sold more" or "it earned less per pound", and
    those are completely different problems with completely different fixes.
    ========================================================================== */
+/* ===== v94 NO BARE COEFFICIENTS ANYWHERE ============================================
+   A correlation coefficient is not a number anyone acts on and it is not a percentage.
+   Standing rule on this tool: never print r. Split the points at the median of the signal
+   and report what actually happened to the outcome in each half, as a percentage gap, with
+   both group sizes shown. Same fact, in a form that can be argued with. */
+window.halfSplit=function(pts){
+ const ok=(pts||[]).filter(p=>p&&isFinite(p.x)&&isFinite(p.y));
+ if(ok.length<4)return null;
+ const xs=ok.map(p=>p.x).slice().sort((a,b)=>a-b);
+ const mid=xs[Math.floor(xs.length/2)];
+ const hi=ok.filter(p=>p.x>mid), lo=ok.filter(p=>p.x<=mid);
+ if(!hi.length||!lo.length)return null;
+ const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+ const yHi=mean(hi.map(p=>p.y)), yLo=mean(lo.map(p=>p.y));
+ const gap=yLo?((yHi/yLo-1)*100):null;
+ return {yHi,yLo,gap,nHi:hi.length,nLo:lo.length,n:ok.length,
+   txt:(gap==null?'—':((gap>=0?'+':'−')+Math.abs(gap).toFixed(0)+'%'))};};
 window.dcmpChain=function(facs){/* [[label, cur, prev], ...] multiplied; exact, sequential */
  const out=[]; const run=facs.map(f=>f[2]);
  for(let i=0;i<facs.length;i++){
@@ -23188,7 +23208,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-175527';
+const BUILD='20261008-180507';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
