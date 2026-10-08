@@ -12988,7 +12988,52 @@ function influencerCohort(g,PR,M,N){
 }
 function promoCard(g){
  const PR=O.promo;
- if(!PR||!PR.codes||!PR.codes.length){
+ /* v94.1: this guarded on PR.codes, which has NEVER existed in the payload. The promo pull
+    emits PR.on (56 codes) and PR.off (76), both keyed by code to a date map -- the Codes &
+    influencers tab reads exactly those and renders the full table. So this card sat on
+    "waiting for the first run that carries promo data" permanently while the data was right
+    there. Eighth time this session the fix was that nothing read what the collector sent. */
+ const _pOn=(PR&&PR.on)||{}, _pOff=(PR&&PR.off)||{};
+ if(PR&&!PR.codes&&(Object.keys(_pOn).length||Object.keys(_pOff).length)){
+  const win=PR.win||null;
+  const inW=d=>!win||(d>=win[0]&&d<=win[1]);
+  /* on rows are [orders, revenue, discount, netOrSomething]; off rows are [orders, revenue,
+     margin]. Only the first two are read here, which both legs agree on. */
+  const agg={};
+  const take=(src,leg)=>Object.keys(src).forEach(code=>{
+    const days=src[code]||{};
+    Object.keys(days).forEach(d=>{ if(!inW(d))return;
+      const v=days[d]||[]; const e=agg[code]||(agg[code]={code,ord:0,rev:0,disc:0,on:0,off:0});
+      e.ord+=v[0]||0; e.rev+=v[1]||0;
+      if(leg==='on'){e.disc+=v[2]||0; e.on+=v[1]||0;} else {e.off+=v[1]||0;}});});
+  take(_pOn,'on'); take(_pOff,'off');
+  const rows=Object.values(agg).filter(r=>r.ord>0).sort((a,b)=>b.rev-a.rev);
+  if(rows.length){
+   const M9=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+   const N9=v=>Math.round(Math.abs(v||0)).toLocaleString();
+   const tO=rows.reduce((a,r)=>a+r.ord,0), tR=rows.reduce((a,r)=>a+r.rev,0), tD=rows.reduce((a,r)=>a+r.disc,0);
+   const TH9='padding:5px 8px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+   const TD9='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;white-space:nowrap';
+   pnlCard(g,'shopify','Discount codes &mdash; '+rows.length+' in use'
+    +INFO('Shopify discount_code usage on the online leg and till discounts on the in-store leg, summed over the promo pull window. The full table, the influencer split and the margin on each code live on the Codes & influencers tab.'),
+    'What the codes cost and what they brought in'+(win?(', '+win[0]+' → '+win[1]):'')+'.',
+    '<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3" data-hcx="1"><tr>'
+    +'<th style="'+TH9+';text-align:left">Code</th><th style="'+TH9+'">Orders</th>'
+    +'<th style="'+TH9+'">Revenue<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">online + in store</div></th>'
+    +'<th style="'+TH9+'">Given away<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">online only</div></th></tr>'
+    +rows.slice(0,10).map(r=>'<tr><td style="'+TD9+';text-align:left;font-weight:700">'+esc(String(r.code).slice(0,34))+'</td>'
+      +'<td style="'+TD9+'">'+N9(r.ord)+'</td><td style="'+TD9+'">'+M9(r.rev)+'</td>'
+      +'<td style="'+TD9+'">'+(r.disc?M9(r.disc):'<span style="color:var(--ink-3);font-size:10.5px">in store</span>')+'</td></tr>').join('')
+    +'<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD9+';text-align:left">ALL '+rows.length+' CODES</td>'
+    +'<td style="'+TD9+'">'+N9(tO)+'</td><td style="'+TD9+'">'+M9(tR)+'</td><td style="'+TD9+'">'+M9(tD)+'</td></tr>'
+    +'</table></div>'
+    +(rows.length>10?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Top 10 by revenue of '+rows.length+'.</div>':'')
+    +'<div class="rtNote"><b>Given away is online only</b> &mdash; Shopify reports a discount amount per order and the tills do not, so an in-store code shows its revenue and no giveaway. '
+    +'There is no gross profit here: the online leg comes from ShopifyQL, which carries no margin field. The in-store margin per code is on the Codes &amp; influencers tab.'
+    +'<div style="margin-top:7px"><button type="button" class="btn g" style="font-size:11.5px" onclick="tab(\'dc\')">Open Codes &amp; influencers &rarr;</button></div></div>');
+   return;}
+ }
+ if(!PR||((!PR.codes||!PR.codes.length)&&!Object.keys(_pOn).length&&!Object.keys(_pOff).length)){
   pnlCard(g,'shopify','Discount codes'+INFO('Shopify discount_code usage, plus a live probe of whether the shops record any till discounts at all.'),
    'This card fills on the next collector sync.',
    '<div style="padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
@@ -23208,7 +23253,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-180507';
+const BUILD='20261009-004905';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
