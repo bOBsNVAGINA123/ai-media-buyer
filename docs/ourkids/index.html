@@ -3926,15 +3926,31 @@ function rTD(){
      so there is no "all ecom" scope here and the card says so rather than implying one. */
   const MSC=ST.movScope||'all';
   const wide=V.some(r=>r.d&&r.d.length>=4);
+  /* v93.6: six wide carries Mall of Arabia as its OWN pair (4,5) so it can be taken out of
+     the shops figure. MOA opened Nov 2025 and runs E£5-7M a month, so in-or-out is a real
+     choice: it is excluded by default here, the chip says so, and the card prints what the
+     exclusion is worth rather than quietly dropping a branch. */
+  const hasMOA=V.some(r=>r.d&&r.d.length>=6);
+  const MOAIN=ST.movMOA==='in';
   const scLbl={all:'shops + Shopify',pos:'shops only',shop:'Shopify only'};
+  /* declared OUT here on purpose: the header that prints it is built outside the if(st)
+     block below, and a `let` inside that block put it out of reach -- which took the whole
+     section down until the catch was made to speak. */
+  let moaGp=0;
   if(st){
    const ix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(st+'T00:00:00Z'))/864e5);
-   const gAt=(r,i)=>{const d=r.d;
-     if(!wide||d.length<4)return d[1][i]||0;
-     return MSC==='pos'?(d[1][i]||0):(MSC==='shop'?(d[3][i]||0):((d[1][i]||0)+(d[3][i]||0)));};
-   const rAt=(r,i)=>{const d=r.d;
-     if(!wide||d.length<4)return d[0][i]||0;
-     return MSC==='pos'?(d[0][i]||0):(MSC==='shop'?(d[2][i]||0):((d[0][i]||0)+(d[2][i]||0)));};
+   /* 0,1 shops without MOA · 2,3 Shopify · 4,5 MOA. Shopify never includes MOA. */
+   const pick=(d,i,ri,si,mi)=>{
+     const shops=(d[ri][i]||0)+((hasMOA&&MOAIN&&d.length>mi)?(d[mi][i]||0):0);
+     if(MSC==='pos')return shops;
+     if(MSC==='shop')return d.length>si?(d[si][i]||0):0;
+     return shops+(d.length>si?(d[si][i]||0):0);};
+   const gAt=(r,i)=>{const d=r.d; if(!wide||d.length<4)return d[1][i]||0; return pick(d,i,1,3,5);};
+   const rAt=(r,i)=>{const d=r.d; if(!wide||d.length<4)return d[0][i]||0; return pick(d,i,0,2,4);};
+   /* what the exclusion is actually worth over this window, so it is never silent */
+   if(hasMOA){const i0=Math.max(0,ix(W.s)),i1=ix(W.e);
+     V.forEach(r=>{if(!r.d||r.d.length<6)return;
+       for(let i=i0;i<=Math.min(r.d[5].length-1,i1);i++)moaGp+=r.d[5][i]||0;});}
    const sum=(r,a,b)=>{if(!r.d)return null;let i0=ix(a),i1=ix(b);const n=r.d[0].length;
      if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
      let rv=0,gg=0,sl=[];for(let i=i0;i<=i1;i++){rv+=rAt(r,i);const gv=gAt(r,i);gg+=gv;sl.push(gv);}
@@ -3968,6 +3984,9 @@ function rTD(){
      +(wide?[['all','Shops + Shopify'],['pos','Shops only'],['shop','Shopify only']]
         .map(o=>'<span class="chip" style="font-size:11px'+(MSC===o[0]?';background:var(--brand);color:#fff;border-color:var(--brand)':'')
           +'" onclick="ST.movScope=\''+o[0]+'\';rTab()">'+o[1]+'</span>').join('')
+        +(hasMOA&&MSC!=='shop'?'<span class="chip" style="font-size:11px'+(MOAIN?';background:var(--brand);color:#fff;border-color:var(--brand)':'')
+          +'" title="Mall of Arabia opened Nov 2025 and runs E£5-7M a month; it is out of these figures unless you put it back" onclick="ST.movMOA=\''+(MOAIN?'out':'in')+'\';rTab()">'
+          +(MOAIN?'MOA included':'MOA excluded')+'</span>':'')
        :'<span style="font-size:11px;color:var(--ink-3)">shops and Shopify combined &mdash; the split arrives on the next sync</span>')
     +'</span></div>'
     +'<div style="font-size:11.5px;color:var(--ink-2);margin:0 2px 8px;line-height:1.55">'
@@ -3975,6 +3994,7 @@ function rTD(){
      +'These six are '+(topShare*100).toFixed(0)+'% of all the movement, and the biggest single one is '
      +(Math.abs(allUp-allDn)?(Math.abs(top[0].d)/Math.abs(allUp-allDn)*100).toFixed(0):'—')+'% of it. '
      +'<b>No row here is "what moved"</b> &mdash; the change is spread across '+(nUp+nDn)+' suppliers and this is the head of it.'
+     +(hasMOA&&MSC!=='shop'?('<br><b>Mall of Arabia is '+(MOAIN?'IN':'OUT of')+' these figures</b> &mdash; it carried '+M(moaGp)+' of gross profit over these days'+(MOAIN?'.':', which is not counted above.')+' It opened in November 2025, so any comparison reaching back further is not like for like with it in.'):'')
     +'</div>'
     +'<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
     +top.map((r,i)=>{
@@ -4051,7 +4071,12 @@ function rTD(){
      +'<b>A move is stated here, never explained.</b> A supplier can fall because it was discounted, because it went out of stock, because the mix inside its range moved, or because last window was its peak — this row cannot tell those apart, and neither can the Vendor Capital tab without a product-level cost history.'+prodMove(r.n)};});
    window._tdD.mov={sub:'Supplier gross profit, '+W.s+' → '+W.e+' against the '+W.span+' days before',rows:R};})();
   }
- }catch(e){}
+ }catch(e){
+  /* a bare catch here deleted the whole section with no trace, which is how a broken
+     movers board looks exactly like a quiet day. Say it broke. */
+  console.error('movers board failed:',e);
+  movers='<section style="margin-bottom:16px"><div style="padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-l);background:var(--surface);font-size:12px;color:var(--neg)">'
+   +'<b>What moved most could not be built</b> — '+String(e&&e.message||e).slice(0,160)+'</div></section>';}
 
  /* ---------- 3 + 4 · THE QUEUE ---------- */
  let rules=[];try{rules=tdRules();}catch(e){rules=[];}
@@ -23001,7 +23026,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-171041';
+const BUILD='20261008-172448';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
