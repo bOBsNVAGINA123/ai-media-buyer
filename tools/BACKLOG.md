@@ -232,6 +232,40 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
       across the whole 60 days) — that money lives only in the fixed 60-day conversion-action
       pull.
 
+## Tool-wide audit, 9 Oct 2026
+
+Ran every checker, swept all 46 tabs in a browser, and reconciled the payload against the
+page both ways. What it found:
+
+- **CLEAN**: 46 tabs render with zero console errors and zero throws. No NaN, no undefined,
+  no `[object Object]`, no Infinity, no raw floats anywhere. Coverage green on every feed
+  (Meta spend 99.9% / value 99.9% / orders 99.9% / clicks 100.0%, Google 100.3%). contrast,
+  adsplit, carry and nocoef all pass. Dead payload keys down to two metadata strings.
+- **FOUND AND FIXED — promoCard read a key that has never existed.** It guarded on
+  `O.promo.codes`; the collector emits `on` (56 codes) and `off` (76). So the card printed
+  "waiting for the first run that carries promo data" permanently while **116 codes and
+  E£12.5M of revenue** sat in the payload and rendered fine on the Codes tab. Eighth time
+  this session the bug was that nothing read what the collector sent.
+- **tools/ghost.js committed** — the inverse of unused.js: fields the PAGE READS that the
+  PAYLOAD NEVER SENDS. unused.js finds data nobody renders; ghost.js finds renderers reading
+  a field that does not exist, which is worse because the card does not break, it quietly
+  shows its empty state on live data. Strips comments and skips runtime-assigned keys
+  (O.ad.mclkDef is set by boot(), not the collector). Reads clean now.
+- **FOUND AND FIXED — my own regression, minutes old.** The replacement discount-codes card
+  summed the whole promo window and carried no prior at all. The prior sweep caught it in
+  the same session. It now follows the date box with the equal span before it, and the first
+  thing it says is that giveaway is **up 125%** while coded revenue is up 18%.
+- **TWO COLLECTOR CHANGES WERE CODE-LIVE BUT DATA-DEAD.** `pull_vendors()` and
+  `pull_shop_lines()` sit behind `if heavy:`, so the 6-wide vendor daily series (shops /
+  Shopify / MOA split) and the product quota raise (8 → 40 per vendor, daily cap 800 → 2400)
+  had not reached the payload — the last heavy crawl ran BEFORE those pushes. The page was
+  correctly showing its fallback, but I had reported them as done. Heavy crawl dispatched.
+- **STILL OPEN** (flagged, not fixed): otDrill shows "vs prior value" with no attribution
+  behind it, so decomp.js reads 9 of 10. Nine tables carry six or more figures with no prior
+  period — the branch scoreboard (89 cells), vendor capital (98), three branch tables on the
+  retail P&L, and the money-desk burn list. Several of those are structurally levels rather
+  than trends, but none of them say so, which is the standard this tool is held to.
+
 ## Checks that must stay green
 - node tools/contrast.js
 - node tools/decomp.js      (8/8)
@@ -239,3 +273,5 @@ A pass = pick the top unticked item, fix, verify, deploy, tick, write what was m
 - node --check on both inline scripts
 - node tools/coverage.js okv/data.js 7,30   (spend/value/orders/clicks vs the account series, >=95%)
 - node tools/carry.js             (multi-site XTRA keys merged per key, not with `or`)
+- node tools/ghost.js <data.js>       (fields the page reads that the payload never sends)
+- node tools/nocoef.js               (no r, no R2, no strong/moderate/weak)
