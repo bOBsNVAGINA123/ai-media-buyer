@@ -3918,11 +3918,26 @@ function rTD(){
  try{
   const rows=[];
   const V=(O.vend&&O.vend.rows)||[], st=(O.vend&&O.vend.dayStart)||null;
+  /* v93.4 SCOPE. The vendor daily series used to be ONE pair that fused the tills and
+     Shopify, so this board could not be asked "shops or online". It is now four wide --
+     0,1 shops (report.pos.order) and 2,3 Shopify (team_id = Shopify) -- and this reads
+     BOTH widths, because the page ships before the sync that widens the payload.
+     Noon / Amazon / Homzmart are NOT in this series (they live only in the row scalars),
+     so there is no "all ecom" scope here and the card says so rather than implying one. */
+  const MSC=ST.movScope||'all';
+  const wide=V.some(r=>r.d&&r.d.length>=4);
+  const scLbl={all:'shops + Shopify',pos:'shops only',shop:'Shopify only'};
   if(st){
    const ix=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.parse(st+'T00:00:00Z'))/864e5);
+   const gAt=(r,i)=>{const d=r.d;
+     if(!wide||d.length<4)return d[1][i]||0;
+     return MSC==='pos'?(d[1][i]||0):(MSC==='shop'?(d[3][i]||0):((d[1][i]||0)+(d[3][i]||0)));};
+   const rAt=(r,i)=>{const d=r.d;
+     if(!wide||d.length<4)return d[0][i]||0;
+     return MSC==='pos'?(d[0][i]||0):(MSC==='shop'?(d[2][i]||0):((d[0][i]||0)+(d[2][i]||0)));};
    const sum=(r,a,b)=>{if(!r.d)return null;let i0=ix(a),i1=ix(b);const n=r.d[0].length;
      if(i1<0||i0>=n)return null;i0=Math.max(0,i0);i1=Math.min(n-1,i1);
-     let rv=0,gg=0,sl=[];for(let i=i0;i<=i1;i++){rv+=r.d[0][i]||0;gg+=r.d[1][i]||0;sl.push(r.d[1][i]||0);}
+     let rv=0,gg=0,sl=[];for(let i=i0;i<=i1;i++){rv+=rAt(r,i);const gv=gAt(r,i);gg+=gv;sl.push(gv);}
      return {rv,g:gg,sl};};
    V.forEach(r=>{const c=sum(r,W.s,W.e),pv=sum(r,W.ps,W.pe);
      if(!c||!pv||(pv.g<8000&&c.g<8000))return;
@@ -3948,7 +3963,13 @@ function rTD(){
    const topShare=top.reduce((a,r)=>a+Math.abs(r.d),0)/((allUp-allDn)||1);
    movers='<section style="margin-bottom:16px"><div style="display:flex;align-items:baseline;gap:10px;margin:0 2px 9px">'
     +'<h2 style="font-size:17px;font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)">What moved most</h2>'
-    +'<span style="font-size:11.5px;color:var(--ink-3)">gross profit against the same '+W.span+' days before · suppliers</span></div>'
+    +'<span style="font-size:11.5px;color:var(--ink-3)">gross profit against the same '+W.span+' days before · suppliers · '+scLbl[MSC]+'</span>'
+    +'<span style="margin-left:auto;display:flex;gap:5px">'
+     +(wide?[['all','Shops + Shopify'],['pos','Shops only'],['shop','Shopify only']]
+        .map(o=>'<span class="chip" style="font-size:11px'+(MSC===o[0]?';background:var(--brand);color:#fff;border-color:var(--brand)':'')
+          +'" onclick="ST.movScope=\''+o[0]+'\';rTab()">'+o[1]+'</span>').join('')
+       :'<span style="font-size:11px;color:var(--ink-3)">shops and Shopify combined &mdash; the split arrives on the next sync</span>')
+    +'</span></div>'
     +'<div style="font-size:11.5px;color:var(--ink-2);margin:0 2px 8px;line-height:1.55">'
      +'<b>The whole move was '+SM(netMv)+'</b> &mdash; '+M(allUp)+' of rises across '+nUp+' suppliers against '+M(Math.abs(allDn))+' of falls across '+nDn+'. '
      +'These six are '+(topShare*100).toFixed(0)+'% of all the movement, and the biggest single one is '
@@ -4017,6 +4038,7 @@ function rTD(){
        +'<td style="'+TDp+'">'+(vMove?((x.d/vMove)*100).toFixed(0)+'%':'—')+'</td></tr>').join('')
      +'</table></div>'
      +(pr.length>12?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Top 12 by size of move, of '+pr.length+'.</div>':'')
+     +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Products are the tills and Shopify together &mdash; the per-product feed carries one combined series, so the shops / Shopify switch above does not reach this table.</div>'
      +'</div>';};
    const r0Move={}; top.forEach(r=>{r0Move[r.n]=r.d;});
    (function(){const R={};top.forEach(r=>{R[r.n]={title:String(r.n),tab:'vl',tabName:'Vendor Capital',rows:[
@@ -12740,9 +12762,13 @@ function rDC(){
    +'<td style="'+TD+';color:#a3271a">'+(r.onDisc?M(r.onDisc):'—')+'</td>'
    +'<td style="'+TD+'">'+(r.onOrd?N(r.onOrd):'<span style="color:var(--ink-3)">—</span>')+'</td>'
    +'<td style="'+TD+'">'+(r.offOrd?N(r.offOrd):'<span style="color:var(--ink-3)">—</span>')+'</td>'
-   +'<td style="'+TD+';font-weight:800;color:'+(r.offGp<0?'#a3271a':'#161d2e')+'">'+(r.offRev?((r.offGp<0?'−':'')+M(r.offGp)):'—')+'</td>'
+   /* an em dash here read as "the number is missing". It is not: 10 of the 38 codes have
+      no in-store orders at all, so there is no in-store margin to show. Say which. */
+   +'<td style="'+TD+';font-weight:800;color:'+(r.offGp<0?'#a3271a':'#161d2e')+'">'
+     +(r.offRev?((r.offGp<0?'−':'')+M(r.offGp))
+       :'<span style="font-weight:600;font-size:10.5px;color:#5f6a7d">'+(r.onOrd?'online only':'no orders')+'</span>')+'</td>'
    +'<td style="'+TD+';font-weight:800;color:'+(r.gpPct==null?'#5f6a7d':(r.gpPct<0?'#a3271a':(offBgp!=null&&r.gpPct<offBgp?'#a35a1a':'#0f6e56')))+'">'
-     +(r.gpPct==null?'—':r.gpPct.toFixed(1)+'%')+'</td>'
+     +(r.gpPct==null?'<span style="font-weight:600;font-size:10.5px;color:#5f6a7d">'+(r.onOrd?'no in-store leg':'—')+'</span>':r.gpPct.toFixed(1)+'%')+'</td>'
    +(function(){const m2=r.mix;
      if(!m2)return '<td style="'+TD+'"><span style="color:var(--ink-3)" title="Customer mix lands with the next collector run">—</span></td>';
      if(m2.broken)return '<td style="'+TD+'"><span style="color:var(--warn)" title="The last crawl could not read who these customers were — fixed in the collector, refills on the next run">resyncing</span></td>';
@@ -12791,15 +12817,24 @@ function rDC(){
   'Every code, both legs, on the dates above. <b>Basket and margin are compared with an un-coded order in the same window</b> — whether a code is worth running is a question about the basket it buys, not the discount it hands over.',
   ctl+tileH+alert
   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
-  +'<tr><th style="'+TH+';text-align:left">Code</th><th style="'+TH+'">Orders</th><th style="'+TH+'">Revenue</th>'
-  +'<th style="'+TH+'">AOV</th><th style="'+TH+'">Given away</th>'
+  /* v93.5: "Revenue" sat two columns away from "GP %" and the two are on DIFFERENT LEGS --
+     revenue is online plus in store, GP exists only in store, because the online side comes
+     from ShopifyQL which carries no margin at all. Reading across the row therefore looked
+     like a margin on the revenue beside it and is not one. Every column now names its leg. */
+  +'<tr><th style="'+TH+';text-align:left">Code</th><th style="'+TH+'">Orders</th>'
+  +'<th style="'+TH+'">Revenue<div style="font-weight:600;font-size:10px;text-transform:none;color:#5f6a7d">online + in store</div></th>'
+  +'<th style="'+TH+'">AOV</th>'
+  +'<th style="'+TH+'">Given away<div style="font-weight:600;font-size:10px;text-transform:none;color:#5f6a7d">online only</div></th>'
   +'<th style="'+TH+'">Online ord</th><th style="'+TH+'">In-store ord</th>'
-  +'<th style="'+TH+'">In-store GP</th><th style="'+TH+'">GP %</th>'
+  +'<th style="'+TH+'">Gross profit<div style="font-weight:600;font-size:10px;text-transform:none;color:#5f6a7d">IN STORE ONLY</div></th>'
+  +'<th style="'+TH+'">GP %<div style="font-weight:600;font-size:10px;text-transform:none;color:#5f6a7d">of in-store revenue</div></th>'
   +'<th style="'+TH+'">Customers<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">new / returning / unregistered</div></th>'
   +'<th style="'+TH+'">GP per receipt<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">better or worse than un-coded</div></th></tr>'+body+'</table></div>'
   +(L.length>40?'<div style="font-size:11.5px;color:#5f6a7d;margin-top:5px">'+(L.length-40)+' smaller codes not shown.</div>':'')
   +monthBlock
   +'<div style="margin-top:11px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+  +'<b>There is no online gross profit anywhere on this tab, and that is a source limit, not an omission.</b> '
+  +'The online leg comes from ShopifyQL (orders, gross sales, discounts, net sales) which carries no margin field at all; the in-store leg comes from report.pos.order, the only model here that has margin on it. So GP and GP% are IN STORE ONLY while revenue and orders are both legs, and a code with no in-store orders shows &ldquo;online only&rdquo; rather than a dash. '
   +'<b>Given away is an ONLINE-only figure.</b> Shopify reports a discount amount per order; the shops do not — the till takes it off as a percentage on the product lines, so in store the honest measure is the margin that survived, which is the GP column. Adding the two would be adding a discount to a profit.</div>');
 
  /* ============ v9.32 INFLUENCERS, MONTH BY MONTH ============
@@ -22966,7 +23001,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-164828';
+const BUILD='20261008-171041';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
