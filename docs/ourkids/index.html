@@ -12995,37 +12995,61 @@ function promoCard(g){
     there. Eighth time this session the fix was that nothing read what the collector sent. */
  const _pOn=(PR&&PR.on)||{}, _pOff=(PR&&PR.off)||{};
  if(PR&&!PR.codes&&(Object.keys(_pOn).length||Object.keys(_pOff).length)){
-  const win=PR.win||null;
-  const inW=d=>!win||(d>=win[0]&&d<=win[1]);
+  /* v94.2: the first build of this card summed the whole promo window and carried no prior
+     at all -- my own regression, caught by the prior sweep minutes later. It now follows
+     the date box when one is set and compares against the equal span immediately before. */
+  const pw=PR.win||null;
+  let cs=null,ce=null,ps=null,pe=null;
+  (function(){
+    const d0=(ST.s&&ST.e)?ST.s:(pw?pw[0]:null), d1=(ST.s&&ST.e)?ST.e:(pw?pw[1]:null);
+    if(!d0||!d1)return;
+    cs=d0; ce=d1;
+    const n=Math.round((Date.parse(d1)-Date.parse(d0))/864e5)+1;
+    if(!isFinite(n)||n<1)return;
+    pe=new Date(Date.parse(d0)-864e5).toISOString().slice(0,10);
+    ps=new Date(Date.parse(pe)-(n-1)*864e5).toISOString().slice(0,10);
+    /* the promo pull only reaches back so far -- do not invent a prior it cannot cover */
+    if(pw&&ps<pw[0]){ps=null;pe=null;}
+  })();
+  const inW=d=>!cs||(d>=cs&&d<=ce);
+  const inP=d=>!!ps&&d>=ps&&d<=pe;
   /* on rows are [orders, revenue, discount, netOrSomething]; off rows are [orders, revenue,
      margin]. Only the first two are read here, which both legs agree on. */
   const agg={};
   const take=(src,leg)=>Object.keys(src).forEach(code=>{
     const days=src[code]||{};
-    Object.keys(days).forEach(d=>{ if(!inW(d))return;
-      const v=days[d]||[]; const e=agg[code]||(agg[code]={code,ord:0,rev:0,disc:0,on:0,off:0});
-      e.ord+=v[0]||0; e.rev+=v[1]||0;
-      if(leg==='on'){e.disc+=v[2]||0; e.on+=v[1]||0;} else {e.off+=v[1]||0;}});});
+    Object.keys(days).forEach(d=>{
+      const cur=inW(d), prv=inP(d);
+      if(!cur&&!prv)return;
+      const v=days[d]||[]; const e=agg[code]||(agg[code]={code,ord:0,rev:0,disc:0,on:0,off:0,pOrd:0,pRev:0,pDisc:0});
+      if(cur){e.ord+=v[0]||0; e.rev+=v[1]||0; if(leg==='on'){e.disc+=v[2]||0; e.on+=v[1]||0;} else {e.off+=v[1]||0;}}
+      else {e.pOrd+=v[0]||0; e.pRev+=v[1]||0; if(leg==='on')e.pDisc+=v[2]||0;}});});
   take(_pOn,'on'); take(_pOff,'off');
   const rows=Object.values(agg).filter(r=>r.ord>0).sort((a,b)=>b.rev-a.rev);
   if(rows.length){
    const M9=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
    const N9=v=>Math.round(Math.abs(v||0)).toLocaleString();
    const tO=rows.reduce((a,r)=>a+r.ord,0), tR=rows.reduce((a,r)=>a+r.rev,0), tD=rows.reduce((a,r)=>a+r.disc,0);
+   const pO=rows.reduce((a,r)=>a+r.pOrd,0), pR=rows.reduce((a,r)=>a+r.pRev,0), pD=rows.reduce((a,r)=>a+r.pDisc,0);
+   const dl=(c,p,good)=>{
+     if(!ps)return '<div style="font-size:10px;color:var(--ink-3)">no prior window</div>';
+     if(!p||!isFinite(c/p))return '<div style="font-size:10px;color:var(--ink-3)">new</div>';
+     const d=(c/p-1)*100, up=d>=0, ok=(up===(good!==false));
+     return '<div style="font-size:10px;font-weight:800;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(d).toFixed(0)+'%</div>';};
    const TH9='padding:5px 8px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
    const TD9='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;white-space:nowrap';
    pnlCard(g,'shopify','Discount codes &mdash; '+rows.length+' in use'
     +INFO('Shopify discount_code usage on the online leg and till discounts on the in-store leg, summed over the promo pull window. The full table, the influencer split and the margin on each code live on the Codes & influencers tab.'),
-    'What the codes cost and what they brought in'+(win?(', '+win[0]+' → '+win[1]):'')+'.',
+    'What the codes cost and what they brought in'+(cs?(', '+cs+' → '+ce):'')+(ps?(' against '+ps+' → '+pe):'')+'.',
     '<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3" data-hcx="1"><tr>'
     +'<th style="'+TH9+';text-align:left">Code</th><th style="'+TH9+'">Orders</th>'
     +'<th style="'+TH9+'">Revenue<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">online + in store</div></th>'
     +'<th style="'+TH9+'">Given away<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">online only</div></th></tr>'
     +rows.slice(0,10).map(r=>'<tr><td style="'+TD9+';text-align:left;font-weight:700">'+esc(String(r.code).slice(0,34))+'</td>'
-      +'<td style="'+TD9+'">'+N9(r.ord)+'</td><td style="'+TD9+'">'+M9(r.rev)+'</td>'
-      +'<td style="'+TD9+'">'+(r.disc?M9(r.disc):'<span style="color:var(--ink-3);font-size:10.5px">in store</span>')+'</td></tr>').join('')
+      +'<td style="'+TD9+'">'+N9(r.ord)+dl(r.ord,r.pOrd,true)+'</td><td style="'+TD9+'">'+M9(r.rev)+dl(r.rev,r.pRev,true)+'</td>'
+      +'<td style="'+TD9+'">'+(r.disc?(M9(r.disc)+dl(r.disc,r.pDisc,false)):'<span style="color:var(--ink-3);font-size:10.5px">in store</span>')+'</td></tr>').join('')
     +'<tr style="background:var(--surface-3);font-weight:800"><td style="'+TD9+';text-align:left">ALL '+rows.length+' CODES</td>'
-    +'<td style="'+TD9+'">'+N9(tO)+'</td><td style="'+TD9+'">'+M9(tR)+'</td><td style="'+TD9+'">'+M9(tD)+'</td></tr>'
+    +'<td style="'+TD9+'">'+N9(tO)+dl(tO,pO,true)+'</td><td style="'+TD9+'">'+M9(tR)+dl(tR,pR,true)+'</td><td style="'+TD9+'">'+M9(tD)+dl(tD,pD,false)+'</td></tr>'
     +'</table></div>'
     +(rows.length>10?'<div style="font-size:10.5px;color:var(--ink-3);margin-top:4px">Top 10 by revenue of '+rows.length+'.</div>':'')
     +'<div class="rtNote"><b>Given away is online only</b> &mdash; Shopify reports a discount amount per order and the tills do not, so an in-store code shows its revenue and no giveaway. '
@@ -23253,7 +23277,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261009-004905';
+const BUILD='20261009-005431';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
