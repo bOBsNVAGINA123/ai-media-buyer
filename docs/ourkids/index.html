@@ -21346,6 +21346,16 @@ function rMETA(){
      an ad still clearing break-even by a wide margin means the CREATIVE is tiring while the
      money is still good: brief the replacement, do not switch the spend off. The word only
      becomes PULL when the economics have gone too. */
+  /* v93.7: this column was pv*fON + fv*fOFF -- COMBINED -- and said so nowhere, so there
+     was no way to tell which leg you were reading and no way to see the legs apart. Three
+     columns now, same as every other ad surface. */
+  const _legs=(function(){const d=r.a.d||{};
+    const sum=(k,i0,i1)=>{const x=d[k]||[];let t=0;for(let i=Math.max(0,i0);i<=Math.min(x.length-1,i1);i++)t+=x[i]||0;return t;};
+    const sp=sum('sp',PW.a,PW.b), on=sum('pv',PW.a,PW.b)*fON, off=sum('fv',PW.a,PW.b)*fOFF;
+    const psp=(PW.pa!=null&&PW.pa>=0)?sum('sp',PW.pa,PW.pb):0;
+    const pon=psp?sum('pv',PW.pa,PW.pb)*fON:0, poff=psp?sum('fv',PW.pa,PW.pb)*fOFF:0;
+    return {on:sp?on/sp:null, off:sp?off/sp:null, both:sp?(on+off)/sp:null,
+            pOn:psp?pon/psp:null, pOff:psp?poff/psp:null, pBoth:psp?(pon+poff)/psp:null};})();
   const _roasNow=(r.now&&r.now.roas)||null;
   const _rich=_roasNow!=null&&_roasNow>=beFat*1.5;
   /* v9.90: never tell someone to pull an ad that is already off. The entity feed carries each
@@ -21358,14 +21368,26 @@ function rMETA(){
     :r.sc.s>=RV.pull?(_rich?['REFRESH \u2014 do not cut','#a35a1a']:['PULL OR REFRESH','#a3271a'])
     :r.sc.s>=50?['brief the replacement','#a35a1a']:['healthy','#0f6e56'];
   body+='<tr>'
-   +'<td style="'+TD+';text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis"><b>'
+   +'<td style="'+TD+';text-align:left;max-width:270px"><div style="display:flex;gap:7px;align-items:flex-start">'
+     +(function(){const src=r.a.im||r.a.th;
+        return src?'<img src="'+src+'" loading="lazy" style="width:34px;height:34px;object-fit:cover;border-radius:5px;flex:0 0 34px"/>'
+                  :'<div style="width:34px;height:34px;border-radius:5px;flex:0 0 34px;background:var(--surface-3)"></div>';})()
+     +'<div style="min-width:0"><b>'
      +(_lnk?'<a href="'+_lnk+'" target="_blank" rel="noopener" style="color:#3a3bd0;text-decoration:none" title="Open this exact ad in Ads Manager to view or edit">'+esc(r.a.n||'')+'</a>':esc(r.a.n||''))+'</b>'
-     +'<div style="font-size:10.5px;color:#5f6a7d">'+esc(r.a.cmp||'')+'</div></td>'
+     +'<div style="font-size:10.5px;color:#5f6a7d">'+esc(r.a.cmp||'')+'</div>'
+     +(function(){const q=String(r.a&&r.a.st||'').toUpperCase();
+        if(!q)return '<div style="font-size:10px;color:var(--ink-3)">status unknown</div>';
+        const live=(q==='ACTIVE'||q==='WITH_ISSUES');
+        return '<div style="font-size:10px;font-weight:800;color:'+(live?'#0f7a55':'#8b93a7')+'">'
+          +(live?'● LIVE':'○ '+q.toLowerCase().replace(/_/g,' '))+'</div>';})()
+     +'</div></div></td>'
    +'<td style="'+TD+'">'+M(r.spendAll)+arF(r.now.sp,r.prevW&&r.prevW.sp,true)+'</td>'
    +'<td style="'+TD+'">'+r.now.ctr.toFixed(2)+'%<div style="font-size:10.5px;color:#5f6a7d">best '+r.bestCtr.toFixed(2)+'%</div>'+arF(r.now.ctr,r.prevW&&r.prevW.ctr,true)+'</td>'
    +'<td style="'+TD+'">'+r.now.freq.toFixed(1)+'×'+arF(r.now.freq,r.prevW&&r.prevW.freq,false)+'</td>'
    +'<td style="'+TD+'">'+M(r.now.cpm)+'<div style="font-size:10.5px;color:#5f6a7d">from '+M(r.launch.cpm)+'</div>'+arF(r.now.cpm,r.prevW&&r.prevW.cpm,false)+'</td>'
-   +'<td style="'+TD+'">'+(r.now.roas?r.now.roas.toFixed(2)+'×':'—')+arF(r.now.roas,r.prevW&&r.prevW.roas,true)+'</td>'
+   +'<td style="'+TD+'">'+(_legs.on!=null?_legs.on.toFixed(2)+'×':'—')+arF(_legs.on,_legs.pOn,true)+'</td>'
+   +'<td style="'+TD+'">'+(_legs.off?_legs.off.toFixed(2)+'×':'<span style="color:var(--ink-3);font-size:10.5px">no in-store</span>')+(_legs.off?arF(_legs.off,_legs.pOff,true):'')+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+(_legs.both!=null?_legs.both.toFixed(2)+'×':'—')+arF(_legs.both,_legs.pBoth,true)+'</td>'
    +pasCell(_pp.on)+pasCell(_pp.both)
    +'<td style="'+TD+'">'+(r.enough?bar(r.sc.s):'<span style="color:var(--ink-3)">—</span>')+'</td>'
    +'<td style="'+TD+';text-align:left"><b style="color:'+st[1]+';font-size:11.5px">'+st[0]+'</b>'
@@ -21375,16 +21397,78 @@ function rMETA(){
  pnlCard(g,'meta','Creative fatigue score — '+pull.length+' to pull, '+watch.length+' to replace soon'
    +INFO('The RevUp model: 50% CTR decay from the ad’s own best week, 30% frequency, 20% CPM rise from its own launch week. Above 70 means pull or refresh.'),
   'Score = 0.5 &times; (CTR decay &times; 2) + 0.3 &times; (frequency ÷ 8 &times; 100) + 0.2 &times; (CPM rise &times; 2). '
-  +'Each ad is judged against <b>itself</b>, never the account average. Ads under E£2,000 lifetime spend or 500 impressions this week are left unscored rather than guessed at.',
+  +'Each ad is judged against <b>itself</b>, never the account average. '
+  +'<b>Every figure here reads '+((typeof PW!=='undefined'&&PW&&PW.lbl)?PW.lbl:(ST.s+' &rarr; '+ST.e))+' against the equal span immediately before it</b> &mdash; change the date box and the verdicts change. '
+  +'An ad needs <b>E£1,500 of spend in BOTH halves</b> to be scored, so an ad launched inside this window is not here at all: there is no earlier week of its own to measure decay against. It is out for being NEW, not for being small.',
   '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
   +'<tr><th style="'+TH+';text-align:left">Ad<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">click to edit in Ads Manager</div></th><th style="'+TH+'">Spend</th><th style="'+TH+'">CTR now</th>'
-  +'<th style="'+TH+'">Freq</th><th style="'+TH+'">CPM</th><th style="'+TH+'">ROAS</th>'
+  +'<th style="'+TH+'">Freq</th><th style="'+TH+'">CPM</th>'
+  +'<th style="'+TH+'">ROAS online</th><th style="'+TH+'">ROAS in-store</th>'
+  +'<th style="'+TH+'">ROAS total<div style="font-weight:600;font-size:10px;text-transform:none;color:#5f6a7d">online + in-store</div></th>'
   +'<th style="'+TH+'">After spend<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">online only</div></th>'
   +'<th style="'+TH+'">After spend<div style="font-weight:600;font-size:10.5px;text-transform:none;color:#5f6a7d">incl. the shops</div></th>'
   +'<th style="'+TH+'">Fatigue</th><th style="'+TH+';text-align:left">Verdict &amp; why</th></tr>'+body+'</table></div>'
   +'<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #cbd3e1;background:#f7f9fc;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
   +'<b>The deck’s lesson from its worked example:</b> at a score of 51 the CPA was only 31% above target — that is the week to brief the replacement, not the week it hits 82. '
-  +'<b>A high score never means switch the money off on its own</b> — fatigue measures attention, not profit, so an ad still clearing break-even by half again reads <i>REFRESH — do not cut</i>. Replace the execution, keep the budget where it is earning.</div>');
+  +'<b>A high score never means switch the money off on its own</b> — fatigue measures attention, not profit, so an ad still clearing break-even by half again reads <i>REFRESH — do not cut</i>. Replace the execution, keep the budget where it is earning.</div>'
+  /* v93.7: the score is three impression-based components, and whether they predict
+     anything is a question with an answer in this very payload. Correlate each against the
+     change in COST PER PURCHASE over the same two halves and print it, rather than asking
+     anyone to take the weights on trust. Measured 2026-10-08 on the 13 ads clearing E£1,500
+     and 5 purchases in both halves: whole score r=0.30, CTR decay r=0.45, frequency
+     r=-0.02, CPM rise r=-0.57 -- frequency carries 30% of the weight on no relationship at
+     all, and CPM rise carries 20% with the sign REVERSED from what the data shows. */
+  +(function(){try{
+    const E=[];
+    (O.mads||[]).filter(a=>a.d&&a.pf==='meta').forEach(a=>{
+      const S2=(k,i0,i1)=>{const x=(a.d||{})[k]||[];let t=0;for(let i=Math.max(0,i0);i<=Math.min(x.length-1,i1);i++)t+=x[i]||0;return t;};
+      if(PW.pa==null||PW.pa<0)return;
+      const nw={sp:S2('sp',PW.a,PW.b),im:S2('im',PW.a,PW.b),rch:S2('rch',PW.a,PW.b),ck:S2('oc',PW.a,PW.b),pu:S2('pu',PW.a,PW.b)};
+      const pv2={sp:S2('sp',PW.pa,PW.pb),im:S2('im',PW.pa,PW.pb),rch:S2('rch',PW.pa,PW.pb),ck:S2('oc',PW.pa,PW.pb),pu:S2('pu',PW.pa,PW.pb)};
+      if(nw.sp<1500||pv2.sp<1500||!nw.im||!pv2.im||nw.pu<5||pv2.pu<5)return;
+      const ctrD=(pv2.ck/pv2.im)?((nw.ck/nw.im)/(pv2.ck/pv2.im)-1):null;
+      const frq=nw.rch?nw.im/nw.rch:null;
+      const cpmR=(pv2.sp/pv2.im)?((nw.sp/nw.im)/(pv2.sp/pv2.im)-1):null;
+      if(ctrD==null||frq==null||cpmR==null)return;
+      const sc=0.5*((-ctrD)*2)+0.3*(frq/8)+0.2*(cpmR*2);
+      const dCpa=(nw.sp/nw.pu)/(pv2.sp/pv2.pu)-1;
+      if(!isFinite(sc)||!isFinite(dCpa))return;
+      E.push({sc,ctrD:-ctrD,frq,cpmR,dCpa});});
+    if(E.length<5)return '';
+    const pear=(xs,ys)=>{const n=xs.length;const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;
+      let sxy=0,sxx=0,syy=0;for(let i=0;i<n;i++){const dx=xs[i]-mx,dy=ys[i]-my;sxy+=dx*dy;sxx+=dx*dx;syy+=dy*dy;}
+      return (sxx&&syy)?sxy/Math.sqrt(sxx*syy):null;};
+    const y=E.map(e=>e.dCpa);
+    const rr=k=>{const v=pear(E.map(e=>e[k]),y); return v==null?'—':v.toFixed(2);};
+    const n=E.length;
+    /* the |r| a sample this size needs before it means anything at the 5% level */
+    const crit=(n>4)?(1.96/Math.sqrt(n-1)):null;
+    return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #a35a1a;background:#fffaf2;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+     +'<b>Does this score predict anything? Measured on your own ads, not assumed.</b> Each part against the change in COST PER PURCHASE over the same two halves, on the '+n+' ads clearing E£1,500 and 5 purchases in both:'
+     +'<div style="margin:5px 0 0;font-variant-numeric:tabular-nums">'
+     +'whole score <b>r = '+rr('sc')+'</b> &middot; CTR decay <b>r = '+rr('ctrD')+'</b> &middot; frequency <b>r = '+rr('frq')+'</b> &middot; CPM rise <b>r = '+rr('cpmR')+'</b></div>'
+     +(crit?'<div style="margin-top:4px">At n='+n+' nothing under <b>|r| ≈ '+crit.toFixed(2)+'</b> is distinguishable from chance, so read these as a direction and not a law.</div>':'')
+     +'<div style="margin-top:4px"><b>Frequency carries 30% of the weight and CPM rise 20%</b>. On this account frequency has shown no relationship to cost per purchase, and CPM rise has shown the OPPOSITE sign to the one the formula assumes. '
+     +'The CTR term is the only one pointing the way the score claims. Treat a high score as a reason to look at the ad, never as the reason to act &mdash; the money columns to its left are the ones that decide.</div></div>';
+   }catch(e){return '';}})()
+  /* an ad that launched inside the window cannot be scored, and three of them are doing
+     real volume right now. Silently dropping those is how the card loses the room. */
+  +(function(){try{
+    const miss=(O.mads||[]).filter(a=>{
+      if(!a.d||a.pf!=='meta')return false;
+      const S2=(k,i0,i1)=>{const x=(a.d||{})[k]||[];let t=0;for(let i=Math.max(0,i0);i<=Math.min(x.length-1,i1);i++)t+=x[i]||0;return t;};
+      const nw=S2('sp',PW.a,PW.b); if(nw<1500)return false;
+      const pv2=(PW.pa!=null&&PW.pa>=0)?S2('sp',PW.pa,PW.pb):0;
+      if(pv2>=1500)return false;
+      a.__nwsp=nw; a.__pu=S2('pu',PW.a,PW.b)+S2('op',PW.a,PW.b);
+      return true;}).sort((x,y)=>y.__nwsp-x.__nwsp);
+    if(!miss.length)return '';
+    return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #286db5;background:#f4f8ff;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
+     +'<b>'+miss.length+' ad'+(miss.length===1?'':'s')+' spent real money in this window and could NOT be scored</b> — each launched inside it, so there is no earlier half of its own to measure decay against. They are not small and they are not absent from the account:'
+     +'<div style="margin-top:5px">'+miss.slice(0,6).map(a=>'<div>&middot; <b>'+esc(String(a.n||'').slice(0,46))+'</b> — '+M(a.__nwsp)+', '+Math.round(a.__pu)+' purchases'
+       +(String(a.st||'').toUpperCase()==='ACTIVE'?' <span style="color:#0f7a55;font-weight:700">● live</span>':' <span style="color:#8b93a7">○ '+String(a.st||'status unknown').toLowerCase().replace(/_/g,' ')+'</span>')+'</div>').join('')+'</div>'
+     +'<div style="margin-top:4px">Judge these on the money, not on fatigue — there is no fatigue to measure yet.</div></div>';
+   }catch(e){return '';}})());
 
  /* ---------- 4. budget split against the 4-campaign framework ---------- */
  /* v86 two fixes. (1) This card followed the date box and still showed no prior, so a
@@ -23026,7 +23110,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-172448';
+const BUILD='20261008-174443';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
