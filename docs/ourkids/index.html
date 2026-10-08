@@ -21049,13 +21049,19 @@ function rMETA(){
  /* ---- v58 SCOREBOARD + DECOMPOSITION, at campaign / ad set / ad ---- */
  try{(function(){
   const S=(d,k,i,j)=>{let t=0;const A=d&&d[k];if(!A)return 0;for(let x=Math.max(0,i);x<=j;x++)t+=A[x]||0;return t;};
-  const met=(list,i,j)=>{let sp=0,im=0,atc=0,pu=0,pv=0,fv=0,rch=0,nc=0;
+  const met=(list,i,j)=>{let sp=0,im=0,atc=0,pu=0,pv=0,fv=0,rch=0,nc=0,ck=0;
    list.forEach(a=>{sp+=S(a.d,'sp',i,j);im+=S(a.d,'im',i,j);atc+=S(a.d,'atc',i,j);
-    pu+=S(a.d,'pu',i,j);pv+=S(a.d,'pv',i,j);fv+=S(a.d,'fv',i,j);rch+=S(a.d,'rch',i,j);nc+=S(a.d,'nc',i,j);});
+    pu+=S(a.d,'pu',i,j);pv+=S(a.d,'pv',i,j);fv+=S(a.d,'fv',i,j);rch+=S(a.d,'rch',i,j);nc+=S(a.d,'nc',i,j);
+    ck+=S(a.d,'oc',i,j);});
    pv*=fON; fv*=fOFF;
-   return {sp,im,atc,pu,pv,fv,rch,nc,val:pv,
-     atcr:im?atc/im:0, cvr:atc?pu/atc:0, aov:pu?pv/pu:0,
-     cpm:im?sp/im*1000:0, roas:sp?pv/sp:0, cpa:pu?sp/pu:0, freq:rch?im/rch:0};};
+   /* v93.8: CLICKS were never in this object, so the decomposition below had no session
+      step and every traffic effect landed on "impressions up". Impressions are not a lever
+      -- they are spend divided by CPM, which the code already said in a comment while
+      leaving them as the headline reason. The click is the lever: it is what becomes a
+      session on the site. atcr is now ATC per CLICK, not per impression. */
+   return {sp,im,ck,atc,pu,pv,fv,rch,nc,val:pv,
+     ctr:im?ck/im:0, atcr:ck?atc/ck:0, atcrIm:im?atc/im:0, cvr:atc?pu/atc:0, aov:pu?pv/pu:0,
+     cpm:im?sp/im*1000:0, cpc:ck?sp/ck:0, roas:sp?pv/sp:0, cpa:pu?sp/pu:0, freq:rch?im/rch:0};};
   const cur=met(ads,PW.a,PW.b), prv=PW.ok?met(ads,PW.pa,PW.pb):null;
   const pc2=(c,p)=>(p>0)?((c/p-1)*100):null;
   const be6=GPBE();
@@ -21079,10 +21085,21 @@ function rMETA(){
    +'</div>';
   let dec='';
   if(prv&&prv.im>0&&prv.atc>0&&prv.pu>0){
-   const FV={'Impressions':v=>N(v),'Add-to-cart rate':v=>(v*100).toFixed(2)+'%',
-             'Cart → purchase':v=>(v*100).toFixed(1)+'%','Average order value':v=>M(v),'CPM':v=>M(v)};
-   const rev=dcmpChain([['Impressions',cur.im,prv.im],['Add-to-cart rate',cur.atcr,prv.atcr],
-                        ['Cart → purchase',cur.cvr,prv.cvr],['Average order value',cur.aov,prv.aov]]);
+   /* v93.9: revenue = SESSIONS × CVR × AOV. Impressions are not in it, because impressions
+      do not grow revenue -- they are spend ÷ CPM, and only the click that becomes a session
+      can turn into an order. Impressions and CTR explain how the sessions were BOUGHT, which
+      is a different question and gets its own line below. */
+   const FV={'Sessions (clicks to site)':v=>N(v),'Purchases per session':v=>(v*100).toFixed(2)+'%',
+             'Average order value':v=>M(v),'Impressions':v=>N(v),'Click rate':v=>(v*100).toFixed(2)+'%',
+             'Add-to-cart per session':v=>(v*100).toFixed(2)+'%','Cart → purchase':v=>(v*100).toFixed(1)+'%','CPM':v=>M(v)};
+   const _cvrS=o=>o.ck?o.pu/o.ck:0;
+   const rev=dcmpChain([['Sessions (clicks to site)',cur.ck,prv.ck],
+                        ['Purchases per session',_cvrS(cur),_cvrS(prv)],
+                        ['Average order value',cur.aov,prv.aov]]);
+   /* the two sub-splits, each exact on its own: where the sessions came from, and which
+      half of the conversion problem moved -- the ad (add to cart) or the site (checkout) */
+   const sess=dcmpChain([['Impressions',cur.im,prv.im],['Click rate',cur.ctr,prv.ctr]]);
+   const conv=dcmpChain([['Add-to-cart per session',cur.atcr,prv.atcr],['Cart → purchase',cur.cvr,prv.cvr]]);
    const spd=dcmpChain([['Impressions',cur.im,prv.im],['CPM',cur.cpm/1000,prv.cpm/1000]]);
    const dV=cur.val-prv.val, dS=cur.sp-prv.sp;
    const top=rev.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];
@@ -21096,12 +21113,19 @@ function rMETA(){
       +'<div class="num" style="flex:0 0 175px;text-align:right;font-size:10.5px;color:var(--ink-3)">'+(FV[x.n]?FV[x.n](x.from)+' → '+FV[x.n](x.to):'')+'</div></div>';}).join('');};
    dec='<div style="margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:12px 14px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--ink)">Why claimed value moved '+(dV>=0?'+':'−')+M(Math.abs(dV))+'</div>'
-    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">value = impressions × add-to-cart rate × cart→purchase × AOV · the four add to the whole</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">value = sessions × purchases per session × AOV · the three add to the whole</div>'
+    +'<div style="font-size:11px;color:var(--ink-3);margin:-4px 0 8px"><b>Impressions are deliberately not in this.</b> They do not grow revenue &mdash; they are spend ÷ CPM, and only a click that becomes a session can turn into an order. Sessions here are outbound clicks from the ad, which is the one session count no bot flood touches.</div>'
     +bars(rev,dV)
     +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12px;line-height:1.6;color:var(--ink-2)">'
     +'<b style="color:var(--ink)">The specific reason:</b> '+top.n.toLowerCase()+' '+(top.d>=0?'rose':'fell')+' from <b>'+FV[top.n](top.from)+'</b> to <b>'+FV[top.n](top.to)+'</b>, worth <b style="color:'+(top.d>=0?'var(--pos)':'var(--neg)')+'">'+(top.d>=0?'+':'−')+M(Math.abs(top.d))+'</b>'
     +(dV&&Math.abs(top.d)<=Math.abs(dV)?(' — '+Math.abs(top.d/dV*100).toFixed(0)+'% of the whole move.'):' — more than the whole move; the rest offset it.')
     +' <b>Meta separates the two halves of a conversion problem that Google cannot</b>: a fall in add-to-cart rate is the ad, a fall in cart→purchase is the site.</div>'
+    +'<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Where the sessions came from</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">sessions = impressions × click rate · this is the BUYING side, not the growth side</div>'
+    +bars(sess,cur.ck-prv.ck)
+    +'<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Which half of the conversion moved</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">purchases per session = add-to-cart per session × cart→purchase · the ad, then the site</div>'
+    +bars(conv,_cvrS(cur)-_cvrS(prv))
     +'<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Why spend moved '+(dS>=0?'+':'−')+M(Math.abs(dS))+'</div>'
     +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">spend = impressions × CPM ÷ 1,000</div>'
     +bars(spd,dS)+'</div>';}
@@ -21117,21 +21141,26 @@ function rMETA(){
   const subOf={cmp:a=>a.acct||'', as:a=>a.cmp||'', ad:a=>(a.cmp||'')+(a.as?' · '+a.as:'')};
   const grp={};
   ads.forEach(a=>{const k=keyOf[LV](a); if(k==null)return; (grp[k]=grp[k]||{n:nameOf[LV](a),sub:subOf[LV](a),list:[]}).list.push(a);});
-  const FV2={'Impressions':v=>N(v),'Add-to-cart rate':v=>(v*100).toFixed(2)+'%',
+  const FV2={'Impressions':v=>N(v),'Click rate':v=>(v*100).toFixed(2)+'%',
+             'Sessions (clicks to site)':v=>N(v),'Purchases per session':v=>(v*100).toFixed(2)+'%',
              'Cart → purchase':v=>(v*100).toFixed(1)+'%','Average order value':v=>M(v),'CPM':v=>M(v)};
   /* v81 NAME THE METRIC, NOT THE STORY. "more people saw it" is a restatement of the number
      next to it, not a reason -- the reason is the metric that produced it. Impressions are not
      a lever: they are spend divided by CPM, so that row says which of the two moved. */
   const SH4={'Impressions':['Impressions up','Impressions down'],
-             'Add-to-cart rate':['ATC rate up','ATC rate down'],
+             'Click rate':['Click rate up','Click rate down'],
+             'Sessions (clicks to site)':['Sessions up','Sessions down'],
+             'Purchases per session':['Conversion rate up','Conversion rate down'],
              'Cart → purchase':['Cart→buy rate up','Cart→buy rate down'],
              'Average order value':['AOV up','AOV down']};
   const rows=Object.keys(grp).map(k=>{
    const G=grp[k], c=met(G.list,PW.a,PW.b), p2=PW.ok?met(G.list,PW.pa,PW.pb):null;
    if(c.sp<50&&(!p2||p2.sp<50))return null;
-   const on=!!(p2&&p2.im>0&&p2.atc>0&&p2.pu>0);
-   const rev=on?dcmpChain([['Impressions',c.im,p2.im],['Add-to-cart rate',c.atcr,p2.atcr],
-                           ['Cart → purchase',c.cvr,p2.cvr],['Average order value',c.aov,p2.aov]]):null;
+   const on=!!(p2&&p2.ck>0&&p2.pu>0);
+   const _cs=o=>o.ck?o.pu/o.ck:0;
+   const rev=on?dcmpChain([['Sessions (clicks to site)',c.ck,p2.ck],
+                           ['Purchases per session',_cs(c),_cs(p2)],
+                           ['Average order value',c.aov,p2.aov]]):null;
    const spd=on?dcmpChain([['Impressions',c.im,p2.im],['CPM',c.cpm/1000,p2.cpm/1000]]):null;
    const top=rev?rev.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d))[0]:null;
    return {k,G,c,p:p2,on,rev,spd,top,d:c.val-(p2?p2.val:0),ds:c.sp-(p2?p2.sp:0),n:G.n,sub:G.sub};})
@@ -21443,13 +21472,34 @@ function rMETA(){
     const n=E.length;
     /* the |r| a sample this size needs before it means anything at the 5% level */
     const crit=(n>4)?(1.96/Math.sqrt(n-1)):null;
+    /* v93.8: a bare correlation coefficient is not a number anyone acts on, and it is not a
+       percentage change either. Split the ads at the median of each signal and print what
+       actually happened to COST PER PURCHASE in each half -- two groups, both shown, as a
+       percentage move. Measured 2026-10-08: the CTR half-split separates the two groups by
+       7%, frequency by 18%, and CPM rise by MINUS 40% -- the ads whose CPM rose most had
+       cost per purchase FALL 23% while the rest rose 17%. */
+    const medOf=k=>{const v=E.map(x=>x[k]).sort((a,b)=>a-b);return v[Math.floor(v.length/2)];};
+    const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+    const split=(k,worseIsHigh)=>{const mv=medOf(k);
+      const hi=E.filter(x=>x[k]>mv), lo=E.filter(x=>x[k]<=mv);
+      const w=worseIsHigh?hi:lo, b=worseIsHigh?lo:hi;
+      if(!w.length||!b.length)return null;
+      const a=mean(w.map(x=>x.dCpa))*100, c=mean(b.map(x=>x.dCpa))*100;
+      return {a,c,gap:a-c,nw:w.length,nb:b.length};};
+    const pc=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(0)+'%';
+    const line=(lbl,r2,expect)=>{ if(!r2)return '';
+      const works=(r2.gap>0);
+      return '<div style="margin-top:3px"><b>'+lbl+'</b> &mdash; those ads&rsquo; cost per purchase moved <b style="color:'+(r2.a>=0?'#c0143c':'#0f6e56')+'">'+pc(r2.a)+'</b>'
+        +', the other half <b style="color:'+(r2.c>=0?'#c0143c':'#0f6e56')+'">'+pc(r2.c)+'</b> &mdash; a gap of <b>'+pc(r2.gap)+'</b> ('+r2.nw+' against '+r2.nb+' ads). '
+        +(works?'<span style="color:#0f6e56">Points the way the score assumes.</span>':'<span style="color:#c0143c;font-weight:700">Points the OPPOSITE way to the score.</span>')+'</div>';};
+    const sCtr=split('ctrD',true), sFrq=split('frq',true), sCpm=split('cpmR',true);
     return '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid #a35a1a;background:#fffaf2;border-radius:0 8px 8px 0;font-size:11.5px;color:#5b6478;line-height:1.55">'
-     +'<b>Does this score predict anything? Measured on your own ads, not assumed.</b> Each part against the change in COST PER PURCHASE over the same two halves, on the '+n+' ads clearing E£1,500 and 5 purchases in both:'
-     +'<div style="margin:5px 0 0;font-variant-numeric:tabular-nums">'
-     +'whole score <b>r = '+rr('sc')+'</b> &middot; CTR decay <b>r = '+rr('ctrD')+'</b> &middot; frequency <b>r = '+rr('frq')+'</b> &middot; CPM rise <b>r = '+rr('cpmR')+'</b></div>'
-     +(crit?'<div style="margin-top:4px">At n='+n+' nothing under <b>|r| ≈ '+crit.toFixed(2)+'</b> is distinguishable from chance, so read these as a direction and not a law.</div>':'')
-     +'<div style="margin-top:4px"><b>Frequency carries 30% of the weight and CPM rise 20%</b>. On this account frequency has shown no relationship to cost per purchase, and CPM rise has shown the OPPOSITE sign to the one the formula assumes. '
-     +'The CTR term is the only one pointing the way the score claims. Treat a high score as a reason to look at the ad, never as the reason to act &mdash; the money columns to its left are the ones that decide.</div></div>';
+     +'<b>Does this score predict anything? Measured on your own ads, in percentage terms.</b> Each signal split at its median, then what happened to COST PER PURCHASE in each half, over '+(PW.lbl||'this window')+' against the span before it, on the '+E.length+' ads clearing E£1,500 and 5 purchases in both:'
+     +line('CTR fell most (50% of the score)',sCtr)
+     +line('Frequency highest (30% of the score)',sFrq)
+     +line('CPM rose most (20% of the score)',sCpm)
+     +'<div style="margin-top:5px"><b>'+E.length+' ads is a small group</b> and these gaps are not significance tests &mdash; read them as a direction. But the direction on CPM is the wrong one, and it carries a fifth of the weight. '
+     +'Treat a high score as a reason to look at the ad, never as the reason to act: the money columns to its left are what decide.</div></div>';
    }catch(e){return '';}})()
   /* an ad that launched inside the window cannot be scored, and three of them are doing
      real volume right now. Silently dropping those is how the card loses the room. */
@@ -23110,7 +23160,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-174443';
+const BUILD='20261008-175222';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
