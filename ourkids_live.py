@@ -2806,9 +2806,19 @@ def pull_pos_customers():
                         # they are written by pull_shop_lines, which is team_id = Shopify.
                         # Noon / Amazon / Homzmart are in the row scalars (orev/ogp) and NOT
                         # in this series, which is why the page offers no "all ecom" scope.
-                        _vd = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(r["date"][:10], [0.0, 0.0, 0.0, 0.0])
-                        while len(_vd) < 4: _vd.append(0.0)
-                        _vd[0] += rv; _vd[1] += _gpv
+                        # v93.6: SIX wide. 0,1 are the shops WITHOUT Mall of Arabia, 2,3 are
+                        # Shopify, 4,5 are Mall of Arabia on its own. Carrying MOA as its own
+                        # pair rather than folding it in is what lets the board take it out of
+                        # the combined figure without a per-branch daily series for all seven
+                        # (160 vendors x 7 branches x 400 days is not affordable; one extra
+                        # pair is). MOA opened Nov 2025 and runs E£5-7M a month, so whether it
+                        # is in or out has to be a visible choice and never a silent default.
+                        _vd = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(r["date"][:10], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                        while len(_vd) < 6: _vd.append(0.0)
+                        if br == "Mall of Arabia":
+                            _vd[4] += rv; _vd[5] += _gpv
+                        else:
+                            _vd[0] += rv; _vd[1] += _gpv
                     if _tid:
                         _pd0 = XTRA.setdefault("pday", {}).setdefault(_tid, {}).setdefault(r["date"][:10], [0.0, 0.0])
                         _pd0[0] += rv; _pd0[1] += gp_inc(rv, r.get("margin"))
@@ -3364,8 +3374,8 @@ def pull_shop_lines():
             if _vn:
                 _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
                 _vm[0] += rv; _vm[1] += mg
-                _vd2 = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(d[:10], [0.0, 0.0, 0.0, 0.0])
-                while len(_vd2) < 4: _vd2.append(0.0)
+                _vd2 = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(d[:10], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                while len(_vd2) < 6: _vd2.append(0.0)
                 _vd2[2] += rv; _vd2[3] += mg
             if _tid:
                 _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
