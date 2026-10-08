@@ -15087,11 +15087,18 @@ function rAds(){if(TAB!=='ao')return;dCh();const g=document.getElementById('g6')
    '<div class="ak"><span>Spend</span><b>E&pound; '+money(a.sp)+'</b></div>'+
    '<div class="ak"><span>Website conv. value</span><b>E&pound; '+money(a.pv)+'</b></div>'+
    '<div class="ak"><span>Website ROAS</span><b>'+(a.sp?(a.pv/a.sp).toFixed(2):'0.00')+'x</b></div>'+
-   '<div class="ak"><span>Offline conv. value</span><b>E&pound; '+money(io*mf)+(a.opur?' <span style="font-weight:600;color:#5f6a7d">('+a.opur+' pur)</span>':'')+'</b></div>'+
+   /* Meta returns these as weighted floats, and they were printed raw: "(46.52611396002827
+      pur)" and "35.46471254245817 customers" are not counts anyone can read. */
+   '<div class="ak"><span>Offline conv. value</span><b>E&pound; '+money(io*mf)+(a.opur?' <span style="font-weight:600;color:#5f6a7d">('+Math.round(a.opur).toLocaleString()+' pur)</span>':'')+'</b></div>'+
    '<div class="ak"><span>Offline ROAS</span><b style="color:var(--brand)">'+(a.sp?(io*mf/a.sp).toFixed(2):'0.00')+'x</b></div>'+
    '<div class="ak"><span>TOTAL conv. value</span><b>E&pound; '+money((a.pv||0)+io*mf)+'</b></div>'+
    '<div class="ak"><span>TOTAL ROAS</span><b style="color:#0f7a55">'+(a.sp?(((a.pv||0)+io*mf)/a.sp).toFixed(2):'0.00')+'x</b></div>'+
-   (NCLIVE?'<div class="ak"><span>NEW customers (store)</span><b>'+(a.nc||0)+((a.nc&&a.opur)?' <span style="font-weight:600;color:#5f6a7d">'+Math.round(a.nc/a.opur*100)+'% of store pur</span>':'')+'</b></div>'+'<div class="ak"><span>NC store revenue</span><b style="color:var(--brand)">E&pound; '+money((a.ncv||0)*mf)+'</b></div>'+((a.nc&&a.ncv)?'<div class="ak"><span>NC AOV (store)</span><b>E&pound; '+money(a.ncv*mf/a.nc)+vsA(a.ncv*mf/a.nc,avAov)+'</b></div>'+'<div class="ak"><span>NC gross profit est.</span><b>E&pound; '+money(a.ncv*mf*gpr)+vsA(a.ncv*mf*gpr,avGp)+'</b></div>':''):'')+
+   /* v93.11: "NC AOV" is PER CUSTOMER and "NC gross profit est." was a TOTAL, printed one
+      under the other with no unit on either -- which is how a gross profit ends up looking
+      smaller than an average order value and the card looks broken. Both now say their unit,
+      and the total's comparison says it is against the average AD (a size comparison), not
+      against a per-customer figure. */
+   (NCLIVE?'<div class="ak"><span>NEW customers (store)</span><b>'+Math.round(a.nc||0).toLocaleString()+((a.nc&&a.opur)?' <span style="font-weight:600;color:#5f6a7d">'+Math.round(a.nc/a.opur*100)+'% of store pur</span>':'')+'</b></div>'+'<div class="ak"><span>NC store revenue</span><b style="color:var(--brand)">E&pound; '+money((a.ncv||0)*mf)+'</b></div>'+((a.nc&&a.ncv)?'<div class="ak"><span>NC AOV (store) <span style="font-weight:600;color:#5f6a7d">per customer</span></span><b>E&pound; '+money(a.ncv*mf/a.nc)+vsA(a.ncv*mf/a.nc,avAov)+'</b></div>'+'<div class="ak"><span>NC gross profit <span style="font-weight:600;color:#5f6a7d">total, '+(gpr*100).toFixed(1)+'% of NC revenue</span></span><b>E&pound; '+money(a.ncv*mf*gpr)+(avGp>0?' <span style="font-weight:700;font-size:10.5px;color:'+((a.ncv*mf*gpr)>=avGp?'#0f7a55':'#c4203f')+'">'+((a.ncv*mf*gpr)>=avGp?'+':'')+Math.round(((a.ncv*mf*gpr)/avGp-1)*100)+'% vs the average ad</span>':'')+'</b></div>':''):'')+
    ((W&&a.d)?'<div class="ak"><span>Launched (first spend)</span><b>'+(f0>0?aD2(W,f0):'&le; '+W.start)+'</b></div>':'')+((a.vv&&a.imp)?'<div class="ak"><span>Hook rate (3s/impr)</span><b>'+(a.vv/a.imp*100).toFixed(1)+'%</b></div>':'')+'<div class="ak"><span>CPP (Shopify)</span><b>E&pound; '+(a.pur?money(a.sp/a.pur):'&mdash;')+'</b></div>'+
    '<div class="ak" style="border:0"><span>'+(a.pl?'<a href="'+a.pl+'" target="_blank" rel="noopener" style="color:var(--brand);font-size:11.5px">open real preview &rarr;</a>':'')+'</span><b>'+amLink(LVL,a.id,a.acct,'edit')+'</b></div>'+'</div>';}).join('')+'</div>';
   h3+='<div class="ins" style="margin-top:8px"><div class="row"><span class="dot" style="background:'+C.grn+'"></span><span>Ads where TOTAL ROAS is far above website ROAS are your store-drivers &mdash; they sell offline. Ads where the two match are pure e-com.'+(NCLIVE?' In-store NEW customers per ad are Meta&rsquo;s own all-branch new-customer conversion &mdash; real attribution, not modelling. Rank by NEW-customer store value to find your acquisition ads.':'')+'</span></div>'+(NCLIVE?'':'<div class="row"><span class="dot" style="background:'+C.org+'"></span><span><b>Per-ad NEW-customer store value is hidden this window because Meta attributed zero to it.</b> Your in-store CAPI is firing the standard <b>offline_conversion.purchase</b> event (E&pound; '+money(((O.metaCC||{}).offlineVal||0)*mf)+' attributed &mdash; that IS live), but the branch-tagged and new-customer <b>custom conversions</b> ('+(((O.metaCC||{}).listed)||0)+' rules exist on the account, '+(((O.metaCC||{}).seen)||0)+' fired) are not attributing to ads. That is a CAPI event-mapping condition on Meta&rsquo;s side, not a dashboard gap &mdash; the branch splits everywhere else on this dashboard come from real POS. To light this column up, the in-store events need the branch + new/returning parameters your custom-conversion rules filter on.</span></div>')+'</div>';
@@ -20569,6 +20576,7 @@ function adMomentum(g,opt){
   +'<th style="'+TH+'">ROAS 7d<div style="font-weight:600;text-transform:none;color:var(--ink-3)">'+SCLBL[SC]+'</div></th>'
   +'<th style="'+TH+'">CVR 3d</th><th style="'+TH+'">CVR 7d</th>'
   +'<th style="'+TH+'">Cost per purchase 3d</th><th style="'+TH+'">Cost per purchase 7d</th>'
+  +'<th style="'+TH+';text-align:left">What moved the 7d ROAS</th>'
   +'<th style="'+TH+';text-align:left">Reading</th></tr>';
  rows.slice(0,opt.limit||30).forEach(o=>{const rd=read(o);
   h+='<tr><td style="'+TD+';text-align:left;max-width:280px;overflow:hidden;text-overflow:ellipsis"><b>'+String(o.nm).slice(0,54).replace(/</g,'&lt;')+'</b>'
@@ -20578,6 +20586,26 @@ function adMomentum(g,opt){
    +cell(o,'h3','roas',X,true)+cell(o,'h7','roas',X,true)
    +cell(o,'h3','cvr',PC,true)+cell(o,'h7','cvr',PC,true)
    +cell(o,'h3','cpp',M,false)+cell(o,'h7','cpp',M,false)
+   /* v93.10: the columns stated the move and never attributed it. ROAS is exactly
+      (1 ÷ cost per session) × purchases per session × AOV, so the same three levers that
+      run everywhere else split this move with no residual. */
+   +(function(){try{
+      const c2=o.h7.c, p2=o.h7.p;
+      if(!p2||!p2.sp||!p2.ck||!p2.pu||!c2.ck||!c2.pu)return '<td style="'+TD+';text-align:left;color:var(--ink-3);font-size:10.5px">no prior week</td>';
+      const inv=x=>x.ck?x.ck/x.sp:0, cv=x=>x.ck?x.pu/x.ck:0, av=x=>x.pu?x.v/x.pu:0;
+      const parts=dcmpChain([['Cost per session',inv(c2),inv(p2)],
+                             ['Conversion rate',cv(c2),cv(p2)],
+                             ['Basket size',av(c2),av(p2)]]);
+      if(!parts||!parts.length)return '<td style="'+TD+'">—</td>';
+      const top=parts.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];
+      const dR=(c2.roas||0)-(p2.roas||0);
+      const lbl=top.n==='Cost per session'?((top.d>=0)?'cheaper sessions':'dearer sessions')
+        :(top.n==='Conversion rate'?((top.d>=0)?'conversion rate up':'conversion rate down')
+        :((top.d>=0)?'basket size up':'basket size down'));
+      return '<td style="'+TD+';text-align:left;font-size:10.5px;white-space:normal;max-width:190px">'
+       +'<b style="color:'+(top.d>=0?'var(--pos)':'var(--neg)')+'">'+lbl+'</b>'
+       +(dR?' <span style="color:var(--ink-3)">'+Math.abs(top.d/dR*100).toFixed(0)+'% of the move</span>':'')
+       +'</td>';}catch(e){return '<td style="'+TD+'">—</td>';}})()
    +'<td style="'+TD+';text-align:left;font-size:10.5px;font-weight:700;color:'+rd[1]+'">'+rd[0]+'</td></tr>';});
  h+='</table></div>';
  const nBoth=rows.filter(o=>read(o)[0]==='fading on both').length;
@@ -23160,7 +23188,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261008-175222';
+const BUILD='20261008-175527';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
