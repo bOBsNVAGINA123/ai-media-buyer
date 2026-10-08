@@ -2799,7 +2799,15 @@ def pull_pos_customers():
                         _gpv = gp_inc(rv, r.get("margin"))
                         _vm[0] += rv; _vm[1] += _gpv
                         # v13.1 DAILY too, so the date box can actually drive this tab.
-                        _vd = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(r["date"][:10], [0.0, 0.0])
+                        # v93.4: FOUR numbers, not two. The vendor daily series fused the
+                        # tills and Shopify into one pair, so the movers board could not be
+                        # asked "shops or online" at all -- the question needs the split at
+                        # source. 0,1 are the shops (report.pos.order); 2,3 are Shopify, and
+                        # they are written by pull_shop_lines, which is team_id = Shopify.
+                        # Noon / Amazon / Homzmart are in the row scalars (orev/ogp) and NOT
+                        # in this series, which is why the page offers no "all ecom" scope.
+                        _vd = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(r["date"][:10], [0.0, 0.0, 0.0, 0.0])
+                        while len(_vd) < 4: _vd.append(0.0)
                         _vd[0] += rv; _vd[1] += _gpv
                     if _tid:
                         _pd0 = XTRA.setdefault("pday", {}).setdefault(_tid, {}).setdefault(r["date"][:10], [0.0, 0.0])
@@ -3356,8 +3364,9 @@ def pull_shop_lines():
             if _vn:
                 _vm = XTRA.setdefault("vmon", {}).setdefault(_vn, {}).setdefault(_m7, [0.0, 0.0])
                 _vm[0] += rv; _vm[1] += mg
-                _vd2 = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(d[:10], [0.0, 0.0])
-                _vd2[0] += rv; _vd2[1] += mg
+                _vd2 = XTRA.setdefault("vday", {}).setdefault(_vn, {}).setdefault(d[:10], [0.0, 0.0, 0.0, 0.0])
+                while len(_vd2) < 4: _vd2.append(0.0)
+                _vd2[2] += rv; _vd2[3] += mg
             if _tid:
                 _pm = XTRA.setdefault("pmon", {}).setdefault(_tid, {}).setdefault(_m7, [0.0, 0.0])
                 _pm[0] += rv; _pm[1] += mg
@@ -6087,8 +6096,15 @@ def pull_vendors():
         v = p.get("v")
         if v in _want:
             _byv.setdefault(v, []).append(p)
+    # v93.4: eight was far too few to open a supplier up. MEASURED against Odoo for
+    # Ourkids Alnass over 29 Sep - 4 Oct: 422 products carried positive margin, the top 8
+    # were 13.7% of it and 80% needed 184 -- so the drill showed 5% of the move and the
+    # products that actually moved it (the Long-Sleeved Thermals) were not in the list at
+    # all. 40 reaches ~37% on that vendor at roughly 0.42 KB per product compressed. Full
+    # coverage is not affordable with a 400-day series per product; the card states what
+    # share of the move it is actually showing rather than implying it is the whole story.
     for v, lst in _byv.items():
-        for p in lst[:8]:
+        for p in lst[:40]:
             if id(p) not in _have:
                 _have.add(id(p)); prows.append(p)
     log("prodv rows", len(prows), "covering", len({p.get("v") for p in prows}), "vendors")
@@ -6876,7 +6892,14 @@ def build():
         for k in keep:
             days = src.get(k)
             if not days: continue
-            r = [0] * DAY_WIN; g = [0] * DAY_WIN; hit = 0
+            # v93.4: pack as many series as the source carries. vday is now 4 wide (shops
+            # rev/gp, Shopify rev/gp) while pday is still 2 -- hard-coding two silently
+            # threw the scope split away on the way out.
+            width = 2
+            for v in days.values():
+                if len(v) > width: width = len(v)
+            ser = [[0] * DAY_WIN for _ in range(width)]
+            hit = 0
             for ds, v in days.items():
                 if ds < d0: continue
                 try:
@@ -6884,8 +6907,9 @@ def build():
                 except Exception:
                     continue
                 if 0 <= i < DAY_WIN:
-                    r[i] += round(v[0]); g[i] += round(v[1]); hit = 1
-            if hit: out[k] = [r, g]
+                    for j in range(min(width, len(v))): ser[j][i] += round(v[j])
+                    hit = 1
+            if hit: out[k] = ser
         return out, d0
 
     # v50: stamp each vendor with its buying model so the monthly series below can be split
@@ -6984,7 +7008,7 @@ def build():
         # reaches 90% and costs +0.23 MB gzipped (measured on the live payload, 0.42 KB per
         # product compressed) against a 2.11 MB total. Cheap enough that the old cap was
         # simply the wrong trade.
-        _pk = [r.get("t") for r in sorted(prodv["rows"], key=lambda r: -(r.get("r") or 0))[:800] if r.get("t")]
+        _pk = [r.get("t") for r in sorted(prodv["rows"], key=lambda r: -(r.get("r") or 0))[:2400] if r.get("t")]
         _pp, _ps = _daypack(XTRA.get("pday", {}), _pk)
         if _pp:
             prodv["dayStart"] = _ps
