@@ -6040,8 +6040,18 @@ def pull_vendors():
         for r in g:
             t = r.get("product_tmpl_id")
             if not t: continue
+            _rv90 = float(r.get("price_total") or 0)
+            # v94.4: keep it per TEMPLATE as well as per vendor. The per-vendor product quota
+            # below was ranked on LIFETIME revenue, so a vendor whose range rotates by season
+            # got last season's winners and none of this week's: Ourkids Alnass's 40 kept
+            # products covered 6.3% of its level and 2.4% of its move, while the lines that
+            # actually moved it (the Long-Sleeved Thermals) are new SKUs with almost no
+            # lifetime. Ranking on the last 90 days needs no extra query -- this loop already
+            # groups by product_tmpl_id, it just threw the template away.
+            if key == "r90":
+                T(t[0])["r90"] = T(t[0]).get("r90", 0.0) + _rv90
             code = TV.get(t[0], ("", "", ""))[0]
-            if code: V(code)[key] += float(r.get("price_total") or 0)
+            if code: V(code)[key] += _rv90
 
     # ---- online, grouped by variant then folded up to the template ----
     PP = prod_tmpl_map()
@@ -6097,12 +6107,20 @@ def pull_vendors():
     # to nothing, because one big seller can take dozens of the 200 slots. Keep the global
     # 200 (it is what the product tables read) and add the top 8 of EVERY vendor that
     # appears on the vendor board, so every row on that board can be opened.
+    # the GLOBAL top-200 stays on lifetime revenue -- that list is what the product tables
+    # read and it should be the big sellers. The PER-VENDOR quota below ranks on RECENT
+    # revenue instead, because its job is to explain a move that happened this week.
     _ranked = sorted(tmpl.values(), key=lambda x: -(x["r"] + x["orev"]))
+    # ranked on the last 90 days of TILL revenue. Online recent is not available per template
+    # at this point (orev is lifetime), and the shops are the bulk of a supplier's movement,
+    # so this is the right signal for "which of this vendor's lines are live right now".
+    # Lifetime breaks ties so a product with no recent tills is not ordered at random.
+    _recent = sorted(tmpl.values(), key=lambda x: (-x.get("r90", 0.0), -(x.get("r", 0.0) + x.get("orev", 0.0))))
     prows = _ranked[:200]
     _have = {id(p) for p in prows}
     _want = {r["v"] for r in rows}
     _byv = {}
-    for p in _ranked:
+    for p in _recent:
         v = p.get("v")
         if v in _want:
             _byv.setdefault(v, []).append(p)
