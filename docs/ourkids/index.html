@@ -21515,9 +21515,13 @@ function rMETA(){
     :r.sc.s>=50?['brief the replacement','#a35a1a']:['healthy','#0f6e56'];
   body+='<tr>'
    +'<td style="'+TD+';text-align:left;max-width:270px"><div style="display:flex;gap:7px;align-items:flex-start">'
+     /* v94.3: these were 34x34 squares in a 91px row -- a sliver lost against the text, and
+        a square crop of a 4:5 or 9:16 ad throws most of the creative away. Meta serves this
+        account mostly vertical, so the box is 4:5 and tall enough to sit with the row. */
      +(function(){const src=r.a.im||r.a.th;
-        return src?'<img src="'+src+'" loading="lazy" style="width:34px;height:34px;object-fit:cover;border-radius:5px;flex:0 0 34px"/>'
-                  :'<div style="width:34px;height:34px;border-radius:5px;flex:0 0 34px;background:var(--surface-3)"></div>';})()
+        const box='width:46px;height:58px;flex:0 0 46px;border-radius:6px;background:var(--surface-3)';
+        return src?'<img src="'+src+'" loading="lazy" alt="" style="'+box+';object-fit:cover;display:block"/>'
+                  :'<div style="'+box+'"></div>';})()
      +'<div style="min-width:0"><b>'
      +(_lnk?'<a href="'+_lnk+'" target="_blank" rel="noopener" style="color:#3a3bd0;text-decoration:none" title="Open this exact ad in Ads Manager to view or edit">'+esc(r.a.n||'')+'</a>':esc(r.a.n||''))+'</b>'
      +'<div style="font-size:10.5px;color:#5f6a7d">'+esc(r.a.cmp||'')+'</div>'
@@ -23277,7 +23281,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261009-005431';
+const BUILD='20261009-182330';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
