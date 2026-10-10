@@ -3994,6 +3994,15 @@ function rTD(){
      +'These six are '+(topShare*100).toFixed(0)+'% of all the movement, and the biggest single one is '
      +(Math.abs(allUp-allDn)?(Math.abs(top[0].d)/Math.abs(allUp-allDn)*100).toFixed(0):'—')+'% of it. '
      +'<b>No row here is "what moved"</b> &mdash; the change is spread across '+(nUp+nDn)+' suppliers and this is the head of it.'
+     /* v94.5: the supplier book is not the whole business and this card never said so.
+        Reconciled against Odoo on 10 Oct: branch revenue in the payload matches
+        report.pos.order to 0.00% and gross profit matches the 4% basis to E£2 on E£12M, so
+        the FIGURES are right -- but the vendor daily series only carries lines that map to
+        a vendor, and only the vendors the book shows. Measured for September: the series is
+        6.4% short of till revenue and 12.8% short of the Shopify leg. */
+     +((O.vend&&O.vend.cov&&O.vend.cov.revPct)?('<br><b>This is the supplier book, not the whole business.</b> It carries '
+        +(O.vend.cov.shown||0)+' of '+(O.vend.cov.vend||0)+' suppliers and <b>'+O.vend.cov.revPct+'% of revenue</b> over all time. '
+        +'A line Odoo cannot map to a vendor is in your branch totals and not in these rows, so read this as what moved among the suppliers it covers.'):'')
      +(hasMOA&&MSC!=='shop'?('<br><b>Mall of Arabia is '+(MOAIN?'IN':'OUT of')+' these figures</b> &mdash; it carried '+M(moaGp)+' of gross profit over these days'+(MOAIN?'.':', which is not counted above.')+' It opened in November 2025, so any comparison reaching back further is not like for like with it in.'):'')
     +'</div>'
     +'<div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-1);overflow:hidden">'
@@ -23281,7 +23290,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261009-182330';
+const BUILD='20261010-131900';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
