@@ -1283,8 +1283,20 @@ function winStamp(t){try{
    bar.title='';}
   el.style.cssText='display:flex;gap:8px;align-items:center;margin:0 0 10px;padding:6px 11px;'
    +'border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-m);font-size:11.5px;color:var(--ink-3)';
+  /* v94.6: the picker now reaches the last day that HAS data, including the day the
+     collector stopped mid-way through. That day is real but short, so it has to be named --
+     unblocking it silently would trade a hidden block for a hidden understatement. */
+  const _pt=(O.partial&&ST.e&&ST.e>=O.partial&&ST.s<=O.partial)?O.partial:null;
+  if(_pt){
+   el.style.cssText='display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;padding:7px 11px;'
+    +'border:1px solid var(--warn-line);background:var(--warn-wash);border-radius:var(--r-m);font-size:11.5px;line-height:1.5;color:var(--ink-2)';
+   el.innerHTML='<span style="font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;white-space:nowrap;padding-top:1px">Part day</span>'
+    +'<span><b style="color:var(--ink)">'+box+'</b> — every number on this tab reads these days, and <b>'+_pt+' is only as far as the collector got</b>'
+    +(O.lastSync?(' (synced '+O.lastSync+')'):'')+'. It is a real day with a short count, so it reads low against a full one. '
+    +(O.fullEnd?('End on <b>'+O.fullEnd+'</b> for the last complete day.'):'')+'</span>';
+  }else{
   el.innerHTML='<span style="font-weight:700;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px">Window</span>'
-   +'<span><b style="color:var(--ink-2)">'+box+'</b> — every number on this tab reads these days.</span>';
+   +'<span><b style="color:var(--ink-2)">'+box+'</b> — every number on this tab reads these days.</span>';}
  }
  const first=pane.firstElementChild;
  if(first&&first.classList&&first.classList.contains('bar'))first.insertAdjacentElement('afterend',el);
@@ -2904,7 +2916,18 @@ function boot(){O=window.O;FF=window.F;
     highlighted the first group -- Today selected, Overview on screen. */
  try{tab(TAB||'td');}catch(e){rOn();}
  document.getElementById('ft').innerHTML='Sources — Revenue/GP/orders/returns/channels: Odoo (daily). Branch retail revenue: Odoo POS journal accounting (daily, REAL). Sessions/funnel: Shopify. Spend + ROAS: Meta·Google·TikTok. Default attribution live; other windows modeled. Auto-synced every 3 hours. Click any blue ? beside a number for its exact source, or open the Guide tab. · <b>v9.8</b>';}
-function lastD(){const a=(O.aw&&O.aw[1])||ST.e;return (window.EXT!==false&&a===(O.today||''))?addD(a,-1):a;}
+/* v94.6: the running day was stripped against O.today, which is the day the COLLECTOR ran,
+   not the day it is now. Once the clock rolls past midnight that stamp goes stale and a day
+   that has finished stays locked out of the date picker until the next sync. Measured
+   2026-10-12: O.today was 2026-10-10, the real Cairo date was 2026-10-12, and the picker
+   capped at 2026-10-09 -- two complete days unselectable with their data sitting in the
+   payload. Strip the running day only when it is actually running NOW. */
+function lastD(){
+ const a=(O.aw&&O.aw[1])||ST.e;
+ if(window.EXT===false)return a;
+ let now='';
+ try{now=(typeof cairoToday==='function')?cairoToday():(O.today||'');}catch(e){now=O.today||'';}
+ return (a===now)?addD(a,-1):a;}
 function setEXT(v){window.EXT=v;const t=(O.today||'');if(v&&ST.e===t)ST.e=addD(t,-1);if(!v&&ST.e===addD(t,-1))ST.e=t;RDR();}
 /* v9.30 ANY RANGE, NO NONSENSE RANGE. The FROM box had a min but no max and the TO box had a
    max but no min, so nothing stopped FROM being set after TO. The header then printed
@@ -23290,7 +23313,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261010-131900';
+const BUILD='20261012-003033';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
