@@ -3164,6 +3164,8 @@ def pull_pos_customers():
                 log("product LTV cohorts", len(_pout), "products >=25 acquired customers, 7 horizons")
             except Exception as _e:
                 log("vendor LTV cohorts FAILED", _e)
+                # stamp it so the _thin gate does not force a heavy crawl every hour on a bug
+                XTRA["prodCoh"] = {"rows": [], "err": str(_e)[:160], "asOf": END.isoformat()}
         except Exception as _e:
             log("hook brands fail", str(_e)[:120])
         log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
@@ -6922,6 +6924,10 @@ def build():
                     if len(_sv.get("opy") or []) < 11 or _sv.get("opyAge") is None:
                         return "repeat-frequency buckets are the old 6-wide shape (need 11 + opyAge)"
                     break
+            # v95: prodCoh is built inside pull_pos_customers; without this the fresh-bnrD
+            # gate carried the old payload forward and the key could never appear.
+            if not ((pv.get("prodCoh") or {}).get("asOf")):
+                return "product LTV cohorts missing (prodCoh)"
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
@@ -7288,7 +7294,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or ({"rows": [], "err": "not built on this heavy run", "asOf": END.isoformat()} if heavy else {})), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "madsCov": _xm("madsCov"),
