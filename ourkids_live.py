@@ -2757,7 +2757,7 @@ def pull_pos_customers():
     bnr = {}; bstat = {}; bun = {}; bnrd = {}; bund = {}; bunv = {}; bcatd = {}
     ANON = anon_partner_ids()
     TV = tmpl_vendor_map(); VNM = vendor_names()
-    VCS = {}; PFD = {}; PFV = {}; PATTR = {}; JR = []
+    VCS = {}; PFD = {}; PFV = {}; PFP = {}; TNAME = {}; PATTR = {}; JR = []
     try:
         rows = []
         q = datetime.date(2024, 8, 1)
@@ -2852,11 +2852,20 @@ def pull_pos_customers():
                         if _vn:
                             _vl = VNM.get(_vn) or _vn
                             _at["ven"][_vl] = _at["ven"].get(_vl, 0.0) + rv
+                    # v95: the tmpl id arrives as [id, name]; keep the name for the
+                    # product-level acquisition cohort below, and track each customer's
+                    # FIRST-ORDER PRODUCTS in lockstep with PFV's first-order vendors.
+                    if _tid and _tid not in TNAME:
+                        TNAME[_tid] = ((r.get("product_tmpl_id") or [0, ""])[1] or "")[:48]
                     if _vn:
                         VCS.setdefault(_vn, set()).add(pid)
                         _p0 = PFD.get(pid)
-                        if _p0 is None or d10 < _p0: PFD[pid] = d10; PFV[pid] = set([_vn])
-                        elif d10 == _p0: PFV[pid].add(_vn)
+                        if _p0 is None or d10 < _p0:
+                            PFD[pid] = d10; PFV[pid] = set([_vn])
+                            PFP[pid] = set([_tid]) if _tid else set()
+                        elif d10 == _p0:
+                            PFV[pid].add(_vn)
+                            if _tid: PFP.setdefault(pid, set()).add(_tid)
                 off += len(page)
                 if len(page) < 10000: break
             q = q2
@@ -3038,6 +3047,7 @@ def pull_pos_customers():
                 # 365 days, comparing THEIR day-0 with THEIR 365d, because averaging 982
                 # customers at day 0 against 343 at a year is not a repeat rate at all.
                 _vc = {}
+                _pc = {}   # v95: product-level, same tenure-fair horizons as the vendor one
                 for p in _all:
                     _f = first.get(p)
                     _fd = _f[0] if isinstance(_f, (tuple, list)) else _f
@@ -3045,7 +3055,8 @@ def pull_pos_customers():
                     _f0 = datetime.date.fromisoformat(_fd)
                     _age = (END - _f0).days
                     _vs = PFV.get(p) or ()
-                    if not _vs: continue
+                    _ps = PFP.get(p) or ()
+                    if not _vs and not _ps: continue
                     _ok = [i for i, H in enumerate(_HZ) if _age >= H]
                     if not _ok: continue
                     _acc = [0.0] * len(_HZ)
@@ -3056,8 +3067,8 @@ def pull_pos_customers():
                             if _dd <= _HZ[i]: _acc[i] += _mg
                     _i365 = _HZ.index(365)
                     _has365 = _i365 in _ok
-                    for _v in _vs:
-                        e = _vc.setdefault(_v, {"n": 0, "s": [None] * len(_HZ), "pair": []})
+                    def _tally(dst, key):
+                        e = dst.setdefault(key, {"n": 0, "s": [None] * len(_HZ), "pair": []})
                         if e["s"][0] is None:
                             e["s"] = [[] for _ in _HZ]
                         e["n"] += 1
@@ -3065,6 +3076,8 @@ def pull_pos_customers():
                             e["s"][i].append(_acc[i])
                         if _has365:
                             e["pair"].append((_acc[0], _acc[_i365]))
+                    for _v in _vs: _tally(_vc, _v)
+                    for _pp in _ps: _tally(_pc, _pp)
                 def _med(xs):
                     if not xs: return None
                     xs = sorted(xs); k = len(xs)
@@ -3087,6 +3100,26 @@ def pull_pos_customers():
                 _vout.sort(key=lambda x: -(x["mult"] or 0))
                 XTRA["vcoh"] = {"hz": _HZ, "rows": _vout[:60], "asOf": END.isoformat(), "minN": 25}
                 log("vendor LTV cohorts", len(_vout), "vendors >=25 acquired customers, 7 horizons")
+                # v95: the SAME tenure-fair cohort, per PRODUCT -- what a customer whose FIRST
+                # order contained this product is worth at a FIXED number of days, so a product
+                # that acquired people long ago no longer looks good purely for having aged.
+                # Ranked on value at 365 days (p365), the honest "brings good customers" signal.
+                _pout = []
+                for _pp, e in _pc.items():
+                    if e["n"] < 25: continue
+                    _pa = [x for x, _y in e["pair"]]; _pb = [_y for _x, _y in e["pair"]]
+                    _m0, _m365 = _med(_pa), _med(_pb)
+                    _pout.append({"t": _pp, "nm": (TNAME.get(_pp) or str(_pp))[:48], "n": e["n"],
+                                  "cur": [round(_med(e["s"][i]), 1) if e["s"][i] else None
+                                          for i in range(len(_HZ))],
+                                  "mat": [len(e["s"][i]) for i in range(len(_HZ))],
+                                  "pn": len(e["pair"]),
+                                  "p0": round(_m0, 1) if _m0 is not None else None,
+                                  "p365": round(_m365, 1) if _m365 is not None else None,
+                                  "mult": round(_m365 / _m0, 3) if (_m0 and _m365) else None})
+                _pout.sort(key=lambda x: -(x["p365"] or 0))
+                XTRA["prodCoh"] = {"hz": _HZ, "rows": _pout[:80], "asOf": END.isoformat(), "minN": 25}
+                log("product LTV cohorts", len(_pout), "products >=25 acquired customers, 7 horizons")
             except Exception as _e:
                 log("vendor LTV cohorts FAILED", _e)
         except Exception as _e:
@@ -7213,7 +7246,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or {}), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "madsCov": _xm("madsCov"),
