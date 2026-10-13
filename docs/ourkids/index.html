@@ -2971,8 +2971,8 @@ function pre(p){const last=lastD();if(p==='ytd')ST.s=last.slice(0,4)+'-01-01';el
 const TABGROUPS=[
  ['Today',[['td','What needs you']]],
  ['Overview',[['on','Online store'],['hm','Daily heat map'],['off','Branches'],['tm','Pace & timeframes'],['rm','How every number is built']]],
- ['Customers',[['cp','Best customers'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
- ['Products',[['fo','Where to focus'],['vl','Vendors & products LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
+ ['Customers',[['cp','Customer portfolio analysis'],['lt','Lifetime profit vs CAC'],['co','Cohort payback'],['rt','Repeat rate'],['cj','First order \u2192 lifetime']]],
+ ['Products',[['fo','Where to focus'],['vl','Vendor LTV'],['dc','Codes & influencers'],['av','Vendor capital'],['ag','Listing gap']]],
  ['Advertising',[['mt','Meta'],['gg','Google'],['tk','TikTok'],['bg','New launches'],['ao','Ads \u2192 branches'],['mi','All platforms side by side'],['bf','Black Friday planner']]],
  ['Growth Lab',[['gl','Growth Lab']]],
  ['P&L',[['be','Break-even & buying'],['pn','Online P&L'],['rp','Branches P&L'],['au','Where the profit comes from'],['cs','Costs & payroll'],['pl','30d vs prior 30d']]],
@@ -23404,7 +23404,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-154049';
+const BUILD='20261013-225810';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
