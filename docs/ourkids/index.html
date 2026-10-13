@@ -540,7 +540,7 @@ tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--b
 <div class="foot" id="ft"></div></div>
 <div id="mwrap"></div>
 <script>
-const HASH="9f97837eb237a58b0b15c0b0962b450c131d5ddbade4ac2ca88b34b451600745";
+const HASH="5a623109d248dc9e9062ce1f3da9a37f0eb18509b37795cdd9daab30a0e20099";
 async function unlock(){const v=document.getElementById('pw').value;const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));const x=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('');if(x===HASH){document.getElementById('gate').classList.add('hide');document.getElementById('app').classList.remove('hide');try{stickMeasure();setTimeout(stickMeasure,60);setTimeout(stickMeasure,500);}catch(e){}boot();}else document.getElementById('er').textContent='Wrong password';}
 document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});
 const C={teal:'#1fc3b6',blue:'#286db5',indigo:'#4a4bd8',violet:'#7952c5',orange:'#a6592a',pink:'#ff5da2',grn:'#0a7756',red:'#c4203f',grey:'#5f6a7d'};
@@ -23313,7 +23313,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261012-003033';
+const BUILD='20261013-135319';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
