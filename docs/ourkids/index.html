@@ -17808,11 +17808,70 @@ function cbCard(g){const DB=O.decB;if(!DB||!DB.win)return;
   +'<tr><th style="text-align:left">Spend bracket</th><th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>'
   +(RB?'<th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>':'')+'</tr>'
   +RA.map(row).join('')+'</table></div>'+hi);}
+/* ===== v95 STANDARDIZED HOOK — what products bring GOOD customers, tenure-fair ==========
+   The "best customers" deciles and the lifetime acquisition cards reward anything acquired
+   LONGER AGO: two years of trading beats one, regardless of quality. This asks the same
+   question fairly. For customers whose FIRST order contained a product, it reads gross
+   profit per customer at a FIXED age from their own first purchase, counting a customer at
+   a horizon only once that horizon has actually elapsed for them. Ranked on value at 365
+   days -- the honest signal for "brings a customer worth keeping", with age removed.
+   Product-level when O.prodCoh is in the payload (needs a heavy crawl); until then it shows
+   the same thing at BRAND level from O.vcoh and says so. */
+function hookStd(g){
+ const PC=O.prodCoh, VC=O.vcoh;
+ const src=(PC&&PC.rows&&PC.rows.length)?{d:PC,grain:'product',lbl:'Product'}
+          :((VC&&VC.rows&&VC.rows.length)?{d:VC,grain:'brand',lbl:'Brand'}:null);
+ if(!src)return;
+ const D=src.d, HZ=D.hz||[0,30,60,90,180,365,730], i365=HZ.indexOf(365), i0=0;
+ const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const N=v=>Math.round(v||0).toLocaleString();
+ /* only rank rows with enough MATURE customers at 365d to mean anything */
+ const MINMAT=15;
+ const rows=(D.rows||[]).map(r=>{const mat365=(r.mat&&r.mat[i365])||0;
+   return {nm:r.nm, n:r.n, p0:r.p0, p365:r.p365, mult:r.mult, mat365, cur:r.cur};})
+  .filter(r=>r.p365!=null&&r.mat365>=MINMAT)
+  .sort((a,b)=>(b.p365||0)-(a.p365||0));
+ if(!rows.length)return;
+ const med=rows.map(r=>r.p365).sort((a,b)=>a-b)[Math.floor(rows.length/2)]||0;
+ const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
+ const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
+ let h='<div style="overflow-x:auto"><table class="bt heat" data-hc="2,3,4,5,6" data-hcx="1"><tr>'
+  +'<th style="'+TH+';text-align:left">'+src.lbl+' a customer FIRST bought</th>'
+  +'<th style="'+TH+'">Customers acquired</th>'
+  +'<th style="'+TH+'">GP in first order</th>'
+  +'<th style="'+TH+'">GP by day 365<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">per customer, standardized</div></th>'
+  +'<th style="'+TH+'">× first order</th>'
+  +'<th style="'+TH+'">Mature at 365d</th></tr>';
+ rows.slice(0,25).forEach(r=>{
+  h+='<tr><td style="'+TD+';text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis;font-weight:700" dir="auto" title="'+String(r.nm).replace(/"/g,'')+'">'+esc(String(r.nm).slice(0,52))+'</td>'
+   +'<td style="'+TD+'">'+N(r.n)+'</td>'
+   +'<td style="'+TD+'">'+(r.p0!=null?M(r.p0):'—')+'</td>'
+   +'<td style="'+TD+';font-weight:800">'+M(r.p365)+'</td>'
+   +'<td style="'+TD+'">'+(r.mult!=null?r.mult.toFixed(1)+'×':'—')+'</td>'
+   +'<td style="'+TD+';color:'+(r.mat365<30?'var(--warn)':'var(--ink-3)')+'">'+N(r.mat365)+'</td></tr>';});
+ h+='</table></div>';
+ const best=rows[0], worst=rows[rows.length-1];
+ h+='<div class="rtNote">'
+  +'<b>This is tenure-standardized, which the lifetime tables are not.</b> It reads gross profit per acquired customer at a FIXED 365 days from each customer&rsquo;s own first order, so a '+src.grain+' that acquired people two years ago no longer out-ranks a newer one just for having aged. '
+  +(best&&worst?('<b>'+esc(String(best.nm).slice(0,30))+'</b> brings the most valuable first-time customer at <b>'+M(best.p365)+'</b> by day 365, against <b>'+M(worst.p365)+'</b> for '+esc(String(worst.nm).slice(0,30))+' &mdash; the median here is '+M(med)+'. '):'')
+  +'<b>Mature at 365d</b> is how many of its customers have actually reached a year, so the 365-day figure is real and not projected; rows under '+MINMAT+' are hidden and under 30 are amber. '
+  +(src.grain==='brand'
+    ? '<b>This is at BRAND level</b> &mdash; the per-PRODUCT version lands on the next heavy crawl (the collector change shipped, the data follows).'
+    : 'A customer is attributed to every '+src.grain+' in their first order, so a basket with three products credits all three.')
+  +'</div>';
+ pnlCard(g,'odoo','What brings a GOOD customer &mdash; standardized to value at one year'
+  +INFO('For customers whose first order contained each '+src.grain+', gross profit per customer at a fixed 365 days from their own first purchase. Removes the tenure advantage that makes older acquisitions look better. Ranked on day-365 value over customers old enough to count.'),
+  'The acquisition question asked fairly &mdash; who brings customers worth keeping, not who has simply been around longest.',h);
+ try{applyHeat(g);}catch(e){}
+}
+window.hookStd=hookStd;
+
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
  document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. MATURITY: deciles are LIFETIME sums, so recently-acquired customers sit in low deciles until their cohort matures &mdash; that is age, not weakness; the age-fair view is <b>Branch cohort quality (SAME-AGE)</b> on the Retail P&amp;L tab. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
  try{cbCard(g);}catch(e){}
  if(ST.decScB===undefined)ST.decScB='Shopify';
  rDec(g,ST.decSc||'ALL STORES','decSc');
+ try{hookStd(g);}catch(e){console.error('standardized hook card failed:',e);}
  qsweep('g15');}
 function decIns(D,tt,money){
  if(!D||D.length<10)return '';
@@ -23345,7 +23404,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-150142';
+const BUILD='20261013-154049';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
