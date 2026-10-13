@@ -3659,9 +3659,16 @@ function rTD(){
  /* v20 if the payload is not in yet, paint a skeleton the exact shape of the answer so
     the layout does not jump when it arrives. Never a spinner: a spinner says "wait",
     a skeleton says "here is where to look". */
- if(!window.O||!O.fin){g.innerHTML=skStanding()
+ /* v94.8: this guard was `!window.O||!O.fin`. `O` is the lexical global that boot() sets to
+    window.O; until boot runs it is undefined. When data.js has defined window.O but boot has
+    not yet assigned O, `!window.O` is false, so JS goes on to evaluate `!O.fin` -> undefined.fin
+    -> "Cannot read properties of undefined (reading 'fin')", and the Today tab shows
+    "could not build" on perfectly good data. Test window.O only, and bind O from it so the
+    rest of this function (which uses the bare O) is safe even if boot has not run. */
+ if(!window.O||!window.O.fin){g.innerHTML=skStanding()
    +'<div class="skwrap" style="display:block;padding:16px 18px"><div class="skline lbl skshim"></div>'
    +'<div class="skline skshim" style="width:86%"></div><div class="skline sm skshim"></div></div>';return;}
+ O=window.O; FF=FF||window.F;
  const W=tdWindows();
  const M=_tdM, SM=_tdSM;
 
@@ -23338,7 +23345,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-142016';
+const BUILD='20261013-150142';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
