@@ -3163,12 +3163,12 @@ def pull_pos_customers():
                                   "p365": round(_m365, 1) if _m365 is not None else None,
                                   "mult": round(_m365 / _m0, 3) if (_m0 and _m365) else None})
                 _pout.sort(key=lambda x: -(x["p365"] or 0))
-                XTRA["prodCoh"] = {"hz": _HZ, "rows": _pout[:80], "asOf": END.isoformat(), "minN": 25}
+                XTRA["prodCoh"] = {"hz": _HZ, "rows": _pout[:80], "asOf": END.isoformat(), "minN": 25, "v": 2}
                 log("product LTV cohorts", len(_pout), "products >=25 acquired customers, 7 horizons")
             except Exception as _e:
                 log("vendor LTV cohorts FAILED", _e)
                 # stamp it so the _thin gate does not force a heavy crawl every hour on a bug
-                XTRA["prodCoh"] = {"rows": [], "err": str(_e)[:160], "asOf": END.isoformat()}
+                XTRA["prodCoh"] = {"rows": [], "err": str(_e)[:160], "asOf": END.isoformat(), "v": 2}
         except Exception as _e:
             log("hook brands fail", str(_e)[:120])
         log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
@@ -6929,8 +6929,8 @@ def build():
                     break
             # v95: prodCoh is built inside pull_pos_customers; without this the fresh-bnrD
             # gate carried the old payload forward and the key could never appear.
-            if not ((pv.get("prodCoh") or {}).get("asOf")):
-                return "product LTV cohorts missing (prodCoh)"
+            if (pv.get("prodCoh") or {}).get("v") != 2:   # v2 = ranked over >=25 customers past day 365
+                return "product LTV cohorts missing or old shape (prodCoh v2)"
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
@@ -7297,7 +7297,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or ({"rows": [], "err": "not built on this heavy run", "asOf": END.isoformat()} if heavy else {})), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or ({"rows": [], "err": "not built on this heavy run", "asOf": END.isoformat(), "v": 2} if heavy else {})), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "madsCov": _xm("madsCov"),
