@@ -19180,6 +19180,90 @@ window.dcmpChain=function(facs){/* [[label, cur, prev], ...] multiplied; exact, 
   run[i]=facs[i][1];
   out.push({n:facs[i][0], d:run.reduce((a,b)=>a*b,1)-before, from:facs[i][2], to:facs[i][1]});}
  return out;};
+/* v96 THE PAID-MEDIA TREE: value = spend × (impressions ÷ spend) × CTR × CVR × AOV.
+   The old tree started at impressions, which on a budget-capped campaign is a CONSEQUENCE
+   of spend, not a cause -- so "fewer people saw it" blamed reach for what was a budget cap.
+   Spend leads; impressions-per-pound is the auction price (the inverse of CPM), the one
+   place a competitor pushing into the auction shows up. Exact and sequential, so the five
+   bars sum to the move. */
+/* Share of Google's CLAIMED revenue that was real, measured on the cleanest blackout
+   (4 May-17 Jun 2026, 45 days: claim E£109k/day, actual total-revenue drop E£35k/day).
+   Off-season figure; never tested in BTS. Budget and bid actions are judged on it, so a
+   "raise the budget" is never priced on Google's own number alone. */
+window.G_INCR=0.32;
+/* KPIs first, then the decomposition, then the decisions. okActCard and the burn alert pin
+   themselves to the top of a tab; this sets the order once everything has rendered. Cards
+   matched by title, in the order given; everything else keeps its place below them. */
+window.leadOrder=function(g,res){try{const cards=[...g.children];let at=null;
+ res.forEach(re=>{const c=cards.find(x=>re.test(((x.querySelector('.ct')||{}).textContent||'').trim()));
+  if(!c)return; if(at)at.after(c); else g.insertBefore(c,g.firstChild); at=c;});}catch(e){}};
+window.PT_FMT={'Spend':v=>'E£'+Math.round(v||0).toLocaleString(),
+ 'Auction price (CPM)':v=>v?('E£'+(1000/v).toFixed(1)+' CPM'):'—',
+ 'Click-through rate':v=>((v||0)*100).toFixed(2)+'%','Conversion rate':v=>((v||0)*100).toFixed(2)+'%',
+ 'Average order value':v=>'E£'+Math.round(v||0).toLocaleString()};
+window.PT_SAY={'Spend':['you spent more','you spent less'],
+ 'Auction price (CPM)':['the auction got cheaper','the auction got more expensive'],
+ 'Click-through rate':['more people clicked','fewer people clicked'],
+ 'Conversion rate':['the clicks bought more','the clicks bought less'],
+ 'Average order value':['the baskets were bigger','the baskets were smaller']};
+window.paidTree=function(c,p){
+ const f=o=>({sp:o.sp||0,ipe:o.sp?(o.im||0)/o.sp:0,ctr:o.im?(o.ck||0)/o.im:0,cvr:o.ck?(o.pur||0)/o.ck:0,aov:o.pur?(o.val||0)/o.pur:0});
+ const a=f(c),b=f(p);
+ return dcmpChain([['Spend',a.sp,b.sp],['Auction price (CPM)',a.ipe,b.ipe],['Click-through rate',a.ctr,b.ctr],
+                   ['Conversion rate',a.cvr,b.cvr],['Average order value',a.aov,b.aov]]);};
+/* auction share over a day range, from the daily additive counts the collector ships.
+   cov = share of the window's impressions on days Google actually reported share for. */
+window.aucShare=function(d,i,j){
+ const S=k=>{let t=0;const A=d&&d[k];if(!A)return 0;for(let x=Math.max(0,i);x<=j;x++)t+=A[x]||0;return t;};
+ const el=S('el'),lb=S('lb'),lr=S('lr'),imc=S('imc'),imp=S('imp');
+ let bud=0,bd=0;const B=d&&d.bud;if(B)for(let x=Math.max(0,i);x<=j;x++)if(B[x]>0){bud+=B[x];bd++;}
+ return {el,imc,imp,cov:imp?imc/imp:0,is:el?imc/el:null,bl:el?lb/el:null,rl:el?lr/el:null,bud,bd};};
+/* what to DO, from the factor that moved most. Measured parts are stated as numbers; the
+   action is a rule on them, never a story. Competitor NAMES are not in any API we hold
+   (Google Ads: METRIC_ACCESS_DENIED on auction_insight_*; Merchant Center competitive
+   visibility: no rows for Egypt), so the card says where to read them instead. */
+window.gVerdict=function(o){
+ const t=o.top; if(!t)return {line:'',html:''};
+ const pct=v=>v==null?'—':(v*100).toFixed(0)+'%', M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
+ const a0=o.a0,a1=o.a1, covOK=!!(a0&&a1&&a0.cov>=0.7&&a1.cov>=0.7);
+ const share=covOK?(' Lost to budget '+pct(a0.bl)+' → '+pct(a1.bl)+'; lost to rank '+pct(a0.rl)+' → '+pct(a1.rl)+'.'):'';
+ const gap=(a1&&a1.imp&&a1.cov<0.7)?(' Google has released auction share for only '+(a1.cov*100).toFixed(0)+'% of this window&rsquo;s impressions'+(o.shop?' (Shopping reports it days late)':'')+', so budget-vs-rank cannot be split for it yet.'):'';
+ const u=(a0&&a1&&a0.bd&&a1.bd&&a0.bud&&a1.bud)?{b0:a0.bud/a0.bd,b1:a1.bud/a1.bd,u0:o.p.sp/a0.bud,u1:o.c.sp/a1.bud}:null;
+ const real=o.roas*G_INCR, ok=real>=o.be, okClaim=o.roas>=o.be;
+ const roasTxt='claimed ROAS '+o.roas.toFixed(2)+'×, about '+real.toFixed(2)+'× real at the 32% your May–June blackout measured, vs break-even '+o.be.toFixed(2)+'×';
+ const test='Raise it 20% for 14 days and judge on TOTAL revenue, not Google&rsquo;s number — it needs a claimed '+(o.be/G_INCR).toFixed(1)+'× to clear break-even for real.';
+ const down=t.d<0; let why='',line='',act='';
+ if(t.n==='Spend'){
+  if(u&&Math.abs(u.b1/u.b0-1)<0.02) why='Daily budget unchanged at '+M(u.b1)+'; Google spent '+(u.u0*100).toFixed(0)+'% of it before and '+(u.u1*100).toFixed(0)+'% now'+(u.u1>=0.95?' — it is on the cap, so the lost impressions are the budget, not a competitor':'')+'.';
+  else if(u) why='You moved the daily budget '+M(u.b0)+' → '+M(u.b1)+'.';
+  else why='Spend '+(down?'fell':'rose')+'.';
+  if(down){line=ok?'Raise the budget':(okClaim?'Test +20%, don’t scale':'Hold — under break-even');
+   act=roasTxt+(ok?': it clears even on the real number — raise the daily budget.':(okClaim?'. '+test:': do not buy more of it.'));}
+  else {line=ok?'Keep scaling':(okClaim?'Judge on total revenue':'Pull back');
+   act=roasTxt+(ok?': the extra spend is paying.':(okClaim?'. Check total revenue moved with it before going further.':': the extra spend is not paying — trim back.'));}
+ }else if(t.n==='Auction price (CPM)'){
+  const rankUp=covOK&&a1.rl!=null&&a0.rl!=null&&(a1.rl-a0.rl)>0.03;
+  if(down){
+   if(rankUp){why='The auction got more expensive AND you lost more to rank — someone is outbidding you.';
+    line='Competitor pressure';act='Google does not release who to the API: open <b>Auction insights</b> for this campaign in Google Ads (Insights &amp; reports) to see the domain. '+(ok?roasTxt+': raise the bid / loosen the tROAS target to win the share back.':roasTxt+': do not chase them at this price.'+(okClaim?' '+test:''));}
+   else if(covOK&&a1.rl!=null&&a0.rl!=null&&(a0.rl-a1.rl)>0.03){why='You paid more per auction AND lost less to rank — your own bidding went up, not a rival&rsquo;s.';line='Your bids rose';act=roasTxt+(ok?': the more expensive traffic is paying.':': it is buying traffic that does not pay — tighten the tROAS target.');}
+   else if(covOK){why='The auction got more expensive without losing rank — a placement/inventory mix shift, not a rival outbidding you.';line='Mix shift, not a rival';act='Nothing to bid against; watch it another week.';}
+   else {why='The auction got more expensive.';line='Check Auction insights';act='Whether a rival caused it needs the rank split, which Google has not released for this window.';}
+  } else {why='The auction got cheaper — no competitor is squeezing this campaign.';line='No auction problem';act='';}
+ }else if(t.n==='Click-through rate'){
+  why=down?'Fewer of the people who saw it clicked.':'More of the people who saw it clicked.';
+  line=down?(o.shop?'Fix the listings':(o.pmax?'Fix the assets':'Fix the ads')):'Working';
+  act=down?(o.shop?'On the top products compare your price, main image and title against the other listings on the same search — Shopping clicks go to the cheapest credible offer.':'Check which queries now trigger it and refresh the ad copy.'):'';
+ }else if(t.n==='Conversion rate'){
+  why=down?'Same clicks, fewer buyers.':'The clicks bought more.';
+  line=down?'Fix the landing products':'Working';
+  act=down?'Check stock-outs, price and delivery fee on the products these clicks land on — the ad did its job.':'';
+ }else{
+  why=down?'Smaller baskets.':'Bigger baskets.';line=down?'Cheaper mix sold':'Working';act='';}
+ const html='<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12px;line-height:1.6;color:var(--ink-2)">'
+  +'<b style="color:var(--ink)">'+PT_SAY[t.n][down?1:0].replace(/^./,c=>c.toUpperCase())+'</b> ('+PT_FMT[t.n](t.from)+' → '+PT_FMT[t.n](t.to)+', '+(t.d>=0?'+':'−')+M(t.d)+'). '
+  +why+share+gap+(act?'<br><b style="color:var(--ink)">Do:</b> '+act:'')+'</div>';
+ return {line,html};};
 /* revenue+margin decomposition of a set of rows carrying daily [rev, gp] */
 window.dcmpGP=function(rows,i0,i1,p0,p1,nameOf){
  const M3=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
@@ -20811,7 +20895,7 @@ function adMomentum(g,opt){
       if(!parts||!parts.length)return '<td style="'+TD+'">—</td>';
       const top=parts.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];
       const dR=(c2.roas||0)-(p2.roas||0);
-      const lbl=top.n==='Cost per session'?((top.d>=0)?'cheaper sessions':'dearer sessions')
+      const lbl=top.n==='Cost per session'?((top.d>=0)?'cheaper sessions':'more expensive sessions')
         :(top.n==='Conversion rate'?((top.d>=0)?'conversion rate up':'conversion rate down')
         :((top.d>=0)?'basket size up':'basket size down'));
       return '<td style="'+TD+';text-align:left;font-size:10.5px;white-space:normal;max-width:190px">'
@@ -21261,6 +21345,7 @@ window.dxToggle=function(tr,payload){try{
    +(d.sub?'<div style="font-size:11px;color:var(--ink-3)">'+esc(d.sub)+'</div>':'')
    +bars(d.val,'Why the value moved '+(d.dv>=0?'+':'−')+M4(Math.abs(d.dv)),d.vid)
    +bars(d.spd,'Why the spend moved '+(d.ds>=0?'+':'−')+M4(Math.abs(d.ds)),d.sid)
+   +(d.note||'')
    +'<div style="font-size:10.5px;color:var(--ink-3);margin-top:9px;line-height:1.5">Each factor is valued with the ones above it already moved, so the bars sum to the total exactly. That makes the split order-dependent, in the funnel order shown.</div></div>';
  row.appendChild(td); tr.parentNode.insertBefore(row,tr.nextSibling);
 }catch(e){}};
@@ -22055,6 +22140,7 @@ function rMETA(){
     +'<span style="font-size:12.5px;color:#26313f;line-height:1.55">'+t[2]+'</span></div>').join('')
    :'<div style="font-size:12.5px;color:#5b6478;line-height:1.6">CPM '+sg(dCpm)+', CTR '+sg(dCtr)+', CVR '+sg(dCvr)+', AOV '+sg(dAov)+' — all inside the &plusmn;20% band the deck sets as the trigger.</div>');
 
+ leadOrder(g,[/^Meta — the whole account first/,/^Meta scoreboard/,/^Campaign, ad set or ad/,/^Do this first/,/gross profit burned/]);
  try{qsweep('g31');}catch(e){}
 }
 /* v9.52 GOOGLE TAB.
@@ -22228,7 +22314,8 @@ function rGOOG(){
   +kpiCell('CPC',M(cur.cpc),pc(cur.cpc,prv.cpc),false,'what a click costs')
   +kpiCell('CTR',cur.ctr.toFixed(2)+'%',pc(cur.ctr,prv.ctr),true,N(cur.clk)+' clicks on '+N(cur.im)+' impressions')
   +kpiCell('CVR',cur.cvr.toFixed(2)+'%',pc(cur.cvr,prv.cvr),true,'conversions ÷ clicks')
-  +kpiCell('Conversions',N(cur.pur),pc(cur.pur,prv.pur),true,'at '+M(cur.cpa)+' each')
+  +kpiCell('CPP',M(cur.cpa),pc(cur.cpa,prv.cpa),false,'cost per purchase · '+N(cur.pur)+' conversions')
+  +kpiCell('CPM',M(cur.cpm),pc(cur.cpm,prv.cpm),false,'cost per 1,000 impressions — the auction price')
   +'</div>';
  /* ---- the exact decomposition of the two things that moved ---- */
  const chain=(c,p,facs)=>{/* facs: [[label, curVal, prevVal], ...] multiplied together */
@@ -22244,10 +22331,29 @@ function rGOOG(){
   /* v55a CTR and CVR are carried as PERCENTAGES on these objects (2.80 means 2.80%),
      so feeding them straight into imp x ctr x cvr x aov overstates revenue by 10,000x.
      The chain runs on fractions; the formatters put the percent back for display. */
-  const fmtF={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%','Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v),'Cost per click':v=>M(v)};
-  const rev=chain(cur,prv,[['Impressions',cur.im,prv.im],['Click-through rate',cur.ctr/100,prv.ctr/100],
-                           ['Conversion rate',cur.cvr/100,prv.cvr/100],['Average order value',cur.aov,prv.aov]]);
-  const spd=chain(cur,prv,[['Impressions',cur.im,prv.im],['Click-through rate',cur.ctr/100,prv.ctr/100],['Cost per click',cur.cpc,prv.cpc]]);
+  const fmtF=PT_FMT;
+  const rev=paidTree({sp:cur.sp,im:cur.im,ck:cur.clk,pur:cur.pur,val:cur.val},{sp:prv.sp,im:prv.im,ck:prv.clk,pur:prv.pur,val:prv.val});
+  /* v96 account auction share: impressions are additive, so eligible / lost-to-budget /
+     lost-to-rank sum across campaigns exactly; coverage says how much Google has released. */
+  /* only campaigns Google has reported for in BOTH windows (>=70% of their impressions):
+     mixing a fully-reported week with a Shopping-blank one compares different campaigns. */
+  const inBoth=ads.filter(x=>aucShare(x.d,PW.a,PW.b).cov>=0.7&&aucShare(x.d,PW.pa,PW.pb).cov>=0.7);
+  const acc=(i,j)=>{const t={el:0,imc:0,imp:0,lb:0,lr:0};inBoth.forEach(x=>{const a=aucShare(x.d,i,j);
+    t.el+=a.el;t.imc+=a.imc;t.imp+=a.imp;t.lb+=(a.bl||0)*a.el;t.lr+=(a.rl||0)*a.el;});
+    return {cov:t.imp?t.imc/t.imp:0,is:t.el?t.imc/t.el:null,bl:t.el?t.lb/t.el:null,rl:t.el?t.lr/t.el:null};};
+  const A1=acc(PW.a,PW.b), A0=acc(PW.pa,PW.pb), pc1=v=>v==null?'—':(v*100).toFixed(1)+'%';
+  const imAll=ads.reduce((t,x)=>t+aucShare(x.d,PW.a,PW.b).imp,0), imIn=inBoth.reduce((t,x)=>t+aucShare(x.d,PW.a,PW.b).imp,0);
+  const outN=ads.filter(x=>aucShare(x.d,PW.a,PW.b).imp>0&&inBoth.indexOf(x)<0).map(x=>String(x.n||'').slice(0,28));
+  const aucRow=(lab,k,good)=>{const v1=A1[k],v0=A0[k],up=v1!=null&&v0!=null&&v1>=v0;
+    return '<tr><td style="padding:4px 8px;text-align:left;font-weight:650">'+lab+'</td><td class="num" style="padding:4px 8px;text-align:right">'+pc1(v0)+'</td>'
+     +'<td class="num" style="padding:4px 8px;text-align:right;font-weight:700">'+pc1(v1)+'</td>'
+     +'<td class="num" style="padding:4px 8px;text-align:right;font-weight:700;color:'+((v1==null||v0==null)?'var(--ink-3)':((up===!!good)?'var(--pos)':'var(--neg)'))+'">'+((v1==null||v0==null||!v0)?'—':((v1/v0-1)>=0?'+':'−')+Math.abs((v1/v0-1)*100).toFixed(0)+'%')+'</td></tr>';};
+  const aucHtml=inBoth.length?('<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Of the auctions you could have entered</div>'
+   +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 6px">Search, Shopping and Performance Max · lost to <b>budget</b> = you ran out of money · lost to <b>rank</b> = someone out-bid or out-ranked you</div>'
+   +'<table style="border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:4px 8px"></th><th style="text-align:right;padding:4px 8px">before</th><th style="text-align:right;padding:4px 8px">now</th><th style="text-align:right;padding:4px 8px">change</th></tr>'
+   +aucRow('Won (impression share)','is',true)+aucRow('Lost to budget','bl',false)+aucRow('Lost to rank','rl',false)+'</table>'
+   +'<div style="font-size:11px;color:var(--ink-3);margin-top:4px">Read over the <b>'+inBoth.length+'</b> campaigns Google has reported auction share for in both windows &mdash; <b>'+(imAll?(imIn/imAll*100).toFixed(0):'0')+'%</b> of this window&rsquo;s impressions. '
+   +(outN.length?('Left out until Google releases their days (Shopping reports it late): '+outN.map(esc).join(', ')+'. '):'')+'Competitor <b>names</b> are not available through the API; they are in Google Ads &rarr; Insights &amp; reports &rarr; Auction insights.</div>'):'';
   const dRev=cur.val-prv.val, dSp=cur.sp-prv.sp;
   const mxR=Math.max.apply(null,rev.map(x=>Math.abs(x.d)).concat([1]));
   const top=rev.slice().sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];
@@ -22261,16 +22367,14 @@ function rGOOG(){
      +'<div class="num" style="flex:0 0 170px;text-align:right;font-size:10.5px;color:var(--ink-3)">'+(fmtF[x.n]?fmtF[x.n](x.from)+' → '+fmtF[x.n](x.to):'')+'</div></div>';}).join('');
   decomp='<div style="margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:12px 14px">'
    +'<div style="font-size:13px;font-weight:700;color:var(--ink)">Why claimed revenue moved '+(dRev>=0?'+':'−')+M(Math.abs(dRev))+'</div>'
-   +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">revenue = impressions × CTR × CVR × AOV · the four add to the whole, in that order</div>'
+   +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">revenue = spend × (CTR ÷ CPM) × CVR × AOV · the five add to the whole, in that order</div>'
    +bars(rev,mxR,dRev)
    +'<div style="margin-top:10px;padding:10px 12px;border-radius:var(--r-m);background:var(--brand-wash);border:1px solid var(--brand-line);font-size:12px;line-height:1.6;color:var(--ink-2)">'
-   +'<b style="color:var(--ink)">The specific reason:</b> '+top.n.toLowerCase()+' '+(top.d>=0?'rose':'fell')+' from <b>'+(fmtF[top.n]?fmtF[top.n](top.from):top.from)+'</b> to <b>'+(fmtF[top.n]?fmtF[top.n](top.to):top.to)+'</b>, worth <b style="color:'+(top.d>=0?'var(--pos)':'var(--neg)')+'">'+(top.d>=0?'+':'−')+M(Math.abs(top.d))+'</b> on its own — '
+   +'<b style="color:var(--ink)">The specific reason:</b> '+PT_SAY[top.n][top.d>=0?0:1]+' &mdash; from <b>'+(fmtF[top.n]?fmtF[top.n](top.from):top.from)+'</b> to <b>'+(fmtF[top.n]?fmtF[top.n](top.to):top.to)+'</b>, worth <b style="color:'+(top.d>=0?'var(--pos)':'var(--neg)')+'">'+(top.d>=0?'+':'−')+M(Math.abs(top.d))+'</b> on its own — '
    +(dRev&&Math.abs(top.d)<=Math.abs(dRev)
-      ? (Math.abs(top.d/dRev*100).toFixed(0)+'% of the whole move. The other three together are worth '+(dRev-top.d>=0?'+':'−')+M(Math.abs(dRev-top.d))+'.')
-      : ('<b>more than the whole move</b> — the other three pulled '+(dRev-top.d>=0?'the same way':'the other way')+' and left '+(dRev>=0?'+':'−')+M(Math.abs(dRev))+' of it. A single factor can exceed the total whenever the rest offset it.'))+'</div>'
-   +'<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:14px">Why spend moved '+(dSp>=0?'+':'−')+M(Math.abs(dSp))+'</div>'
-   +'<div style="font-size:11.5px;color:var(--ink-3);margin:2px 0 8px">spend = impressions × CTR × CPC</div>'
-   +bars(spd,Math.max.apply(null,spd.map(x=>Math.abs(x.d)).concat([1])),dSp)
+      ? (Math.abs(top.d/dRev*100).toFixed(0)+'% of the whole move. The others together are worth '+(dRev-top.d>=0?'+':'−')+M(Math.abs(dRev-top.d))+'.')
+      : ('<b>more than the whole move</b> — the others pulled '+((dRev-top.d)*top.d>=0?'the same way':'the other way')+' and left '+(dRev>=0?'+':'−')+M(Math.abs(dRev))+' of it. A single factor can exceed the total whenever the rest offset it.'))+'</div>'
+   +aucHtml
    +'<div style="font-size:11px;color:var(--ink-3);margin-top:9px;line-height:1.55">Each factor is valued with the ones before it already moved, so the parts sum to the total exactly and there is no residual to hide. That makes the split <b>order-dependent</b>: the order is the funnel order above, and a different order would shift credit between adjacent factors without changing the total.</div>'
    +'</div>';
  }else{
@@ -22279,60 +22383,72 @@ function rGOOG(){
   +INFO('Every figure is Google’s own reporting over the window in the date box, compared with the window beside it. ROAS is claimed conversion value over spend, not the ledger.'),
   'What the account did, what moved, and the one factor that moved it.',kpis+decomp);
 
- /* ---- CAMPAIGN AGAINST CAMPAIGN, each one decomposed to its own cause ---- */
+ /* ---- CAMPAIGN AGAINST CAMPAIGN: the KPIs first, then the cause, then what to do ----
+    v96: every row reads spend, revenue, ROAS, CPP, CPC, CPM, CTR, CVR and AOV with its own
+    change first, and only then the decomposition -- on the paid tree (spend × CTR÷CPM ×
+    CVR × AOV), so a budget-capped campaign is no longer told "fewer people saw it". */
  if(PW.ok){try{
+  const isShop=a=>/SHOPPING/.test(String(a.cmp||''));
   const rows=ads.map(a=>{
    const c=agg(PW.a,PW.b,[a]), p2=agg(PW.pa,PW.pb,[a]);
    if(c.sp<100&&p2.sp<100)return null;
-   const ch=chain(c,p2,[['Impressions',c.im,p2.im],['Click-through rate',c.ctr/100,p2.ctr/100],
-                        ['Conversion rate',c.cvr/100,p2.cvr/100],['Average order value',c.aov,p2.aov]]);
    const live=p2.sp>0&&p2.im>0;
+   const ch=live?paidTree({sp:c.sp,im:c.im,ck:c.clk,pur:c.pur,val:c.val},{sp:p2.sp,im:p2.im,ck:p2.clk,pur:p2.pur,val:p2.val}):[];
    const top=live?ch.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d))[0]:null;
-   return {a,c,p:p2,d:c.val-p2.val,ds:c.sp-p2.sp,top,live,ch};}).filter(Boolean);
+   const a1=aucShare(a.d,PW.a,PW.b), a0=aucShare(a.d,PW.pa,PW.pb);
+   const v=live?gVerdict({top,c,p:p2,a0,a1,roas:c.roas,be:be5,shop:isShop(a),pmax:/PERFORMANCE_MAX/.test(String(a.cmp||''))}):{line:'',html:''};
+   return {a,c,p:p2,d:c.val-p2.val,ds:c.sp-p2.sp,top,live,ch,a0,a1,v};}).filter(Boolean);
   if(rows.length){
    rows.sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
-   const FF={'Impressions':v=>N(v),'Click-through rate':v=>(v*100).toFixed(2)+'%','Conversion rate':v=>(v*100).toFixed(2)+'%','Average order value':v=>M(v),'Cost per click':v=>M(v)};
-   const SHORT={'Impressions':'fewer people saw it','Click-through rate':'the ad was clicked less','Conversion rate':'the clicks bought less','Average order value':'the baskets were smaller'};
-   const SHORTUP={'Impressions':'more people saw it','Click-through rate':'the ad was clicked more','Conversion rate':'the clicks bought more','Average order value':'the baskets were bigger'};
    const arrow=(v,good)=>{if(v==null)return '<span style="color:var(--ink-3)">—</span>';
      const up=v>=0;return '<span style="font-weight:700;color:'+((up===!!good)?'var(--pos)':'var(--neg)')+'">'+(up?'▲':'▼')+Math.abs(v).toFixed(0)+'%</span>';};
-   const TD2='padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px';
+   const cell=(txt,ch,good,bold)=>'<td class="num" style="text-align:right'+(bold?';font-weight:700':'')+'">'+txt+'<div style="font-size:10px;color:var(--ink-3)">'+arrow(ch,good)+'</div></td>';
    let h='<div style="overflow-x:auto"><table class="bt" data-nosort style="width:100%">'
     +'<tr><th style="text-align:left">Campaign</th><th style="text-align:right">Spend</th><th style="text-align:right">Revenue</th>'
-    +'<th style="text-align:right">Δ revenue</th><th style="text-align:right">ROAS</th><th style="text-align:right">CPC</th>'
+    +'<th style="text-align:right">ROAS</th><th style="text-align:right">CPP</th><th style="text-align:right">CPC</th><th style="text-align:right">CPM</th>'
     +'<th style="text-align:right">CTR</th><th style="text-align:right">CVR</th><th style="text-align:right">AOV</th>'
-    +'<th style="text-align:left">What moved it</th></tr>';
+    +'<th style="text-align:right">Δ revenue</th><th style="text-align:left">What moved it</th><th style="text-align:left">Do</th></tr>';
    rows.forEach(r=>{
     const ok=r.c.roas>=be5;
+    /* why the SPEND moved: the daily budget you set, against how much of it Google used */
+    const bu=(r.a0.bd&&r.a1.bd&&r.a0.bud&&r.a1.bud)
+      ?dcmpChain([['Daily budget',r.a1.bud/r.a1.bd,r.a0.bud/r.a0.bd],['Share of budget Google spent',r.c.sp/r.a1.bud,r.p.sp/r.a0.bud],['Days',r.a1.bd,r.a0.bd]])
+         .map(x=>({n:x.n,d:x.d,f:x.n==='Daily budget'?('E£'+Math.round(x.from).toLocaleString()):(x.n==='Days'?String(x.from):(x.from*100).toFixed(0)+'%'),
+                   t:x.n==='Daily budget'?('E£'+Math.round(x.to).toLocaleString()):(x.n==='Days'?String(x.to):(x.to*100).toFixed(0)+'%')}))
+      :[];
     const pl2=encodeURIComponent(JSON.stringify({name:String(r.a.n||r.a.id),sub:String(r.a.cmp||''),dv:r.d,ds:r.ds,
-      vid:'value = impressions × CTR × CVR × AOV', sid:'spend = impressions × CTR × CPC',
-      val:r.live?r.ch.map(x=>({n:x.n,d:x.d,f:FF[x.n](x.from),t:FF[x.n](x.to)})):[],
-      spd:r.live?dcmpChain([['Impressions',r.c.im,r.p.im],['Click-through rate',r.c.ctr/100,r.p.ctr/100],['Cost per click',r.c.cpc,r.p.cpc]]).map(x=>({n:x.n,d:x.d,f:(FF[x.n]||(v=>v))(x.from),t:(FF[x.n]||(v=>v))(x.to)})):[]}));
+      vid:'value = spend × (CTR ÷ CPM) × CVR × AOV', sid:'spend = daily budget × share of it Google spent × days',
+      val:r.live?r.ch.map(x=>({n:x.n,d:x.d,f:PT_FMT[x.n](x.from),t:PT_FMT[x.n](x.to)})):[], spd:bu, note:r.v.html}));
     h+='<tr class="dxable" onclick="dxToggle(this,\''+pl2+'\')"><td style="text-align:left;font-weight:650;color:var(--ink)"><span class="dxCar">▸</span> '+esc(String(r.a.n||r.a.id).slice(0,34))
       +'<div style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:lowercase">'+String(r.a.cmp||'').replace(/_/g,' ').toLowerCase()+'</div></td>'
-     +'<td class="num" style="text-align:right">'+M(r.c.sp)+'<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.sp,r.p.sp),false)+'</div></td>'
-     +'<td class="num" style="text-align:right">'+M(r.c.val)+'</td>'
+     +cell(M(r.c.sp),pc(r.c.sp,r.p.sp),true)
+     +cell(M(r.c.val),pc(r.c.val,r.p.val),true)
+     +'<td class="num" style="text-align:right;font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.roas,r.p.roas),true)+'</div></td>'
+     +cell(r.c.pur?M(r.c.cpa):'—',(r.c.pur&&r.p.pur)?pc(r.c.cpa,r.p.cpa):null,false)
+     +cell(M(r.c.cpc),pc(r.c.cpc,r.p.cpc),false)
+     +cell(M(r.c.cpm),pc(r.c.cpm,r.p.cpm),false)
+     +cell(r.c.ctr.toFixed(2)+'%',pc(r.c.ctr,r.p.ctr),true)
+     +cell(r.c.cvr.toFixed(2)+'%',pc(r.c.cvr,r.p.cvr),true)
+     +cell(M(r.c.aov),pc(r.c.aov,r.p.aov),true)
      +'<td class="num" style="text-align:right;font-weight:800;color:'+(r.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.d>=0?'+':'−')+M(Math.abs(r.d))+'</td>'
-     +'<td class="num" style="text-align:right;font-weight:700;color:'+(ok?'var(--pos)':'var(--neg)')+'">'+r.c.roas.toFixed(2)+'×</td>'
-     +'<td class="num" style="text-align:right">'+M(r.c.cpc)+'<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.cpc,r.p.cpc),false)+'</div></td>'
-     +'<td class="num" style="text-align:right">'+r.c.ctr.toFixed(2)+'%<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.ctr,r.p.ctr),true)+'</div></td>'
-     +'<td class="num" style="text-align:right">'+r.c.cvr.toFixed(2)+'%<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.cvr,r.p.cvr),true)+'</div></td>'
-     +'<td class="num" style="text-align:right">'+M(r.c.aov)+'<div style="font-size:10px;color:var(--ink-3)">'+arrow(pc(r.c.aov,r.p.aov),true)+'</div></td>'
-     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:230px">'
-      +(!r.live?'<span style="color:var(--ink-3)">no spend in the compare window — this is a start, not a move</span>'
-        :(r.top?('<b>'+(r.top.d>=0?SHORTUP[r.top.n]:SHORT[r.top.n])+'</b> · '+r.top.n.toLowerCase()+' '+FF[r.top.n](r.top.from)+' → '+FF[r.top.n](r.top.to)
+     +'<td style="text-align:left;font-size:11px;color:var(--ink-2);white-space:normal;min-width:200px">'
+      +(!r.live?'<span style="color:var(--ink-3)">no spend in the compare window — a start, not a move</span>'
+        :(r.top?('<b>'+PT_SAY[r.top.n][r.top.d>=0?0:1]+'</b> · '+PT_FMT[r.top.n](r.top.from)+' → '+PT_FMT[r.top.n](r.top.to)
            +' <span style="font-weight:700;color:'+(r.top.d>=0?'var(--pos)':'var(--neg)')+'">'+(r.top.d>=0?'+':'−')+M(Math.abs(r.top.d))+'</span>'
-           +(r.d&&Math.abs(r.top.d)<=Math.abs(r.d)?' <span style="color:var(--ink-3)">('+Math.abs(r.top.d/r.d*100).toFixed(0)+'% of its move)</span>':(r.d?' <span style="color:var(--ink-3)">(the other three offset it)</span>':'')))
+           +(r.d&&Math.abs(r.top.d)<=Math.abs(r.d)?' <span style="color:var(--ink-3)">('+Math.abs(r.top.d/r.d*100).toFixed(0)+'% of its move)</span>':(r.d?' <span style="color:var(--ink-3)">(the others offset it)</span>':'')))
           :'—'))
-      +'</td></tr>';});
+      +'</td><td style="text-align:left;font-size:11px;font-weight:700;color:var(--ink);white-space:normal;min-width:110px">'+(r.v.line||'—')+'</td></tr>';});
    h+='</table></div>'
     +'<div style="margin-top:10px;padding:11px 13px;border-radius:var(--r-m);background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;line-height:1.6;color:var(--ink-2)">'
-    +'<b style="color:var(--ink)">Every row is decomposed on its own numbers</b>, not on the account average: revenue = impressions × CTR × CVR × AOV, each factor valued with the ones before it already moved, so the four sum exactly to that campaign&rsquo;s revenue change. &ldquo;What moved it&rdquo; names the single largest of the four and what share of the move it carries. '
-    +'A campaign with no spend in the compare window is marked as a start rather than given a fake movement. Ranked by the size of the revenue move, up or down.</div>';
+    +'<b style="color:var(--ink)">Read it left to right:</b> the KPIs and their change, then the one factor that moved the revenue most, then what to do. '
+    +'The cause comes from <b>revenue = spend × (CTR ÷ CPM) × CVR × AOV</b>, each factor valued with the ones before it already moved, so the five sum to the move exactly. '
+    +'Spend leads because on a budget-capped campaign fewer impressions are the <i>result</i> of less spend, not a cause; <b>CPM is the auction price</b>, the only place a competitor pushing in shows up. '
+    +'<b>Click a row</b> for the full split, what moved the spend (your daily budget vs how much of it Google used), and the auction share &mdash; won, lost to budget, lost to rank. '
+    +'Google does not release competitor <b>names</b> to any API we hold; when a row says a rival is outbidding you, the name is in Google Ads &rarr; Insights &amp; reports &rarr; Auction insights.</div>';
    pnlCard(g,'google','Campaign against campaign &mdash; '+PW.lbl+' vs the window before'
-    +INFO('Each campaign aggregated from its own daily series over both windows, then decomposed. ROAS is Google’s claimed value over spend.'),
-    'Which campaigns moved the account, and the one factor that moved each of them.',h);}
- }catch(e){}}
+    +INFO('KPIs first, then the cause on the paid tree, then the action. Each campaign aggregated from its own daily series over both windows. ROAS is Google’s claimed value over spend.'),
+    'Each campaign’s numbers, the one factor that moved it, and what to do about it.',h);}
+ }catch(e){console.error('campaign against campaign failed:',e);}}
 
  /* ---- v56 SEARCH TERMS, DECOMPOSED ON THEIR OWN PRIOR WINDOW ----
     searchIntel ships im/ck/cn/cv for the current window AND imL/ckL/cnL/cvL for the
@@ -22808,8 +22924,16 @@ function rGOOG(){
       ev:'Marginal decay '+(dec?dec.k.toFixed(2):'—')+'× measured on this campaign alone. Fix the bid, the feed or the landing page before the budget.'});
      return;
    }
+   /* v96: the claim alone is not enough -- judged on the measured incrementality too */
+   if(mRoas*G_INCR<be){
+     A.push({p:'P1',money:0,lbl:'TEST, DON’T SCALE',
+      t:'Test a budget raise on '+(a.n||a.id)+' — do not scale it yet',
+      w:'It loses <b>'+(bl*100).toFixed(0)+'% of auctions to budget</b> and Google claims '+mRoas.toFixed(2)+'× on the next pound. Your cleanest Google blackout (May–Jun 2026) found only <b>32%</b> of Google&rsquo;s claimed revenue was real, which makes it about <b>'+(mRoas*G_INCR).toFixed(2)+'×</b> — under the '+be.toFixed(2)+'× break-even. Raise it 20% for 14 days and judge on total revenue, not on Google&rsquo;s number.',
+      ev:'Claimed ROAS has to reach '+(be/G_INCR).toFixed(1)+'× to clear break-even at the measured incrementality. Off-season measurement; never tested in BTS.'});
+     return;
+   }
    const upliftV=c.val*(bl/isv), upliftSp=upliftV/mRoas;
-   const gain=upliftV*gpOn-upliftSp; if(gain<=0)return;
+   const gain=upliftV*G_INCR*gpOn-upliftSp; if(gain<=0)return;
    /* P0 is reserved for money that is worth interrupting the week for; a capped campaign
       forfeiting E£10k/month is real but it is not more urgent than a six-figure P1. */
    A.push({p:(gain*mo>=25000)?'P0':'P1',money:gain*mo,lbl:'GP FORGONE / MO',
@@ -22876,6 +23000,7 @@ function rGOOG(){
     +'<span style="font-size:12.5px;color:#26313f;line-height:1.55">'+t[2]+'</span></div>').join('')
    :'<div style="font-size:12.5px;color:#5b6478">All four inputs are inside the ±20% band.</div>');
 
+ leadOrder(g,[/^Google — the whole account first/,/^Google scoreboard/,/^Campaign against campaign/,/^Do this first/]);
  try{qsweep('g32');}catch(e){}
 }
 function rTK(){if(TAB!=='tk')return;dCh();
@@ -23404,7 +23529,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-225810';
+const BUILD='20261013-233328';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
