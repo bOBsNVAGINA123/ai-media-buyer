@@ -1551,6 +1551,48 @@ def pull_google_ads():
                 except Exception: idx = -1
                 if 0 <= idx < N:
                     D = e["d"]; D["sp"][idx] += sp; D["pv"][idx] += pv; D["pur"][idx] += pu; D["imp"][idx] += im; D["clk"][idx] += ck
+    # v96: DAILY auction share + daily budget, so the page can split a campaign's lost
+    # impressions into "lost to budget" vs "lost to rank" on ANY date-box window -- the
+    # old isNow/isPrev pair was a fixed 7 days ending TODAY, and Google withholds Shopping
+    # impression share for days it has not finished (measured 13 Oct: all six Shopping
+    # campaigns blank for 5 and 7-12 Oct, Search/PMax complete). Stored as additive
+    # impression counts (eligible, lost-to-budget, lost-to-rank) so windows can be summed;
+    # `imc` = impressions on days Google DID report, i.e. the coverage numerator.
+    # Separate query on purpose: if Google ever rejects one of these metrics, the spend
+    # feed above must still land.
+    try:
+        gq2 = ("SELECT campaign.id, segments.date, metrics.impressions, metrics.search_impression_share, "
+               "metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share, "
+               "campaign_budget.amount_micros FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
+               "AND campaign.advertising_channel_type IN ('SEARCH','SHOPPING','PERFORMANCE_MAX')" % (c0, c1))
+        req = urllib.request.Request("https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (_gads_ver(hd), cid),
+                                     data=json.dumps({"query": gq2}).encode(), headers=hd)
+        with urllib.request.urlopen(req, timeout=90) as r: b2 = json.loads(r.read())
+        nis = 0
+        for b in (b2 if isinstance(b2, list) else [b2]):
+            for row in b.get("results", []):
+                e = agg.get(str((row.get("campaign") or {}).get("id")))
+                dd = (row.get("segments") or {}).get("date")
+                if not e or not dd: continue
+                idx = (datetime.date.fromisoformat(dd) - base).days
+                if not (0 <= idx < N): continue
+                D = e["d"]
+                for kk in ("el", "lb", "lr", "imc", "bud"): D.setdefault(kk, [0.0] * N)
+                D["bud"][idx] = float((row.get("campaignBudget") or {}).get("amountMicros") or 0) / 1e6
+                m = row.get("metrics") or {}
+                im = float(m.get("impressions") or 0); s = m.get("searchImpressionShare")
+                bl = float(m.get("searchBudgetLostImpressionShare") or 0); rl = float(m.get("searchRankLostImpressionShare") or 0)
+                if not s or im <= 0: continue
+                s = float(s)
+                # ponytail: Google floors IS at "<10%" (0.0999) and caps the losses at ">90%";
+                # under the floor the complement 1-bl-rl is the tighter estimate. Approximate
+                # at the caps, exact everywhere else.
+                if s < 0.1 and (bl + rl) > 0 and 0.005 < 1 - bl - rl < s: s = 1 - bl - rl
+                el = im / s
+                D["el"][idx] += el; D["lb"][idx] += el * bl; D["lr"][idx] += el * rl; D["imc"][idx] += im; nis += 1
+        log("google daily auction share", nis, "campaign-days")
+    except Exception as e:
+        log("google daily auction share fail", str(e)[:160])
     for e in agg.values():
         e["ov"] = e["pv"]
         for kk in ("sp", "pv", "ov"): e[kk] = round(e[kk])
