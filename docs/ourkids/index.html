@@ -17125,11 +17125,27 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      variable that lives in only one of them. */
   const MSb=(function(){const any=names.find(n=>PS[n]&&Object.keys(PS[n]).length);
     if(!any)return [];return Object.keys(PS[any]).sort().filter(m=>m>=ST.pm0&&m<=ST.pm1);})();
+  /* v94.7: a branch salary is PAID ~5th of the next month for the previous month's work,
+     so the current month's payroll is not in Odoo until early next month. Measured 13 Oct:
+     September's run had not posted -- company branch-tagged salary read E£39,300 against a
+     ~E£1.7M norm, and New Cairo showed E£8,650 against its own E£209k-397k history. The old
+     fallback only fired when the posted figure was exactly 0; a tiny non-zero scrap (a mid
+     month reward line) beat it and the month read as if payroll were E£8,650. Treat a month
+     whose posted salary is under 40% of the branch's own median as NOT BOOKED, fall back to
+     that median, and record the month so the table can say the figure is an estimate. */
+  const _salNorm={};
+  Object.keys(BC).forEach(n=>{const vs=Object.keys(BC[n]).map(m=>(BC[n][m]||{}).sal||0).filter(v=>v>20000).sort((a,b)=>a-b);
+    _salNorm[n]=vs.length?vs[Math.floor(vs.length/2)]:0;});
+  const salBooked=(n,m)=>{const v=((BC[n]||{})[m]||{}).sal||0; const nm=_salNorm[n]||0;
+    return nm?(v>=nm*0.4):(v>20000);};
+  const SAL_EST=new Set();
+  Object.keys(PS).forEach(n=>Object.keys(PS[n]||{}).forEach(m=>{
+    if(((PS[n][m]||[])[0]||0)>0 && !salBooked(n,m) && (_salNorm[n]||0)>0) SAL_EST.add(m);}));
   const sumB=(n,MS)=>{MS=MS||MSb;let rev=0,gp=0,ord=0,sal=0,rent=0,util=0,nc=0,nrev=0,rrev=0,unr=0;
     const BCn=(BC[n]||{});
     MS.forEach(m=>{const P=(PS[n]||{})[m]; if(!P)return;
      rev+=P[0]||0; gp+=gpAdj(P[0],P[1]); ord+=P[2]||0;
-     const sv=(BCn[m]&&BCn[m].sal>0)?BCn[m].sal:((FXB[n]||{}).payroll||0); sal+=sv||0;
+     const sv=salBooked(n,m)?BCn[m].sal:(_salNorm[n]||(FXB[n]||{}).payroll||0); sal+=sv||0;
      const rv=(BCn[m]&&BCn[m].rent>0)?BCn[m].rent:(((RB[n]||{})[m]>0)?RB[n][m]:0); rent+=rv||0;
      const e=O.exp&&O.exp[m];
      const tp=names.reduce((a2,x)=>a2+(((PS[x]||{})[m])?PS[x][m][0]:0),0);
@@ -17463,7 +17479,16 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      +'style="font-size:11.5px;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;font-weight:700;margin-left:6px">'
      +[['auto','Auto (per line)'],['own','% of own revenue'],['company','% share of company']]
        .map(o=>'<option value="'+o[0]+'"'+(o[0]===PB?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
-   let ch='<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel+' <span style="margin-left:10px">Show</span>'+psel
+   /* v94.7: name the months whose payroll has not posted, so the estimate used above is
+      never read as the real figure. Salary, contribution and EBITDA for these months rest
+      on the branch's trailing-median payroll, not on Odoo postings. */
+   const _estShown=[...SAL_EST].filter(m=>selM?(m===selM):(MS.indexOf(m)>=0)).sort();
+   const salBanner=_estShown.length?('<div style="margin:0 0 10px;padding:9px 12px;border:1px solid var(--warn-line);background:var(--warn-wash);border-radius:var(--r-m);font-size:11.5px;line-height:1.55;color:var(--ink-2)">'
+     +'<b style="color:var(--warn);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px">Payroll not posted</b><br>'
+     +'<b style="color:var(--ink)">'+_estShown.join(', ')+'</b> '+(_estShown.length>1?'have':'has')+' no salary run in Odoo yet &mdash; branch payroll is paid around the 5th of the following month, so the current month&rsquo;s wages are not booked until then. '
+     +'The salary line for '+(_estShown.length>1?'those months':'that month')+' shows each branch&rsquo;s <b>trailing-median payroll as an estimate</b>, not the few reward and adjustment lines that have posted (company-wide those summed under E£40k against a ~E£1.7M norm). '
+     +'Gross profit and revenue are real; <b>contribution and EBITDA for '+(_estShown.length>1?'these months are':'this month is')+' provisional</b> until the run posts.</div>'):'';
+   let ch=salBanner+'<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel+' <span style="margin-left:10px">Show</span>'+psel
      +'<span style="margin-left:10px">% base</span>'+bsel
      +' <span style="margin-left:10px;color:var(--ink-3)">Click any line to break it down month by month.</span></div>'
      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
@@ -23313,7 +23338,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-135319';
+const BUILD='20261013-142016';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
