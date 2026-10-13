@@ -3148,7 +3148,10 @@ def pull_pos_customers():
                 # Ranked on value at 365 days (p365), the honest "brings good customers" signal.
                 _pout = []
                 for _pp, e in _pc.items():
-                    if e["n"] < 25: continue
+                    # ranked on p365 below, so only products with >=25 customers who have
+                    # actually REACHED day 365 -- the first build ranked 1-customer medians
+                    # (a E£37k hoodie) and only 25 of the 80 shipped were readable.
+                    if e["n"] < 25 or len(e["pair"]) < 25: continue
                     _pa = [x for x, _y in e["pair"]]; _pb = [_y for _x, _y in e["pair"]]
                     _m0, _m365 = _med(_pa), _med(_pb)
                     _pout.append({"t": _pp, "nm": (TNAME.get(_pp) or str(_pp))[:48], "n": e["n"],
