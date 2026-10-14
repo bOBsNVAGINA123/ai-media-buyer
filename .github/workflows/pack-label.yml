@@ -1,0 +1,47 @@
+name: Ourkids pack-of-2 labelling
+
+# The pack size lives only in the product title, which nothing can filter, rank or
+# badge on. This puts it in a tag -- the one field automated collections, search
+# filters, the theme and the ad feeds all read. Daily, so whatever merchandising
+# uploads tomorrow is labelled without anybody remembering to do it.
+on:
+  schedule:
+    # 04:10 UTC = 07:10 Cairo, after stock-rank (03:40) so the two never collide.
+    # Off the :00 minute deliberately -- GitHub throttles crons set to exactly :00.
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = print the plan, change nothing"
+        required: false
+        default: "0"
+      include_pieces:
+        description: "1 = also tag '2 Pcs' / '2 Pieces' titles (178 products, ambiguous)"
+        required: false
+        default: "0"
+      max_tags:
+        description: "Most products to tag in one run"
+        required: false
+        default: "1200"
+
+concurrency:
+  group: pack-label
+  cancel-in-progress: false
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Tag every pack-of-two product
+        env:
+          SHOPIFY_STORE:       ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN:       ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
+          DRY_RUN:             ${{ github.event.inputs.dry_run || '0' }}
+          INCLUDE_PIECES:      ${{ github.event.inputs.include_pieces || '0' }}
+          MAX_TAGS:            ${{ github.event.inputs.max_tags || '1200' }}
+        run: python3 ourkids_pack_label.py
