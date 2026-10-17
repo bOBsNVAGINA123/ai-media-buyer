@@ -1,14 +1,14 @@
 {
  "ok": true,
  "error": "",
- "seconds": 275,
- "finishedUtc": "2026-10-17 18:37:30 UTC",
+ "seconds": 228,
+ "finishedUtc": "2026-10-17 22:28:26 UTC",
  "log": [
   "[audit] bulk op returned 116514 rows",
   "[audit] barcodes mapped 76390 live 33922",
   "[audit] odoo products 84926",
   "[audit] receipt lines 98265",
-  "[audit] vendors 308 gap SKUs 3785",
-  "[audit] WROTE audit.json 161228 bytes in 276s"
+  "[audit] vendors 308 gap SKUs 3803",
+  "[audit] WROTE audit.json 161226 bytes in 228s"
  ]
 }
