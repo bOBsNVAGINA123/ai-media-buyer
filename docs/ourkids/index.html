@@ -1244,7 +1244,38 @@ const WINDECL={
  au:function(){return {label:'the month you pick on the card',fixed:1,
    why:'The company P&L only balances over a complete posted month.'};}
 };
-function winStamp(t){try{
+/* v97 PAYROLL NOT POSTED. Branch salaries are paid ~5th of the next month for the month
+   before, so a finished month can have no salary run in Odoo yet (measured 17 Oct 2026:
+   September's run still absent -- E£39,300 posted against E£1.24M-1.97M in Jun-Aug). The
+   figures stay as posted; every tab that shows salary or profit after salary says so. */
+window.payGap=function(){if(window.__payGap)return window.__payGap;
+ const BC=(window.O&&O.bcost)||{}, by={};
+ Object.keys(BC).forEach(b=>Object.keys(BC[b]||{}).forEach(m=>{by[m]=(by[m]||0)+((BC[b][m]||{}).sal||0);}));
+ const now=String((window.O&&O.today)||'').slice(0,7), ms=Object.keys(by).filter(m=>m<now).sort();
+ const out=[];
+ ms.forEach((m,i)=>{const prev=ms.slice(0,i).filter(x=>out.indexOf(x)<0).slice(-3).map(x=>by[x]).filter(v=>v>0);
+  if(prev.length<2)return; const med=prev.slice().sort((a,b)=>a-b)[Math.floor(prev.length/2)];
+  if(by[m]<med*0.4)out.push(m);});
+ /* only the last two finished months can be "not posted YET"; older dips are payroll booked
+    into the neighbouring month (Jun+Jul 2025 and Feb+Mar 2026 each sum to a normal pair) */
+ const recent=ms.slice(-2);
+ return (window.__payGap={months:out.filter(m=>recent.indexOf(m)>=0),by});};
+window.payNote=function(months){const G=payGap(),M=v=>'E£'+Math.round(v||0).toLocaleString();
+ const ms=(months||G.months);if(!ms.length)return '';
+ const ok=Object.keys(G.by).filter(m=>ms.indexOf(m)<0&&m<ms[0]).sort().slice(-3);
+ const lo=Math.min.apply(null,ok.map(m=>G.by[m])),hi=Math.max.apply(null,ok.map(m=>G.by[m]));
+ return '<div data-paystamp="1" style="margin:0 0 10px;padding:9px 12px;border:1px solid var(--warn-line);background:var(--warn-wash);border-radius:var(--r-m);font-size:11.5px;line-height:1.55;color:var(--ink-2)">'
+  +'<b style="color:var(--warn);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px">Payroll not posted</b> &nbsp;'
+  +'<b style="color:var(--ink)">'+ms.join(', ')+'</b>: the branch salary run is not in Odoo yet &mdash; only '+ms.map(m=>M(G.by[m])).join(', ')+' posted, against '+(ok.length?(M(lo)+'&ndash;'+M(hi)+' in '+ok.join(', ')):'earlier months')+'. '
+  +'Salaries are shown <b>as posted</b>, so profit after salary for '+(ms.length>1?'those months':'that month')+' is overstated until accounting posts the run.</div>';};
+function payStamp(t){try{const pane=document.getElementById(t+'C');if(!pane)return;
+ const old=pane.querySelector(':scope > [data-paystamp]');if(old)old.remove();
+ if(!payGap().months.length||!/salar|payroll|ebitda/i.test(pane.innerText||''))return;
+ if(pane.querySelector('[data-paystamp]'))return;   /* a card already carries it */
+ const g=pane.querySelector('.grid'); const w=document.createElement('div'); w.innerHTML=payNote();
+ const el=w.firstChild; if(g)pane.insertBefore(el,g); else pane.insertBefore(el,pane.firstChild);}catch(e){}}
+window.payStamp=payStamp;
+function winStamp(t){try{payStamp(t);}catch(e){}try{
  const pane=document.getElementById(t+'C');if(!pane)return;
  const old=pane.querySelector('[data-winstamp]');if(old)old.remove();
  const d=WINDECL[t]?WINDECL[t]():null;
@@ -17138,8 +17169,9 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
      ~E£1.7M norm, and New Cairo showed E£8,650 against its own E£209k-397k history. The old
      fallback only fired when the posted figure was exactly 0; a tiny non-zero scrap (a mid
      month reward line) beat it and the month read as if payroll were E£8,650. Treat a month
-     whose posted salary is under 40% of the branch's own median as NOT BOOKED, fall back to
-     that median, and record the month so the table can say the figure is an estimate. */
+     whose posted salary is under 40% of the branch's own median as NOT BOOKED and record the
+     month so the table says so. v97: the figure itself stays the ACTUAL posted salary -- the
+     user's rule is actual numbers; an estimate from other months is not one. */
   const _salNorm={};
   Object.keys(BC).forEach(n=>{const vs=Object.keys(BC[n]).map(m=>(BC[n][m]||{}).sal||0).filter(v=>v>20000).sort((a,b)=>a-b);
     _salNorm[n]=vs.length?vs[Math.floor(vs.length/2)]:0;});
@@ -17152,7 +17184,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
     const BCn=(BC[n]||{});
     MS.forEach(m=>{const P=(PS[n]||{})[m]; if(!P)return;
      rev+=P[0]||0; gp+=gpAdj(P[0],P[1]); ord+=P[2]||0;
-     const sv=salBooked(n,m)?BCn[m].sal:(_salNorm[n]||(FXB[n]||{}).payroll||0); sal+=sv||0;
+     const sv=(BCn[m]&&BCn[m].sal>0)?BCn[m].sal:((FXB[n]||{}).payroll||0); sal+=sv||0;
      const rv=(BCn[m]&&BCn[m].rent>0)?BCn[m].rent:(((RB[n]||{})[m]>0)?RB[n][m]:0); rent+=rv||0;
      const e=O.exp&&O.exp[m];
      const tp=names.reduce((a2,x)=>a2+(((PS[x]||{})[m])?PS[x][m][0]:0),0);
@@ -17490,11 +17522,7 @@ function rRetail(){if(TAB!=='rp')return;dCh();const g=document.getElementById('g
       never read as the real figure. Salary, contribution and EBITDA for these months rest
       on the branch's trailing-median payroll, not on Odoo postings. */
    const _estShown=[...SAL_EST].filter(m=>selM?(m===selM):(MS.indexOf(m)>=0)).sort();
-   const salBanner=_estShown.length?('<div style="margin:0 0 10px;padding:9px 12px;border:1px solid var(--warn-line);background:var(--warn-wash);border-radius:var(--r-m);font-size:11.5px;line-height:1.55;color:var(--ink-2)">'
-     +'<b style="color:var(--warn);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px">Payroll not posted</b><br>'
-     +'<b style="color:var(--ink)">'+_estShown.join(', ')+'</b> '+(_estShown.length>1?'have':'has')+' no salary run in Odoo yet &mdash; branch payroll is paid around the 5th of the following month, so the current month&rsquo;s wages are not booked until then. '
-     +'The salary line for '+(_estShown.length>1?'those months':'that month')+' shows each branch&rsquo;s <b>trailing-median payroll as an estimate</b>, not the few reward and adjustment lines that have posted (company-wide those summed under E£40k against a ~E£1.7M norm). '
-     +'Gross profit and revenue are real; <b>contribution and EBITDA for '+(_estShown.length>1?'these months are':'this month is')+' provisional</b> until the run posts.</div>'):'';
+   const salBanner=_estShown.length?payNote(_estShown):'';
    let ch=salBanner+'<div style="margin-bottom:9px;font-size:11.5px;color:var(--ink-2)">Month '+msel+' <span style="margin-left:10px">Show</span>'+psel
      +'<span style="margin-left:10px">% base</span>'+bsel
      +' <span style="margin-left:10px;color:var(--ink-3)">Click any line to break it down month by month.</span></div>'
@@ -17808,70 +17836,72 @@ function cbCard(g){const DB=O.decB;if(!DB||!DB.win)return;
   +'<tr><th style="text-align:left">Spend bracket</th><th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>'
   +(RB?'<th>Customers</th><th>% of cust</th><th>Revenue</th><th>% of rev</th><th>Avg / cust</th><th>Repeat</th>':'')+'</tr>'
   +RA.map(row).join('')+'</table></div>'+hi);}
-/* ===== v95 STANDARDIZED HOOK — what products bring GOOD customers, tenure-fair ==========
-   The "best customers" deciles and the lifetime acquisition cards reward anything acquired
-   LONGER AGO: two years of trading beats one, regardless of quality. This asks the same
-   question fairly. For customers whose FIRST order contained a product, it reads gross
-   profit per customer at a FIXED age from their own first purchase, counting a customer at
-   a horizon only once that horizon has actually elapsed for them. Ranked on value at 365
-   days -- the honest signal for "brings a customer worth keeping", with age removed.
-   Product-level when O.prodCoh is in the payload (needs a heavy crawl); until then it shows
-   the same thing at BRAND level from O.vcoh and says so. */
-function hookStd(g){
- const PC=O.prodCoh, VC=O.vcoh;
- const src=(PC&&PC.rows&&PC.rows.length)?{d:PC,grain:'product',lbl:'Product'}
-          :((VC&&VC.rows&&VC.rows.length)?{d:VC,grain:'brand',lbl:'Brand'}:null);
- if(!src)return;
- const D=src.d, HZ=D.hz||[0,30,60,90,180,365,730], i365=HZ.indexOf(365), i0=0;
- const M=v=>'E£'+Math.round(Math.abs(v||0)).toLocaleString();
- const N=v=>Math.round(v||0).toLocaleString();
- /* only rank rows with enough MATURE customers at 365d to mean anything */
- const MINMAT=15;
- const rows=(D.rows||[]).map(r=>{const mat365=(r.mat&&r.mat[i365])||0;
-   return {nm:r.nm, n:r.n, p0:r.p0, p365:r.p365, mult:r.mult, mat365, cur:r.cur};})
-  .filter(r=>r.p365!=null&&r.mat365>=MINMAT)
-  .sort((a,b)=>(b.p365||0)-(a.p365||0));
- if(!rows.length)return;
- const med=rows.map(r=>r.p365).sort((a,b)=>a-b)[Math.floor(rows.length/2)]||0;
- const TH='padding:6px 9px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap';
- const TD='padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap';
- let h='<div style="overflow-x:auto"><table class="bt heat" data-hc="2,3,4,5,6" data-hcx="1"><tr>'
-  +'<th style="'+TH+';text-align:left">'+src.lbl+' a customer FIRST bought</th>'
-  +'<th style="'+TH+'">Customers acquired</th>'
-  +'<th style="'+TH+'">GP in first order</th>'
-  +'<th style="'+TH+'">GP by day 365<div style="font-weight:600;font-size:10px;text-transform:none;color:var(--ink-3)">per customer, standardized</div></th>'
-  +'<th style="'+TH+'">× first order</th>'
-  +'<th style="'+TH+'">Mature at 365d</th></tr>';
- rows.slice(0,25).forEach(r=>{
-  h+='<tr><td style="'+TD+';text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis;font-weight:700" dir="auto" title="'+String(r.nm).replace(/"/g,'')+'">'+esc(String(r.nm).slice(0,52))+'</td>'
-   +'<td style="'+TD+'">'+N(r.n)+'</td>'
-   +'<td style="'+TD+'">'+(r.p0!=null?M(r.p0):'—')+'</td>'
-   +'<td style="'+TD+';font-weight:800">'+M(r.p365)+'</td>'
-   +'<td style="'+TD+'">'+(r.mult!=null?r.mult.toFixed(1)+'×':'—')+'</td>'
-   +'<td style="'+TD+';color:'+(r.mat365<30?'var(--warn)':'var(--ink-3)')+'">'+N(r.mat365)+'</td></tr>';});
- h+='</table></div>';
- const best=rows[0], worst=rows[rows.length-1];
- h+='<div class="rtNote">'
-  +'<b>This is tenure-standardized, which the lifetime tables are not.</b> It reads gross profit per acquired customer at a FIXED 365 days from each customer&rsquo;s own first order, so a '+src.grain+' that acquired people two years ago no longer out-ranks a newer one just for having aged. '
-  +(best&&worst?('<b>'+esc(String(best.nm).slice(0,30))+'</b> brings the most valuable first-time customer at <b>'+M(best.p365)+'</b> by day 365, against <b>'+M(worst.p365)+'</b> for '+esc(String(worst.nm).slice(0,30))+' &mdash; the median here is '+M(med)+'. '):'')
-  +'<b>Mature at 365d</b> is how many of its customers have actually reached a year, so the 365-day figure is real and not projected; rows under '+MINMAT+' are hidden and under 30 are amber. '
-  +(src.grain==='brand'
-    ? '<b>This is at BRAND level</b> &mdash; the per-PRODUCT version lands on the next heavy crawl (the collector change shipped, the data follows).'
-    : 'A customer is attributed to every '+src.grain+' in their first order, so a basket with three products credits all three.')
-  +'</div>';
- pnlCard(g,'odoo','What brings a GOOD customer &mdash; standardized to value at one year'
-  +INFO('For customers whose first order contained each '+src.grain+', gross profit per customer at a fixed 365 days from their own first purchase. Removes the tenure advantage that makes older acquisitions look better. Ranked on day-365 value over customers old enough to count.'),
-  'The acquisition question asked fairly &mdash; who brings customers worth keeping, not who has simply been around longest.',h);
- try{applyHeat(g);}catch(e){}
+/* v97 ORDER LADDER. For customers whose FIRST order contained a vendor (or product): how many
+   came back for a 2nd, 3rd, 4th, 5th order, and what each of those orders was worth -- AOV and
+   GP per order -- plus orders, revenue and GP per customer over their first year. Every key is
+   read on the same footing: customers acquired from 1 Nov 2024 (history starts 1 Aug 2024, so
+   an earlier "first" order may be an old customer) to a year ago, followed for 12 months.
+   Shops and Shopify are kept apart: different tills, and Shopify revenue is ex-VAT. */
+function ladderCard(g){
+ const L=O.ladder||{};
+ const sc=ST.ldSc==='shop'?'shop':'pos', gr=ST.ldGr==='p'?'p':'v', srt=ST.ldSort||'n';
+ const D=((L[sc]||{})[gr])||{};
+ const M=v=>v==null?'—':'E£'+Math.round(v).toLocaleString(), P=v=>(v*100).toFixed(0)+'%';
+ const chip=(on,txt,js)=>'<span class="chip" style="'+(on?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="'+js+';rCP()">'+txt+'</span>';
+ let h='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;font-size:11.5px;color:var(--ink-2)">'
+  +chip(sc==='pos','Shops',"ST.ldSc='pos'")+chip(sc==='shop','Shopify',"ST.ldSc='shop'")
+  +'<span style="width:10px"></span>'+chip(gr==='v','By vendor',"ST.ldGr='v'")+chip(gr==='p','By product',"ST.ldGr='p'")
+  +'<span style="width:10px"></span>Sort '+chip(srt==='n','Customers',"ST.ldSort='n'")+chip(srt==='gpc','Year-1 GP per customer',"ST.ldSort='gpc'")
+  +chip(srt==='r2','Came back for a 2nd order',"ST.ldSort='r2'")+chip(srt==='aov','1st-order AOV',"ST.ldSort='aov'")
+  +'<input type="search" placeholder="Find a '+(gr==='v'?'vendor':'product')+'…" oninput="ldFilter(this)" style="margin-left:auto;font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;min-width:190px"></div>';
+ if(D.err||!D.rows){
+  h+='<div style="padding:12px;border-radius:var(--r-m);background:var(--warn-wash);border:1px solid var(--warn-line);font-size:12px">'
+   +(D.err?('This ladder failed to build on the last crawl: '+esc(String(D.err))):'This ladder arrives with the next heavy crawl.')+'</div>';
+ } else {
+  const key={n:r=>r.n,gpc:r=>r.gpc,r2:r=>r.n?r.c[1]/r.n:0,aov:r=>r.aov[0]||0}[srt]||(r=>r.n);
+  const rows=D.rows.slice().sort((a,b)=>key(b)-key(a));
+  const K=5, ord=['1st','2nd','3rd','4th','5th'];
+  const TH='padding:6px 8px;border-bottom:2px solid var(--line-2);font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;text-align:right;white-space:nowrap;position:sticky;top:0;background:var(--surface)';
+  const TD='padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;white-space:nowrap;vertical-align:top';
+  h+='<div style="overflow:auto;max-height:640px"><table id="ldT" style="width:100%;border-collapse:collapse"><tr>'
+   +'<th style="'+TH+';text-align:left;left:0;z-index:2">'+(gr==='v'?'Vendor':'Product')+' in the first order</th><th style="'+TH+'">Customers</th>'
+   +ord.map((o,i)=>'<th style="'+TH+'">'+o+' order'+(i?'<div style="font-weight:600;text-transform:none">came back · AOV · GP</div>':'<div style="font-weight:600;text-transform:none">AOV · GP</div>')+'</th>').join('')
+   +'<th style="'+TH+'">Orders<div style="font-weight:600;text-transform:none">per customer, yr 1</div></th>'
+   +'<th style="'+TH+'">Revenue<div style="font-weight:600;text-transform:none">per customer, yr 1</div></th>'
+   +'<th style="'+TH+'">GP<div style="font-weight:600;text-transform:none">per customer, yr 1</div></th></tr>';
+  rows.forEach(r=>{
+   h+='<tr data-n="'+esc(String(r.nm).toLowerCase())+'"><td style="'+TD+';text-align:left;font-weight:700;white-space:normal;min-width:190px;max-width:260px" dir="auto">'+esc(String(r.nm))+'</td>'
+    +'<td style="'+TD+'">'+r.n.toLocaleString()+'</td>';
+   for(let i=0;i<K;i++){const c=r.c[i]||0;
+    h+='<td style="'+TD+'">'+(c?((i?'<div style="font-weight:700;color:var(--ink)">'+P(c/r.n)+'</div>':'')
+        +'<div>'+M(r.aov[i])+'</div><div style="color:var(--ink-3)">GP '+M(r.gpo[i])+'</div>'):'<span style="color:var(--ink-3)">—</span>')
+      +(i&&c&&c<10?'<div style="font-size:10px;color:var(--warn)">'+c+' customers</div>':'')+'</td>';}
+   h+='<td style="'+TD+'">'+r.opc.toFixed(2)+'</td><td style="'+TD+'">'+M(r.rpc)+'</td><td style="'+TD+';font-weight:800">'+M(r.gpc)+'</td></tr>';});
+  h+='</table></div>';
+  const all=rows.reduce((t,r)=>t+r.n,0);
+  h+='<div class="rtNote"><b>How to read a row:</b> the customers whose very first '+(sc==='pos'?'shop receipt':'Shopify order')+' contained this '+(gr==='v'?'vendor':'product')
+   +'. The <b>1st order</b> column is that first order&rsquo;s average value and gross profit. Each later column says what share of those customers came back for that order, and what that order was worth on average. The last three columns add up everything they bought in their first 12 months, per customer.<br>'
+   +'<b>Same footing for everyone:</b> '+(D.cust||0).toLocaleString()+' '+(sc==='pos'?'shop':'Shopify')+' customers acquired between 1 Nov 2024 and a year ago, each followed for exactly 12 months, so an older vendor is not flattered by having had longer. '
+   +'Earlier months are left out because the history starts on 1 Aug 2024, and a &ldquo;first&rdquo; order before November may belong to an existing customer. '
+   +'A first order with three '+(gr==='v'?'vendors':'products')+' counts for all three, so the customer column sums to more than the customer total. '
+   +(gr==='v'?'Vendors':'Products')+' with fewer than 25 such customers are not listed; an order column backed by fewer than 10 customers is marked. '
+   +(sc==='shop'?'Shopify revenue is net of VAT (Odoo price subtotal); returned orders are excluded.':'Shop revenue is the till total including VAT; refunded receipts are excluded.')+'</div>';
+ }
+ pnlCard(g,'odoo','Order ladder &mdash; what a customer&rsquo;s 1st, 2nd, 3rd&hellip; order is worth, by what they first bought'
+  +INFO('For customers whose first order contained each vendor or product: share who came back for each later order, the AOV and gross profit of each order, and year-one totals per customer. Customers acquired 1 Nov 2024 to a year ago, each followed for 12 months.'),
+  'Every vendor and product with at least 25 such customers. Shops and Shopify separately.',h);
 }
-window.hookStd=hookStd;
+window.ladderCard=ladderCard;
+window.ldFilter=function(el){const q=String(el.value||'').trim().toLowerCase();
+ document.querySelectorAll('#ldT tr[data-n]').forEach(tr=>{tr.style.display=(!q||tr.getAttribute('data-n').indexOf(q)>=0)?'':'none';});};
+
 
 function rCP(){if(TAB!=='cp')return;dCh();const g=document.getElementById('g15');g.innerHTML='';
  document.getElementById('bn15').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b> &middot; <b>CUSTOMER PORTFOLIO</b> &mdash; every registered customer split into ten equal-sized deciles by lifetime value. D1 = your top 10% of spenders, D10 = the lightest. Every figure is a real Odoo sum per customer, no estimates. Store deciles are POS-registered customers; Shopify deciles are online accounts. Use the SCOPE selector to switch between all stores and a single branch. MATURITY: deciles are LIFETIME sums, so recently-acquired customers sit in low deciles until their cohort matures &mdash; that is age, not weakness; the age-fair view is <b>Branch cohort quality (SAME-AGE)</b> on the Retail P&amp;L tab. Under every decile table sits <b>what each decile actually buys</b> &mdash; the categories and vendors they over-index on, how much more or less they repeat than the average customer, and the one move to make for that group.';
  try{cbCard(g);}catch(e){}
  if(ST.decScB===undefined)ST.decScB='Shopify';
  rDec(g,ST.decSc||'ALL STORES','decSc');
- try{hookStd(g);}catch(e){console.error('standardized hook card failed:',e);}
+ try{ladderCard(g);}catch(e){console.error('order ladder card failed:',e);}
  qsweep('g15');}
 function decIns(D,tt,money){
  if(!D||D.length<10)return '';
@@ -19781,14 +19811,16 @@ function custSeg(g){
  const B=O.decB; let bandH='';
  if(B&&B.win){
   const winK=(ST.csBand&&B.win[ST.csBand])?ST.csBand:(B.win.life?'life':Object.keys(B.win)[0]);
-  const W=B.win[winK]||{};
+  /* v97 Shopify bands ship under their own key (decBShop) -- merged here so SHOPIFY reads
+     its own customers instead of falling back to ALL STORES */
+  const W=Object.assign({},B.win[winK]||{},(((O.decBShop||{}).win||{})[winK])||{});
   const bsc=W[sc]?sc:(W['ALL STORES']?'ALL STORES':Object.keys(W)[0]);
   const rows=W[bsc]||[];
   if(rows.length){
    const tc=rows.reduce((a,x)=>a+(x.c||0),0)||1, tr=rows.reduce((a,x)=>a+(x.r||0),0)||1;
    const wk=['30','90','180','365','life'].filter(k=>B.win[k]);
    const chip=k=>'<span class="chip" style="'+(k===winK?'background:#2b3242;color:#fff;border-color:#2b3242':'')+'" onclick="ST.csBand=\''+k+'\';rCJ()">'+(k==='life'?'Lifetime':('Last '+k+'d'))+'</span>';
-   bandH='<div style="margin:16px 0 8px;font-weight:800;font-size:13px">What each customer has spent '+(bsc!==sc?('<span style="font-weight:600;color:var(--warn)">— '+bsc+', the nearest scope with band data</span>'):'')+'</div>'
+   bandH='<div style="margin:16px 0 8px;font-weight:800;font-size:13px">What each customer has spent '+(bsc==='SHOPIFY'?'<span style="font-weight:600;color:var(--ink-3)">— Shopify revenue is net of VAT</span> ':'')+(bsc!==sc?('<span style="font-weight:600;color:var(--warn)">— '+bsc+', the nearest scope with band data</span>'):'')+'</div>'
     +'<div style="margin-bottom:8px;font-size:11.5px;color:var(--ink-2)">Window '+wk.map(chip).join(' ')+'</div>'
     +'<div style="overflow-x:auto"><table class="bt heat" data-hc="1,2,3,4,5" data-hcx="1" style="width:100%"><tr>'
     +'<th style="'+TH+';text-align:left">Spend band</th><th style="'+TH+'">Customers</th><th style="'+TH+'">% of customers</th>'
@@ -23512,7 +23544,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261013-234357';
+const BUILD='20261017-210737';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
