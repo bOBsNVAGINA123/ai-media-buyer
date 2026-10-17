@@ -2793,6 +2793,56 @@ def anon_partner_ids():
     return ids
 
 
+def _ladder(orders, firstkeys, names, K=5, minN=25):
+    """ORDER LADDER. For customers whose FIRST order contained a key (vendor or product):
+    how many came back for a 2nd, 3rd... order, and what each of those orders was worth
+    (AOV = revenue / orders, GP per order). Read on the same footing for every key: only
+    customers acquired from 1 Nov 2024 (history starts 1 Aug 2024, so earlier "first"
+    orders may be old customers) to a year before today, and only their orders within
+    365 days of their first. orders: pid -> [(date, rev, gp), ...] with rev > 0."""
+    lo = datetime.date(2024, 11, 1); hi = END - datetime.timedelta(days=365)
+    acc = {}; ncust = 0
+    for pid, ol in orders.items():
+        ks = firstkeys.get(pid)
+        if not ks or not ol: continue
+        ol = sorted(ol)
+        f0 = datetime.date.fromisoformat(ol[0][0])
+        if not (lo <= f0 <= hi): continue
+        yr = [o for o in ol if (datetime.date.fromisoformat(o[0]) - f0).days <= 365]
+        ncust += 1
+        for k in ks:
+            e = acc.setdefault(k, {"n": 0, "c": [0] * K, "r": [0.0] * K, "g": [0.0] * K, "o": 0, "R": 0.0, "G": 0.0})
+            e["n"] += 1; e["o"] += len(yr)
+            for i, o in enumerate(yr):
+                e["R"] += o[1]; e["G"] += o[2]
+                if i < K: e["c"][i] += 1; e["r"][i] += o[1]; e["g"][i] += o[2]
+    rows = []
+    for k, e in acc.items():
+        if e["n"] < minN: continue
+        rows.append({"k": str(k), "nm": (names.get(k) or str(k))[:56], "n": e["n"], "c": e["c"],
+                     "aov": [round(e["r"][i] / e["c"][i]) if e["c"][i] else None for i in range(K)],
+                     "gpo": [round(e["g"][i] / e["c"][i]) if e["c"][i] else None for i in range(K)],
+                     "opc": round(e["o"] / e["n"], 2), "rpc": round(e["R"] / e["n"]), "gpc": round(e["G"] / e["n"])})
+    rows.sort(key=lambda x: -x["n"])
+    return {"rows": rows, "cust": ncust}
+
+
+def _ladder_check():
+    """runnable check: python3 -c 'import ourkids_live as o; o._ladder_check()'"""
+    global END
+    END = datetime.date(2026, 10, 1)
+    o = {1: [("2025-01-01", 100, 30), ("2025-02-01", 50, 10), ("2026-09-01", 999, 999)],
+         2: [("2025-03-01", 200, 60)],
+         3: [("2024-09-01", 80, 20), ("2024-10-01", 80, 20)],      # before 1 Nov 2024: excluded
+         4: [("2026-01-01", 70, 20)]}                               # under a year old: excluded
+    L = _ladder(o, {1: {"A"}, 2: {"A"}, 3: {"A"}, 4: {"A"}}, {"A": "Vendor A"}, K=3, minN=1)
+    r = L["rows"][0]
+    assert L["cust"] == 2 and r["n"] == 2, L
+    assert r["c"] == [2, 1, 0] and r["aov"] == [150, 50, None] and r["gpo"] == [45, 10, None], r
+    assert r["opc"] == 1.5 and r["rpc"] == 175 and r["gpc"] == 50, r   # the 2026-09 order is past day 365
+    print("ladder ok")
+
+
 def pull_pos_customers():
     """Branch customer economics from report.pos.order: new vs returning per branch-month, repeat rate, LTGP.
     Walk-in / house-account receipts are excluded from every customer number and counted separately in bun."""
@@ -3089,7 +3139,6 @@ def pull_pos_customers():
                 # 365 days, comparing THEIR day-0 with THEIR 365d, because averaging 982
                 # customers at day 0 against 343 at a year is not a repeat rate at all.
                 _vc = {}
-                _pc = {}   # v95: product-level, same tenure-fair horizons as the vendor one
                 for p in _all:
                     _f = first.get(p)
                     _fd = _f[0] if isinstance(_f, (tuple, list)) else _f
@@ -3097,8 +3146,7 @@ def pull_pos_customers():
                     _f0 = datetime.date.fromisoformat(_fd)
                     _age = (END - _f0).days
                     _vs = PFV.get(p) or ()
-                    _ps = PFP.get(p) or ()
-                    if not _vs and not _ps: continue
+                    if not _vs: continue
                     _ok = [i for i, H in enumerate(_HZ) if _age >= H]
                     if not _ok: continue
                     _acc = [0.0] * len(_HZ)
@@ -3119,7 +3167,6 @@ def pull_pos_customers():
                         if _has365:
                             e["pair"].append((_acc[0], _acc[_i365]))
                     for _v in _vs: _tally(_vc, _v)
-                    for _pp in _ps: _tally(_pc, _pp)
                 def _med(xs):
                     if not xs: return None
                     xs = sorted(xs); k = len(xs)
@@ -3142,33 +3189,26 @@ def pull_pos_customers():
                 _vout.sort(key=lambda x: -(x["mult"] or 0))
                 XTRA["vcoh"] = {"hz": _HZ, "rows": _vout[:60], "asOf": END.isoformat(), "minN": 25}
                 log("vendor LTV cohorts", len(_vout), "vendors >=25 acquired customers, 7 horizons")
-                # v95: the SAME tenure-fair cohort, per PRODUCT -- what a customer whose FIRST
-                # order contained this product is worth at a FIXED number of days, so a product
-                # that acquired people long ago no longer looks good purely for having aged.
-                # Ranked on value at 365 days (p365), the honest "brings good customers" signal.
-                _pout = []
-                for _pp, e in _pc.items():
-                    # ranked on p365 below, so only products with >=25 customers who have
-                    # actually REACHED day 365 -- the first build ranked 1-customer medians
-                    # (a E£37k hoodie) and only 25 of the 80 shipped were readable.
-                    if e["n"] < 25 or len(e["pair"]) < 25: continue
-                    _pa = [x for x, _y in e["pair"]]; _pb = [_y for _x, _y in e["pair"]]
-                    _m0, _m365 = _med(_pa), _med(_pb)
-                    _pout.append({"t": _pp, "nm": (TNAME.get(_pp) or str(_pp))[:48], "n": e["n"],
-                                  "cur": [round(_med(e["s"][i]), 1) if e["s"][i] else None
-                                          for i in range(len(_HZ))],
-                                  "mat": [len(e["s"][i]) for i in range(len(_HZ))],
-                                  "pn": len(e["pair"]),
-                                  "p0": round(_m0, 1) if _m0 is not None else None,
-                                  "p365": round(_m365, 1) if _m365 is not None else None,
-                                  "mult": round(_m365 / _m0, 3) if (_m0 and _m365) else None})
-                _pout.sort(key=lambda x: -(x["p365"] or 0))
-                XTRA["prodCoh"] = {"hz": _HZ, "rows": _pout[:80], "asOf": END.isoformat(), "minN": 25, "v": 2}
-                log("product LTV cohorts", len(_pout), "products >=25 acquired customers, 7 horizons")
+                # v97 ORDER LADDER (branches): per-order rev/gp from the same rows
+                try:
+                    _od = {}
+                    for _pid, _d, _br, _mg, _oid, _rv, _qy in rows:
+                        if not _oid: continue
+                        _o = _od.get((_pid, _oid))
+                        if _o is None: _o = _od[(_pid, _oid)] = [_d, 0.0, 0.0]
+                        _o[1] += _rv; _o[2] += _mg
+                        if _d < _o[0]: _o[0] = _d
+                    _ords = {}
+                    for (_pid, _oid), _o in _od.items():
+                        if _o[1] > 0: _ords.setdefault(_pid, []).append(tuple(_o))
+                    XTRA.setdefault("ladder", {})["pos"] = {"v": _ladder(_ords, PFV, VNM), "p": _ladder(_ords, PFP, TNAME)}
+                    log("order ladder (shops)", len(XTRA["ladder"]["pos"]["v"]["rows"]), "vendors",
+                        len(XTRA["ladder"]["pos"]["p"]["rows"]), "products")
+                except Exception as _e:
+                    log("order ladder (shops) FAILED", str(_e)[:160])
+                    XTRA.setdefault("ladder", {})["pos"] = {"err": str(_e)[:160]}   # stamped: no hourly forced crawl
             except Exception as _e:
                 log("vendor LTV cohorts FAILED", _e)
-                # stamp it so the _thin gate does not force a heavy crawl every hour on a bug
-                XTRA["prodCoh"] = {"rows": [], "err": str(_e)[:160], "asOf": END.isoformat(), "v": 2}
         except Exception as _e:
             log("hook brands fail", str(_e)[:120])
         log("comparable brackets", len(VBANDS), "bands x", len(_bw), "windows x", len(DA), "scopes")
@@ -3424,6 +3464,7 @@ def pull_shop_lines():
     retail are real sums, not allocations. Also feeds vendor/product monthly for the online side."""
     TV = tmpl_vendor_map(); VNM = vendor_names()
     agg = {}; oc = {}; oseen = set(); SATTR = {}; ODATES = {}; JRO = []; JVL = []; ORD = {}
+    OVN = {}; OTP = {}; STN = {}   # v97: vendors / products in each order, for the order ladder
     off = 0
     while off < 900000:
         page = oexec("sale.report", "search_read",
@@ -3478,13 +3519,50 @@ def pull_shop_lines():
             # not by line, so this stays small next to the ~900k-line crawl.
             if ref:
                 _o = ORD.get((pid, ref))
-                if _o is None: _o = ORD[(pid, ref)] = [0.0, 0.0, d]
-                _o[0] += rv; _o[1] += mg
+                if _o is None: _o = ORD[(pid, ref)] = [0.0, 0.0, d, 0.0]
+                _o[0] += rv; _o[1] += mg; _o[3] += qy
                 if d < _o[2]: _o[2] = d
+                if rv > 0:
+                    if _vn: OVN.setdefault((pid, ref), set()).add(_vn)
+                    if _tid:
+                        OTP.setdefault((pid, ref), set()).add(_tid)
+                        if _tid not in STN: STN[_tid] = ((r.get("product_tmpl_id") or [0, ""])[1] or "")[:56]
             if _vn and rv > 0: JVL.append((pid, d, VNM.get(_vn) or _vn))
         off += len(page)
         if len(page) < 10000: break
     XTRA.setdefault("dec", {})["Shopify"] = _decile(agg, oc, SATTR)
+    # v97 SHOPIFY SPEND BANDS -- the same absolute brackets the shops get (decB), so the
+    # "how much customers spend" table stops falling back to ALL STORES for Shopify. Kept in
+    # its own key: decB is built by the POS pull, which the fresh-bnrD gate can skip.
+    try:
+        _bw = {"life": {"SHOPIFY": _bands(agg, oc)}}
+        for _wd in (365, 180, 90, 30):
+            _cut = (END - datetime.timedelta(days=_wd - 1)).isoformat()
+            _a2 = {}; _o2 = {}
+            for (_p, _rf), _o in ORD.items():
+                if _o[2] < _cut: continue
+                _x = _a2.setdefault(_p, [0.0, 0.0, 0.0]); _x[0] += _o[0]; _x[1] += _o[1]; _x[2] += _o[3]
+                _o2[_p] = _o2.get(_p, 0) + 1
+            _bw[str(_wd)] = {"SHOPIFY": _bands(_a2, _o2)}
+        XTRA["decBShop"] = {"win": _bw, "asOf": END.isoformat()}
+        log("shopify spend bands", len(agg), "customers lifetime")
+    except Exception as _e:
+        log("shopify spend bands FAILED", str(_e)[:160])
+    # v97 ORDER LADDER (Shopify): first order = the customer's earliest order with revenue
+    try:
+        _ords = {}; _fo = {}
+        for (_p, _rf), _o in ORD.items():
+            if _o[0] <= 0: continue
+            _ords.setdefault(_p, []).append((_o[2], _o[0], _o[1]))
+            if _p not in _fo or _o[2] < _fo[_p][0]: _fo[_p] = (_o[2], _rf)
+        _fv = {p2: OVN.get((p2, f[1]), set()) for p2, f in _fo.items()}
+        _fp = {p2: OTP.get((p2, f[1]), set()) for p2, f in _fo.items()}
+        XTRA.setdefault("ladder", {})["shop"] = {"v": _ladder(_ords, _fv, VNM), "p": _ladder(_ords, _fp, STN)}
+        log("order ladder (Shopify)", len(XTRA["ladder"]["shop"]["v"]["rows"]), "vendors",
+            len(XTRA["ladder"]["shop"]["p"]["rows"]), "products")
+    except Exception as _e:
+        log("order ladder (Shopify) FAILED", str(_e)[:160])
+        XTRA.setdefault("ladder", {})["shop"] = {"err": str(_e)[:160]}
     log("shopify decile customers", len(agg), "orders", len(oseen))
     # ---- v8.4 ONLINE journeys from the same line crawl (real line-level cat/vendor) ----
     try:
@@ -6927,10 +7005,12 @@ def build():
                     if len(_sv.get("opy") or []) < 11 or _sv.get("opyAge") is None:
                         return "repeat-frequency buckets are the old 6-wide shape (need 11 + opyAge)"
                     break
-            # v95: prodCoh is built inside pull_pos_customers; without this the fresh-bnrD
-            # gate carried the old payload forward and the key could never appear.
-            if (pv.get("prodCoh") or {}).get("v") != 2:   # v2 = ranked over >=25 customers past day 365
-                return "product LTV cohorts missing or old shape (prodCoh v2)"
+            # v97: the order ladder is built inside the heavy pulls; without this the fresh-bnrD
+            # gate carries the old payload forward and a new key can never appear. Both legs are
+            # stamped even on failure, so a bug cannot force a heavy crawl every hour.
+            _ld = pv.get("ladder") or {}
+            if not (_ld.get("pos") and _ld.get("shop")):
+                return "order ladder missing (ladder.pos / ladder.shop)"
             _ch = pv.get("coh") or []
             if _ch and not any(c.get("g0") is not None for c in _ch):
                 return "cohort LTGP horizons missing (g0/g60/g730)"
@@ -7297,7 +7377,7 @@ def build():
                              "nc": [round(ms.get(d, {}).get("nc", 0.0)) for d in win]}
                          for b, ms in MBR.items()} if MBR else (prev.get("bmeta") or {})),
               "gpBasis": GP_BASIS, "vend": vend, "prodv": prodv, "ship": ship, "ship2": ship2, "sal": sal, "vinv": vinv,
-              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "prodCoh": (XTRA.get("prodCoh") or prev.get("prodCoh") or ({"rows": [], "err": "not built on this heavy run", "asOf": END.isoformat(), "v": 2} if heavy else {})), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
+              "dec": dec, "decB": (XTRA.get("decB") or prev.get("decB") or {}), "hookV": (XTRA.get("hookV") or prev.get("hookV") or {}), "vcoh": (XTRA.get("vcoh") or prev.get("vcoh") or {}), "decBShop": _xm("decBShop"), "ladder": (lambda _l: ({**_l, **{_k: {"err": "not built on this heavy run"} for _k in ("pos", "shop") if not _l.get(_k)}} if heavy else _l))(_xm("ladder")), "lag": lag, "bunr": bunr, "reach": mreach, "treach": treach, "xchan": xchan,
               "mads": mads, "gads": gads, "tads": tads, "audMix": safe(pull_meta_audiences, _mtok, mads) or {}, "netnew": safe(pull_meta_netnew, _mtok) or prev.get("netnew") or {}, "rtCohPack": rtpk, "searchIntel": safe(pull_search_intel) or prev.get("searchIntel") or {}, "shopch": safe(pull_shopify_channels) or prev.get("shopch") or {}, "why": why, "whyOff": whyOff,
               "madsW": XTRA.get("madsW") or prev.get("madsW"),
               "madsCov": _xm("madsCov"),
