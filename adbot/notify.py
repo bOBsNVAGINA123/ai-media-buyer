@@ -17,7 +17,7 @@ def sb(method, path, payload=None, prefer="return=representation"):
 
 
 def row(a, run_id):
-    keep = ("need7", "x_need", "type_cpa", "last7", "last28", "lifetime", "stock", "adset_name", "note", "rule", "hit_txt", "sizing", "do")
+    keep = ("need7", "x_need", "type_cpa", "last7", "last28", "lifetime", "stock", "adset_name", "note", "rule", "hit_txt", "sizing", "do", "stats", "adset_context", "impact")
     return {"run_id": run_id, "kind": a["kind"], "level": a["level"], "object_id": str(a["id"]), "object_name": a.get("name"),
             "campaign": a.get("campaign"), "audience": a.get("audience"), "confidence": a["confidence"],
             "hit_rate": a.get("hit_rate"), "why": a.get("why"), "change": a.get("change"),
