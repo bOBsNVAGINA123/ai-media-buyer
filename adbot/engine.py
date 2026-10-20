@@ -26,7 +26,7 @@ COOLDOWN_DAYS = 3                         # never re-touch what was edited this 
 # spend, week-to-week, season + stock + Google controlled (+10% spend -> +7.0% revenue, 95% CI 4.6-9.4%).
 # The within-ad-set curve said 1.0 and is NOT used: Meta spends more in the weeks it finds buyers,
 # so spend follows sales there as much as sales follow spend.
-MARG_B, MARG_B_LO, MARG_B_HI = 0.70, 0.46, 0.94
+MARG_B, MARG_B_LO = 0.70, 0.46            # upper CI 0.94 not used: the curve explodes there
 MAX_UP, MAX_UP_BIG = 1.5, 2.0              # one approval: +50%, or +100% when the room is 2x+ (held 96% / 92% in history)
 MIN_STEP, MAX_DOWN = 0.10, 0.50
 UTIL_MIN = 0.85                           # under this share of budget spent, more budget buys nothing
@@ -249,7 +249,8 @@ def build(rep):
         #   s*/s_now = (B * ROAS/need) ** (1 / (1 - B))
         def target(bb):
             return (bb * x) ** (1 / (1 - bb)) if x > 0 else 0
-        r_mid, r_lo, r_hi = target(MARG_B), target(MARG_B_LO), min(target(MARG_B_HI), 9.0)
+        # ponytail: constant-elasticity curve; history only has moves up to ~+100%, so the target is shown capped at 3x
+        r_mid, r_safe = min(target(MARG_B), 3.0), min(target(MARG_B_LO), 3.0)
         daily = w7["spend"] / 7.0; bud = budget / 100.0
         util = daily / bud if bud else None
         rule = None
@@ -270,21 +271,23 @@ def build(rep):
         new = int(round(budget * (1 + step) / 100.0) * 100) if budget else 0
         R = RULES["scale" if rule == "scale" else rule]
         head = (("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs; the next pound should return about %.0f%% of that, "
-                 "so it still pays up to roughly E£%s/day (range E£%s-%s) from E£%s/day now."
-                 % (r7, x, nd, MARG_B * 100, f"{bud * r_mid:,.0f}", f"{bud * r_lo:,.0f}", f"{bud * r_hi:,.0f}", f"{bud:,.0f}")) if up else
+                 "so spend keeps paying up to about E£%s/day%s (at least E£%s/day on the most pessimistic read) from E£%s/day now."
+                 % (r7, x, nd, MARG_B * 100, f"{bud * r_mid:,.0f}", "+" if r_mid >= 3 else "", f"{bud * r_safe:,.0f}", f"{bud:,.0f}")) if up else
                 ("Last 7 days ROAS %.2f is only %.0f%% of the %.2f it needs on E£%s spend (%.1fx this audience's CPA); "
                  "the next pound breaks even nearer E£%s/day than E£%s/day."
                  % (r7, x * 100, nd, f"{w7['spend']:,}", w7["spend"] / tcpa[t], f"{bud * max(r_mid, 0.1):,.0f}", f"{bud:,.0f}")))
         change = {"op": "budget", "object": oid, "from": budget, "to": new} if budget else None
         note = None
-        if up and util is not None and util < UTIL_MIN:
+        if util is not None and util < UTIL_MIN:
             change = None
-            note = ("It spent only %.0f%% of its E£%s/day budget last week, so a bigger budget would not be spent. "
-                    "It is limited by audience size or bid, not money: widen the audience or add creatives instead." % (util * 100, f"{bud:,.0f}"))
+            note = (("It spent only %.0f%% of its E£%s/day budget last week, so a bigger budget would not be spent. "
+                     "It is limited by audience size or bid, not money: widen the audience or add creatives instead.") if up else
+                    ("It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing. "
+                     "Pause its losing ads (see the pause cards) or the ad set itself.")) % (util * 100, f"{bud:,.0f}")
         budget_taken.add(oid)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
                         why=head, note=note, change=change,
-                        sizing={"next_pound_share": MARG_B, "target_daily": round(bud * r_mid), "range": [round(bud * r_lo), round(bud * r_hi)],
+                        sizing={"next_pound_share": MARG_B, "target_daily": round(bud * r_mid), "safe_daily": round(bud * r_safe), "capped": r_mid >= 3,
                                 "budget_used": round(util * 100) if util is not None else None, "step_pct": round(step * 100)}))
 
     # ---- ad decisions
