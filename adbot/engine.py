@@ -32,7 +32,9 @@ RULES = {
     "pause":      dict(roas_x=0.6, cpa_x=3, hit=0.79, hit_txt="79% kept losing for 4 more weeks (n=131)"),
     "winner":     dict(roas_x=2.0, cpa_x=10, hit=0.78, hit_txt="78% stayed at 1.2x+ break-even for 4 more weeks (n=303)"),
 }
-STOCK_LOW = 50                            # landing / catalogue stock index (%) that triggers a stock alert
+STOCK_LOW = 50                            # landing-page stock index (%) that triggers a stock alert
+DPA_LOW = 70                              # catalogue set: Meta shows Shopify-wide stock, not what the five can ship
+DEAD_HIT = (0.44, "Zero-purchase ads at 3x CPA stayed dead only 44% of the time (n=18) -- a weak signal")
 
 EXISTING_HINT = ("buyer", "purchas", "customer", "existing", "retention", "ru purchase", "all buyers")
 RT_SUBTYPES = {"WEBSITE", "ENGAGEMENT", "VIDEO", "IG_BUSINESS", "FB_EVENT", "APP", "OFFLINE_CONVERSION", "BAG_OF_ACCOUNTS"}
@@ -202,8 +204,9 @@ def build(rep):
     rep["landing_pages"] = [{k: v for k, v in l.items() if k != "_keys"} for l in land.values()]
     rep["landing_keys"] = {l["url"]: l.get("_keys") for l in land.values() if l.get("_keys")}
     rep["dpa_sets"] = dpa
+    rep["ad_stock"] = {aid: {k: v for k, v in st.items() if not k.startswith("_")} for aid, st in ad_stock.items()}
 
-    out = []; skipped = []
+    out = []; skipped = []; budget_taken = set()
 
     def conf_of(m, t):
         tc = tcpa.get(t)
@@ -246,7 +249,7 @@ def build(rep):
             continue
         if oid in touched or any(s in touched for s in sids):
             skipped.append({"id": oid, "name": name, "rule": rule, "why": "edited in the last %d days" % COOLDOWN_DAYS}); continue
-        R = RULES[rule]; up = rule != "trim"
+        R = RULES[rule]; up = rule != "trim"; budget_taken.add(oid)
         new = int(round(budget * (1 + R["step"] if up else 1 - R["step"]) / 100.0) * 100)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
             why=("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs to pay on incremental, on %d purchases."
@@ -274,27 +277,47 @@ def build(rep):
         if life["spend"] >= RULES["pause"]["cpa_x"] * tc and xl < RULES["pause"]["roas_x"]:
             if a["id"] in touched:
                 skipped.append({"id": a["id"], "name": a["name"], "rule": "pause", "why": "edited in the last %d days" % COOLDOWN_DAYS}); continue
-            act = dict(base, kind="pause", rule="pause", hit_rate=RULES["pause"]["hit"], hit_txt=RULES["pause"]["hit_txt"], x_need=round(xl, 2),
-                       confidence=conf_of(life, t),
+            zero = life["purch7"] == 0
+            act = dict(base, kind="pause", rule="pause", hit_rate=DEAD_HIT[0] if zero else RULES["pause"]["hit"],
+                       hit_txt=DEAD_HIT[1] if zero else RULES["pause"]["hit_txt"], x_need=round(xl, 2),
+                       confidence="low data" if zero else conf_of(life, t),
                        why="Lifetime ROAS %.2f is %.0f%% of the %.2f it needs, after E£%s (%.1fx this audience's CPA)."
                            % (life["roas_all7"] or 0, xl * 100, nd, f"{life['spend']:,}", life["spend"] / tc),
                        change={"op": "status", "object": a["id"], "to": "PAUSED"})
             out.append(act); pause_by_set[a["adset_id"]].append(act); continue
         x28 = (w28["roas_all7"] or 0) / nd if w28["spend"] else 0
         if w28["spend"] >= RULES["winner"]["cpa_x"] * tc and x28 >= RULES["winner"]["roas_x"]:
+            s_ = sets.get(a["adset_id"], {})
+            own = ("adset", a["adset_id"], s_.get("daily_budget")) if s_.get("daily_budget") else \
+                  ("campaign", s_.get("campaign_id"), camps.get(s_.get("campaign_id"), {}).get("daily_budget"))
+            ch = None; note = None
+            if own[2] and own[1] not in budget_taken and own[1] not in touched and a["adset_id"] not in touched:
+                b_ = int(own[2]); ch = {"op": "budget", "object": own[1], "from": b_, "to": int(round(b_ * 1.2 / 100.0) * 100)}
+                budget_taken.add(own[1]); note = "Approving raises the %s budget that feeds this ad by 20%%." % ("ad set" if own[0] == "adset" else "campaign (CBO)")
+            elif own[1] in budget_taken:
+                note = "Its budget already has a push or trim proposed above."
             out.append(dict(base, kind="winner", rule="winner", hit_rate=RULES["winner"]["hit"], hit_txt=RULES["winner"]["hit_txt"],
-                            x_need=round(x28, 2), confidence=conf_of(w28, t),
-                            why="Last 28 days ROAS %.2f is %.1fx the %.2f it needs, on E£%s. Give it more budget or put it into a scaling ad set."
-                                % (w28["roas_all7"], x28, nd, f"{w28['spend']:,}"), change=None))
-        if w28["spend"] >= tc and st.get("index") is not None and st["index"] < STOCK_LOW:
-            what = "Catalogue" if st.get("kind") == "dpa" else "Landing page"
+                            x_need=round(x28, 2), confidence=conf_of(w28, t), note=note,
+                            why="Last 28 days ROAS %.2f is %.1fx the %.2f it needs, on E£%s and %d purchases."
+                                % (w28["roas_all7"], x28, nd, f"{w28['spend']:,}", w28["purch7"]), change=ch))
+        is_dpa = st.get("kind") == "dpa"
+        low = st.get("index") is not None and st["index"] < (DPA_LOW if is_dpa else STOCK_LOW)
+        if w28["spend"] >= tc and low and a["id"] not in touched:
             first = "; ".join("%s %d%%" % (p["title"][:28], p["sizes_in_stock"]) for p in (st.get("first4") or []))
+            losing = x28 < 1
+            if is_dpa:
+                what = ("Catalogue set: %d%% shippable by sales, only %d%% of its %s items can ship from the five locations. "
+                        "Meta reads Shopify-wide stock, so this ad can show products you cannot send."
+                        % (st["index"], st.get("index_unweighted") or 0, f"{st.get('items', 0):,}"))
+            else:
+                what = "Landing page stock %d%% (sizes you can ship today, first products weighted most). %s" % (
+                    st["index"], ("First products: " + first) if first else "")
+            fix = (" It is also under break-even (%.0f%% of need), so pause it." % (x28 * 100)) if losing else \
+                  (" Still profitable at %.1fx need: fix the page (move in-stock products to the top or restock), do not pause." % x28)
             out.append(dict(base, kind="stock", rule="stock", hit_rate=None,
                             hit_txt="Account-wide: +10% fulfillable stock = CPA 10% lower, CVR 11% higher (420 days)",
-                            x_need=round(x28, 2), confidence=conf_of(w28, t),
-                            why="%s stock %d%% (sizes you can ship today, first products weighted most). %s"
-                                % (what, st["index"], ("First products: " + first) if first else ""),
-                            change={"op": "status", "object": a["id"], "to": "PAUSED"}))
+                            x_need=round(x28, 2), confidence=conf_of(w28, t), why=what + fix,
+                            change={"op": "status", "object": a["id"], "to": "PAUSED"} if losing else None))
     # pausing every live ad in an ad set = pause the ad set instead
     for sid, acts_ in pause_by_set.items():
         if len(acts_) == len(live_by_set[sid]) and len(acts_) > 1:
