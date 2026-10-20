@@ -311,11 +311,20 @@ def build(rep):
         change = {"op": "budget", "object": oid, "from": budget, "to": new}
         notes = []
         if util is not None and util < UTIL_MIN:
-            change = None
-            notes.append(("It spent only %.0f%% of its E£%s/day budget last week, so a bigger budget would not be spent: "
-                          "widen the audience or add creatives." if up else
-                          "It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing: pause its losing ads or the ad set.")
-                         % (util * 100, f"{bud:,.0f}"))
+            if up:
+                # it earns but cannot spend more: more budget buys nothing, a second ad set with a wider audience can
+                rule = "duplicate"
+                src = oid if lvl == "adset" else max(sids, key=lambda sid: sum(r["sp"] for r in by_set.get(sid, []) if r["wk"] == last))
+                change = {"op": "copy", "object": src}
+                head = ("It makes money but spent only %.0f%% of its E£%s/day budget last week, so a bigger budget would not be spent. "
+                        "If a copy with a wider audience finds buyers like these and spends E£%s/day more: %s"
+                        % (util * 100, f"{bud:,.0f}", f"{pick['spend']:,}", head.split(". ", 1)[1]))
+                notes.append("Approve makes a PAUSED copy of %s with all its ads. On the copy: widen the audience (broad or a lookalike), "
+                             "then switch it on. Nothing goes live by itself." % ("this ad set" if lvl == "adset" else "its biggest ad set"))
+            else:
+                change = None
+                notes.append("It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing: turn off its losing ads (see those cards) or the ad set."
+                             % (util * 100, f"{bud:,.0f}"))
         if WARN:
             notes.append(WARN)
         budget_taken.add(oid)
@@ -408,6 +417,23 @@ def build(rep):
     order = {"pause": 0, "stock": 1, "trim": 2, "scale": 3, "winner": 4}
     out.sort(key=lambda x: (order[x["kind"]], x["confidence"] != "confident",
                             -((x.get("last7") or x.get("last28") or x.get("lifetime") or {}).get("spend") or 0)))
+    # ---- one plain move per card, biggest money first
+    def money(a):
+        return ((a.get("sizing") or {}).get("pick") or {}).get("net_p50") or 0
+    def move(a):
+        ch = a.get("change") or {}
+        fr, to = (ch.get("from") or 0) / 100, (ch.get("to") or 0) / 100
+        if a["kind"] == "pause": return "Turn off this ad"
+        if a["kind"] == "stock": return "Turn off: its page can't ship" if ch.get("op") == "status" else "Fix the page: put in-stock products first"
+        if a["kind"] == "duplicate": return "Duplicate this ad set (paused copy), widen the audience, switch it on"
+        if a["kind"] == "scale": return "Spend more: E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")
+        if a["kind"] == "trim": return ("Spend less: E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch else "Spend less: turn off its losing ads"
+        if a["kind"] == "winner": return "Winner: keep it running" + ((", spend more E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch.get("op") == "budget" else "")
+        return "Look at it"
+    for a in out:
+        a["do"] = move(a)
+    order = {"pause": 0, "trim": 1, "scale": 2, "duplicate": 3, "stock": 4, "winner": 5}
+    out.sort(key=lambda a: (order.get(a["kind"], 9), -abs(money(a))))
     rep["actions"] = out; rep["skipped"] = skipped
     rep["counts"] = dict(collections.Counter(a["kind"] + " · " + a["confidence"] for a in out))
     return rep
