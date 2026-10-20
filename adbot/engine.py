@@ -323,6 +323,17 @@ def build(rep):
                         sizing={"roas_expected": r7, "roas_last_week": raw7, "instore_share": round(st_share, 2), "budget_used": round(util * 100) if util is not None else None,
                                 "step_pct": round((pick["k"] - 1) * 100), "pick": pick, "options": ups + downs}))
 
+    # ---- all budget cards approved together: the account-level curve, not the sum of single cards
+    moves = [a for a in out if a.get("change") and a["change"].get("op") == "budget"]
+    if moves:
+        s0 = ACC["spend_day"]
+        ds = sum((a["change"]["to"] - a["change"]["from"]) / 100.0 * min(((a.get("sizing") or {}).get("budget_used") or 100) / 100.0, 1.0) for a in moves)
+        pk = X.package(s0, s0 + ds, SEASON)
+        rep["account"]["package"] = {"cards": len(moves), "spend_from": round(s0), "spend_to": round(s0 + ds), "net_day": pk,
+                                     "sum_of_cards": sum(a["sizing"]["pick"]["net_p50"] for a in moves),
+                                     "highest_week_on_record": 68541}
+        D.log("package", rep["account"]["package"])
+
     # ---- ad decisions
     pause_by_set = collections.defaultdict(list); live_by_set = collections.defaultdict(list)
     for a in ads:
