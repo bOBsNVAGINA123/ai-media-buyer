@@ -302,3 +302,15 @@ def retailer_variant(rid):
     """'shopify_EG_123_456' / '456' -> '456' (the Shopify variant id)."""
     m = re.findall(r"\d{6,}", str(rid or ""))
     return m[-1] if m else ""
+
+
+def google_daily(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "ourkids", "data.js")):
+    """Daily Google + Meta spend from the dashboard payload in this repo (same checkout). {} if unreadable."""
+    try:
+        s = open(path, encoding="utf-8").read(); i = s.find("{")
+        o, _ = json.JSONDecoder().raw_decode(s[i:]); a = o["ad"]
+        d0 = dt.date.fromisoformat(a["start"])
+        return {"days": [(d0 + dt.timedelta(days=k)).isoformat() for k in range(a["n"])], "g": a["gspend"], "m": a["mspend"],
+                "synced": o.get("lastSync")}
+    except Exception as e:
+        log("google_daily unreadable:", e); return {}
