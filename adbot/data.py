@@ -328,3 +328,18 @@ def _google_stale(path):
         return "google" in ((st.get("data") or {}).get("stale") or [])
     except Exception:
         return None
+
+
+def missing_sizes(call, stock, days=30, top=15):
+    """Share of last-N-days online demand (by barcode) whose size cannot ship today from the five locations,
+    plus the biggest missing sizes. Quantity does not matter: a size counts as there if one unit can ship."""
+    w = online_sales_weights(call, days=days)
+    tot = sum(w.values()) or 1
+    gone = sorted(((v, bc) for bc, v in w.items() if stock.get(bc, 0) <= 0), reverse=True)
+    names = {}
+    if gone:
+        for p in call("product.product", "search_read", [[["barcode", "in", [bc for _, bc in gone[:top]]]]],
+                      {"fields": ["barcode", "display_name"]}):
+            names[p["barcode"]] = p["display_name"]
+    return {"share": round(sum(v for v, _ in gone) / tot, 4), "days": days,
+            "top": [{"barcode": bc, "name": names.get(bc, bc), "online_rev": round(v)} for v, bc in gone[:top]]}
