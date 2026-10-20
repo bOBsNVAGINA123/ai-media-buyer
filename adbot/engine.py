@@ -18,6 +18,7 @@ import json, os, sys, datetime as dt, collections
 import data as D
 
 M_ON, M_ST = 0.2605, 0.3183               # delivered online margin / in-store margin
+M_ON_GROSS = 0.352                        # online before courier + PayMob (9.16% of revenue)
 # incremental / 7-day-click ROAS by audience type, Ads Reporting 19 Sep-15 Oct 2026.
 # Re-read monthly; this is what turns a 7-day-click ROAS into "pays on incremental".
 INCR = {"new": 0.70, "retargeting": 0.88, "existing": 0.64}
@@ -26,7 +27,7 @@ COOLDOWN_DAYS = 3                         # never re-touch what was edited this 
 # spend, week-to-week, season + stock + Google controlled (+10% spend -> +7.0% revenue, 95% CI 4.6-9.4%).
 # The within-ad-set curve said 1.0 and is NOT used: Meta spends more in the weeks it finds buyers,
 # so spend follows sales there as much as sales follow spend.
-MARG_B, MARG_B_LO = 0.70, 0.46            # upper CI 0.94 not used: the curve explodes there
+MARG_B, MARG_B_LO, MARG_B_HI = 0.70, 0.46, 0.94   # HI only for a trim's worst case (cut loses the most)
 MAX_UP, MAX_UP_BIG = 1.5, 2.0              # one approval: +50%, or +100% when the room is 2x+ (held 96% / 92% in history)
 MIN_STEP, MAX_DOWN = 0.10, 0.50
 UTIL_MIN = 0.85                           # under this share of budget spent, more budget buys nothing
@@ -94,6 +95,17 @@ def need7(m, typ):
     tot = (m["_v_on"] + m["_v_st"]) or 1
     st = m["_v_st"] / tot
     return round(1 / (M_ON * (1 - st) + M_ST * st) / INCR[typ], 2)
+
+
+def profit_move(m, typ, k, b):
+    """Expected change in E£/day if spend goes from today's to k x today's, on incremental revenue.
+    Revenue scales k**b (next-pound curve). Returns online gross / online delivered / in-store GP, spend, net."""
+    on, st = m["_v_on"] / 7.0 * INCR[typ], m["_v_st"] / 7.0 * INCR[typ]
+    g = k ** b - 1; d = m["spend"] / 7.0 * (k - 1)
+    gp_on, gp_st = on * M_ON * g, st * M_ST * g
+    return {"rev_online": round(on * g), "rev_instore": round(st * g), "gp_online_gross": round(on * M_ON_GROSS * g),
+            "gp_online_delivered": round(gp_on), "gp_instore": round(gp_st), "spend": round(d),
+            "net": round(gp_on + gp_st - d)}
 
 
 def clean(m):
@@ -284,10 +296,18 @@ def build(rep):
                      "It is limited by audience size or bid, not money: widen the audience or add creatives instead.") if up else
                     ("It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing. "
                      "Pause its losing ads (see the pause cards) or the ad set itself.")) % (util * 100, f"{bud:,.0f}")
+        k = new / budget if budget and change else 1.0
+        if change:
+            pm, pw = profit_move(w7, t, k, MARG_B), profit_move(w7, t, k, MARG_B_LO if up else MARG_B_HI)
+            head += (" Expected per day: spend %+s, incremental revenue %+s online / %+s in-store, gross profit %+s online "
+                     "(%+s after delivery) and %+s in-store, so net profit after ad spend %+s (worst case %+s)."
+                     % tuple(f"E£{v:,}" for v in (pm["spend"], pm["rev_online"], pm["rev_instore"], pm["gp_online_gross"],
+                                                    pm["gp_online_delivered"], pm["gp_instore"], pm["net"], pw["net"])))
         budget_taken.add(oid)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
                         why=head, note=note, change=change,
                         sizing={"next_pound_share": MARG_B, "target_daily": round(bud * r_mid), "safe_daily": round(bud * r_safe), "capped": r_mid >= 3,
+                                "profit_day": pm if change else None, "profit_day_worst": pw if change else None,
                                 "budget_used": round(util * 100) if util is not None else None, "step_pct": round(step * 100)}))
 
     # ---- ad decisions
