@@ -1,0 +1,41 @@
+name: OurKids Ad Bot
+
+# Read-only data pull + daily recommendations. Writes nothing to Meta, Odoo or Shopify.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ourkids-adbot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install requests
+      - name: Pull data and build recommendations
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACCOUNT_ID: ${{ secrets.META_ACCOUNT_ID }}
+          ODOO_SERVER: ${{ secrets.ODOO_SERVER }}
+          ODOO_DB: ${{ secrets.ODOO_DB }}
+          ODOO_LOGIN: ${{ secrets.ODOO_LOGIN }}
+          ODOO_APIKEY: ${{ secrets.ODOO_APIKEY }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+        run: |
+          mkdir -p out
+          cd adbot && python engine.py ../out/adbot_report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: adbot
+          path: out/
+          retention-days: 1
