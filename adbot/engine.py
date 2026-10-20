@@ -1,7 +1,6 @@
 """OurKids ad bot -- daily rules (v1, backtested).
 
-Reads a year of Meta ad-week data, fulfillable stock (the five shipping locations +
-FULL/Shopify), each live ad's landing page and each DPA product set, and writes the day's
+Reads a year of Meta ad-week data, fulfillable stock (the 7 Shopify-synced warehouses), each live ad's landing page and each DPA product set, and writes the day's
 recommended actions. Nothing here changes Meta: the phone app executes an action only
 after it is approved.
 
@@ -51,7 +50,7 @@ RULES = {
     "winner":     dict(roas_x=2.0, cpa_x=10, hit=0.78, hit_txt="78% stayed at 1.2x+ break-even for 4 more weeks (n=303)"),
 }
 STOCK_LOW = 50                            # landing-page stock index (%) that triggers a stock alert
-DPA_LOW = 70                              # catalogue set: Meta shows Shopify-wide stock, not what the five can ship
+DPA_LOW = 70                              # catalogue set: Meta shows Shopify-wide stock, not what the synced warehouses can ship
 DEAD_HIT = (0.44, "Zero-purchase ads at 3x CPA stayed dead only 44% of the time (n=18) -- a weak signal")
 
 EXISTING_HINT = ("buyer", "purchas", "customer", "existing", "retention", "ru purchase", "all buyers")
@@ -303,7 +302,7 @@ def build(rep):
         head = ("%s budget E£%s -> E£%s/day (%+d%%). Expected net profit %s/day after the extra ad spend "
                 "(80%% range %s to %s). Chance it makes money: %d%% (%s). Online alone: %s/day, chance %d%%; the shops add %s gross profit/day. "
                 "Forecast ROAS %.2f (last week %.2f, 4 weeks %.2f, %s audiences %.2f, less the %d%% that past forecasts ran high), "
-                "%d%% of it in-store. Season and sizes: online return at %d%% of normal (%d%% of in-demand sizes can't ship today vs 17%% typical), shops at %d%%."
+                "%d%% of it in-store. Season and sizes: online return at %d%% of normal (%d%% of in-demand sizes can't ship today vs 16%% typical), shops at %d%%."
                 % ("Raise" if up else "Cut", f"{bud:,.0f}", f"{new / 100:,.0f}", round((pick["k"] - 1) * 100), e(pick["net_p50"]),
                    e(pick["net_p10"]), e(pick["net_p90"]), round(pick["p_pays"] * 100), X.label(pick["p_pays"]),
                    e(pick["online_p50"]), round(pick["online_p_pays"] * 100), e(pick["gp_instore"]),
@@ -388,7 +387,7 @@ def build(rep):
             first = "; ".join("%s %d%%" % (p["title"][:28], p["sizes_in_stock"]) for p in (st.get("first4") or []))
             losing = x28 < 1
             if is_dpa:
-                what = ("Catalogue set: %d%% shippable by sales, only %d%% of its %s items can ship from the five locations. "
+                what = ("Catalogue set: %d%% shippable by sales, only %d%% of its %s items can ship from the synced warehouses. "
                         "Meta reads Shopify-wide stock, so this ad can show products you cannot send."
                         % (st["index"], st.get("index_unweighted") or 0, f"{st.get('items', 0):,}"))
             else:
