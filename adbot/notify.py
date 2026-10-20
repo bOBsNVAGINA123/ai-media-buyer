@@ -17,7 +17,7 @@ def sb(method, path, payload=None, prefer="return=representation"):
 
 
 def row(a, run_id):
-    keep = ("need7", "x_need", "type_cpa", "last7", "last28", "lifetime", "stock", "adset_name", "note", "rule", "hit_txt", "sizing")
+    keep = ("need7", "x_need", "type_cpa", "last7", "last28", "lifetime", "stock", "adset_name", "note", "rule", "hit_txt", "sizing", "do")
     return {"run_id": run_id, "kind": a["kind"], "level": a["level"], "object_id": str(a["id"]), "object_name": a.get("name"),
             "campaign": a.get("campaign"), "audience": a.get("audience"), "confidence": a["confidence"],
             "hit_rate": a.get("hit_rate"), "why": a.get("why"), "change": a.get("change"),
@@ -51,7 +51,7 @@ def push(rep, n):
         D.log("push skipped (no key or no actions)"); return
     from pywebpush import webpush, WebPushException
     c = collections_counts(rep)
-    body = "%d to pause · %d stock · %d to trim · %d to push · %d winners" % (c["pause"], c["stock"], c["trim"], c["scale"], c["winner"])
+    body = "%d turn off · %d spend less · %d spend more · %d duplicate · %d stock · %d winners" % (c["pause"], c["trim"], c["scale"], c["duplicate"], c["stock"], c["winner"])
     payload = json.dumps({"title": "Ad Desk: %d actions waiting" % n, "body": body, "url": "/", "tag": "adbot-" + dt.date.today().isoformat()})
     for p in sb("GET", "adbot_phones?select=id,endpoint,sub") or []:
         try:
@@ -66,7 +66,7 @@ def push(rep, n):
 
 
 def collections_counts(rep):
-    c = {"pause": 0, "stock": 0, "trim": 0, "scale": 0, "winner": 0}
+    c = {"pause": 0, "stock": 0, "trim": 0, "scale": 0, "winner": 0, "duplicate": 0}
     for a in rep.get("actions") or []:
         c[a["kind"]] = c.get(a["kind"], 0) + 1
     return c
