@@ -1,0 +1,44 @@
+name: Ad Desk setup
+
+# One-off: copies the Meta token (and, once you have added it, the Supabase key) from this
+# repo's secrets into the Ad Desk app on Vercel, so approvals can run on Meta. The values go
+# GitHub -> Vercel directly; they are never printed.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy secrets to the Ad Desk app
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          PROJECT = "prj_TLkFE4QlfX6Fgnv0GVjLvPFZSZGI"; TEAM = "team_f9pi561ocnJiAXGdpgOZWMR0"
+          def put(key, value):
+              if not value:
+                  print("skip", key, "(not set in GitHub secrets)"); return
+              body = json.dumps({"key": key, "value": value, "type": "encrypted", "target": ["production"]}).encode()
+              req = urllib.request.Request("https://api.vercel.com/v10/projects/%s/env?upsert=true&teamId=%s" % (PROJECT, TEAM),
+                                           data=body, method="POST",
+                                           headers={"Authorization": "Bearer " + os.environ["VERCEL_TOKEN"], "Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  print("set", key, r.status)
+          put("META_ACCESS_TOKEN", os.environ.get("META_ACCESS_TOKEN"))
+          put("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_SERVICE_KEY"))
+          # redeploy so the new values take effect
+          req = urllib.request.Request("https://api.vercel.com/v6/deployments?projectId=%s&teamId=%s&target=production&limit=1" % (PROJECT, TEAM),
+                                       headers={"Authorization": "Bearer " + os.environ["VERCEL_TOKEN"]})
+          dep = json.loads(urllib.request.urlopen(req).read())["deployments"][0]
+          body = json.dumps({"name": "ourkids-ad-desk", "deploymentId": dep["uid"], "target": "production"}).encode()
+          req = urllib.request.Request("https://api.vercel.com/v13/deployments?teamId=%s&forceNew=1" % TEAM, data=body, method="POST",
+                                       headers={"Authorization": "Bearer " + os.environ["VERCEL_TOKEN"], "Content-Type": "application/json"})
+          print("redeploy", urllib.request.urlopen(req).status)
+          PY
