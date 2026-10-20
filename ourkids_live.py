@@ -5635,16 +5635,16 @@ def _gads_ver(hd):
     the branch-sales pipeline. Probes newest-first, caches for the run."""
     if GADS_VER["v"]: return GADS_VER["v"]
     cid = os.environ.get("GOOGLE_CUSTOMER_ID", "")
-    for v in ("v22", "v23", "v24", "v25", "v21"):
+    for v in ("v23", "v24", "v25", "v26"):   # v9.7.20: v22 was retired 20 Oct 2026 (UNSUPPORTED_VERSION; it still passed this probe). v23 = proven field set
         d = http_json("https://googleads.googleapis.com/%s/customers/%s/googleAds:searchStream" % (v, cid),
                       {"query": "SELECT customer.id FROM customer LIMIT 1"}, hd, tries=1)
         if isinstance(d, list) or (isinstance(d, dict) and not d.get("error")):
             GADS_VER["v"] = v
             log("google ads api :: version probe picked", v)
             return v
-    GADS_VER["v"] = "v22"
-    log("google ads api :: NO live version found among v21-v25 -- Google moved again; "
-        "using v22 so the errors stay loud")
+    GADS_VER["v"] = "v23"
+    log("google ads api :: NO live version found among v22-v26 -- Google moved again; "
+        "using v23 so the errors stay loud")
     return GADS_VER["v"]
 
 def _gads_hdr():
