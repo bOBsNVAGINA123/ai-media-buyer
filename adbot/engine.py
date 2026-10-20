@@ -296,6 +296,10 @@ def build(rep):
                 budget_taken.add(own[1]); note = "Approving raises the %s budget that feeds this ad by 20%%." % ("ad set" if own[0] == "adset" else "campaign (CBO)")
             elif own[1] in budget_taken:
                 note = "Its budget already has a push or trim proposed above."
+            elif own[1] in touched or a["adset_id"] in touched:
+                note = "Its budget or ad set was edited in the last %d days; leaving it to settle before another change." % COOLDOWN_DAYS
+            elif not own[2]:
+                note = "No daily budget to raise (lifetime budget or set elsewhere) -- raise it by hand or move the ad into a scaling ad set."
             out.append(dict(base, kind="winner", rule="winner", hit_rate=RULES["winner"]["hit"], hit_txt=RULES["winner"]["hit_txt"],
                             x_need=round(x28, 2), confidence=conf_of(w28, t), note=note,
                             why="Last 28 days ROAS %.2f is %.1fx the %.2f it needs, on E£%s and %d purchases."
