@@ -443,7 +443,11 @@ def main(out_path):
     D.log("landing pages", len(rep["landing_pages"]), "dpa sets", {k: (v.get("coverage"), v.get("index")) for k, v in rep["dpa_sets"].items()})
     D.log("actions", rep["counts"], "skipped (cooldown)", len(rep["skipped"]))
     if os.environ.get("SUPABASE_SERVICE_KEY"):
-        import notify
+        import notify, outcomes
+        try:
+            outcomes.track(rep["account"], M_ON, M_ST)      # yesterday's applied actions: forecast vs actual
+        except Exception as e:
+            D.log("outcome tracking failed (cards still sent):", e)
         notify.publish(rep)
     else:
         D.log("SUPABASE_SERVICE_KEY not set: report only, nothing sent")
