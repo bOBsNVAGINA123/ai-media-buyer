@@ -243,7 +243,8 @@ def build(rep):
             WARN = ("Google Ads spent nothing on %d of the last %d days (since %s). On Google-dark days Meta's own ROAS read 63%% higher "
                     "while real revenue did not clearly move, so this week's Meta numbers are inflated: check Google billing first."
                     % (len(dark), len(recent), dark[0]))
-    rep["account"] = {"roas_online7_4w": round(ACC["on"], 2), "roas_instore7_4w": round(ACC["st"], 2), "spend_day": round(ACC["spend_day"]),
+    SEASON = X.season_index(G.get("shop", {}), G.get("pos", {}), dt.date.today()) if G else (1.0, 1.0)
+    rep["account"] = {"season_index": {"online": SEASON[0], "instore": SEASON[1]}, "roas_online7_4w": round(ACC["on"], 2), "roas_instore7_4w": round(ACC["st"], 2), "spend_day": round(ACC["spend_day"]),
                       "google_warning": WARN, "gate": GATE, "p_min": P_MIN}
     # ---- budget decisions on whoever owns the budget: ad set (ABO) or campaign (CBO)
     live_sets = {a["adset_id"] for a in ads}
@@ -281,7 +282,7 @@ def build(rep):
         st_share = mix["_v_st"] / ((mix["_v_on"] + mix["_v_st"]) or 1)
         r_on, r_st = r7 * (1 - st_share), r7 * st_share
         sim = lambda k: X.simulate(daily, k, r_on, r_st, ACC["on"], ACC["st"], ACC["spend_day"], w7["purch7"],
-                                   MB, (MB_HI - MB_LO) / 3.92, M_ON, M_ST)
+                                   MB, (MB_HI - MB_LO) / 3.92, M_ON, M_ST, SEASON)
         ups = [sim(k) for k in (1.2, 1.5, 2.0)]; downs = [sim(k) for k in (0.8, 0.65, 0.5)]
         ok_up = [r for r in ups if r[GATE] >= P_MIN and (r["k"] < 2 or r[GATE] >= 0.9)]
         ok_dn = [r for r in downs if r[GATE] >= P_MIN]
@@ -297,11 +298,12 @@ def build(rep):
         head = ("%s budget E£%s -> E£%s/day (%+d%%). Expected net profit %s/day after the extra ad spend "
                 "(80%% range %s to %s). Chance it makes money: %d%% (%s). Online alone: %s/day, chance %d%%; the shops add %s gross profit/day. "
                 "Forecast ROAS %.2f (last week %.2f, 4 weeks %.2f, %s audiences %.2f, less the %d%% that past forecasts ran high), "
-                "%d%% of it in-store."
+                "%d%% of it in-store. Season: last year the next 2 weeks ran at %d%% of the yearly average online and %d%% in the shops."
                 % ("Raise" if up else "Cut", f"{bud:,.0f}", f"{new / 100:,.0f}", round((pick["k"] - 1) * 100), e(pick["net_p50"]),
                    e(pick["net_p10"]), e(pick["net_p90"]), round(pick["p_pays"] * 100), X.label(pick["p_pays"]),
                    e(pick["online_p50"]), round(pick["online_p_pays"] * 100), e(pick["gp_instore"]),
-                   r7, raw7, w28["roas_all7"] or 0, t, rep["types"][t].get("roas_all7") or 0, round((1 - math.exp(bias)) * 100), round(st_share * 100)))
+                   r7, raw7, w28["roas_all7"] or 0, t, rep["types"][t].get("roas_all7") or 0, round((1 - math.exp(bias)) * 100), round(st_share * 100),
+                   round(SEASON[0] * 100), round(SEASON[1] * 100)))
         change = {"op": "budget", "object": oid, "from": budget, "to": new}
         notes = []
         if util is not None and util < UTIL_MIN:
