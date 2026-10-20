@@ -15,7 +15,7 @@ import math, random
 
 CAL = {"spend_ref": 37309.0,
        "on": (4.24, 0.71, 0.80),     # revenue per extra Meta E£ at spend_ref: mean, s.e., elasticity
-       "st": (17.16, 3.47, 0.64)}
+       "st": (14.70, 3.87, 0.64)}   # in-store: the most conservative robust read (back to school, White Friday, Ramadan/Eid weeks left out; 17.16 with them)
 # purchases last week >= p: (median log miss, p10, p90 of log miss around it, already x1.65)
 BIAS = ((0, -0.078, -1.472, 1.150), (10, -0.116, -0.973, 0.834), (20, -0.117, -0.812, 0.819), (50, -0.133, -1.271, 0.816))
 CALIB_TXT = ("80% ranges held 79-83% of the time on weeks the model had not seen; "
@@ -26,7 +26,7 @@ def miss(purch):
     return next((b, lo, hi) for p, b, lo, hi in reversed(BIAS) if purch >= p)
 
 
-def simulate(spend_day, k, r_on, r_st, acc_on, acc_st, s_now, purch, curve_b, curve_sd, m_on, m_st, n=4000, seed=7):
+def simulate(spend_day, k, r_on, r_st, acc_on, acc_st, s_now, purch, curve_b, curve_sd, m_on, m_st, season=(1.0, 1.0), n=4000, seed=7):
     """Net E£/day from moving daily spend spend_day -> k * spend_day.
     r_on / r_st: this owner's forecast 7-day-click ROAS online / in-store; acc_*: the account's, same basis."""
     rnd = random.Random(seed); bias, lo, hi = miss(purch)
@@ -34,8 +34,8 @@ def simulate(spend_day, k, r_on, r_st, acc_on, acc_st, s_now, purch, curve_b, cu
     for _ in range(n):
         z = rnd.gauss(0, 1)
         f = math.exp(bias + z * ((-lo if z < 0 else hi) / 1.2816))          # split-normal miss of the ROAS forecast
-        con = max(rnd.gauss(*CAL["on"][:2]), 0) * (s_now / CAL["spend_ref"]) ** (CAL["on"][2] - 1)
-        cst = max(rnd.gauss(*CAL["st"][:2]), 0) * (s_now / CAL["spend_ref"]) ** (CAL["st"][2] - 1)
+        con = max(rnd.gauss(*CAL["on"][:2]), 0) * (s_now / CAL["spend_ref"]) ** (CAL["on"][2] - 1) * season[0]
+        cst = max(rnd.gauss(*CAL["st"][:2]), 0) * (s_now / CAL["spend_ref"]) ** (CAL["st"][2] - 1) * season[1]
         b = min(max(rnd.gauss(curve_b, curve_sd), 0.2), 0.98)
         span = spend_day * (k ** b - 1) / b                                  # spend-weighted marginal over the move
         d_on = con * (r_on * f / acc_on if acc_on else 0) * span * m_on
@@ -46,6 +46,32 @@ def simulate(spend_day, k, r_on, r_st, acc_on, acc_st, s_now, purch, curve_b, cu
     return {"k": k, "spend": round(spend_day * (k - 1)), "net_p10": round(q(net, .1)), "net_p50": round(q(net, .5)), "net_p90": round(q(net, .9)),
             "p_pays": round(sum(x > 0 for x in net) / n, 2), "online_p50": round(q(onl, .5)), "online_p_pays": round(sum(x > 0 for x in onl) / n, 2),
             "gp_online": round(q(d_on_all, .5)), "gp_instore": round(q(d_st_all, .5))}
+
+
+def season_index(shop, pos, today):
+    """Expected demand over the next 14 days vs this year's daily average, online (daily Shopify) and in-store
+    (monthly branch totals) = (this year's last 28 days / this year's last 365) x (last year's next 14 days /
+    last year's 28 days before them). Scales the account's extra-pound return, which was measured at the yearly
+    average. The last-year ratio, tested over 48 weeks, cut the 2-week forecast miss 31% -> 20% online, 21% -> 13% in-store."""
+    import datetime as dt
+    D = lambda k: today + dt.timedelta(days=k)
+    ly = lambda d: d - dt.timedelta(days=364)
+    past28 = [D(-k) for k in range(1, 29)]; yr = [D(-k) for k in range(1, 366)]; nxt = [D(k) for k in range(14)]
+    def mdays(d):   # the current month holds month-to-date sales through yesterday
+        if (d.year, d.month) == (today.year, today.month):
+            return max(today.day - 1, 1)
+        return ((d.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)).day
+    on = lambda d: shop.get(d.isoformat())
+    st = lambda d: (pos.get(d.strftime("%Y-%m"), 0) / mdays(d)) or None
+    def avg(f, days):
+        v = [f(d) for d in days]; v = [x for x in v if x]
+        return sum(v) / len(v) if len(v) >= 0.8 * len(days) else None
+    r = []
+    for f in (on, st):
+        level = avg(f, past28), avg(f, yr)
+        shape = avg(f, [ly(d) for d in nxt]), avg(f, [ly(d) for d in past28])
+        r.append(min(max(level[0] / level[1] * shape[0] / shape[1], 0.5), 2.0) if all(level + shape) else 1.0)
+    return tuple(round(x, 2) for x in r)
 
 
 def label(p):
