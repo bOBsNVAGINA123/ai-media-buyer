@@ -27,7 +27,7 @@ def row(a, run_id):
 def publish(rep):
     # yesterday's unanswered actions are stale once new numbers exist
     sb("PATCH", "adbot_actions?status=eq.pending", {"status": "expired"}, prefer="return=minimal")
-    summary = {k: rep.get(k) for k in ("weeks", "type_cpa", "types", "counts", "skipped", "dpa_sets", "token_scopes")}
+    summary = {k: rep.get(k) for k in ("weeks", "type_cpa", "types", "counts", "skipped", "dpa_sets", "token_scopes", "account")}
     summary["landing_pages"] = rep.get("landing_pages")
     run = sb("POST", "adbot_runs", {"run_date": dt.date.today().isoformat(), "summary": summary})[0]
     acts = rep.get("actions") or []
