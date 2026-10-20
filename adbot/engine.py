@@ -51,6 +51,13 @@ RULES = {
 }
 STOCK_LOW = 50                            # landing-page stock index (%) that triggers a stock alert
 DPA_LOW = 70                              # catalogue set: Meta shows Shopify-wide stock, not what the synced warehouses can ship
+# Turning an ad OFF while its ad set keeps its budget (365 days, 49 such events; ad set vs ad sets whose spend
+# moved the same way, week controlled). In 107 more cases the ad set's own spend fell ~79% straight after.
+AD_OFF_HIST = {
+    "3+": "History (12 cases): with 3+ live ads, turning one off without a replacement left the ad set's online ROAS +16% (+6% to +26%) and all-in ROAS +16% (-8% to +37%). In-store: too few cases to read.",
+    "2": "History (12 cases): with only 2 live ads, the ad set's ROAS moved -4% (-23% to +18%) and online -6%: no clear gain. Put a new ad in when you turn this one off.",
+    "1": "It is the only live ad: turning it off stops the ad set. Put a new ad in first if the ad set should keep running.",
+}
 DEAD_HIT = (0.44, "Zero-purchase ads at 3x CPA stayed dead only 44% of the time (n=18) -- a weak signal")
 
 EXISTING_HINT = ("buyer", "purchas", "customer", "existing", "retention", "ru purchase", "all buyers")
@@ -225,7 +232,7 @@ def build(rep):
     rep["dpa_sets"] = dpa
     rep["ad_stock"] = {aid: {k: v for k, v in st.items() if not k.startswith("_")} for aid, st in ad_stock.items()}
 
-    out = []; skipped = []; budget_taken = set()
+    out = []; skipped = []
 
     def conf_of(m, t):
         tc = tcpa.get(t)
@@ -325,7 +332,6 @@ def build(rep):
                 change = None
                 notes.append("It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing: turn off its losing ads (see those cards) or the ad set."
                              % (util * 100, f"{bud:,.0f}"))
-        budget_taken.add(oid)
         out.append(dict(base, kind=rule, rule=rule, hit_rate=pick["p_pays"], hit_txt=X.CALIB_TXT,
                         why=head, note=" ".join(notes) or None, change=change,
                         sizing={"roas_expected": r7, "roas_last_week": raw7, "instore_share": round(st_share, 2), "budget_used": round(util * 100) if util is not None else None,
@@ -346,6 +352,14 @@ def build(rep):
     pause_by_set = collections.defaultdict(list); live_by_set = collections.defaultdict(list)
     for a in ads:
         live_by_set[a["adset_id"]].append(a["id"])
+    # the live scaling ad set per audience type (campaign or ad set name contains "scal"), biggest 4-week spend
+    scal = {}
+    for sid in live_by_set:
+        s_ = sets.get(sid, {}); nm = (camps.get(s_.get("campaign_id"), {}).get("name", "") + " " + s_.get("name", "")).lower()
+        if "scal" in nm:
+            t_ = typ.get(sid, "new"); sp_ = sum(r["sp"] for r in by_set.get(sid, []) if r["wk"] in last4)
+            if sp_ > scal.get(t_, (None, -1, ""))[1]:
+                scal[t_] = (sid, sp_, s_.get("name", ""))
     for a in ads:
         L = by_ad.get(a["id"], []); t = typ.get(a["adset_id"], "new"); tc = tcpa.get(t)
         life = agg(L); w28 = agg([r for r in L if r["wk"] in last4])
@@ -368,22 +382,24 @@ def build(rep):
                        why="Lifetime ROAS %.2f is %.0f%% of the %.2f it needs, after E£%s (%.1fx this audience's CPA)."
                            % (life["roas_all7"] or 0, xl * 100, nd, f"{life['spend']:,}", life["spend"] / tc),
                        change={"op": "status", "object": a["id"], "to": "PAUSED"})
+            n_live = len(live_by_set.get(a["adset_id"], []))
+            act["history"] = AD_OFF_HIST["3+" if n_live >= 3 else "2" if n_live == 2 else "1"]
             out.append(act); pause_by_set[a["adset_id"]].append(act); continue
         x28 = (w28["roas_all7"] or 0) / nd if w28["spend"] else 0
         if w28["spend"] >= RULES["winner"]["cpa_x"] * tc and x28 >= RULES["winner"]["roas_x"]:
-            s_ = sets.get(a["adset_id"], {})
-            own = ("adset", a["adset_id"], s_.get("daily_budget")) if s_.get("daily_budget") else \
-                  ("campaign", s_.get("campaign_id"), camps.get(s_.get("campaign_id"), {}).get("daily_budget"))
-            ch = None; note = None
-            if own[2] and own[1] not in budget_taken and own[1] not in touched and a["adset_id"] not in touched:
-                b_ = int(own[2]); ch = {"op": "budget", "object": own[1], "from": b_, "to": int(round(b_ * 1.2 / 100.0) * 100)}
-                budget_taken.add(own[1]); note = "Approving raises the %s budget that feeds this ad by 20%%." % ("ad set" if own[0] == "adset" else "campaign (CBO)")
-            elif own[1] in budget_taken:
-                note = "Its budget already has a push or trim proposed above."
-            elif own[1] in touched or a["adset_id"] in touched:
-                note = "Its budget or ad set was edited in the last %d days; leaving it to settle before another change." % COOLDOWN_DAYS
-            elif not own[2]:
-                note = "No daily budget to raise (lifetime budget or set elsewhere) -- raise it by hand or move the ad into a scaling ad set."
+            # budgets move only at ad-set level (the cards above); an ad can be copied into scaling or remade
+            s_ = sets.get(a["adset_id"], {}); here = (camps.get(s_.get("campaign_id"), {}).get("name", "") + " " + s_.get("name", "")).lower()
+            tgt = scal.get(t); ch = None
+            if "scal" in here or not tgt:
+                note = ("It already runs in a scaling ad set: make 2-3 new versions of it (same product and offer, new first 3 seconds or a new face). "
+                        "Ads run about 7-10% better in their first 2 weeks, then hold flat, so new versions buy that lift again." if "scal" in here else
+                        "No live scaling ad set for this audience: duplicate its ad set or start one, then copy this ad in.")
+            elif a["id"] in touched:
+                note = "Edited in the last %d days; leaving it to settle." % COOLDOWN_DAYS
+            else:
+                ch = {"op": "copy_ad", "object": a["id"], "to_adset": tgt[0], "to_name": tgt[2]}
+                note = ("Apply copies this ad into the scaling ad set '%s' (same post, so its likes and comments carry over) and switches the copy on. "
+                        "The original keeps running here. No budget changes: the copy competes inside the scaling ad set's budget." % tgt[2])
             out.append(dict(base, kind="winner", rule="winner", hit_rate=RULES["winner"]["hit"], hit_txt=RULES["winner"]["hit_txt"],
                             x_need=round(x28, 2), confidence=conf_of(w28, t), note=note,
                             why="Last 28 days ROAS %.2f is %.1fx the %.2f it needs, on E£%s and %d purchases."
@@ -423,7 +439,7 @@ def build(rep):
         if a["kind"] == "duplicate": return "Duplicate this ad set (paused copy), widen the audience, switch it on"
         if a["kind"] == "scale": return "Spend more: E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")
         if a["kind"] == "trim": return ("Spend less: E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch else "Spend less: turn off its losing ads"
-        if a["kind"] == "winner": return "Winner: keep it running" + ((", spend more E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch.get("op") == "budget" else "")
+        if a["kind"] == "winner": return ("Winner: move it to scaling (%s)" % ch.get("to_name")) if ch.get("op") == "copy_ad" else "Winner: make 2-3 more versions of it"
         return "Look at it"
     # ---- every card: spend, ROAS 7-day click (all / online), incremental ROAS, how long it has run
     try:
