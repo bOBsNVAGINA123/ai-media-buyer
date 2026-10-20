@@ -18,6 +18,17 @@ CAL = {"spend_ref": 37309.0,
        "st": (14.70, 3.87, 0.64)}   # in-store: the most conservative robust read (back to school, White Friday, Ramadan/Eid weeks left out; 17.16 with them)
 # purchases last week >= p: (median log miss, p10, p90 of log miss around it, already x1.65)
 BIAS = ((0, -0.078, -1.472, 1.150), (10, -0.116, -0.973, 0.834), (20, -0.117, -0.812, 0.819), (50, -0.133, -1.271, 0.816))
+# Missing sizes (365 days, month/weekday/spend/Google/payday controlled): 5% more of in-demand sizes unable to ship
+# -> real webstore revenue per Meta E£ -14.6% (CI -18.1 to -11.0); sizes gone <=7 days cost most (-33.8%).
+# In-store unaffected. Median missing share over the year 16.7%; the return bends down above ~18%.
+MISS_B, MISS_MEDIAN = math.log(1 - 0.146) / 0.05, 0.167
+
+
+def miss_factor(share):
+    """Online extra-pound return today vs the year's typical missing-size level."""
+    return round(min(max(math.exp(MISS_B * (share - MISS_MEDIAN)), 0.5), 1.5), 2) if share is not None else 1.0
+
+
 CALIB_TXT = ("80% ranges held 79-83% of the time on weeks the model had not seen; "
              "the account model missed weekly gross profit by a median 8.9%")
 
