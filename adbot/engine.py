@@ -1,38 +1,58 @@
-"""OurKids ad bot -- daily rules.
+"""OurKids ad bot -- daily rules (v1, backtested).
 
-Reads a year of Meta ad-week data, fulfillable stock and each live ad's landing page,
-and writes the day's recommended actions. Every action carries the numbers behind it
-and a confidence label: CONFIDENT when the ad set spent at least 3x its audience type's
-CPA in the window, LOW DATA otherwise (still sent, never hidden).
+Reads a year of Meta ad-week data, fulfillable stock (the five shipping locations +
+FULL/Shopify), each live ad's landing page and each DPA product set, and writes the day's
+recommended actions. Nothing here changes Meta: the phone app executes an action only
+after it is approved.
 
-Evidence for each threshold (measured 20 Oct 2026, see the review page):
-  * raising spend 100%+ in a week moved CPA +18%, the same as ad sets held flat
-  * cuts improved CPA only ~4% and cost about half the reach -> trim, not pause
-  * 38% of ads in the bottom half on their first E£1k ended in the top half -> no kill before E£3k
-  * +10% fulfillable stock -> CVR +11%, CPA -10%, ROAS +22% (420 days)
+Every rule below was replayed week by week over 52 weeks of this account
+(21 Oct 2025 - 19 Oct 2026) against what happened next; HIT is the share of times it was
+right. Two candidate rules failed that test and are deliberately absent:
+  * "zero purchases at 3x CPA -> pause": only 44% stayed dead (n=18) -- would kill winners
+  * "ROAS fell under 60% of the ad's own best weeks -> pause": 49%, a coin flip (n=305)
+
+Confidence: CONFIDENT needs spend >= 3x the audience type's own CPA (trailing 4 weeks)
+AND >= 10 purchases (7-day click). Anything less is still sent, labelled LOW DATA.
 """
-import json, os, sys, statistics, datetime as dt, collections
+import json, os, sys, datetime as dt, collections
 import data as D
 
 M_ON, M_ST = 0.2605, 0.3183               # delivered online margin / in-store margin
-# incremental / 7-day-click ROAS by audience type, read from Ads Reporting 19 Sep-15 Oct 2026.
-# Re-read monthly; these set how high a 7dc ROAS must be to break even on incremental.
+# incremental / 7-day-click ROAS by audience type, Ads Reporting 19 Sep-15 Oct 2026.
+# Re-read monthly; this is what turns a 7-day-click ROAS into "pays on incremental".
 INCR = {"new": 0.70, "retargeting": 0.88, "existing": 0.64}
-SCALE_X, SCALE_UP, TRIM_DOWN = 1.3, 0.30, 0.20
-KILL_SPEND, DEAD_SPEND, MIN_PUR_SCALE = 3000, 1500, 15
+COOLDOWN_DAYS = 3                         # never re-touch what was edited this recently
+
+# rule -> (threshold, measured hit rate). Hit rates from adbot/backtest (365 days).
+RULES = {
+    "scale_hard": dict(roas_x=1.5, min_pur=10, step=0.30, hit=0.94, hit_txt="94% held profitable when spend went up 20%+ (n=89)"),
+    "scale":      dict(roas_x=1.3, min_pur=10, step=0.20, hit=0.91, hit_txt="91% held profitable when spend went up 20%+ (n=117)"),
+    "scale_low":  dict(roas_x=1.3, min_pur=5,  step=0.20, hit=0.85, hit_txt="85% held profitable with 5-9 purchases (n=135)"),
+    "trim":       dict(roas_x=0.8, cpa_x=3, step=0.20, hit=0.81, hit_txt="81% stayed under break-even for 2 more weeks (n=525)"),
+    "pause":      dict(roas_x=0.6, cpa_x=3, hit=0.79, hit_txt="79% kept losing for 4 more weeks (n=131)"),
+    "winner":     dict(roas_x=2.0, cpa_x=10, hit=0.78, hit_txt="78% stayed at 1.2x+ break-even for 4 more weeks (n=303)"),
+}
+STOCK_LOW = 50                            # landing / catalogue stock index (%) that triggers a stock alert
 
 EXISTING_HINT = ("buyer", "purchas", "customer", "existing", "retention", "ru purchase", "all buyers")
 RT_SUBTYPES = {"WEBSITE", "ENGAGEMENT", "VIDEO", "IG_BUSINESS", "FB_EVENT", "APP", "OFFLINE_CONVERSION", "BAG_OF_ACCOUNTS"}
 
 
 def audience_type(adset, aud_by_id, camp_name):
+    """new / retargeting / existing. A lookalike is NEW people even when its seed is buyers."""
     inc = ((adset.get("targeting") or {}).get("custom_audiences")) or []
-    names = " ".join((a.get("name") or aud_by_id.get(a.get("id"), {}).get("name", "")) for a in inc).lower()
-    subs = {aud_by_id.get(a.get("id"), {}).get("subtype", "") for a in inc}
     hint = (adset.get("name", "") + " " + camp_name).lower()
-    if any(h in names for h in EXISTING_HINT) or "existing" in hint or "retention" in hint:
+    real = []
+    for a in inc:
+        meta = aud_by_id.get(a.get("id"), {})
+        sub = meta.get("subtype", "")
+        nm = (a.get("name") or meta.get("name") or "").lower()
+        if sub == "LOOKALIKE" or "lla" in nm.split() or "lookalike" in nm or nm.startswith("lla"):
+            continue
+        real.append((sub, nm))
+    if any(any(h in nm for h in EXISTING_HINT) for sub, nm in real) or "existing" in hint or "retention" in hint:
         return "existing"
-    if subs & RT_SUBTYPES or "remarketing" in hint or "retarget" in hint:
+    if any(sub in RT_SUBTYPES for sub, nm in real) or "remarketing" in hint or "retarget" in hint:
         return "retargeting"
     return "new"
 
@@ -40,8 +60,8 @@ def audience_type(adset, aud_by_id, camp_name):
 def agg(rows):
     s = collections.Counter()
     for r in rows:
-        for k in ("sp", "im", "oc", "pu7", "puV", "pv7", "pvV", "op7", "opV", "ov7", "ovV"):
-            s[k] += r[k]
+        for k in ("sp", "im", "oc", "rch", "pu7", "puV", "pv7", "pvV", "op7", "opV", "ov7", "ovV"):
+            s[k] += r.get(k, 0)
     sp = s["sp"]; pur7 = s["pu7"] + s["op7"]
     return {
         "spend": round(sp), "purch7": round(pur7, 1), "purch_online7": round(s["pu7"], 1),
@@ -54,162 +74,253 @@ def agg(rows):
         "cvr": round(s["pu7"] / s["oc"] * 100, 2) if s["oc"] else None,
         "cpc": round(sp / s["oc"], 2) if s["oc"] else None,
         "aov": round(s["pv7"] / s["pu7"]) if s["pu7"] else None,
+        "instore_share": round(s["ov7"] / (s["pv7"] + s["ov7"]) * 100) if (s["pv7"] + s["ov7"]) else None,
         "_v_on": s["pv7"], "_v_st": s["ov7"],
     }
 
 
 def need7(m, typ):
-    """7-day-click ROAS (online + in-store) at which this entity breaks even on incremental."""
+    """7-day-click ROAS (online + in-store) at which this breaks even on incremental,
+    given its own online/in-store mix."""
     tot = (m["_v_on"] + m["_v_st"]) or 1
     st = m["_v_st"] / tot
-    be = 1 / (M_ON * (1 - st) + M_ST * st)
-    return round(be / INCR[typ], 2)
+    return round(1 / (M_ON * (1 - st) + M_ST * st) / INCR[typ], 2)
+
+
+def clean(m):
+    return {k: v for k, v in m.items() if not k.startswith("_")}
 
 
 def stock_index(products, stock, n=12):
-    """Landing-page stock: share of each product's sizes you can ship today, weighted by
-    position (1/rank) so the first products count most. Also the first-4 detail."""
+    """Landing-page stock: share of each product's sizes you can ship today, weighted 1/rank
+    so the first products count most. Returns index, first-4 detail and the barcodes."""
     if not products:
         return None
-    num = den = 0.0; first = []
+    num = den = 0.0; first = []; keys_all = []
     for i, p in enumerate(products[:n]):
         vs = (p.get("variants") or {}).get("nodes") or []
-        keys = [(v.get("barcode") or v.get("sku") or "").strip() for v in vs]
-        keys = [k for k in keys if k]
+        keys = [k for k in ((v.get("barcode") or v.get("sku") or "").strip() for v in vs) if k]
         if not keys:
             continue
+        keys_all.append([i, keys])
         share = sum(1 for k in keys if stock.get(k, 0) > 0) / len(keys)
         w = 1.0 / (i + 1); num += w * share; den += w
         if i < 4:
-            first.append({"title": p.get("title", "")[:60], "sizes_in_stock": round(share * 100)})
-    return {"index": round(num / den * 100) if den else None, "first4": first}
+            first.append({"title": (p.get("title") or "")[:60], "sizes_in_stock": round(share * 100)})
+    return {"index": round(num / den * 100) if den else None, "first4": first, "_keys": keys_all}
 
 
-def main(out_path):
-    rep = {"generated": dt.datetime.utcnow().isoformat() + "Z", "account": D.ACT}
+def dpa_index(items, varmap, stock, weights):
+    """Catalogue stock: share of the product set you can ship today, weighted by 180 days of
+    online sales (+1 so unsold items still count). Coverage says how many items matched."""
+    num = den = 0.0; matched = inn = 0
+    for it in items:
+        k = (it.get("gtin") or "").strip() or varmap.get(D.retailer_variant(it.get("retailer_id")), "")
+        if not k:
+            continue
+        matched += 1
+        q = stock.get(k, 0)
+        w = weights.get(k, 0) + 1.0
+        num += w * (q > 0); den += w; inn += q > 0
+    return {"kind": "dpa", "items": len(items), "matched": matched, "in_stock_items": inn,
+            "coverage": round(matched / len(items) * 100) if items else 0,
+            "index": round(num / den * 100) if den else None,
+            "index_unweighted": round(inn / matched * 100) if matched else None}
+
+
+def recently_touched(acts, days=COOLDOWN_DAYS):
+    cut = dt.datetime.utcnow() - dt.timedelta(days=days)
+    out = {}
+    for a in acts:
+        try:
+            t = dt.datetime.strptime(a["event_time"][:19], "%Y-%m-%dT%H:%M:%S")
+        except Exception:
+            continue
+        if t >= cut and a.get("event_type") in ("update_ad_set_budget", "update_campaign_budget", "update_ad_set_run_status",
+                                                 "update_ad_run_status", "update_ad_set_target_spec", "update_ad_set_bid_strategy",
+                                                 "update_ad_set_bidding", "update_campaign_run_status", "create_ad_set", "create_ad"):
+            oid = str(a.get("object_id"))
+            out[oid] = max(out.get(oid, t), t)
+    return out
+
+
+def build(rep):
     rep["token_scopes"] = D.token_scopes()
     rows = D.insights_weekly()
     sets = {a["id"]: a for a in D.adsets()}
     camps = {c["id"]: c for c in D.campaigns()}
     auds = {a["id"]: a for a in D.audiences()}
     ads = D.live_ads()
+    acts = D.activities(days=7)
+    touched = recently_touched(acts)
     call = D.odoo()
     stock = D.fulfillable_stock(call)
-    weights = D.online_sales_weights(call)
+    weights = D.online_sales_weights(call, days=180)
 
-    raw_path = os.path.join(os.path.dirname(os.path.abspath(out_path)) or ".", "adbot_raw.json")
-    json.dump({"rows": rows, "sets": sets, "camps": camps, "auds": auds, "ads": ads,
-               "stock_keys": len(stock)}, open(raw_path, "w"), default=str)
     weeks = sorted({r["wk"] for r in rows}); last = weeks[-1]; last4 = set(weeks[-4:])
     rep["weeks"] = [weeks[0], last, len(weeks)]
-    by_set = collections.defaultdict(list); by_ad = collections.defaultdict(list)
+    by_set = collections.defaultdict(list); by_ad = collections.defaultdict(list); by_camp = collections.defaultdict(list)
     for r in rows:
-        by_set[r["adset"]].append(r); by_ad[r["ad"]].append(r)
+        by_set[r["adset"]].append(r); by_ad[r["ad"]].append(r); by_camp[r["camp"]].append(r)
 
-    # ---- audience type per ad set, and each type's own CPA (last 4 weeks, 7dc, all purchases)
-    typ = {}
-    for sid, s in sets.items():
-        typ[sid] = audience_type(s, auds, camps.get(s.get("campaign_id"), {}).get("name", ""))
+    typ = {sid: audience_type(s, auds, camps.get(s.get("campaign_id"), {}).get("name", "")) for sid, s in sets.items()}
     for sid, L in by_set.items():
-        if sid not in typ:
-            typ[sid] = audience_type({"name": L[0]["adset_name"]}, auds, L[0]["camp_name"])
-    tcpa = {}
+        typ.setdefault(sid, audience_type({"name": L[0]["adset_name"]}, auds, L[0]["camp_name"]))
+    tcpa = {}; rep["types"] = {}
     for t in INCR:
-        R = [r for r in rows if r["wk"] in last4 and typ.get(r["adset"]) == t]
-        m = agg(R); tcpa[t] = m["cpa7"]
-        rep.setdefault("types", {})[t] = {k: v for k, v in m.items() if not k.startswith("_")}
+        m = agg([r for r in rows if r["wk"] in last4 and typ.get(r["adset"]) == t])
+        tcpa[t] = m["cpa7"]; rep["types"][t] = clean(m)
     rep["type_cpa"] = tcpa
 
-    # ---- landing pages and DPA product sets of live ads
-    land_cache = {}; dpa_cache = {}; ad_stock = {}
+    # ---- stock: landing pages and DPA product sets of live ads
+    varmap = {}
+    if any((a.get("creative") or {}).get("product_set_id") for a in ads):
+        try:
+            varmap = D.variant_barcodes()
+        except Exception as e:
+            D.log("variant map failed:", str(e)[:120])
+    land, dpa, ad_stock = {}, {}, {}
     for a in ads:
         c = a.get("creative") or {}
         ps = c.get("product_set_id")
         if ps:
-            if ps not in dpa_cache:
+            if ps not in dpa:
                 try:
-                    items = D.product_set_items(ps)
-                    num = den = 0.0; n_in = 0
-                    for it in items:
-                        k = (it.get("gtin") or "").strip()
-                        q = stock.get(k, 0) if k else 0
-                        w = weights.get(k, 0) + 1.0
-                        num += w * (q > 0); den += w; n_in += q > 0
-                    dpa_cache[ps] = {"kind": "dpa", "items": len(items), "matched": sum(1 for it in items if (it.get("gtin") or "").strip() in stock),
-                                     "in_stock_items": n_in, "index": round(num / den * 100) if den else None}
+                    dpa[ps] = dpa_index(D.product_set_items(ps, cap=20000), varmap, stock, weights)
                 except Exception as e:
-                    dpa_cache[ps] = {"kind": "dpa", "error": str(e)[:120]}
-            ad_stock[a["id"]] = dict(dpa_cache[ps], product_set=ps)
+                    dpa[ps] = {"kind": "dpa", "error": str(e)[:120]}
+            ad_stock[a["id"]] = dict(dpa[ps], product_set=ps)
             continue
         url = D.creative_link(c)
-        if url not in land_cache:
+        if url not in land:
             try:
                 kind, prods = D.landing_products(url)
-                si = stock_index(prods, stock)
-                land_cache[url] = dict(si or {}, kind=kind, url=url)
+                land[url] = dict(stock_index(prods, stock) or {}, kind=kind, url=url)
             except Exception as e:
-                land_cache[url] = {"kind": "error", "url": url, "error": str(e)[:120]}
-        ad_stock[a["id"]] = land_cache[url]
-    rep["landing_pages"] = list(land_cache.values()); rep["dpa_sets"] = dpa_cache
+                land[url] = {"kind": "error", "url": url, "error": str(e)[:120]}
+        ad_stock[a["id"]] = {k: v for k, v in land[url].items() if not k.startswith("_")}
+    rep["landing_pages"] = [{k: v for k, v in l.items() if k != "_keys"} for l in land.values()]
+    rep["landing_keys"] = {l["url"]: l.get("_keys") for l in land.values() if l.get("_keys")}
+    rep["dpa_sets"] = dpa
 
-    # ---- actions
-    acts = []
-    live_set_ids = {a["adset_id"] for a in ads}
-    for sid in live_set_ids:
-        L = by_set.get(sid, []); s = sets.get(sid, {}); t = typ.get(sid, "new")
+    out = []; skipped = []
+
+    def conf_of(m, t):
+        tc = tcpa.get(t)
+        return "confident" if (tc and m["spend"] >= 3 * tc and m["purch7"] >= 10) else "low data"
+
+    # ---- budget decisions on whoever owns the budget: ad set (ABO) or campaign (CBO)
+    live_sets = {a["adset_id"] for a in ads}
+    owners = {}
+    for sid in live_sets:
+        s = sets.get(sid, {})
+        if s.get("daily_budget"):
+            owners[("adset", sid)] = [sid]
+        elif s.get("campaign_id") and camps.get(s["campaign_id"], {}).get("daily_budget"):
+            owners.setdefault(("campaign", s["campaign_id"]), []).append(sid)
+    for (lvl, oid), sids in owners.items():
+        L = [r for sid in sids for r in by_set.get(sid, [])]
         if not L:
             continue
+        ts = collections.Counter(typ.get(sid, "new") for sid in sids); t = ts.most_common(1)[0][0]
         w7 = agg([r for r in L if r["wk"] == last]); w28 = agg([r for r in L if r["wk"] in last4])
-        nd = need7(w28, t); conf = bool(tcpa.get(t)) and w7["spend"] >= 3 * tcpa[t]
-        camp = camps.get(s.get("campaign_id"), {})
-        budget_obj, budget = (sid, s.get("daily_budget")) if s.get("daily_budget") else (s.get("campaign_id"), camp.get("daily_budget"))
-        base = {"level": "adset", "id": sid, "name": s.get("name") or L[0]["adset_name"], "campaign": camp.get("name") or L[0]["camp_name"],
-                "audience": t, "confidence": "confident" if conf else "low data", "need7": nd,
-                "last7": {k: v for k, v in w7.items() if not k.startswith("_")}, "last28": {k: v for k, v in w28.items() if not k.startswith("_")}}
-        r7 = w7["roas_all7"] or 0
-        if budget and r7 >= SCALE_X * nd and w7["purch7"] >= MIN_PUR_SCALE:
-            new = int(int(budget) * (1 + SCALE_UP))
-            acts.append(dict(base, kind="scale", why="7dc ROAS %.2f is %.1fx what it needs (%.2f)" % (r7, r7 / nd, nd),
-                             change={"op": "budget", "object": budget_obj, "from": int(budget), "to": new}))
-        elif budget and r7 < nd and w7["spend"] >= KILL_SPEND:
-            new = int(int(budget) * (1 - TRIM_DOWN))
-            acts.append(dict(base, kind="trim", why="7dc ROAS %.2f under the %.2f it needs" % (r7, nd),
-                             change={"op": "budget", "object": budget_obj, "from": int(budget), "to": new}))
+        if not w7["spend"]:
+            continue
+        nd = need7(w28 if w28["spend"] else w7, t)
+        budget = int((sets[oid] if lvl == "adset" else camps[oid]).get("daily_budget") or 0)
+        name = (sets.get(oid, {}).get("name") if lvl == "adset" else camps.get(oid, {}).get("name")) or L[0]["adset_name"]
+        camp = camps.get(sets.get(oid, {}).get("campaign_id") if lvl == "adset" else oid, {}).get("name") or L[0]["camp_name"]
+        r7 = w7["roas_all7"] or 0; x = r7 / nd if nd else 0
+        base = {"level": lvl, "id": oid, "name": name, "campaign": camp, "audience": t, "need7": nd, "x_need": round(x, 2),
+                "type_cpa": tcpa.get(t), "last7": clean(w7), "last28": clean(w28), "confidence": conf_of(w7, t)}
+        rule = None
+        if x >= RULES["scale_hard"]["roas_x"] and w7["purch7"] >= RULES["scale_hard"]["min_pur"]:
+            rule = "scale_hard"
+        elif x >= RULES["scale"]["roas_x"] and w7["purch7"] >= RULES["scale"]["min_pur"]:
+            rule = "scale"
+        elif x >= RULES["scale_low"]["roas_x"] and w7["purch7"] >= RULES["scale_low"]["min_pur"]:
+            rule = "scale_low"
+        elif x < RULES["trim"]["roas_x"] and tcpa.get(t) and w7["spend"] >= RULES["trim"]["cpa_x"] * tcpa[t]:
+            rule = "trim"
+        if not rule:
+            continue
+        if oid in touched or any(s in touched for s in sids):
+            skipped.append({"id": oid, "name": name, "rule": rule, "why": "edited in the last %d days" % COOLDOWN_DAYS}); continue
+        R = RULES[rule]; up = rule != "trim"
+        new = int(round(budget * (1 + R["step"] if up else 1 - R["step"]) / 100.0) * 100)
+        out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
+            why=("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs to pay on incremental, on %d purchases."
+                 % (r7, x, nd, w7["purch7"])) if up else
+                ("Last 7 days ROAS %.2f is only %.0f%% of the %.2f it needs, on E£%s spend (%.1fx this audience's CPA)."
+                 % (r7, x * 100, nd, f"{w7['spend']:,}", w7["spend"] / tcpa[t])),
+            change={"op": "budget", "object": oid, "from": budget, "to": new} if budget else None))
+
+    # ---- ad decisions
+    pause_by_set = collections.defaultdict(list); live_by_set = collections.defaultdict(list)
     for a in ads:
-        L = by_ad.get(a["id"], []); t = typ.get(a["adset_id"], "new")
+        live_by_set[a["adset_id"]].append(a["id"])
+    for a in ads:
+        L = by_ad.get(a["id"], []); t = typ.get(a["adset_id"], "new"); tc = tcpa.get(t)
         life = agg(L); w28 = agg([r for r in L if r["wk"] in last4])
-        nd = need7(life, t) if life["spend"] else None
-        base = {"level": "ad", "id": a["id"], "name": a["name"], "adset": a["adset_id"],
-                "campaign": camps.get(a.get("campaign_id"), {}).get("name", ""), "audience": t,
-                "need7": nd, "lifetime": {k: v for k, v in life.items() if not k.startswith("_")},
-                "last28": {k: v for k, v in w28.items() if not k.startswith("_")}, "stock": ad_stock.get(a["id"])}
-        conf = bool(tcpa.get(t)) and life["spend"] >= 3 * tcpa[t]
-        base["confidence"] = "confident" if conf else "low data"
-        if life["spend"] >= DEAD_SPEND and life["purch7"] == 0:
-            acts.append(dict(base, kind="pause", why="E£%s spent, no purchases" % life["spend"], change={"op": "status", "object": a["id"], "to": "PAUSED"}))
-        elif nd and life["spend"] >= KILL_SPEND and (life["roas_all7"] or 0) < 0.5 * nd:
-            acts.append(dict(base, kind="pause", why="7dc ROAS %.2f, under half of the %.2f it needs" % (life["roas_all7"] or 0, nd),
-                             change={"op": "status", "object": a["id"], "to": "PAUSED"}))
-        elif nd and w28["spend"] and (w28["roas_all7"] or 0) >= 1.5 * nd and conf:
-            acts.append(dict(base, kind="winner", why="last 28 days 7dc ROAS %.2f, %.1fx what it needs" % (w28["roas_all7"], w28["roas_all7"] / nd),
-                             change=None))
+        if not life["spend"] or not tc:
+            continue
+        nd = need7(life, t)
         st = ad_stock.get(a["id"]) or {}
-        if w28["spend"] >= 1000 and st.get("index") is not None and st["index"] < 50:
-            acts.append(dict(base, kind="stock", why="%s stock %s%%: shoppers land on sold-out sizes" % ("Catalogue" if st.get("kind") == "dpa" else "Landing page", st["index"]),
-                             change={"op": "status", "object": a["id"], "to": "PAUSED"}))
+        base = {"level": "ad", "id": a["id"], "name": a["name"], "adset": a["adset_id"],
+                "adset_name": sets.get(a["adset_id"], {}).get("name", ""),
+                "campaign": camps.get(a.get("campaign_id"), {}).get("name", ""), "audience": t, "need7": nd,
+                "type_cpa": tc, "lifetime": clean(life), "last28": clean(w28), "stock": st}
+        xl = (life["roas_all7"] or 0) / nd
+        if life["spend"] >= RULES["pause"]["cpa_x"] * tc and xl < RULES["pause"]["roas_x"]:
+            if a["id"] in touched:
+                skipped.append({"id": a["id"], "name": a["name"], "rule": "pause", "why": "edited in the last %d days" % COOLDOWN_DAYS}); continue
+            act = dict(base, kind="pause", rule="pause", hit_rate=RULES["pause"]["hit"], hit_txt=RULES["pause"]["hit_txt"], x_need=round(xl, 2),
+                       confidence=conf_of(life, t),
+                       why="Lifetime ROAS %.2f is %.0f%% of the %.2f it needs, after E£%s (%.1fx this audience's CPA)."
+                           % (life["roas_all7"] or 0, xl * 100, nd, f"{life['spend']:,}", life["spend"] / tc),
+                       change={"op": "status", "object": a["id"], "to": "PAUSED"})
+            out.append(act); pause_by_set[a["adset_id"]].append(act); continue
+        x28 = (w28["roas_all7"] or 0) / nd if w28["spend"] else 0
+        if w28["spend"] >= RULES["winner"]["cpa_x"] * tc and x28 >= RULES["winner"]["roas_x"]:
+            out.append(dict(base, kind="winner", rule="winner", hit_rate=RULES["winner"]["hit"], hit_txt=RULES["winner"]["hit_txt"],
+                            x_need=round(x28, 2), confidence=conf_of(w28, t),
+                            why="Last 28 days ROAS %.2f is %.1fx the %.2f it needs, on E£%s. Give it more budget or put it into a scaling ad set."
+                                % (w28["roas_all7"], x28, nd, f"{w28['spend']:,}"), change=None))
+        if w28["spend"] >= tc and st.get("index") is not None and st["index"] < STOCK_LOW:
+            what = "Catalogue" if st.get("kind") == "dpa" else "Landing page"
+            first = "; ".join("%s %d%%" % (p["title"][:28], p["sizes_in_stock"]) for p in (st.get("first4") or []))
+            out.append(dict(base, kind="stock", rule="stock", hit_rate=None,
+                            hit_txt="Account-wide: +10% fulfillable stock = CPA 10% lower, CVR 11% higher (420 days)",
+                            x_need=round(x28, 2), confidence=conf_of(w28, t),
+                            why="%s stock %d%% (sizes you can ship today, first products weighted most). %s"
+                                % (what, st["index"], ("First products: " + first) if first else ""),
+                            change={"op": "status", "object": a["id"], "to": "PAUSED"}))
+    # pausing every live ad in an ad set = pause the ad set instead
+    for sid, acts_ in pause_by_set.items():
+        if len(acts_) == len(live_by_set[sid]) and len(acts_) > 1:
+            for x in acts_:
+                x["note"] = "Every live ad in this ad set is flagged; pausing them all stops the ad set."
+
     order = {"pause": 0, "stock": 1, "trim": 2, "scale": 3, "winner": 4}
-    acts.sort(key=lambda x: (order[x["kind"]], x["confidence"] != "confident", -(x.get("last7") or x.get("last28") or {}).get("spend", 0)))
-    rep["actions"] = acts
-    rep["counts"] = collections.Counter(a["kind"] + " · " + a["confidence"] for a in acts)
+    out.sort(key=lambda x: (order[x["kind"]], x["confidence"] != "confident",
+                            -((x.get("last7") or x.get("last28") or x.get("lifetime") or {}).get("spend") or 0)))
+    rep["actions"] = out; rep["skipped"] = skipped
+    rep["counts"] = dict(collections.Counter(a["kind"] + " · " + a["confidence"] for a in out))
+    return rep
+
+
+def main(out_path):
+    rep = build({"generated": dt.datetime.utcnow().isoformat() + "Z", "account": D.ACT})
     json.dump(rep, open(out_path, "w"), default=str, indent=1)
-    log_summary(rep)
-
-
-def log_summary(rep):
     D.log("token scopes:", rep["token_scopes"])
     D.log("weeks", rep["weeks"], "type CPA", rep["type_cpa"])
-    D.log("landing pages", len(rep["landing_pages"]), "dpa sets", len(rep["dpa_sets"]))
-    D.log("actions", dict(rep["counts"]))
+    D.log("landing pages", len(rep["landing_pages"]), "dpa sets", {k: (v.get("coverage"), v.get("index")) for k, v in rep["dpa_sets"].items()})
+    D.log("actions", rep["counts"], "skipped (cooldown)", len(rep["skipped"]))
+    if os.environ.get("SUPABASE_SERVICE_KEY"):
+        import notify
+        notify.publish(rep)
+    else:
+        D.log("SUPABASE_SERVICE_KEY not set: report only, nothing sent")
 
 
 if __name__ == "__main__":
