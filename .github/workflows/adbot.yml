@@ -6,7 +6,12 @@ on:
   schedule:
     # 07:17 Cairo (04:17 UTC) daily; off the top of the hour, where GitHub drops scheduled jobs
     - cron: "17 4 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      raw:
+        description: "Also save the year of raw ad-weeks (for analysis)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,6 +42,7 @@ jobs:
           SUPABASE_URL: https://vnrxkekoqftknzjayxpx.supabase.co
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          ADBOT_RAW: ${{ inputs.raw && '../out/adbot_raw.json' || '' }}
         run: |
           mkdir -p out
           cd adbot && python engine.py ../out/adbot_report.json
