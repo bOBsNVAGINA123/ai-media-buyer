@@ -316,6 +316,15 @@ def google_daily(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "
         for br in o["pos"].values():
             for m, v in br.items(): pos[m] = pos.get(m, 0) + (v[0] or 0)
         return {"days": [(d0 + dt.timedelta(days=k)).isoformat() for k in range(a["n"])], "g": a["gspend"], "m": a["mspend"],
-                "synced": o.get("lastSync"), "shop": shop, "pos": pos}
+                "synced": o.get("lastSync"), "shop": shop, "pos": pos, "google_stale": _google_stale(path)}
     except Exception as e:
         log("google_daily unreadable:", e); return {}
+
+
+def _google_stale(path):
+    """True when the dashboard says its Google feed is failing (then a E£0 day means 'unknown', not 'dark')."""
+    try:
+        st = json.load(open(os.path.join(os.path.dirname(path), "status.json"), encoding="utf-8"))
+        return "google" in ((st.get("data") or {}).get("stale") or [])
+    except Exception:
+        return None
