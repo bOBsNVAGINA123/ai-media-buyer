@@ -22,13 +22,20 @@ M_ON, M_ST = 0.2605, 0.3183               # delivered online margin / in-store m
 # Re-read monthly; this is what turns a 7-day-click ROAS into "pays on incremental".
 INCR = {"new": 0.70, "retargeting": 0.88, "existing": 0.64}
 COOLDOWN_DAYS = 3                         # never re-touch what was edited this recently
+# The next E£1 of Meta returns this share of the current ROAS. From real Odoo webstore revenue vs Meta
+# spend, week-to-week, season + stock + Google controlled (+10% spend -> +7.0% revenue, 95% CI 4.6-9.4%).
+# The within-ad-set curve said 1.0 and is NOT used: Meta spends more in the weeks it finds buyers,
+# so spend follows sales there as much as sales follow spend.
+MARG_B, MARG_B_LO, MARG_B_HI = 0.70, 0.46, 0.94
+MAX_UP, MAX_UP_BIG = 1.5, 2.0              # one approval: +50%, or +100% when the room is 2x+ (held 96% / 92% in history)
+MIN_STEP, MAX_DOWN = 0.10, 0.50
+UTIL_MIN = 0.85                           # under this share of budget spent, more budget buys nothing
 
 # rule -> (threshold, measured hit rate). Hit rates from adbot/backtest (365 days).
 RULES = {
-    "scale_hard": dict(roas_x=1.5, min_pur=10, step=0.30, hit=0.94, hit_txt="94% held profitable when spend went up 20%+ (n=89)"),
-    "scale":      dict(roas_x=1.3, min_pur=10, step=0.20, hit=0.91, hit_txt="91% held profitable when spend went up 20%+ (n=117)"),
-    "scale_low":  dict(roas_x=1.3, min_pur=5,  step=0.20, hit=0.85, hit_txt="85% held profitable with 5-9 purchases (n=135)"),
-    "trim":       dict(roas_x=0.8, cpa_x=3, step=0.20, hit=0.81, hit_txt="81% stayed under break-even for 2 more weeks (n=525)"),
+    "scale":      dict(roas_x=1 / 0.70, min_pur=10, hit=0.93, hit_txt="Profitable ad sets pushed +30-60% stayed profitable 96% of the time, +100%+ 92% (n=28, 26)"),
+    "scale_low":  dict(roas_x=1 / 0.70, min_pur=5,  hit=0.85, hit_txt="With only 5-9 purchases: 85% held profitable (n=135)"),
+    "trim":       dict(roas_x=1.0, cpa_x=3, hit=0.77, hit_txt="Ad sets under break-even after 3x CPA stayed under it 77% of the time over the next 2 weeks (n=703)"),
     "pause":      dict(roas_x=0.6, cpa_x=3, hit=0.79, hit_txt="79% kept losing for 4 more weeks (n=131)"),
     "winner":     dict(roas_x=2.0, cpa_x=10, hit=0.78, hit_txt="78% stayed at 1.2x+ break-even for 4 more weeks (n=303)"),
 }
@@ -236,27 +243,49 @@ def build(rep):
         r7 = w7["roas_all7"] or 0; x = r7 / nd if nd else 0
         base = {"level": lvl, "id": oid, "name": name, "campaign": camp, "audience": t, "need7": nd, "x_need": round(x, 2),
                 "type_cpa": tcpa.get(t), "last7": clean(w7), "last28": clean(w28), "confidence": conf_of(w7, t)}
+        # ---- how big a move: where does the NEXT pound stop paying?
+        # next E£1 returns B x the average ROAS (B from real Odoo webstore revenue vs Meta spend,
+        # week-to-week, season + stock controlled). Spend that makes the next pound break even:
+        #   s*/s_now = (B * ROAS/need) ** (1 / (1 - B))
+        def target(bb):
+            return (bb * x) ** (1 / (1 - bb)) if x > 0 else 0
+        r_mid, r_lo, r_hi = target(MARG_B), target(MARG_B_LO), min(target(MARG_B_HI), 9.0)
+        daily = w7["spend"] / 7.0; bud = budget / 100.0
+        util = daily / bud if bud else None
         rule = None
-        if x >= RULES["scale_hard"]["roas_x"] and w7["purch7"] >= RULES["scale_hard"]["min_pur"]:
-            rule = "scale_hard"
-        elif x >= RULES["scale"]["roas_x"] and w7["purch7"] >= RULES["scale"]["min_pur"]:
-            rule = "scale"
-        elif x >= RULES["scale_low"]["roas_x"] and w7["purch7"] >= RULES["scale_low"]["min_pur"]:
-            rule = "scale_low"
-        elif x < RULES["trim"]["roas_x"] and tcpa.get(t) and w7["spend"] >= RULES["trim"]["cpa_x"] * tcpa[t]:
+        if x * MARG_B >= 1 and w7["purch7"] >= 5:
+            rule = "scale" if w7["purch7"] >= 10 else "scale_low"
+        elif x < 1 and tcpa.get(t) and w7["spend"] >= RULES["trim"]["cpa_x"] * tcpa[t]:
             rule = "trim"
         if not rule:
             continue
         if oid in touched or any(s in touched for s in sids):
             skipped.append({"id": oid, "name": name, "rule": rule, "why": "edited in the last %d days" % COOLDOWN_DAYS}); continue
-        R = RULES[rule]; up = rule != "trim"; budget_taken.add(oid)
-        new = int(round(budget * (1 + R["step"] if up else 1 - R["step"]) / 100.0) * 100)
+        up = rule != "trim"
+        if up:
+            step = min(r_mid, MAX_UP_BIG if r_mid >= 2 else MAX_UP) - 1
+            step = max(step, MIN_STEP)
+        else:
+            step = max(min(r_mid, 1 - MIN_STEP), 1 - MAX_DOWN) - 1
+        new = int(round(budget * (1 + step) / 100.0) * 100) if budget else 0
+        R = RULES["scale" if rule == "scale" else rule]
+        head = (("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs; the next pound should return about %.0f%% of that, "
+                 "so it still pays up to roughly E£%s/day (range E£%s-%s) from E£%s/day now."
+                 % (r7, x, nd, MARG_B * 100, f"{bud * r_mid:,.0f}", f"{bud * r_lo:,.0f}", f"{bud * r_hi:,.0f}", f"{bud:,.0f}")) if up else
+                ("Last 7 days ROAS %.2f is only %.0f%% of the %.2f it needs on E£%s spend (%.1fx this audience's CPA); "
+                 "the next pound breaks even nearer E£%s/day than E£%s/day."
+                 % (r7, x * 100, nd, f"{w7['spend']:,}", w7["spend"] / tcpa[t], f"{bud * max(r_mid, 0.1):,.0f}", f"{bud:,.0f}")))
+        change = {"op": "budget", "object": oid, "from": budget, "to": new} if budget else None
+        note = None
+        if up and util is not None and util < UTIL_MIN:
+            change = None
+            note = ("It spent only %.0f%% of its E£%s/day budget last week, so a bigger budget would not be spent. "
+                    "It is limited by audience size or bid, not money: widen the audience or add creatives instead." % (util * 100, f"{bud:,.0f}"))
+        budget_taken.add(oid)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
-            why=("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs to pay on incremental, on %d purchases."
-                 % (r7, x, nd, w7["purch7"])) if up else
-                ("Last 7 days ROAS %.2f is only %.0f%% of the %.2f it needs, on E£%s spend (%.1fx this audience's CPA)."
-                 % (r7, x * 100, nd, f"{w7['spend']:,}", w7["spend"] / tcpa[t])),
-            change={"op": "budget", "object": oid, "from": budget, "to": new} if budget else None))
+                        why=head, note=note, change=change,
+                        sizing={"next_pound_share": MARG_B, "target_daily": round(bud * r_mid), "range": [round(bud * r_lo), round(bud * r_hi)],
+                                "budget_used": round(util * 100) if util is not None else None, "step_pct": round(step * 100)}))
 
     # ---- ad decisions
     pause_by_set = collections.defaultdict(list); live_by_set = collections.defaultdict(list)
