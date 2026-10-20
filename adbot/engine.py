@@ -419,7 +419,7 @@ def build(rep):
         return ((a.get("sizing") or {}).get("pick") or {}).get("net_p50") or 0
     def move(a):
         ch = a.get("change") or {}
-        fr, to = (ch.get("from") or 0) / 100, (ch.get("to") or 0) / 100
+        fr, to = ((ch.get("from") or 0) / 100, (ch.get("to") or 0) / 100) if ch.get("op") == "budget" else (0, 0)
         if a["kind"] == "pause": return "Turn off this ad"
         if a["kind"] == "stock": return "Turn off: its page can't ship" if ch.get("op") == "status" else "Fix the page: put in-stock products first"
         if a["kind"] == "duplicate": return "Duplicate this ad set (paused copy), widen the audience, switch it on"
