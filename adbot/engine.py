@@ -239,7 +239,10 @@ def build(rep):
     if G:
         recent = [(d, g) for d, g in zip(G["days"], G["g"]) if d >= (dt.date.today() - dt.timedelta(days=8)).isoformat() and d < dt.date.today().isoformat()]
         dark = [d for d, g in recent if not g]
-        if dark:
+        if G.get("google_stale"):
+            WARN = ("Google spend is unknown: the dashboard's Google feed is failing, so this run cannot tell whether Google is live. "
+                    "If Google is dark, Meta's own ROAS reads about 63% high (real revenue did not clearly move on dark days).")
+        elif dark:
             WARN = ("Google Ads spent nothing on %d of the last %d days (since %s). On Google-dark days Meta's own ROAS read 63%% higher "
                     "while real revenue did not clearly move, so this week's Meta numbers are inflated: check Google billing first."
                     % (len(dark), len(recent), dark[0]))
