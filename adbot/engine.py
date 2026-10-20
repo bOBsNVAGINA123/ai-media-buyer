@@ -172,6 +172,8 @@ def build(rep):
     camps = {c["id"]: c for c in D.campaigns()}
     auds = {a["id"]: a for a in D.audiences()}
     ads = D.live_ads()
+    if os.environ.get("ADBOT_RAW"):           # manual runs only: a year of ad-weeks for the driver analysis
+        json.dump({"rows": rows, "sets": sets, "camps": camps, "auds": auds, "ads": ads}, open(os.environ["ADBOT_RAW"], "w"), default=str)
     acts = D.activities(days=7)
     touched = recently_touched(acts)
     call = D.odoo()
