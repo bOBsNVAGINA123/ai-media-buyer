@@ -425,8 +425,59 @@ def build(rep):
         if a["kind"] == "trim": return ("Spend less: E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch else "Spend less: turn off its losing ads"
         if a["kind"] == "winner": return "Winner: keep it running" + ((", spend more E£%s -> E£%s/day" % (f"{fr:,.0f}", f"{to:,.0f}")) if ch.get("op") == "budget" else "")
         return "Look at it"
+    # ---- every card: spend, ROAS 7-day click (all / online), incremental ROAS, how long it has run
+    try:
+        IR = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "incr_reads.json"), encoding="utf-8"))
+    except Exception:
+        IR = {"ads": {}, "window": ""}
+    today = dt.date.today()
+    first = lambda rs: min((r["wk"] for r in rs if r["sp"] > 0), default=None)
+    def incr_ratio(a):
+        if a["level"] == "ad":
+            r = IR["ads"].get(a.get("name") or "")
+            return (r, "Meta's incremental read " + IR["window"]) if r else (INCR[a["audience"]], "estimated from the audience type")
+        L = [r for sid in ([a["id"]] if a["level"] == "adset" else [s_ for s_, x in sets.items() if x.get("campaign_id") == a["id"]])
+             for r in by_set.get(sid, []) if r["wk"] in last4]
+        w = n = 0.0
+        for r in L:
+            q = IR["ads"].get(r["ad_name"])
+            if q: w += q * r["sp"]; n += r["sp"]
+        tot = sum(r["sp"] for r in L) or 1
+        if n / tot >= 0.5:
+            return (w / n, "Meta's incremental read %s (%d%% of its spend)" % (IR["window"], round(n / tot * 100)))
+        return (INCR[a["audience"]], "estimated from the audience type")
     for a in out:
         a["do"] = move(a)
+        win = ("lifetime", a.get("lifetime")) if a["kind"] == "pause" else ("last 7 days", a.get("last7")) if a.get("last7") else ("last 28 days", a.get("last28"))
+        m = win[1] or {}
+        if a["level"] == "ad":
+            rs = by_ad.get(a["id"], [])
+        else:
+            rs = [r for sid in ([a["id"]] if a["level"] == "adset" else [s_ for s_, x in sets.items() if x.get("campaign_id") == a["id"]]) for r in by_set.get(sid, [])]
+        f0 = first(rs)
+        ratio, src = incr_ratio(a)
+        a["stats"] = {"window": win[0], "spend": m.get("spend"), "roas7": m.get("roas_all7"), "roas7_online": m.get("roas_online7"),
+                      "roas_incr": round((m.get("roas_all7") or 0) * ratio, 2), "incr_src": src, "purchases": m.get("purch7"),
+                      "cpa": m.get("cpa7"), "live_days": (today - dt.date.fromisoformat(f0)).days if f0 else None, "need7": a.get("need7")}
+        def gp_net(mm):    # delivered GP after its own spend, on incremental value: online x 26.05%, in-store x 31.83%
+            sp = mm.get("spend") or 0; on = (mm.get("roas_online7") or 0) * sp; st = max((mm.get("roas_all7") or 0) * sp - on, 0)
+            return on * ratio * M_ON + st * ratio * M_ST - sp
+        wdays = {"last 7 days": 7, "last 28 days": 28}.get(win[0]) or max(a["stats"]["live_days"] or 1, 1)
+        g_win = gp_net(m); g28 = gp_net(a.get("last28") or {})
+        a["stats"].update(gp_net=round(g_win), gp_net_day=round(g_win / wdays), today=today.isoformat())
+        pick = (a.get("sizing") or {}).get("pick") or {}
+        if a["kind"] == "pause":
+            a["impact"] = {"lost_so_far": round(min(g_win, 0)), "recover_day": round(max(-g28 / 28, 0)) if a.get("last28") else None}
+        elif pick:
+            a["impact"] = {"uplift_day": pick["net_p50"], "range": [pick["net_p10"], pick["net_p90"]]}
+        elif a["kind"] == "winner":
+            a["impact"] = {"earning_day": round(g28 / 28) if a.get("last28") else None}
+        if a["kind"] == "pause" and a.get("adset"):
+            sid = a["adset"]; L = [r for r in by_set.get(sid, []) if r["wk"] in last4]
+            al, wo = agg(L), agg([r for r in L if r["ad"] != a["id"]])
+            a["adset_context"] = {"name": a.get("adset_name"), "window": "last 28 days", "spend": al["spend"], "roas7": al["roas_all7"],
+                                  "roas7_without": wo["roas_all7"], "spend_share": round(sum(r["sp"] for r in L if r["ad"] == a["id"]) / (al["spend"] or 1) * 100),
+                                  "live_ads": len(live_by_set.get(sid, []))}
     order = {"pause": 0, "trim": 1, "scale": 2, "duplicate": 3, "stock": 4, "winner": 5}
     out.sort(key=lambda a: (order.get(a["kind"], 9), a["confidence"] != "confident", -abs(money(a)),
                             -((a.get("last7") or a.get("last28") or a.get("lifetime") or {}).get("spend") or 0)))
