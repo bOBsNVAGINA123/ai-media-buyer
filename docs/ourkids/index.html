@@ -11984,7 +11984,7 @@ function bfDefaults(){
    d.aov=Math.round((p.g-p.r)/(p.o||1));
    d.cogs=+(1-(p.gp*(p.g?1-p.r/p.g:1))/((p.g-p.r)||1)).toFixed(3);
    if(s2h(bm)&&s2('conf',bm))d.fwd=Math.round(s2('cost',bm)/s2('conf',bm));
-   const bx=BOSTA_X[bm];if(bx&&bx.n)d.rto=Math.round(bx.priced/bx.n);
+   const bx=BXm(bm);if(bx&&bx.n)d.rto=Math.round(bx.priced/bx.n);
    const S2=S2f();if(S2){const i=S2If()[bm];
     const kept=(S2.keptV||[])[i]||0,ret=(S2.retV||[])[i]||0;
     if(kept+ret>0){const rr=ret/(kept+ret);d.rtoCOD=+Math.min(0.35,Math.max(0.05,rr*1.3)).toFixed(3);d.retPre=+Math.min(0.1,Math.max(0.01,rr*0.4)).toFixed(3);}}
@@ -18536,7 +18536,7 @@ function trueROAS(g){
   const mer=sp?net/sp:null;
   const trueMer=sp?(net+shipNet)/sp:null;
   const trueGp=gp2+shipNet-sp;
-  const BX=BOSTA_X[m];
+  const BX=BXm(m);
   b+='<tr><td style="'+TD+';text-align:left;font-weight:700">'+m+(BX?'<div style="font-size:10.5px;color:#0f6e56;font-weight:600">Bosta per-delivery mix</div>':'<div style="font-size:10.5px;color:#5f6a7d;font-weight:600">ledger only</div>')+'</td>'
    +'<td style="'+TD+'">'+M(net)+'</td>'
    +'<td style="'+TD+(ppoOdd?';color:#a4561a':'')+'" title="Ledger courier bill divided by CONFIRMED ORDERS. This moves when the share of orders that actually ship moves, so it is not a price.">'+(perDel!=null?'E£'+perDel.toFixed(0):'—')+'</td>'
@@ -18602,14 +18602,21 @@ function ppoBand(){const S=S2f();if(!S)return null;const v=[];
  S.m.forEach((m,i)=>{const n=bostaN(m),c=S.conf[i]||0;if(n&&c&&(S.cost[i]||0)>0)v.push(n/c);});
  if(v.length<4)return null;v.sort((a,b)=>a-b);
  return {lo:v[Math.floor(v.length*0.15)],hi:v[Math.floor(v.length*0.85)],n:v.length};}
+/* v98: every month's return-leg share from Bosta's own counts x the measured fee per type
+   (O.bosta.months byType, O.bosta.fees); 2026-08 keeps its exact per-delivery pricing. */
+function BXm(m){if(BOSTA_X[m])return BOSTA_X[m];const B=window.O&&O.bosta,mm=B&&B.months&&B.months[m],F=(B&&B.fees)||{};
+ if(!mm||!mm.byType)return null;const fee=t=>((F[t]||{}).mean)||0,bt=mm.byType;
+ const pr=t=>(bt[t]||0)*fee(t),all=Object.keys(bt).reduce((a,t)=>a+pr(t),0);if(!all)return null;
+ const rto=pr('Return to Origin'),cust=pr('Customer Return Pickup'),exch=pr('Exchange');
+ return {retShare:(rto+cust+exch)/all,n:mm.n||0,ofN:mm.n||0,priced:all,rto,cust,exch,src:'Bosta API counts x measured fee per type'};}
 const BOSTA_X={'2026-08':{retShare:0.1652,n:6164,ofN:6236,priced:432033,
   rto:39868,cust:15074,exch:16448,src:'Bosta API per-delivery mix, pulled 2026-09-01'}};
 function s2(k,m){if(!s2h(m))return 0;const a=S2f()[k];const v=(a&&a[S2If()[m]])||0;
  if(k==='cost'&&!v)return s2est(m);
  return v;}
 /* return-leg and outbound cost for a month, = the ledger's courier bill split by the API mix */
-function s2ret(m){const b=BOSTA_X[m];if(!b)return null;const c=s2('cost',m);return c?c*b.retShare:null;}
-function s2send(m){const b=BOSTA_X[m];if(!b)return null;const c=s2('cost',m);return c?c*(1-b.retShare):null;}
+function s2ret(m){const b=BXm(m);if(!b)return null;const c=s2('cost',m);return c?c*b.retShare:null;}
+function s2send(m){const b=BXm(m);if(!b)return null;const c=s2('cost',m);return c?c*(1-b.retShare):null;}
 /* The final month is ALWAYS understated: Bosta settles COD on a lag, so only the
    first settlement batch of that month has hit the ledger when we read it. Every
    cost-bearing chart drops it rather than drawing a cliff that is not real. */
@@ -23544,7 +23551,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261017-210737';
+const BUILD='20261020-144109';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
