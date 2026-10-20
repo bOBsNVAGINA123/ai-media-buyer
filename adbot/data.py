@@ -212,11 +212,13 @@ def fulfillable_stock(call):
 
 
 def online_sales_weights(call, days=30):
-    """barcode -> online revenue over the last N days (weights for the DPA index)."""
+    """barcode -> online revenue over the last N days (weights for the DPA index). Stockable products only:
+    the Shopify shipping and discount lines are services and would count as 'missing sizes'."""
     since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
     rows = call("sale.order.line", "read_group",
                 [[["order_id.team_id.name", "ilike", "shopify"], ["order_id.state", "in", ["sale", "done"]],
-                  ["order_id.date_order", ">=", since + " 00:00:00"], ["display_type", "=", False]],
+                  ["order_id.date_order", ">=", since + " 00:00:00"], ["display_type", "=", False],
+                  ["product_id.detailed_type", "=", "product"]],
                  ["price_subtotal"], ["product_id"]], {"lazy": False})
     w = {}; ids = []
     for r in rows:
