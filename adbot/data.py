@@ -10,9 +10,10 @@ import requests
 GRAPH = "https://graph.facebook.com/v21.0"
 ACT = os.environ.get("META_ACCOUNT_ID", "336343742536460").replace("act_", "")
 TOK = os.environ.get("META_ACCESS_TOKEN", "")
-# the five shops/warehouses that ship online orders + the online staging bin (user-confirmed
-# 19 Oct 2026); transit bins are stock on a truck, not stock you can sell today
-FULFIL_LOCS = {94: "Stock Warehouse", 18: "Dokki", 30: "October", 36: "Zayed", 42: "Nasr City", 88: "FULL/Shopify"}
+# The warehouses Odoo's Shopify connector pushes stock from (shopify.location.ept export_stock_warehouse_ids,
+# read 20 Oct 2026) = what the website can sell. FULL/Shopify (88) is the order warehouse, not synced;
+# transit bins are stock on a truck, not stock you can sell today.
+FULFIL_LOCS = {94: "Stock Warehouse", 18: "Dokki", 30: "October", 24: "New Cairo", 36: "Zayed", 42: "Nasr City", 112: "Season"}
 
 
 def log(*a):
@@ -184,7 +185,7 @@ def odoo():
 
 
 def fulfillable_stock(call):
-    """barcode -> units you can ship online today (on hand minus reserved, five locations + FULL/Shopify)."""
+    """barcode -> units you can ship online today (on hand minus reserved, the 7 Shopify-synced warehouses)."""
     rows = call("stock.quant", "read_group",
                 [[["location_id", "in", list(FULFIL_LOCS)]], ["quantity", "reserved_quantity"], ["product_id"]],
                 {"lazy": False})
@@ -331,7 +332,7 @@ def _google_stale(path):
 
 
 def missing_sizes(call, stock, days=30, top=15):
-    """Share of last-N-days online demand (by barcode) whose size cannot ship today from the five locations,
+    """Share of last-N-days online demand (by barcode) whose size cannot ship today from the synced warehouses,
     plus the biggest missing sizes. Quantity does not matter: a size counts as there if one unit can ship."""
     w = online_sales_weights(call, days=days)
     tot = sum(w.values()) or 1
