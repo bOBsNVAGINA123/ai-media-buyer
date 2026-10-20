@@ -1,7 +1,11 @@
 name: OurKids Ad Bot
 
-# Read-only data pull + daily recommendations. Writes nothing to Meta, Odoo or Shopify.
+# Daily recommendations. Reads Meta, Odoo and Shopify; writes only to the Ad Desk database
+# and sends the phone notification. Changes to Meta happen only when an action is approved in the app.
 on:
+  schedule:
+    # 07:17 Cairo (04:17 UTC) daily; off the top of the hour, where GitHub drops scheduled jobs
+    - cron: "17 4 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -30,6 +34,9 @@ jobs:
           ODOO_APIKEY: ${{ secrets.ODOO_APIKEY }}
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
           SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          SUPABASE_URL: https://vnrxkekoqftknzjayxpx.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
         run: |
           mkdir -p out
           cd adbot && python engine.py ../out/adbot_report.json
