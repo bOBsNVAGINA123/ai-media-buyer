@@ -325,8 +325,6 @@ def build(rep):
                 change = None
                 notes.append("It spent only %.0f%% of its E£%s/day budget last week, so a lower budget changes nothing: turn off its losing ads (see those cards) or the ad set."
                              % (util * 100, f"{bud:,.0f}"))
-        if WARN:
-            notes.append(WARN)
         budget_taken.add(oid)
         out.append(dict(base, kind=rule, rule=rule, hit_rate=pick["p_pays"], hit_txt=X.CALIB_TXT,
                         why=head, note=" ".join(notes) or None, change=change,
