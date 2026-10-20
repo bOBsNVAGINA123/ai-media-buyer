@@ -310,7 +310,12 @@ def google_daily(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "
         s = open(path, encoding="utf-8").read(); i = s.find("{")
         o, _ = json.JSONDecoder().raw_decode(s[i:]); a = o["ad"]
         d0 = dt.date.fromisoformat(a["start"])
+        f = o["fin"]; s0 = dt.date.fromisoformat(f["start"])
+        shop = {(s0 + dt.timedelta(days=k)).isoformat(): v * f.get("k", 1) for k, v in enumerate(f["chD"]["Shopify"])}
+        pos = {}
+        for br in o["pos"].values():
+            for m, v in br.items(): pos[m] = pos.get(m, 0) + (v[0] or 0)
         return {"days": [(d0 + dt.timedelta(days=k)).isoformat() for k in range(a["n"])], "g": a["gspend"], "m": a["mspend"],
-                "synced": o.get("lastSync")}
+                "synced": o.get("lastSync"), "shop": shop, "pos": pos}
     except Exception as e:
         log("google_daily unreadable:", e); return {}
