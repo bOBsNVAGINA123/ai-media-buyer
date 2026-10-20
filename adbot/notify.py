@@ -34,6 +34,14 @@ def publish(rep):
     for i in range(0, len(acts), 200):
         sb("POST", "adbot_actions", [row(a, run["id"]) for a in acts[i:i + 200]], prefer="return=minimal")
     D.log("saved run", run["id"], "with", len(acts), "actions")
+    # every live ad's landing / catalogue stock, every day -> the per-ad stock test grows over time
+    day = dt.date.today().isoformat(); snap = []
+    for aid, st in (rep.get("ad_stock") or {}).items():
+        snap.append({"day": day, "ad_id": str(aid), "kind": st.get("kind"), "url": st.get("url"), "product_set": st.get("product_set"),
+                     "idx": st.get("index"), "idx_unweighted": st.get("index_unweighted"), "first4": st.get("first4")})
+    for i in range(0, len(snap), 300):
+        sb("POST", "adbot_stock?on_conflict=day,ad_id", snap[i:i + 300], prefer="resolution=merge-duplicates,return=minimal")
+    D.log("stock snapshot", len(snap), "ads")
     push(rep, len(acts))
 
 
