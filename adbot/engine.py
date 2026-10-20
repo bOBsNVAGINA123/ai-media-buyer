@@ -28,6 +28,13 @@ COOLDOWN_DAYS = 3                         # never re-touch what was edited this 
 # The within-ad-set curve said 1.0 and is NOT used: Meta spends more in the weeks it finds buyers,
 # so spend follows sales there as much as sales follow spend.
 MARG_B, MARG_B_LO, MARG_B_HI = 0.70, 0.46, 0.94   # HI only for a trim's worst case (cut loses the most)
+# Per audience (mid, pessimistic, optimistic). Meta's own value on 52 weeks of ad-set spend steps grew
+# 1.02 per 1.00 for new, 0.81 retargeting, 1.04 existing; the real-revenue 0.70 is scaled by that ratio
+# for retargeting (INFERRED: assumes the attribution gap is the same across audiences).
+MARG = {"new": (0.70, 0.46, 0.94), "existing": (0.70, 0.46, 0.94), "retargeting": (0.56, 0.37, 0.74)}
+# How much to trust last week's ROAS vs the last 4 weeks vs the audience type's 4 weeks, by purchases last week.
+# Fitted on 992 ad-set-weeks predicting the next 2 weeks; cut forecast error 35% / 16% / 11% / 7%.
+SHRINK = ((5, 0.35, 0.40, 0.25), (10, 0.05, 0.85, 0.10), (20, 0.35, 0.40, 0.25), (50, 0.55, 0.00, 0.45))
 MAX_UP, MAX_UP_BIG = 1.5, 2.0              # one approval: +50%, or +100% when the room is 2x+ (held 96% / 92% in history)
 MIN_STEP, MAX_DOWN = 0.10, 0.50
 UTIL_MIN = 0.85                           # under this share of budget spent, more budget buys nothing
@@ -97,10 +104,10 @@ def need7(m, typ):
     return round(1 / (M_ON * (1 - st) + M_ST * st) / INCR[typ], 2)
 
 
-def profit_move(m, typ, k, b):
+def profit_move(m, typ, k, b, scale=1.0):
     """Expected change in E£/day if spend goes from today's to k x today's, on incremental revenue.
     Revenue scales k**b (next-pound curve). Returns online gross / online delivered / in-store GP, spend, net."""
-    on, st = m["_v_on"] / 7.0 * INCR[typ], m["_v_st"] / 7.0 * INCR[typ]
+    on, st = m["_v_on"] / 7.0 * INCR[typ] * scale, m["_v_st"] / 7.0 * INCR[typ] * scale   # scale: last week -> expected ROAS
     g = k ** b - 1; d = m["spend"] / 7.0 * (k - 1)
     gp_on, gp_st = on * M_ON * g, st * M_ST * g
     return {"rev_online": round(on * g), "rev_instore": round(st * g), "gp_online_gross": round(on * M_ON_GROSS * g),
@@ -254,7 +261,11 @@ def build(rep):
         budget = int((sets[oid] if lvl == "adset" else camps[oid]).get("daily_budget") or 0)
         name = (sets.get(oid, {}).get("name") if lvl == "adset" else camps.get(oid, {}).get("name")) or L[0]["adset_name"]
         camp = camps.get(sets.get(oid, {}).get("campaign_id") if lvl == "adset" else oid, {}).get("name") or L[0]["camp_name"]
-        r7 = w7["roas_all7"] or 0; x = r7 / nd if nd else 0
+        raw7 = w7["roas_all7"] or 0
+        wl, w4, wt = next(((a, b, c) for lo, a, b, c in reversed(SHRINK) if w7["purch7"] >= lo), (0.0, 0.6, 0.4))
+        r7 = round(wl * raw7 + w4 * (w28["roas_all7"] or raw7) + wt * (rep["types"][t].get("roas_all7") or raw7), 2)
+        x = r7 / nd if nd else 0
+        MB, MB_LO, MB_HI = MARG[t]
         base = {"level": lvl, "id": oid, "name": name, "campaign": camp, "audience": t, "need7": nd, "x_need": round(x, 2),
                 "type_cpa": tcpa.get(t), "last7": clean(w7), "last28": clean(w28), "confidence": conf_of(w7, t)}
         # ---- how big a move: where does the NEXT pound stop paying?
@@ -264,11 +275,11 @@ def build(rep):
         def target(bb):
             return (bb * x) ** (1 / (1 - bb)) if x > 0 else 0
         # ponytail: constant-elasticity curve; history only has moves up to ~+100%, so the target is shown capped at 3x
-        r_mid, r_safe = min(target(MARG_B), 3.0), min(target(MARG_B_LO), 3.0)
+        r_mid, r_safe = min(target(MB), 3.0), min(target(MB_LO), 3.0)
         daily = w7["spend"] / 7.0; bud = budget / 100.0
         util = daily / bud if bud else None
         rule = None
-        if x * MARG_B >= 1 and w7["purch7"] >= 5:
+        if x * MB >= 1 and w7["purch7"] >= 5:
             rule = "scale" if w7["purch7"] >= 10 else "scale_low"
         elif x < 1 and tcpa.get(t) and w7["spend"] >= RULES["trim"]["cpa_x"] * tcpa[t]:
             rule = "trim"
@@ -284,10 +295,10 @@ def build(rep):
             step = max(min(r_mid, 1 - MIN_STEP), 1 - MAX_DOWN) - 1
         new = int(round(budget * (1 + step) / 100.0) * 100) if budget else 0
         R = RULES["scale" if rule == "scale" else rule]
-        head = (("Last 7 days ROAS %.2f (online + in-store, 7-day click) is %.1fx the %.2f it needs; the next pound should return about %.0f%% of that, "
+        head = (("Expected ROAS %.2f (online + in-store, 7-day click; last week %.2f, 4 weeks %.2f) is %.1fx the %.2f it needs; the next pound should return about %.0f%% of that, "
                  "so spend keeps paying up to about E£%s/day%s (at least E£%s/day on the most pessimistic read) from E£%s/day now."
-                 % (r7, x, nd, MARG_B * 100, f"{bud * r_mid:,.0f}", "+" if r_mid >= 3 else "", f"{bud * r_safe:,.0f}", f"{bud:,.0f}")) if up else
-                ("Last 7 days ROAS %.2f is only %.0f%% of the %.2f it needs on E£%s spend (%.1fx this audience's CPA); "
+                 % (r7, raw7, w28["roas_all7"] or 0, x, nd, MB * 100, f"{bud * r_mid:,.0f}", "+" if r_mid >= 3 else "", f"{bud * r_safe:,.0f}", f"{bud:,.0f}")) if up else
+                ("Expected ROAS %.2f is only %.0f%% of the %.2f it needs on E£%s spend (%.1fx this audience's CPA); "
                  "the next pound breaks even nearer E£%s/day than E£%s/day."
                  % (r7, x * 100, nd, f"{w7['spend']:,}", w7["spend"] / tcpa[t], f"{bud * max(r_mid, 0.1):,.0f}", f"{bud:,.0f}")))
         change = {"op": "budget", "object": oid, "from": budget, "to": new} if budget else None
@@ -300,7 +311,8 @@ def build(rep):
                      "Pause its losing ads (see the pause cards) or the ad set itself.")) % (util * 100, f"{bud:,.0f}")
         k = new / budget if budget and change else 1.0
         if change:
-            pm, pw = profit_move(w7, t, k, MARG_B), profit_move(w7, t, k, MARG_B_LO if up else MARG_B_HI)
+            sc = r7 / raw7 if raw7 else 1.0
+            pm, pw = profit_move(w7, t, k, MB, sc), profit_move(w7, t, k, MB_LO if up else MB_HI, sc)
             head += (" Expected per day: spend %+s, incremental revenue %+s online / %+s in-store, gross profit %+s online "
                      "(%+s after delivery) and %+s in-store, so net profit after ad spend %+s (worst case %+s); online alone %+s."
                      % tuple(f"E£{v:,}" for v in (pm["spend"], pm["rev_online"], pm["rev_instore"], pm["gp_online_gross"],
@@ -308,7 +320,7 @@ def build(rep):
         budget_taken.add(oid)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
                         why=head, note=note, change=change,
-                        sizing={"next_pound_share": MARG_B, "target_daily": round(bud * r_mid), "safe_daily": round(bud * r_safe), "capped": r_mid >= 3,
+                        sizing={"next_pound_share": MB, "roas_expected": r7, "roas_last_week": raw7, "target_daily": round(bud * r_mid), "safe_daily": round(bud * r_safe), "capped": r_mid >= 3,
                                 "profit_day": pm if change else None, "profit_day_worst": pw if change else None,
                                 "budget_used": round(util * 100) if util is not None else None, "step_pct": round(step * 100)}))
 
