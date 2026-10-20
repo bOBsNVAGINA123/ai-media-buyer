@@ -70,7 +70,7 @@ def insights_weekly(days=364):
     params = {
         "level": "ad", "time_increment": 7,
         "time_range": json.dumps({"since": since.isoformat(), "until": until.isoformat()}),
-        "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,outbound_clicks,actions,action_values",
+        "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,reach,frequency,outbound_clicks,actions,action_values",
         "action_attribution_windows": json.dumps(["7d_click", "1d_view"]),
         "filtering": json.dumps([{"field": "spend", "operator": "GREATER_THAN", "value": 0}]),
         "limit": 500, "access_token": TOK, "async": "true"}
@@ -94,6 +94,7 @@ def insights_weekly(days=364):
             "ad": x["ad_id"], "ad_name": x.get("ad_name", ""), "adset": x.get("adset_id"), "adset_name": x.get("adset_name", ""),
             "camp": x.get("campaign_id"), "camp_name": x.get("campaign_name", ""), "wk": x["date_start"],
             "sp": float(x.get("spend") or 0), "im": float(x.get("impressions") or 0), "oc": oc,
+            "rch": float(x.get("reach") or 0), "fq": float(x.get("frequency") or 0),
             "pu7": _act(A, "offsite_conversion.fb_pixel_purchase", "7d_click"), "puV": _act(A, "offsite_conversion.fb_pixel_purchase", "1d_view"),
             "pv7": _act(V, "offsite_conversion.fb_pixel_purchase", "7d_click"), "pvV": _act(V, "offsite_conversion.fb_pixel_purchase", "1d_view"),
             "op7": _act(A, "offline_conversion.purchase", "7d_click"), "opV": _act(A, "offline_conversion.purchase", "1d_view"),
@@ -123,6 +124,25 @@ def live_ads():
         "effective_status": json.dumps(["ACTIVE"]),
         "fields": "id,name,adset_id,campaign_id,created_time,effective_status,"
                   "creative{id,object_type,link_url,product_set_id,template_url,object_story_spec,asset_feed_spec}"})
+
+
+def activities(days=365):
+    """The account's change history (budgets, pauses, new ads/ad sets, targeting, bids),
+    paged month by month so no window hits the row cap."""
+    out = []; end = dt.date.today() + dt.timedelta(days=1)
+    start = end - dt.timedelta(days=days)
+    a = start
+    while a < end:
+        b = min(a + dt.timedelta(days=31), end)
+        try:
+            out += g_all("act_%s/activities" % ACT, {"since": a.isoformat(), "until": b.isoformat(), "limit": 500,
+                         "fields": "event_type,event_time,object_id,object_name,object_type,extra_data,actor_name"}, cap=50000)
+        except Exception as e:
+            log("activities", a, "failed:", str(e)[:120])
+        a = b
+    keep = [x for x in out if x.get("event_type") not in ("ad_account_billing_charge", "funding_event_successful", "funding_event_initiated")]
+    log("activities", len(out), "rows,", len(keep), "non-billing,", start, "->", end)
+    return keep
 
 
 def creative_link(c):
@@ -246,3 +266,39 @@ def landing_products(url, n=12):
         c = (d.get("data") or {}).get("collectionByHandle")
         return ("collection", (c or {}).get("products", {}).get("nodes", []) if c else [])
     return ("other", [])
+
+
+def variant_barcodes():
+    """Shopify variant id -> barcode/sku, for every variant (bulk export). The catalogue's
+    retailer_id is the variant id, so this is how a DPA item reaches fulfillable stock."""
+    q = 'mutation{bulkOperationRunQuery(query:"""{ productVariants { edges { node { legacyResourceId barcode sku } } } }"""){bulkOperation{id status} userErrors{message}}}'
+    d = shop_q(q)
+    errs = (((d.get("data") or {}).get("bulkOperationRunQuery") or {}).get("userErrors")) or []
+    if errs:
+        log("bulk start:", errs)
+    url = None
+    for k in range(120):
+        c = (shop_q("{currentBulkOperation{status url errorCode objectCount}}").get("data") or {}).get("currentBulkOperation") or {}
+        if c.get("status") == "COMPLETED":
+            url = c.get("url"); break
+        if c.get("status") in ("FAILED", "CANCELED", "EXPIRED"):
+            log("bulk", c); break
+        time.sleep(5)
+    out = {}
+    if url:
+        for line in requests.get(url, timeout=300).text.splitlines():
+            try:
+                n = json.loads(line)
+            except Exception:
+                continue
+            k = (n.get("barcode") or n.get("sku") or "").strip()
+            if n.get("legacyResourceId") and k:
+                out[str(n["legacyResourceId"])] = k
+    log("variant barcodes", len(out))
+    return out
+
+
+def retailer_variant(rid):
+    """'shopify_EG_123_456' / '456' -> '456' (the Shopify variant id)."""
+    m = re.findall(r"\d{6,}", str(rid or ""))
+    return m[-1] if m else ""
