@@ -414,9 +414,6 @@ def build(rep):
             for x in acts_:
                 x["note"] = "Every live ad in this ad set is flagged; pausing them all stops the ad set."
 
-    order = {"pause": 0, "stock": 1, "trim": 2, "scale": 3, "winner": 4}
-    out.sort(key=lambda x: (order[x["kind"]], x["confidence"] != "confident",
-                            -((x.get("last7") or x.get("last28") or x.get("lifetime") or {}).get("spend") or 0)))
     # ---- one plain move per card, biggest money first
     def money(a):
         return ((a.get("sizing") or {}).get("pick") or {}).get("net_p50") or 0
@@ -433,7 +430,8 @@ def build(rep):
     for a in out:
         a["do"] = move(a)
     order = {"pause": 0, "trim": 1, "scale": 2, "duplicate": 3, "stock": 4, "winner": 5}
-    out.sort(key=lambda a: (order.get(a["kind"], 9), -abs(money(a))))
+    out.sort(key=lambda a: (order.get(a["kind"], 9), a["confidence"] != "confident", -abs(money(a)),
+                            -((a.get("last7") or a.get("last28") or a.get("lifetime") or {}).get("spend") or 0)))
     rep["actions"] = out; rep["skipped"] = skipped
     rep["counts"] = dict(collections.Counter(a["kind"] + " · " + a["confidence"] for a in out))
     return rep
