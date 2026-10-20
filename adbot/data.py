@@ -75,17 +75,22 @@ def insights_weekly(days=364):
         "action_attribution_windows": json.dumps(["7d_click", "1d_view"]),
         "filtering": json.dumps([{"field": "spend", "operator": "GREATER_THAN", "value": 0}]),
         "limit": 500, "access_token": TOK, "async": "true"}
-    r = requests.post(GRAPH + "/act_%s/insights" % ACT, data=params, timeout=120)
-    if r.status_code != 200:
-        raise RuntimeError("insights async start: " + r.text[:300])
-    run = r.json()["report_run_id"]
-    for k in range(240):
-        st = g(run, {"fields": "async_status,async_percent_completion"})
-        if st.get("async_status") == "Job Completed":
+    for attempt in range(3):          # Meta fails these jobs now and then on its side; a fresh job usually completes
+        r = requests.post(GRAPH + "/act_%s/insights" % ACT, data=params, timeout=120)
+        if r.status_code != 200:
+            raise RuntimeError("insights async start: " + r.text[:300])
+        run = r.json()["report_run_id"]; status = None
+        for k in range(240):
+            status = g(run, {"fields": "async_status,async_percent_completion"}).get("async_status")
+            if status in ("Job Completed", "Job Failed", "Job Skipped"):
+                break
+            time.sleep(5)
+        if status == "Job Completed":
             break
-        if st.get("async_status") in ("Job Failed", "Job Skipped"):
-            raise RuntimeError("insights job " + st.get("async_status"))
-        time.sleep(5)
+        log("insights job", status, "- attempt", attempt + 1, "of 3")
+        time.sleep(30)
+    else:
+        raise RuntimeError("insights job failed 3 times: " + str(status))
     rows = g_all(run + "/insights", {"limit": 500}, cap=200000)
     out = []
     for x in rows:
