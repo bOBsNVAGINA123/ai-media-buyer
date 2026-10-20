@@ -105,7 +105,7 @@ def profit_move(m, typ, k, b):
     gp_on, gp_st = on * M_ON * g, st * M_ST * g
     return {"rev_online": round(on * g), "rev_instore": round(st * g), "gp_online_gross": round(on * M_ON_GROSS * g),
             "gp_online_delivered": round(gp_on), "gp_instore": round(gp_st), "spend": round(d),
-            "net": round(gp_on + gp_st - d)}
+            "net": round(gp_on + gp_st - d), "net_online_only": round(gp_on - d)}
 
 
 def clean(m):
@@ -300,9 +300,9 @@ def build(rep):
         if change:
             pm, pw = profit_move(w7, t, k, MARG_B), profit_move(w7, t, k, MARG_B_LO if up else MARG_B_HI)
             head += (" Expected per day: spend %+s, incremental revenue %+s online / %+s in-store, gross profit %+s online "
-                     "(%+s after delivery) and %+s in-store, so net profit after ad spend %+s (worst case %+s)."
+                     "(%+s after delivery) and %+s in-store, so net profit after ad spend %+s (worst case %+s); online alone %+s."
                      % tuple(f"E£{v:,}" for v in (pm["spend"], pm["rev_online"], pm["rev_instore"], pm["gp_online_gross"],
-                                                    pm["gp_online_delivered"], pm["gp_instore"], pm["net"], pw["net"])))
+                                                    pm["gp_online_delivered"], pm["gp_instore"], pm["net"], pw["net"], pm["net_online_only"])))
         budget_taken.add(oid)
         out.append(dict(base, kind="scale" if up else "trim", rule=rule, hit_rate=R["hit"], hit_txt=R["hit_txt"],
                         why=head, note=note, change=change,
