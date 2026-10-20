@@ -74,6 +74,20 @@ def season_index(shop, pos, today):
     return tuple(round(x, 2) for x in r)
 
 
+def package(s0, s1, season=(1.0, 1.0), m_on=0.2605, m_st=0.3183):
+    """Approve everything at once: account spend s0 -> s1 E£/day. Account-level curve (revenue ~ spend^elasticity,
+    level set by the measured extra-pound return at spend_ref). Returns net E£/day at the low / mid / high return."""
+    out = {}
+    for tag, z in (("low", -1.2816), ("mid", 0.0), ("high", 1.2816)):     # 80% range of the measured returns
+        net = -(s1 - s0)
+        for key, m, sea in (("on", m_on, season[0]), ("st", m_st, season[1])):
+            per, se, el = CAL[key]; per = max(per + z * se, 0)
+            level = per * CAL["spend_ref"] / el * sea
+            net += level * ((s1 / CAL["spend_ref"]) ** el - (s0 / CAL["spend_ref"]) ** el) * m
+        out[tag] = round(net)
+    return out
+
+
 def label(p):
     return "very likely" if p >= 0.9 else "likely" if p >= 0.75 else "coin flip" if p >= 0.5 else "unlikely"
 
