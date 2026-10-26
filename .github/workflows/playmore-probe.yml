@@ -1,0 +1,42 @@
+name: Playmore Odoo probe
+# One-off: which Odoo server/companies does the Playmore login reach? Prints names only, never secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Odoo URL to try"
+        default: "https://ourkids.odoo.com"
+      db:
+        description: "Database (blank = ask the server)"
+        default: "isi-c-playcorp-production-13353955"
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        env:
+          LOGIN: ${{ secrets.PLAYMORE_ODOO_LOGIN }}
+          KEY: ${{ secrets.PLAYMORE_ODOO_APIKEY }}
+          URL: ${{ inputs.url }}
+          DB: ${{ inputs.db }}
+        run: |
+          python3 - <<'PY'
+          import os, xmlrpc.client
+          url, db, login, key = os.environ["URL"].rstrip("/"), os.environ["DB"], os.environ["LOGIN"], os.environ["KEY"]
+          print("login set:", bool(login), "| key set:", bool(key), "| url:", url)
+          if not db:
+              try:
+                  db = xmlrpc.client.ServerProxy(url + "/xmlrpc/2/db").list()[0]
+              except Exception as e:
+                  print("db list blocked:", str(e)[:120]); raise SystemExit(1)
+          print("db:", db)
+          uid = xmlrpc.client.ServerProxy(url + "/xmlrpc/2/common").authenticate(db, login, key, {})
+          print("authenticated:", bool(uid))
+          if uid:
+              m = xmlrpc.client.ServerProxy(url + "/xmlrpc/2/object")
+              u = m.execute_kw(db, uid, key, "res.users", "read", [[uid]], {"fields": ["company_ids", "company_id"]})[0]
+              print("companies this login can see:", [c for c in m.execute_kw(db, uid, key, "res.company", "read", [u["company_ids"]], {"fields": ["name"]})])
+              print("sale orders visible:", m.execute_kw(db, uid, key, "sale.order", "search_count", [[]]))
+          PY
