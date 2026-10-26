@@ -1,43 +1,45 @@
-"""Read-only survey round 4: Bosta/Paymob money flow, returns, shipping cost, Shopify connector records. Totals only."""
-import os, xmlrpc.client, datetime
+"""Read-only survey round 5: value of returned goods by month (Shopify orders), delivery status by month. Totals only."""
+import os, xmlrpc.client, datetime, collections
 U = "https://isi-play-more.odoo.com"; DB = "isi-c-play-more-production-12131321"
 L, K = os.environ["LOGIN"], os.environ["KEY"]
 uid = xmlrpc.client.ServerProxy(U + "/xmlrpc/2/common").authenticate(DB, L, K, {})
 M = xmlrpc.client.ServerProxy(U + "/xmlrpc/2/object", allow_none=True)
-def x(model, method, *a, **kw):
-    try: return M.execute_kw(DB, uid, K, model, method, list(a), kw)
-    except Exception as e: return "ERR " + str(e)[-200:]
-def mon(lbl):
-    try: return datetime.datetime.strptime(lbl, "%B %Y").strftime("%Y-%m")
-    except Exception: return lbl
-for code, nm in (("12.01.02.00.00", "Bosta"), (None, "Paymob")):
-    dom = [["account_id.code", "=", code]] if code else [["journal_id.name", "=", "Paymob"], ["account_id.account_type", "=", "asset_cash"]]
-    print("==", nm, "account by month: debit (money in) / credit (money out) / count")
-    g = x("account.move.line", "read_group", dom + [["parent_state", "=", "posted"]], ["debit:sum", "credit:sum"], ["date:month"], lazy=False)
-    if isinstance(g, list):
-        for r in g[-16:]: print("  ", mon(r["date:month"]), round(r["debit"]), round(r["credit"]), r["__count"])
-    print("  counter-accounts on", nm, "moves:")
-    mv = x("account.move.line", "search_read", dom + [["parent_state", "=", "posted"]], fields=["move_id"], limit=3000)
-    if isinstance(mv, list) and mv:
-        ids = list({m["move_id"][0] for m in mv})
-        g2 = x("account.move.line", "read_group", [["move_id", "in", ids]] + ([["account_id.code", "!=", code]] if code else [["account_id.account_type", "!=", "asset_cash"]]), ["debit:sum", "credit:sum"], ["account_id"], lazy=False, limit=12)
-        if isinstance(g2, list):
-            for r in g2: print("    ", r["account_id"][1][:50], "debit", round(r["debit"]), "credit", round(r["credit"]), "lines", r["__count"])
-print("== customer payments by journal (12 months)")
-g = x("account.payment", "read_group", [["payment_type", "=", "inbound"], ["state", "=", "posted"], ["date", ">=", "2025-10-01"]], ["amount:sum"], ["journal_id"], lazy=False)
-print("  ", [(r["journal_id"][1], r["__count"], round(r["amount"])) for r in g] if isinstance(g, list) else g)
-print("== returns: incoming pickings that return a delivery, by month")
-g = x("stock.picking", "read_group", [["picking_type_code", "=", "incoming"], ["return_id", "!=", False], ["state", "=", "done"]], ["id:count"], ["date_done:month"], lazy=False)
-print("  ", [(mon(r["date_done:month"]), r["__count"]) for r in g][-16:] if isinstance(g, list) else g)
-g = x("stock.picking", "read_group", [["picking_type_code", "=", "incoming"], ["origin", "ilike", "Return"], ["state", "=", "done"]], ["id:count"], ["date_done:month"], lazy=False)
-print("  by origin 'Return':", [(mon(r["date_done:month"]), r["__count"]) for r in g][-16:] if isinstance(g, list) else g)
-print("== outgoing deliveries done by month (count) and carrier_price")
-g = x("stock.picking", "read_group", [["picking_type_code", "=", "outgoing"], ["state", "=", "done"]], ["carrier_price:sum"], ["date_done:month"], lazy=False)
-print("  ", [(mon(r["date_done:month"]), r["__count"], round(r.get("carrier_price") or 0)) for r in g][-16:] if isinstance(g, list) else g)
-print("== Shopify connector models")
-ms = x("ir.model", "search_read", [["model", "ilike", "shopify"]], fields=["model", "name"])
-if isinstance(ms, list):
-    for m in ms:
-        if any(w in m["model"] for w in ("payout", "profit", "fee", "fulfil", "refund", "transaction", "order")):
-            n = x(m["model"], "search_count", [])
-            print("  ", m["model"], "|", m["name"], "|", n)
+x = lambda model, method, *a, **kw: M.execute_kw(DB, uid, K, model, method, list(a), kw)
+mv = x("stock.move", "search_read", [["picking_id.picking_type_code", "=", "incoming"], ["picking_id.return_id", "!=", False], ["state", "=", "done"], ["date", ">=", "2025-07-01"]],
+       fields=["date", "product_uom_qty", "quantity", "sale_line_id", "origin_returned_move_id", "picking_id", "product_id"], limit=20000)
+print("returned move lines:", len(mv))
+sl = list({m["sale_line_id"][0] for m in mv if m.get("sale_line_id")})
+print("with a sale line:", sum(1 for m in mv if m.get("sale_line_id")))
+# fall back to the outgoing move's sale line
+om = list({m["origin_returned_move_id"][0] for m in mv if not m.get("sale_line_id") and m.get("origin_returned_move_id")})
+omap = {}
+for i in range(0, len(om), 1000):
+    for o in x("stock.move", "read", om[i:i + 1000], fields=["sale_line_id"]):
+        if o.get("sale_line_id"): omap[o["id"]] = o["sale_line_id"][0]
+sl = list(set(sl) | set(omap.values()))
+L2 = {}
+for i in range(0, len(sl), 1000):
+    for l in x("sale.order.line", "read", sl[i:i + 1000], fields=["price_total", "price_subtotal", "product_uom_qty", "margin", "order_id"]):
+        L2[l["id"]] = l
+oids = list({l["order_id"][0] for l in L2.values()})
+team = {}
+for i in range(0, len(oids), 1000):
+    for o in x("sale.order", "read", oids[i:i + 1000], fields=["team_id", "partner_id"]):
+        team[o["id"]] = ((o.get("team_id") or [0, "?"])[1], (o.get("partner_id") or [0])[0])
+agg = collections.defaultdict(lambda: collections.defaultdict(float)); orders = collections.defaultdict(set); nolink = collections.Counter()
+for m in mv:
+    sid = (m.get("sale_line_id") or [None])[0] or omap.get((m.get("origin_returned_move_id") or [None])[0])
+    mon = m["date"][:7]
+    if not sid or sid not in L2: nolink[mon] += 1; continue
+    l = L2[sid]; q = m.get("quantity") or m.get("product_uom_qty") or 0; uq = l["product_uom_qty"] or 1
+    t, partner = team.get(l["order_id"][0], ("?", 0))
+    key = "OurKids (intercompany)" if partner == 920 else t
+    a = agg[(mon, key)]; a["value_incl"] += l["price_total"] / uq * q; a["value_ex"] += l["price_subtotal"] / uq * q; a["margin"] += (l["margin"] or 0) / uq * q; a["qty"] += q
+    orders[(mon, key)].add(l["order_id"][0])
+print("month | channel | returned orders | qty | value incl VAT | value ex VAT | margin lost")
+for (mon, key), a in sorted(agg.items()):
+    print(f"  {mon} | {key} | {len(orders[(mon, key)])} | {a['qty']:.0f} | {a['value_incl']:.0f} | {a['value_ex']:.0f} | {a['margin']:.0f}")
+print("returned lines with no sale link, by month:", dict(nolink))
+print("== Shopify orders by month and delivery_status")
+g = x("sale.order", "read_group", [["team_id.name", "=", "Shopify"], ["state", "=", "sale"], ["date_order", ">=", "2026-03-01 00:00:00"]], ["amount_total:sum"], ["date_order:month", "delivery_status"], lazy=False)
+for r in g: print("  ", r["date_order:month"], r.get("delivery_status"), r["__count"], round(r["amount_total"]))
