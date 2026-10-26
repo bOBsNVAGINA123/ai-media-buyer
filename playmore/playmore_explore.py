@@ -1,24 +1,46 @@
-"""Read-only survey of Playmore's Odoo for the P&L build (round 2). Prints structure and totals only."""
-import os, xmlrpc.client, collections
+"""Read-only survey round 3: courier costs and order/delivery status anywhere in Playmore's Odoo. Names/totals only."""
+import os, xmlrpc.client
 U = "https://isi-play-more.odoo.com"; DB = "isi-c-play-more-production-12131321"
 L, K = os.environ["LOGIN"], os.environ["KEY"]
 uid = xmlrpc.client.ServerProxy(U + "/xmlrpc/2/common").authenticate(DB, L, K, {})
 M = xmlrpc.client.ServerProxy(U + "/xmlrpc/2/object", allow_none=True)
-x = lambda model, method, *a, **kw: M.execute_kw(DB, uid, K, model, method, list(a), kw)
-OK = [["state", "=", "sale"]]
-# who buys through the PlayMore team, and what are negative orders
-print("PlayMore-team top customers:", [(g["partner_id"], g["__count"], round(g["amount_total"])) for g in x("sale.order", "read_group", OK + [["team_id", "=", 6]], ["amount_total:sum"], ["partner_id"], lazy=False, orderby="amount_total desc", limit=8)])
-print("PlayMore-team by month:", [(g["date_order:month"], g["__count"], round(g["amount_total"])) for g in x("sale.order", "read_group", OK + [["team_id", "=", 6]], ["amount_total:sum"], ["date_order:month"], lazy=False)][-14:])
-neg = x("sale.order", "search_read", OK + [["amount_total", "<", 0]], fields=["name", "team_id", "amount_total", "partner_id", "origin", "client_order_ref"], limit=6, order="amount_total asc")
-print("biggest negative orders:", neg)
-print("negative orders by team:", [(g["team_id"], g["__count"], round(g["amount_total"])) for g in x("sale.order", "read_group", OK + [["amount_total", "<", 0]], ["amount_total:sum"], ["team_id"], lazy=False)])
-# Shopify team monthly: positive vs negative, untaxed vs total, margin
-for sign, dom in (("pos", [["amount_total", ">", 0]]), ("neg", [["amount_total", "<", 0]])):
-    print("Shopify team", sign, [(g["date_order:month"], g["__count"], round(g["amount_total"]), round(g["amount_untaxed"]), round(g["margin"])) for g in x("sale.order", "read_group", OK + [["team_id", "=", 5]] + dom, ["amount_total:sum", "amount_untaxed:sum", "margin:sum"], ["date_order:month"], lazy=False)][-14:])
-# taxes in use
-print("taxes:", x("account.tax", "search_read", [["type_tax_use", "=", "sale"], ["active", "=", True]], fields=["name", "amount"]))
-# expense accounts with posted balance last 12 months
-g = x("account.move.line", "read_group", [["parent_state", "=", "posted"], ["date", ">=", "2025-10-01"], ["account_id.account_type", "in", ["expense", "expense_direct_cost", "expense_depreciation"]]], ["balance:sum"], ["account_id"], lazy=False, orderby="balance desc", limit=40)
-for r in g: print("  exp", r["account_id"][1][:60], round(r["balance"]))
-# shopify order ids/channel tags
-print("sale.order sample shopify:", x("sale.order", "search_read", OK + [["team_id", "=", 5]], fields=["name", "client_order_ref", "origin", "date_order"], limit=3, order="date_order desc"))
+def x(model, method, *a, **kw):
+    try: return M.execute_kw(DB, uid, K, model, method, list(a), kw)
+    except Exception as e: return "ERR " + str(e)[-160:]
+WORDS = ["bosta", "aramex", "mylerz", "sprint", "j&t", "courier", "shipping", "shipment", "delivery", "deliver", "fedex", "dhl", "r2s", "flash", "شحن", "توصيل", "مندوب"]
+print("== installed modules about shipping/courier")
+mods = x("ir.module.module", "search_read", [["state", "=", "installed"]], fields=["name", "shortdesc"])
+if isinstance(mods, list):
+    for m in mods:
+        t = (m["name"] + " " + (m["shortdesc"] or "")).lower()
+        if any(w in t for w in ("bosta", "deliver", "ship", "carrier", "courier", "shopify", "aramex", "stock")): print("  ", m["name"], "|", m["shortdesc"])
+print("== ALL accounts (any type) whose name hints at courier/shipping")
+acc = x("account.account", "search_read", [], fields=["code", "name", "account_type"])
+if isinstance(acc, list):
+    for a in acc:
+        if any(w in (a["name"] or "").lower() for w in WORDS): print("  ", a["code"], a["name"], a["account_type"])
+print("== partners that look like couriers, and money moved with them (12 months)")
+for w in ["bosta", "aramex", "mylerz", "sprint", "j&t", "courier", "shipping", "شحن", "توصيل"]:
+    ps = x("res.partner", "search_read", [["name", "ilike", w]], fields=["name"], limit=10)
+    if isinstance(ps, list) and ps:
+        for p in ps:
+            b = x("account.move", "read_group", [["partner_id", "=", p["id"]], ["state", "=", "posted"], ["date", ">=", "2025-10-01"]], ["amount_total:sum"], ["move_type"], lazy=False)
+            print("  ", w, "->", p["name"], "|", [(g["move_type"], g["__count"], round(g["amount_total"])) for g in b] if isinstance(b, list) else b)
+print("== journal lines whose label mentions a courier (12 months)")
+for w in ["bosta", "aramex", "mylerz", "shipping", "courier", "شحن"]:
+    g = x("account.move.line", "read_group", [["name", "ilike", w], ["parent_state", "=", "posted"], ["date", ">=", "2025-10-01"]], ["balance:sum"], ["account_id"], lazy=False, limit=8)
+    if isinstance(g, list) and g: print("  ", w, [(r["account_id"][1][:45], r["__count"], round(r["balance"])) for r in g])
+print("== journals")
+print("  ", [(j["name"], j["type"]) for j in x("journal", "search_read", [], fields=["name","type"])] if False else x("account.journal", "search_read", [], fields=["name", "type"]))
+print("== order / delivery status fields")
+for model in ("sale.order", "stock.picking"):
+    f = x(model, "fields_get", attributes=["string", "type"])
+    if isinstance(f, dict):
+        hits = {k: (v["string"], v["type"]) for k, v in f.items() if any(w in (k + " " + v["string"]).lower() for w in ("bosta", "track", "deliver", "carrier", "ship", "fulfil", "status", "state", "courier", "cod", "x_"))}
+        print("  ", model, hits)
+print("== sale.order (Shopify team) delivery status counts")
+print("  ", x("sale.order", "read_group", [["team_id.name", "=", "Shopify"], ["state", "=", "sale"]], ["amount_total:sum"], ["delivery_status"], lazy=False))
+print("== stock.picking states (outgoing, 12 months)")
+print("  ", [(g["state"], g["__count"]) for g in x("stock.picking", "read_group", [["picking_type_code", "=", "outgoing"], ["create_date", ">=", "2025-10-01"]], ["id:count"], ["state"], lazy=False)] if True else "")
+print("== delivery.carrier")
+print("  ", x("delivery.carrier", "search_read", [], fields=["name", "delivery_type"]))
