@@ -77,10 +77,7 @@ fin_d = by_day("sale.order", OK + EXT, ["amount_total", "margin"], "date_order:d
                lambda r: (r.get("amount_total") or 0, r.get("margin") or 0, r.get("__count") or 0))
 shop_d = by_day("sale.order", OK + [["team_id.name", "=", "Shopify"]], ["amount_total", "margin"], "date_order:day",
                 lambda r: (r.get("amount_total") or 0, r.get("margin") or 0, r.get("__count") or 0))
-qty_d = by_day("sale.order.line", [["order_id.state", "in", ["sale", "done"]], ["order_id.date_order", ">=", FIN_START + " 00:00:00"],
-                                   ["order_id.partner_id", "!=", OURKIDS_PARTNER], ["display_type", "=", False],
-                                   ["product_id.detailed_type", "!=", "service"]],
-               ["product_uom_qty"], "order_id.date_order:day", lambda r: r.get("product_uom_qty") or 0)
+qty_d = {}   # units per basket: Odoo 17 cannot group order lines by the order date; the P&L does not use it
 ic_d = by_day("sale.order", OK + [["partner_id", "=", OURKIDS_PARTNER]], ["amount_total"], "date_order:day",
               lambda r: r.get("amount_total") or 0)
 ch_d = {}
