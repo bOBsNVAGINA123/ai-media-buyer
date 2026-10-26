@@ -169,6 +169,7 @@ last_sale = max((d for d in DAYS if fin_d.get(d)), default=TODAY.isoformat())
 O = {"biz": "playmore", "cur": "EGP", "lastSync": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC",
      "today": TODAY.isoformat(), "aw": [FIN_START, TODAY.isoformat()], "gpBasis": "govt4b", "vat": 0.14,
      "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC,
+     "attr": {"order": ["default"], "labels": {"default": "Default 7DC/1DV (LIVE)"}, "meta": {"default": 1.0}, "google": {}, "tt": {}, "metaOff": {"default": 1.0}},
      "notes": {"intercompany": "Sales to OurKids (partner 920) are excluded from every total: they are stock moves between the two companies.",
                "courier": "Playmore's books have no courier account, so delivery cost is missing, not zero.",
                "vat": "Gross profit is Odoo's margin (ex-VAT); the 14% sales tax is the government-charge line."}}
