@@ -1,7 +1,10 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>OurKids — Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="./data.js"></script>
+<script>/* v99 BUSINESS SWITCH: OurKids (data.js) or Playmore (playmore_data.js, built by playmore/playmore_live.py) */
+(function(){var b='ourkids';try{b=localStorage.getItem('okBiz')||'ourkids';}catch(e){}if(b!=='playmore')b='ourkids';window.BIZ=b;
+document.write('<script src="./'+(b==='playmore'?'playmore_data.js':'data.js')+'"><\/script>');})();
+function setBiz(v){try{localStorage.setItem('okBiz',v);}catch(e){}location.reload();}</script>
 <style>
 :root{--ink:#161d2e;--mut:#646e83;--red:#c4203f;--grn:#0a7756;--teal:#1fc3b6;--blue:#286db5;--indigo:#4a4bd8;--violet:#7952c5;--orange:#a6592a;--pink:#ff5da2;--grey:#5f6a7d}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#e7ecf6,#eef1f7 240px);color:var(--ink);-webkit-font-smoothing:antialiased}
@@ -516,7 +519,7 @@ tr.dpSel{background:var(--brand-wash)!important;box-shadow:inset 2px 0 0 var(--b
 <div class="gate" id="gate"><div class="bx"><div class="l2">OK</div><h2>OurKids Analytics</h2><p>Enter password to continue</p>
 <input id="pw" type="password" placeholder="Password" autocomplete="off"/><button class="btn" onclick="unlock()">Unlock</button><div class="err" id="er"></div></div></div>
 <div class="wrap hide" id="app">
-<div class="top"><div class="brand"><div class="logo">OK</div><div><h1>OurKids — Performance</h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<button type="button" class="whatbtn" onclick="this.parentNode.classList.toggle('open')">What this covers</button><div class="whatcovers" style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE BRANCHES</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Overview &rarr; Branches</b>, <b>P&amp;L &rarr; Branches P&amp;L</b>, and <b>Advertising &rarr; Ads &rarr; branches</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the branches.</div></div></div></div>
+<div class="top"><div class="brand"><div class="logo">OK</div><div><h1><span id="bizNm">OurKids</span> — Performance <select id="bizSel" onchange="setBiz(this.value)" title="Switch business" style="font:700 13px inherit;margin-left:8px;padding:3px 6px;border-radius:8px;border:1px solid #d9deea;vertical-align:middle"><option value="ourkids">OurKids</option><option value="playmore">Playmore</option></select></h1><div class="sub">shop-ourkids.com · Odoo · Shopify · Meta · Google · TikTok<button type="button" class="whatbtn" onclick="this.parentNode.classList.toggle('open')">What this covers</button><div class="whatcovers" style="margin-top:5px;font-size:11.5px;line-height:1.5;color:#5b6478;max-width:940px"><b style="color:#0F172A">What this covers:</b> two separate businesses on one page. <b>SHOPIFY</b> = the webstore only, from the Shopify order feed &mdash; every headline number on <b>Overview</b>, <b>What moved it</b> and <b>Shopify P&amp;L</b> is this and nothing else. <b>THE BRANCHES</b> = Nasr City, New Cairo, Mall of Arabia, Dokki, Zayed, Smouha, October, from the Odoo POS journals &mdash; they live under <b>Overview &rarr; Branches</b>, <b>P&amp;L &rarr; Branches P&amp;L</b>, and <b>Advertising &rarr; Ads &rarr; branches</b>. Ad spend is the whole account and is not split between the two, so a return computed on Shopify alone is charged with spend that also worked in the branches.</div></div></div></div>
 <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:flex-end;max-width:62%"><div class="pill" id="pp"></div><div class="pill" id="sync"></div><div class="pill">Currency <b>EGP</b></div></div></div>
 <div class="tgroups" id="tgroups"></div><div class="tabs" id="tabrow"></div>
 <div id="stale"></div>
@@ -650,7 +653,7 @@ function setAlloc(v){ALLOC=!!v;RDR();}
 let CMB='__all';
 function setCmb(v){CMB=v;RDR();}
 const DPRX=Math.min(2,window.devicePixelRatio||1);
-let O,FF,ch=[],TAB='td',   /* v17 the tool OPENS on Today. It was 'on', so the rail highlighted Today while Overview rendered underneath -- the chrome said one thing and the content another. */
+let O,FF,ch=[],TAB=(window.BIZ==='playmore'?'pn':'td'),   /* v17 the tool OPENS on Today. It was 'on', so the rail highlighted Today while Overview rendered underneath -- the chrome said one thing and the content another. */
 IO=null,ST={s:null,e:null,at:'default',att:{meta:'default',google:'default',tt:'default'},cmp:'prev',ord:null,pm0:null,pm1:null,pcust:'nc'};
 /* v6.2 fK. Inside a 248px small-multiple panel a full "E£ 3,175,246" is 88px wide, so four
    of them on a 20-point line physically cannot avoid each other. fK prints the same number
@@ -2880,7 +2883,9 @@ function trBI(U,SC){
   return '<div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:9px 12px;margin-bottom:7px;font-size:12.5px"><span style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+c+'22;color:'+c+';flex-shrink:0">'+l+'</span><span>'+f[1]+'</span></div>';}).join('')
  +'</div></div>';
  return h;}
-function boot(){O=window.O;FF=window.F;
+function boot(){O=window.O;FF=window.F;try{document.getElementById('bizSel').value=window.BIZ;document.getElementById('bizNm').textContent=window.BIZ==='playmore'?'Playmore':'OurKids';
+ if(window.BIZ==='playmore'){document.title='Playmore — Analytics';const lg=document.querySelector('.top .logo');if(lg)lg.textContent='PM';
+  const sb=document.querySelector('.top .sub');if(sb&&sb.firstChild&&sb.firstChild.nodeType===3)sb.firstChild.nodeValue='goplaymore.com · Odoo (isi-play-more) · Meta';}}catch(e){}
  /* v92: O.ad.mclk is Meta's `clicks` -- EVERY click, including likes, comments, profile
     taps and image expands. The per-ad feed (O.mads[].d.oc) has always used outbound_clicks,
     so the Actions Board was printing two different Meta CVRs from the same window with
@@ -3011,6 +3016,8 @@ const TABGROUPS=[
  ['Traffic & creative',[['cv','CVR doctor'],['mn','Menu map'],['tr','Where traffic lands'],['si','Search demand'],['aq','Demand gap'],['mb','Creative benchmarks'],['cl','Change log']]],
  ['Audit',[['au','Commercial'],['av','Vendor Capital'],['ag','Listing Gap'],['aq','Demand Gap']]]
 ];
+/* Playmore has the webstore P&L only: no branches, POS, Google or customer feeds. */
+if(window.BIZ==='playmore')TABGROUPS.splice(0,TABGROUPS.length,['P&L',[['pn','Online P&L']]]);
 const TABQ={
  gl:'Every lever you actually control, on a slider \u2014 what each is worth per month and per year, and which to pull first.',
  on:'Where Shopify stands right now \u2014 pace against last month and last year, plus this week\u2019s scoreboard.',
@@ -18856,7 +18863,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
  if(!ST.pm1||allM.indexOf(ST.pm1)<0)ST.pm1=allM[allM.length-1];
  if(ST.pm0>ST.pm1){const t0=ST.pm0;ST.pm0=ST.pm1;ST.pm1=t0;}
  const mons=allM.filter(m=>m>=ST.pm0&&m<=ST.pm1);
- document.getElementById('bn4').innerHTML='&#8635; Synced <b>'+LSC+' Cairo</b>. Colour: green = best month, red = worst, per row. All refunds, COGS, payroll, rent and OpEx below are ACTUAL accounting figures from Odoo (team-tagged credit notes + the 31.* expense tree). Ads cover 2025-07-25 onward.';
+ document.getElementById('bn4').innerHTML=(O.biz==='playmore'?'<b>PLAYMORE.</b> Webstore = Odoo Shopify team. Sales to OurKids are left out (stock moving between the two companies). Gross profit = Odoo margin; the government charge is the 14% sales tax. Not in Playmore&rsquo;s books: courier cost, webstore refunds, payroll &mdash; those rows show &mdash;. Meta spend from the Playmore ad account (from Jun 2026). ':'')+'&#8635; Synced <b>'+LSC+' Cairo</b>. Colour: green = best month, red = worst, per row. All refunds, COGS, payroll, rent and OpEx below are ACTUAL accounting figures from Odoo (team-tagged credit notes + the 31.* expense tree). Ads cover 2025-07-25 onward.';
  const opts=sel=>allM.map(m=>'<option'+(m===sel?' selected':'')+'>'+m+'</option>').join('');
  const ctl=document.createElement('div');ctl.className='card full';ctl.dataset.a='ins';
  ctl.innerHTML='<div class="bar" style="margin:0;border:0;padding:2px 0;background:transparent"><label>From month</label><select onchange="pnlCtl(&quot;pm0&quot;,this.value)">'+opts(ST.pm0)+'</select><label>To</label><select onchange="pnlCtl(&quot;pm1&quot;,this.value)">'+opts(ST.pm1)+'</select><label>Customer type</label><select onchange="pnlCtl(&quot;pcust&quot;,this.value)"><option value="nc"'+(ST.pcust==='nc'?' selected':'')+'>First-time</option><option value="rc"'+(ST.pcust==='rc'?' selected':'')+'>Returning</option></select><label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer" title="Adds Meta&#39;s in-store (offline) conversion value to the Shopify P&L as a MEMO block. It is never folded into gross sales, gross profit or EBITDA."><input type="checkbox" style="width:auto" '+(ST.pOff?'checked':'')+' onchange="pnlCtl(&quot;pOff&quot;,this.checked)"> Add attributed in-store revenue</label><label>Attribution model</label><select onchange="pnlCtl(&quot;pOffM&quot;,this.value)"'+(ST.pOff?'':' disabled')+'><option value="meta"'+((ST.pOffM||'meta')==='meta'?' selected':'')+'>Meta in-store conversions (Meta&#39;s claim)</option><option value="inc"'+(ST.pOffM==='inc'?' selected':'')+'>&times; 0.217 measured incremental share</option><option value="omni"'+(ST.pOffM==='omni'?' selected':'')+'>Meta omni value &minus; online net revenue</option></select><div class="sp"></div><span class="cs">Filter applies to every table on this tab.</span></div>';
@@ -18907,7 +18914,7 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
      profit", which after the correction is the real cost PLUS the charge). It gets its own
      line instead, and the identity still closes exactly:
          net revenue - government charge - COGS = gross profit. */
-  const GOVT=0.04;
+  const GOVT=(O.biz==='playmore')?(1-1/1.14):0.04;   /* Playmore: 14% sales tax (its Odoo tax setup); OurKids remits 4% */
   const NETR=m=>(SH[m]&&SH[m].g)?SH[m].g-SH[m].r:null;
   const GVC_N=m=>{const n=NETR(m);return n==null?null:-n*GOVT;};
   const COGS_N=m=>{const n=NETR(m),g2=GPF(m);return (n==null||g2==null)?null:-(n*(1-GOVT)-g2);};
@@ -18963,8 +18970,8 @@ function rPnl(){if(TAB!=='pn')return;dCh();const g=document.getElementById('g4')
    null,
    {hdr:'6 &middot; BOTTOM LINE'},
    {n:'Profit contribution (after shipping &amp; ads)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s:null,fmt:SIG,sh:1,b:1,q:'sh_pc',tt:'Gross profit AFTER shipping &minus; all platform ad spend. Nothing hidden: the lines you can see subtract to this one.'},
-   {n:'OpEx: e-com payroll',f:m=>-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026. A FIXED figure, the same in every column — it is not read per month from the ledger.'},
-   {n:'EBITDA est (Shopify)',f:m=>SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s-ecomPay(m):null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Carries the shipping subsidy too. It does NOT carry rent, HQ payroll or utilities — those are company lines, and the webstore’s share of them is on the Blended tab.'},
+   {n:'OpEx: e-com payroll',f:m=>O.biz==='playmore'?null:-EP,fmt:NEG,sh:0,tt:'Fulfilment + marketplace team, Excel Jun-2026. A FIXED figure, the same in every column — it is not read per month from the ledger.'},
+   {n:'EBITDA est (Shopify)',f:m=>O.biz!=='playmore'&&SH[m]&&SH[m].g&&A[m]&&A[m].s&&adFull(m)?GPF(m)+shipNet(m)-A[m].s-ecomPay(m):null,fmt:SIG,sh:1,b:1,tt:'Profit contribution above &minus; the e-commerce payroll line. Carries the shipping subsidy too. It does NOT carry rent, HQ payroll or utilities — those are company lines, and the webstore’s share of them is on the Blended tab.'},
    null,
    {hdr:'MEMO &mdash; information only, charged in no line above'},
    {n:'Cancelled orders, count',f:m=>CX[m]&&CX[m].n?CX[m].n:null,fmt:v=>Math.round(v).toLocaleString(),sh:1,gd:-1,tt:'Shopify-team sale orders sitting in state = cancel, counted in the month they were placed. They never appear in any revenue line — the P&L only ever counted confirmed orders.'},
@@ -23551,7 +23558,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261020-144109';
+const BUILD='20261026-204322';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
