@@ -1,0 +1,39 @@
+name: Playmore data
+
+# Rebuilds docs/ourkids/playmore_data.js (the dashboard's Playmore business) from Playmore's Odoo
+# and its Meta ad account. Read-only on both. Off the :00/:30 rush; every 3 hours.
+on:
+  schedule:
+    - cron: "43 */3 * * *"
+  push:
+    branches: [main]
+    paths: ["playmore/playmore_live.py", ".github/workflows/playmore.yml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playmore-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        env:
+          PLAYMORE_ODOO_LOGIN: ${{ secrets.PLAYMORE_ODOO_LOGIN }}
+          PLAYMORE_ODOO_APIKEY: ${{ secrets.PLAYMORE_ODOO_APIKEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        run: python3 playmore/playmore_live.py
+      - name: Commit
+        run: |
+          git config user.name "OurKids Bot"; git config user.email "bot@ourkids-eg.com"
+          git add docs/ourkids/playmore_data.js
+          git diff --cached --quiet && { echo "no change"; exit 0; }
+          git commit -m "playmore data $(date -u +%F' '%H:%M)"
+          for i in 1 2 3 4 5; do git pull --rebase -X theirs origin main && git push && exit 0; sleep $((i*7)); done
+          exit 1
