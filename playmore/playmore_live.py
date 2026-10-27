@@ -91,6 +91,34 @@ ref_d = by_day("account.move", [["move_type", "=", "out_refund"], ["state", "=",
 sref_d = by_day("account.move", [["move_type", "=", "out_refund"], ["state", "=", "posted"], ["invoice_date", ">=", FIN_START],
                                  ["team_id.name", "=", "Shopify"]], ["amount_total"], "invoice_date:day",
                 lambda r: r.get("amount_total") or 0)
+# ---- RETURNS. Playmore books no credit note when goods come back: the return is only a stock move
+# (incoming picking with return_id). Price each returned unit at its original sale line, so the P&L's
+# refunds line is real. Dated on the day the goods came back. OurKids (intercompany) returns excluded.
+ret_all, ret_shop = {}, {}
+mv = ox("stock.move", "search_read", [[["picking_id.picking_type_code", "=", "incoming"], ["picking_id.return_id", "!=", False],
+                                       ["state", "=", "done"], ["date", ">=", FIN_START], ["sale_line_id", "!=", False]]],
+        {"fields": ["date", "quantity", "product_uom_qty", "sale_line_id"], "limit": 100000})
+ids = list({m["sale_line_id"][0] for m in mv}); SL = {}
+for i in range(0, len(ids), 1000):
+    for l in ox("sale.order.line", "read", [ids[i:i + 1000]], {"fields": ["price_total", "product_uom_qty", "order_id"]}):
+        SL[l["id"]] = l
+oids = list({l["order_id"][0] for l in SL.values()}); OT = {}
+for i in range(0, len(oids), 1000):
+    for o in ox("sale.order", "read", [oids[i:i + 1000]], {"fields": ["team_id", "partner_id"]}):
+        OT[o["id"]] = ((o.get("team_id") or [0, ""])[1], (o.get("partner_id") or [0])[0])
+for m in mv:
+    l = SL.get(m["sale_line_id"][0])
+    if not l: continue
+    team, partner = OT.get(l["order_id"][0], ("", 0))
+    if partner == OURKIDS_PARTNER: continue
+    v = l["price_total"] / (l["product_uom_qty"] or 1) * (m.get("quantity") or m.get("product_uom_qty") or 0)
+    d = m["date"][:10]
+    ret_all[d] = ret_all.get(d, 0) + v
+    if team == "Shopify": ret_shop[d] = ret_shop.get(d, 0) + v
+log("returns priced:", len(mv), "moves, E£", round(sum(ret_all.values())))
+for d, v in ret_all.items(): ref_d[d] = ref_d.get(d, 0) + v
+for d, v in ret_shop.items(): sref_d[d] = sref_d.get(d, 0) + v
+
 # ---- cancellations
 cx_d = by_day("sale.order", [["state", "=", "cancel"], ["date_order", ">=", FIN_START + " 00:00:00"]] + EXT, ["amount_total"],
               "date_order:day", lambda r: (r.get("amount_total") or 0, r.get("__count") or 0))
@@ -170,7 +198,8 @@ O = {"biz": "playmore", "cur": "EGP", "lastSync": datetime.datetime.utcnow().str
      "today": TODAY.isoformat(), "aw": [FIN_START, TODAY.isoformat()], "gpBasis": "govt4b", "vat": 0.14,
      "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC,
      "attr": {"order": ["default"], "labels": {"default": "Default 7DC/1DV (LIVE)"}, "meta": {"default": 1.0}, "google": {}, "tt": {}, "metaOff": {"default": 1.0}},
-     "notes": {"intercompany": "Sales to OurKids (partner 920) are excluded from every total: they are stock moves between the two companies.",
+     "notes": {"returns": "Refunds = goods returned to stock (return pickings), priced at the original sale line; Playmore books no credit notes for them.",
+               "intercompany": "Sales to OurKids (partner 920) are excluded from every total: they are stock moves between the two companies.",
                "courier": "Playmore's books have no courier account, so delivery cost is missing, not zero.",
                "vat": "Gross profit is Odoo's margin (ex-VAT); the 14% sales tax is the government-charge line."}}
 F = {"currency": "EGP", "brand": "Playmore", "branches": [], "company": {}, "meta": {}, "attr": {}, "notes": {}}
