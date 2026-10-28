@@ -95,6 +95,7 @@ sref_d = by_day("account.move", [["move_type", "=", "out_refund"], ["state", "="
 # (incoming picking with return_id). Price each returned unit at its original sale line, so the P&L's
 # refunds line is real. Dated on the day the goods came back. OurKids (intercompany) returns excluded.
 ret_all, ret_shop = {}, {}
+RET_ORD, RET_VAL = {}, {}
 mv = ox("stock.move", "search_read", [[["picking_id.picking_type_code", "=", "incoming"], ["picking_id.return_id", "!=", False],
                                        ["state", "=", "done"], ["date", ">=", FIN_START], ["sale_line_id", "!=", False]]],
         {"fields": ["date", "quantity", "product_uom_qty", "sale_line_id"], "limit": 100000})
@@ -114,7 +115,9 @@ for m in mv:
     v = l["price_total"] / (l["product_uom_qty"] or 1) * (m.get("quantity") or m.get("product_uom_qty") or 0)
     d = m["date"][:10]
     ret_all[d] = ret_all.get(d, 0) + v
-    if team == "Shopify": ret_shop[d] = ret_shop.get(d, 0) + v
+    if team == "Shopify":
+        ret_shop[d] = ret_shop.get(d, 0) + v
+        RET_ORD.setdefault(d[:7], set()).add(l["order_id"][0]); RET_VAL[d[:7]] = RET_VAL.get(d[:7], 0) + v
 log("returns priced:", len(mv), "moves, E£", round(sum(ret_all.values())))
 for d, v in ret_all.items(): ref_d[d] = ref_d.get(d, 0) + v
 for d, v in ret_shop.items(): sref_d[d] = sref_d.get(d, 0) + v
@@ -193,10 +196,53 @@ if META_TOKEN:
 else:
     SRC["meta"] = False; log("no META_ACCESS_TOKEN")
 
+# ---- DELIVERY (ship2 + bosta, the shapes the P&L's delivery block reads).
+# Actual from Odoo: Shopify orders per month, which paid a shipping line and how much, parcels sent
+# (outgoing deliveries done) and parcels back (returns). NOT in Playmore's books: the courier bill
+# (Bosta postings stopped Nov 2025, no fee ever booked), so cost stays 0 and the page prices the
+# parcels at the measured Bosta rate per type, marked EST. Rates are OurKids' Bosta pull (same
+# courier) until Playmore's own Bosta account is connected.
+BOSTA_FEES = {"Send": {"mean": 70.33}, "Return to Origin": {"mean": 55.53}}
+mon = lambda ts: ts[:7]
+so = ox("sale.order", "search_read", [[["team_id.name", "=", "Shopify"], ["state", "in", ["sale", "done"]], ["date_order", ">=", FIN_START + " 00:00:00"],
+                                         ["partner_id", "!=", OURKIDS_PARTNER]]], {"fields": ["date_order", "amount_total"], "limit": 200000})
+OM = {o["id"]: mon(o["date_order"]) for o in so}
+conf, confV = {}, {}
+for o in so:
+    m = OM[o["id"]]; conf[m] = conf.get(m, 0) + 1; confV[m] = confV.get(m, 0) + (o.get("amount_total") or 0)
+shp = ox("sale.order.line", "search_read", [[["order_id", "in", list(OM)], ["product_id.detailed_type", "=", "service"],
+                                              ["product_id.name", "ilike", "shipping"], ["price_subtotal", ">", 0]]],
+         {"fields": ["order_id", "price_subtotal"], "limit": 200000})
+paid, col = {}, {}
+seen = set()
+for l in shp:
+    oid = l["order_id"][0]; m = OM.get(oid)
+    if not m: continue
+    col[m] = col.get(m, 0) + l["price_subtotal"]
+    if oid not in seen: seen.add(oid); paid[m] = paid.get(m, 0) + 1
+pk = ox("stock.picking", "search_read", [[["picking_type_code", "=", "outgoing"], ["state", "=", "done"], ["date_done", ">=", FIN_START],
+                                          ["sale_id", "in", list(OM)]]], {"fields": ["date_done"], "limit": 200000})
+sends = {}
+for p_ in pk:
+    m = mon(p_["date_done"]); sends[m] = sends.get(m, 0) + 1
+months = sorted(set(conf) | set(sends))
+ship2 = {"m": months, "conf": [conf.get(m, 0) for m in months], "ret": [len(RET_ORD.get(m, ())) for m in months],
+         "kept": [max(conf.get(m, 0) - len(RET_ORD.get(m, ())), 0) for m in months],
+         "retV": [round(RET_VAL.get(m, 0)) for m in months], "keptV": [round(max(confV.get(m, 0) - RET_VAL.get(m, 0), 0)) for m in months],
+         "canc": [0] * len(months), "cancV": [0] * len(months),
+         "paidN": [paid.get(m, 0) for m in months], "freeN": [max(conf.get(m, 0) - paid.get(m, 0), 0) for m in months],
+         "col": [round(col.get(m, 0)) for m in months], "colAcc": [0] * len(months),
+         "cost": [0] * len(months), "costN": [0] * len(months), "lagM": months[-1] if months else "", "retFrom": FIN_START}
+bosta = {"pulled": TODAY.isoformat(), "fees": BOSTA_FEES, "feeSource": "OurKids Bosta rates (Playmore's own Bosta account not connected)",
+         "months": {m: {"n": sends.get(m, 0) + len(RET_ORD.get(m, ())), "byType": {"Send": sends.get(m, 0), "Return to Origin": len(RET_ORD.get(m, ()))},
+                        "sends": sends.get(m, 0), "ret": len(RET_ORD.get(m, ()))} for m in months}}
+log("delivery: orders", sum(conf.values()), "paid shipping", sum(paid.values()), "collected E£", round(sum(col.values())),
+    "sends", sum(sends.values()), "returned orders", sum(len(v) for v in RET_ORD.values()))
+
 last_sale = max((d for d in DAYS if fin_d.get(d)), default=TODAY.isoformat())
 O = {"biz": "playmore", "cur": "EGP", "lastSync": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC",
      "today": TODAY.isoformat(), "aw": [FIN_START, TODAY.isoformat()], "gpBasis": "govt4b", "vat": 0.14,
-     "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC,
+     "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC, "ship2": ship2, "bosta": bosta,
      "attr": {"order": ["default"], "labels": {"default": "Default 7DC/1DV (LIVE)"}, "meta": {"default": 1.0}, "google": {}, "tt": {}, "metaOff": {"default": 1.0}},
      "notes": {"returns": "Refunds = goods returned to stock (return pickings), priced at the original sale line; Playmore books no credit notes for them.",
                "intercompany": "Sales to OurKids (partner 920) are excluded from every total: they are stock moves between the two companies.",
