@@ -239,10 +239,67 @@ bosta = {"pulled": TODAY.isoformat(), "fees": BOSTA_FEES, "feeSource": "OurKids 
 log("delivery: orders", sum(conf.values()), "paid shipping", sum(paid.values()), "collected E£", round(sum(col.values())),
     "sends", sum(sends.values()), "returned orders", sum(len(v) for v in RET_ORD.values()))
 
+# ---- DAYS OF INVENTORY LEFT (DOR). On hand = quantity - reserved in every internal location
+# (Go.PlayMore + Season). Sold = units on confirmed sale orders over the last 30 days, split into
+# webstore, OurKids (intercompany: it empties Playmore's shelves too) and other wholesale; negative
+# lines (OurKids sending stock back) are not sales. DOR = on hand / units per day.
+# ponytail: a flat 30-day rate, not units / days-in-stock; a product sold out for part of the month
+# reads slower than it is. Add stock history if that matters.
+WIN = 30
+since = (TODAY - datetime.timedelta(days=WIN)).isoformat() + " 00:00:00"
+so30 = ox("sale.order", "search_read", [[["state", "in", ["sale", "done"]], ["date_order", ">=", since]]],
+          {"fields": ["partner_id", "team_id"], "limit": 100000})
+chan = {}
+for o in so30:
+    pid = (o.get("partner_id") or [0])[0]
+    chan[o["id"]] = "ourkids" if pid == OURKIDS_PARTNER else ("web" if (o.get("team_id") or [0, ""])[1] == "Shopify" else "other")
+lines = ox("sale.order.line", "search_read", [[["order_id", "in", list(chan)], ["display_type", "=", False],
+                                                 ["product_id.detailed_type", "=", "product"]]],
+           {"fields": ["order_id", "product_id", "product_uom_qty"], "limit": 500000})
+sold = {}
+for l in lines:
+    q = l.get("product_uom_qty") or 0
+    if q <= 0: continue
+    p_ = l["product_id"][0]; c = chan.get(l["order_id"][0], "other")
+    sold.setdefault(p_, {"web": 0.0, "ourkids": 0.0, "other": 0.0})[c] += q
+quants = group("stock.quant", [["location_id.usage", "=", "internal"]], ["quantity", "reserved_quantity"], ["product_id"])
+onhand = {}
+for r in quants:
+    p_ = (r.get("product_id") or [0])[0]
+    if p_: onhand[p_] = (r.get("quantity") or 0) - (r.get("reserved_quantity") or 0)
+pids = list(set(onhand) | set(sold)); PR = {}
+for i in range(0, len(pids), 1000):
+    for p_ in ox("product.product", "read", [pids[i:i + 1000]], {"fields": ["product_tmpl_id", "display_name", "default_code", "standard_price", "lst_price"]}):
+        PR[p_["id"]] = p_
+tm = {}
+for p_, info in PR.items():
+    t = (info.get("product_tmpl_id") or [0, info.get("display_name")])
+    e = tm.setdefault(t[0], {"name": t[1], "code": info.get("default_code") or "", "onhand": 0.0, "web": 0.0, "ourkids": 0.0, "other": 0.0,
+                             "value": 0.0, "retail": 0.0, "sizes": 0, "sizesOut": 0, "price": info.get("lst_price") or 0})
+    oh = max(onhand.get(p_, 0), 0); sd = sold.get(p_, {})
+    e["onhand"] += oh; e["value"] += oh * (info.get("standard_price") or 0); e["retail"] += oh * (info.get("lst_price") or 0)
+    for c in ("web", "ourkids", "other"): e[c] += sd.get(c, 0)
+    if oh > 0 or sd: e["sizes"] += 1; e["sizesOut"] += 1 if oh <= 0 else 0
+items = []
+for t, e in tm.items():
+    out = e["web"] + e["ourkids"] + e["other"]
+    if e["onhand"] <= 0 and out <= 0: continue
+    perday = out / WIN
+    items.append({"name": e["name"], "code": e["code"], "onhand": round(e["onhand"]), "web": round(e["web"]), "ourkids": round(e["ourkids"]),
+                  "other": round(e["other"]), "perDay": round(perday, 2), "dor": round(e["onhand"] / perday) if perday > 0 else None,
+                  "value": round(e["value"]), "retail": round(e["retail"]), "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"])})
+tot_oh = sum(i["onhand"] for i in items); tot_out = sum(i["web"] + i["ourkids"] + i["other"] for i in items)
+web_out = sum(i["web"] for i in items)
+dor = {"asof": TODAY.isoformat(), "window": WIN, "units": tot_oh, "value": sum(i["value"] for i in items), "retail": sum(i["retail"] for i in items),
+       "sold": {"web": web_out, "ourkids": sum(i["ourkids"] for i in items), "other": sum(i["other"] for i in items)},
+       "dor": round(tot_oh / (tot_out / WIN)) if tot_out else None, "dorWeb": round(tot_oh / (web_out / WIN)) if web_out else None,
+       "items": sorted(items, key=lambda i: -i["value"])}
+log("dor: products", len(items), "units on hand", tot_oh, "cost value", dor["value"], "DOR all", dor["dor"], "DOR webstore only", dor["dorWeb"])
+
 last_sale = max((d for d in DAYS if fin_d.get(d)), default=TODAY.isoformat())
 O = {"biz": "playmore", "cur": "EGP", "lastSync": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC",
      "today": TODAY.isoformat(), "aw": [FIN_START, TODAY.isoformat()], "gpBasis": "govt4b", "vat": 0.14,
-     "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC, "ship2": ship2, "bosta": bosta,
+     "fin": fin, "shop": shop, "ad": ad, "exp": exp, "pos": {}, "src": SRC, "ship2": ship2, "bosta": bosta, "dor": dor,
      "attr": {"order": ["default"], "labels": {"default": "Default 7DC/1DV (LIVE)"}, "meta": {"default": 1.0}, "google": {}, "tt": {}, "metaOff": {"default": 1.0}},
      "notes": {"returns": "Refunds = goods returned to stock (return pickings), priced at the original sale line; Playmore books no credit notes for them.",
                "intercompany": "Sales to OurKids (partner 920) are excluded from every total: they are stock moves between the two companies.",
