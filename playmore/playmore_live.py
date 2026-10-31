@@ -298,6 +298,14 @@ for pg in range(1, 12):
         m = re.match(r"(\d{4,6})", pr["handle"])
         if m: STYLE.setdefault(m.group(1), info)
 
+# Shopify product id per Odoo template (the connector's records are archived, so ask for inactive ones too):
+# gives a Shopify-admin link even for products the store hides once sold out.
+SHID = {}
+for r in ox("shopify.product.template.ept", "search_read", [[["active", "in", [True, False]], ["shopify_tmpl_id", "!=", False]]],
+            {"fields": ["product_tmpl_id", "shopify_tmpl_id"], "limit": 100000}):
+    if r.get("product_tmpl_id"): SHID[r["product_tmpl_id"][0]] = r["shopify_tmpl_id"]
+log("shopify product ids", len(SHID))
+
 def season_of(code, name):
     m = re.search(r"\b([WS])(\d{2})\b", "%s %s" % (code or "", name or "")) or re.search(r"-([WS])(\d{2})-", code or "")
     return (m.group(1) + m.group(2)) if m else ""
@@ -366,6 +374,7 @@ for t, e in tm.items():
          "dor": round(e["onhand"] / perday) if perday > 0 else None, "value": round(e["value"]), "retail": round(e["retail"]),
          "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"]), "season": season_of(e["code"], e["name"]),
          "url": (e["shop"] or {}).get("url", ""), "img": (e["shop"] or {}).get("img", ""), "live": (e["shop"] or {}).get("live"),
+         "admin": ("https://goplaymore.com/admin/products/" + str(SHID[e["id"]])) if SHID.get(e["id"]) else "",
          "style": (re.search(r"\b(\d{5})\b", e["name"] or "") or [None, ""])[1] if re.search(r"\b(\d{5})\b", e["name"] or "") else ""}
     i["act"], i["why"] = advise(i)
     items.append(i)
