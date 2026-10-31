@@ -32,7 +32,7 @@ jobs:
       - name: Commit
         run: |
           git config user.name "OurKids Bot"; git config user.email "bot@ourkids-eg.com"
-          git add docs/ourkids/playmore_data.js
+          git add docs/ourkids/playmore_data.js docs/ourkids/playmore_img.json
           git diff --cached --quiet && { echo "no change"; exit 0; }
           git commit -m "playmore data $(date -u +%F' '%H:%M)"
           for i in 1 2 3 4 5; do git pull --rebase -X theirs origin main && git push && exit 0; sleep $((i*7)); done
