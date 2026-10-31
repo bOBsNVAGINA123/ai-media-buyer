@@ -282,12 +282,14 @@ for i in range(0, len(pids), 1000):
 # internal reference) and, failing that, by the style number the handle starts with.
 SKU, STYLE = {}, {}
 for pg in range(1, 12):
-    try:
-        req = urllib.request.Request("https://goplaymore.com/products.json?limit=250&page=%d" % pg, headers={"User-Agent": "Mozilla/5.0"})
-        prods = json.load(urllib.request.urlopen(req, timeout=60)).get("products", [])
-    except Exception as e:
-        log("shop feed page", pg, "failed", str(e)[:80]); time.sleep(3); continue
-    if not prods: break
+    prods = None
+    for k in range(4):                     # the store rate-limits shared runners (429): back off and retry
+        try:
+            req = urllib.request.Request("https://goplaymore.com/products.json?limit=250&page=%d" % pg, headers={"User-Agent": "Mozilla/5.0"})
+            prods = json.load(urllib.request.urlopen(req, timeout=60)).get("products", []); break
+        except Exception as e:
+            log("shop feed page", pg, "try", k + 1, "failed", str(e)[:60]); time.sleep(20 * (k + 1))
+    if prods is None or not prods: break
     for pr in prods:
         img = (pr.get("images") or [{}])[0].get("src", "")
         info = {"url": "https://goplaymore.com/products/" + pr["handle"], "img": img, "live": any(v.get("available") for v in pr.get("variants", []))}
@@ -350,15 +352,25 @@ for t, e in tm.items():
          "other": round(e["other"]), "web90": round(e["web90"]), "all90": round(e["all90"]), "last": e["last"], "perDay": round(perday, 2),
          "dor": round(e["onhand"] / perday) if perday > 0 else None, "value": round(e["value"]), "retail": round(e["retail"]),
          "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"]), "season": season_of(e["code"], e["name"]),
-         "url": (e["shop"] or {}).get("url", ""), "img": (e["shop"] or {}).get("img", ""), "live": (e["shop"] or {}).get("live")}
+         "url": (e["shop"] or {}).get("url", ""), "img": (e["shop"] or {}).get("img", ""), "live": (e["shop"] or {}).get("live"),
+         "style": (re.search(r"\b(\d{5})\b", e["name"] or "") or [None, ""])[1] if re.search(r"\b(\d{5})\b", e["name"] or "") else ""}
     i["act"], i["why"] = advise(i)
     items.append(i)
+# thumbnails from Odoo (the webstore feed blocks shared runners), into their own file so only the Stock tab loads them
+IMG = {}
+tids = [i["id"] for i in items]
+for k in range(0, len(tids), 100):
+    for r in ox("product.template", "read", [tids[k:k + 100]], {"fields": ["image_128"]}):
+        if r.get("image_128"): IMG[str(r["id"])] = r["image_128"]
+with open(os.path.join(os.path.dirname(OUT), "playmore_img.json"), "w") as fh:
+    json.dump(IMG, fh, separators=(",", ":"))
+log("thumbnails", len(IMG), "of", len(tids))
 tot_oh = sum(i["onhand"] for i in items); tot_out = sum(i["web"] + i["ourkids"] + i["other"] for i in items)
 web_out = sum(i["web"] for i in items)
 dor = {"asof": TODAY.isoformat(), "window": WIN, "season": CUR, "units": tot_oh, "value": sum(i["value"] for i in items), "retail": sum(i["retail"] for i in items),
        "sold": {"web": web_out, "ourkids": sum(i["ourkids"] for i in items), "other": sum(i["other"] for i in items)},
        "dor": round(tot_oh / (tot_out / WIN)) if tot_out else None, "dorWeb": round(tot_oh / (web_out / WIN)) if web_out else None,
-       "odoo": URL + "/odoo/action-stock.product_template_action_product/", "items": sorted(items, key=lambda i: -i["value"])}
+       "odoo": URL + "/web#model=product.template&view_type=form&id=", "items": sorted(items, key=lambda i: -i["value"])}
 log("dor: products", len(items), "units", tot_oh, "cost", dor["value"], "DOR", dor["dor"], "web-only", dor["dorWeb"],
     "| matched to webstore", sum(1 for i in items if i["url"]), "| advice", {a: sum(1 for i in items if i["act"] == a) for a in ("reorder", "send", "push", "liquidate", "keep")})
 
