@@ -324,23 +324,32 @@ for e in tm.values():
         if m: e["shop"] = STYLE.get(m.group(1))
 
 def advise(i):
-    """One call per product, with the reason. Thresholds: 14 days = time to remake/reorder; 180 days = half a year of stock."""
-    oh, out30, out90, d = i["onhand"], i["web"] + i["ourkids"] + i["other"], i["all90"], i["dor"]
-    sea, old = i["season"], (i["season"] not in ("", CUR, NEXT))
+    """One call per product, with the reason. Seasons: the letter matching now (W in winter) is IN season whatever
+    the year; last season's opposite stock (S26 in winter 26) is held for its season; older off-season stock clears.
+    14 days = time to remake/reorder; 180 days = half a year of stock."""
+    oh, out30, out90, out180, d = i["onhand"], i["web"] + i["ourkids"] + i["other"], i["all90"], i["all180"], i["dor"]
+    sea = i["season"]; inseason = (not sea) or sea[0] == CUR[0]
+    last_off = bool(sea) and not inseason and sea == (("S%02d" % yy) if CUR[0] == "W" else ("W%02d" % (yy - 1)))
     if oh <= 0 and out30 > 0:
         return "reorder", "Sold out and still selling: %d units in 30 days." % out30
     if d is not None and d < 14 and oh > 0:
         return "reorder", "Runs out in about %d days at %.1f units a day." % (d, i["perDay"])
     if oh <= 0:
         return "", ""
-    if out90 == 0 and (old or not sea):
-        return "liquidate", "No sale in 90 days%s: clear it (sale or outlet) before it ages further." % ((" and it is last season's (" + sea + ")") if old else "")
-    if (d is None or d > 180) and i["ourkids"] == 0 and oh >= 20:
-        return "send", "%d units here and OurKids took none in 30 days: offer them to the shops." % oh
-    if (d is None or d > 180) and sea in (CUR, NEXT, ""):
-        return "push", "In season but slow (%s): feature it on the webstore / in ads before the season ends." % ("no sales in 30 days" if d is None else "%d days of stock" % d)
+    if not inseason:
+        if last_off:
+            if out180 == 0:
+                return "liquidate", "%s stock with no sale in 6 months: clear it rather than carry it another year." % sea
+            return "keep", "%s stock, out of season now: hold it for its season rather than discount it." % sea
+        if out90 == 0 or d is None or d > 180:
+            return "liquidate", "Old %s stock that is not moving: sale, outlet or bundle." % sea
+        return "keep", "%s stock still selling: %d days of stock." % (sea, d)
+    if out90 == 0:
+        return "liquidate", "In season%s and no sale in 90 days: it is not going to sell at this price." % ((" (" + sea + ")") if sea else "")
     if d is None or d > 180:
-        return "liquidate", "Over half a year of stock at today's pace%s." % ((" and it is last season's (" + sea + ")") if old else "")
+        if i["ourkids"] == 0 and oh >= 20:
+            return "send", "%d units here, in season, and OurKids took none in 30 days: offer them to the shops." % oh
+        return "push", "In season but slow (%s): feature it on the webstore and in ads." % ("no sale in 30 days" if d is None else "%d days of stock" % d)
     return "keep", "%d days of stock at today's pace." % d
 
 items = []
@@ -349,7 +358,7 @@ for t, e in tm.items():
     if e["onhand"] <= 0 and out <= 0: continue
     perday = out / WIN
     i = {"id": e["id"], "name": e["name"], "code": e["code"], "onhand": round(e["onhand"]), "web": round(e["web"]), "ourkids": round(e["ourkids"]),
-         "other": round(e["other"]), "web90": round(e["web90"]), "all90": round(e["all90"]), "last": e["last"], "perDay": round(perday, 2),
+         "other": round(e["other"]), "web90": round(e["web90"]), "all90": round(e["all90"]), "all180": round(e["all180"]), "last": e["last"], "perDay": round(perday, 2),
          "dor": round(e["onhand"] / perday) if perday > 0 else None, "value": round(e["value"]), "retail": round(e["retail"]),
          "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"]), "season": season_of(e["code"], e["name"]),
          "url": (e["shop"] or {}).get("url", ""), "img": (e["shop"] or {}).get("img", ""), "live": (e["shop"] or {}).get("live"),
