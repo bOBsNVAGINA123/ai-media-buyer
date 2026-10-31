@@ -344,8 +344,12 @@ def advise(i):
         if out90 == 0 or d is None or d > 180:
             return "liquidate", "Old %s stock that is not moving: sale, outlet or bundle." % sea
         return "keep", "%s stock still selling: %d days of stock." % (sea, d)
+    if out90 == 0 and not sea:
+        if out180 == 0:
+            return "liquidate", "No season code and no sale in 6 months: clear it."
+        return "keep", "No season code; no sale in 90 days but it sold in the last 6 months (last %s). If it is summer stock, hold it for summer." % (i["last"] or "?")
     if out90 == 0:
-        return "liquidate", "In season%s and no sale in 90 days: it is not going to sell at this price." % ((" (" + sea + ")") if sea else "")
+        return "liquidate", "In season (%s) and no sale in 90 days: it is not going to sell at this price." % sea
     if d is None or d > 180:
         if i["ourkids"] == 0 and oh >= 20:
             return "send", "%d units here, in season, and OurKids took none in 30 days: offer them to the shops." % oh
