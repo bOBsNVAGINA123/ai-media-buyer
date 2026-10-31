@@ -15501,15 +15501,16 @@ function rPD(){const D=O.dor,el=document.getElementById('pdC');if(!D){el.innerHT
   send:['Send to OurKids','#286db5','A pile here and OurKids took none in 30 days. Offer them to the shops.'],
   push:['Push on the webstore','#a6592a','In season but slow. Feature them on the site and in ads before the season ends.'],
   liquidate:['Liquidate','#7952c5','Old season with no sale in 90 days, or over half a year of stock. Sale, outlet or bundle.'],
-  keep:['Keep','#0a7756','Healthy: 14 to 180 days of stock at today’s pace.']};
+  keep:['Keep','#0a7756','Healthy: 14 to 180 days of stock at today’s pace.'],
+  unlisted:['Not on goplaymore.com','#5f6a7d','Never put on Playmore’s store: no Shopify product exists. The ones with stock can only sell to OurKids until someone lists them.']};
  const f=ST.pdF||'reorder';
- const by=k=>IT.filter(i=>i.act===k),sum=(a,k)=>a.reduce((t,i)=>t+(i[k]||0),0);
+ const by=k=>k==='unlisted'?IT.filter(i=>!i.url&&!i.admin):IT.filter(i=>i.act===k),sum=(a,k)=>a.reduce((t,i)=>t+(i[k]||0),0);
  const card=(k)=>{const a=by(k),on=f===k;return '<div onclick="ST.pdF=\''+k+'\';rPD()" style="cursor:pointer;flex:1;min-width:170px;background:'+(on?ACT[k][1]:'#fff')+';color:'+(on?'#fff':'#161d2e')+';border:2px solid '+ACT[k][1]+';border-radius:12px;padding:12px 14px">'
   +'<div style="font-weight:800;font-size:14px">'+ACT[k][0]+'</div><div style="font:800 24px inherit">'+a.length+' <span style="font-size:13px;font-weight:600">products</span></div>'
   +'<div style="font-size:12px;opacity:.85">'+n(sum(a,'onhand'))+' units &middot; '+E(sum(a,'value'))+' at cost &middot; '+E(sum(a,'retail'))+' at price</div></div>';};
  let h='<div class="card full" style="padding:16px"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline"><div style="font-weight:800;font-size:18px">Playmore stock &mdash; what to do with it</div>'
   +'<div class="cs">'+n(D.units)+' units &middot; '+E(D.value)+' at cost &middot; <b>'+(D.dor==null?'—':D.dor+' days')+'</b> left at today&rsquo;s pace (webstore alone: '+(D.dorWeb==null?'—':D.dorWeb+' days')+') &middot; as of '+D.asof+'</div></div>'
-  +'<div class="cs" style="margin:4px 0 12px">Last 30 days: webstore sold '+n(D.sold.web)+' units, OurKids took '+n(D.sold.ourkids)+', other wholesale '+n(D.sold.other)+'. Current season: '+D.season+'. Tap a box to list those products.</div>'
+  +'<div class="cs" style="margin:4px 0 12px">Last 30 days: webstore sold '+n(D.sold.web)+' units, OurKids took '+n(D.sold.ourkids)+', other wholesale '+n(D.sold.other)+'. Current season: '+D.season+'. Tap a box to list those products. &ldquo;Not on goplaymore.com&rdquo; cuts across the other five.</div>'
   +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'+Object.keys(ACT).map(card).join('')+'</div>';
  // two pictures: where the money sits by days left, and by season
  const bars=(title,read,rows)=>{const mx=Math.max(...rows.map(r=>r[1]),1);return '<div style="flex:1;min-width:300px"><div style="font-weight:700;margin-bottom:2px">'+title+'</div><div class="cs" style="margin-bottom:8px">'+read+'</div>'
@@ -15531,10 +15532,10 @@ function rPD(){const D=O.dor,el=document.getElementById('pdC');if(!D){el.innerHT
  const dcol=d=>d==null?'#7952c5':d<14?'#c4203f':d<60?'#a6592a':d>180?'#7952c5':'#0a7756';
  const TH=(x,r)=>'<th style="text-align:'+(r?'right':'left')+';padding:6px 8px;border-bottom:2px solid #e6e9f2;white-space:nowrap">'+x+'</th>',TD='padding:6px 8px;border-bottom:1px solid #eef1f6;vertical-align:middle';
  h+='<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr>'+TH('')+TH('Product')+TH('Why')+TH('On hand',1)+TH('Sold 30d web',1)+TH('OurKids 30d',1)+TH('Sold 90d',1)+TH('Last sale',1)+TH('Days left',1)+TH('Sizes out',1)+TH('Cost value',1)+'</tr></thead><tbody>'
-  +L.map(i=>{const link=i.url||('https://goplaymore.com/search?q='+encodeURIComponent(i.style||i.name));const im=PMIMG&&PMIMG[i.id];
+  +L.map(i=>{const link=i.url||i.admin||(D.odoo+i.id);const im=PMIMG&&PMIMG[i.id];
    return '<tr><td style="'+TD+';width:52px"><a href="'+link+'" target="_blank" rel="noopener"><img data-pid="'+i.id+'" '+((im||i.img)?'src="'+(im?'data:image/png;base64,'+im:i.img)+'"':'')+' alt="" onerror="this.removeAttribute(\'src\')" style="width:44px;height:44px;object-fit:cover;border-radius:8px;background:#f0f2f7;display:block;border:0"></a></td>'
     +'<td style="'+TD+';min-width:200px"><a href="'+link+'" target="_blank" rel="noopener" style="color:#161d2e;font-weight:700;text-decoration:none">'+i.name+'</a>'
-    +'<div style="font-size:11.5px;color:#646e83">'+(i.season?i.season+' &middot; ':'')+'<a href="'+link+'" target="_blank" rel="noopener" style="color:#286db5">'+(i.url?'on the store':'not on the store now &middot; search')+'</a> &middot; <a href="'+D.odoo+i.id+'" target="_blank" rel="noopener" style="color:#286db5">Odoo</a></div></td>'
+    +'<div style="font-size:11.5px;color:#646e83">'+(i.season?i.season+' &middot; ':'')+'<a href="'+link+'" target="_blank" rel="noopener" style="color:#286db5">'+(i.url?'on the store':i.admin?'hidden on the store (Shopify admin)':'<b style="color:#c4203f">not on goplaymore.com</b> (Odoo)')+'</a>'+(i.url&&i.admin?' &middot; <a href="'+i.admin+'" target="_blank" rel="noopener" style="color:#286db5">Shopify admin</a>':'')+((i.url||i.admin)?' &middot; <a href="'+D.odoo+i.id+'" target="_blank" rel="noopener" style="color:#286db5">Odoo</a>':'')+'</div></td>'
     +'<td style="'+TD+';min-width:220px;font-size:12px;color:#3d4659">'+(i.why||'')+'</td>'
     +[n(i.onhand),n(i.web),n(i.ourkids),n(i.all90),i.last||'—'].map(v=>'<td style="'+TD+';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">'+v+'</td>').join('')
     +'<td style="'+TD+';text-align:right;font-weight:800;color:'+dcol(i.dor)+'">'+(i.onhand<=0?'sold out':i.dor==null?'no sales':i.dor+'d')+'</td>'
@@ -23636,7 +23637,7 @@ window.siApply=function(kind,t,btn){try{navigator.clipboard.writeText(t);}catch(
  window.open(kind==='neg'?'https://ads.google.com/aw/keywords/negative':'https://ads.google.com/aw/keywords','_blank');};
 // Auto-refresh: re-pull data.js every 30 min and re-render the open tab, so the page
 // picks up each 3h sync without a manual reload. boot()-baked constants refresh on full reload.
-const BUILD='20261031-150024';
+const BUILD='20261031-150654';
 // self-update: every 10 min (and 60s after load) compare the deployed build stamp; reload the page when a new deploy landed.
 function staleChk(){try{const t=(O&&O.lastSync)||'';const m=t.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);if(!m)return;
  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-3,+m[5]));const hrs=(Date.now()-d.getTime())/36e5;
