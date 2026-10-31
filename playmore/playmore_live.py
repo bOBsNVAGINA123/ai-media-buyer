@@ -239,29 +239,35 @@ bosta = {"pulled": TODAY.isoformat(), "fees": BOSTA_FEES, "feeSource": "OurKids 
 log("delivery: orders", sum(conf.values()), "paid shipping", sum(paid.values()), "collected E£", round(sum(col.values())),
     "sends", sum(sends.values()), "returned orders", sum(len(v) for v in RET_ORD.values()))
 
-# ---- DAYS OF INVENTORY LEFT (DOR). On hand = quantity - reserved in every internal location
-# (Go.PlayMore + Season). Sold = units on confirmed sale orders over the last 30 days, split into
-# webstore, OurKids (intercompany: it empties Playmore's shelves too) and other wholesale; negative
-# lines (OurKids sending stock back) are not sales. DOR = on hand / units per day.
-# ponytail: a flat 30-day rate, not units / days-in-stock; a product sold out for part of the month
-# reads slower than it is. Add stock history if that matters.
+# ---- DAYS OF INVENTORY LEFT (DOR) + what to do with each product.
+# On hand = quantity - reserved in every internal location (Go.PlayMore + Season). Sold = units on confirmed
+# sale orders, split webstore / OurKids (intercompany: it empties Playmore's shelves too) / other wholesale;
+# negative lines (OurKids sending stock back) are not sales. DOR = on hand / units per day (last 30 days).
+# ponytail: flat 30/90-day rates, not units / days-in-stock; a product sold out for part of the window reads
+# slower than it is. Add stock history if that matters.
+import re
 WIN = 30
-since = (TODAY - datetime.timedelta(days=WIN)).isoformat() + " 00:00:00"
-so30 = ox("sale.order", "search_read", [[["state", "in", ["sale", "done"]], ["date_order", ">=", since]]],
-          {"fields": ["partner_id", "team_id"], "limit": 100000})
-chan = {}
-for o in so30:
+since = (TODAY - datetime.timedelta(days=180)).isoformat() + " 00:00:00"
+so180 = ox("sale.order", "search_read", [[["state", "in", ["sale", "done"]], ["date_order", ">=", since]]],
+           {"fields": ["partner_id", "team_id", "date_order"], "limit": 200000})
+chan, odate = {}, {}
+for o in so180:
     pid = (o.get("partner_id") or [0])[0]
     chan[o["id"]] = "ourkids" if pid == OURKIDS_PARTNER else ("web" if (o.get("team_id") or [0, ""])[1] == "Shopify" else "other")
+    odate[o["id"]] = o["date_order"][:10]
 lines = ox("sale.order.line", "search_read", [[["order_id", "in", list(chan)], ["display_type", "=", False],
                                                  ["product_id.detailed_type", "=", "product"]]],
-           {"fields": ["order_id", "product_id", "product_uom_qty"], "limit": 500000})
+           {"fields": ["order_id", "product_id", "product_uom_qty"], "limit": 1000000})
+d30, d90 = (TODAY - datetime.timedelta(days=30)).isoformat(), (TODAY - datetime.timedelta(days=90)).isoformat()
 sold = {}
 for l in lines:
     q = l.get("product_uom_qty") or 0
     if q <= 0: continue
-    p_ = l["product_id"][0]; c = chan.get(l["order_id"][0], "other")
-    sold.setdefault(p_, {"web": 0.0, "ourkids": 0.0, "other": 0.0})[c] += q
+    oid = l["order_id"][0]; p_ = l["product_id"][0]; c = chan.get(oid, "other"); dd = odate.get(oid, "")
+    e = sold.setdefault(p_, {"web": 0.0, "ourkids": 0.0, "other": 0.0, "web90": 0.0, "all90": 0.0, "all180": 0.0, "last": ""})
+    e["all180"] += q; e["last"] = max(e["last"], dd)
+    if dd >= d90: e["all90"] += q; e["web90"] += q if c == "web" else 0
+    if dd >= d30: e[c] += q
 quants = group("stock.quant", [["location_id.usage", "=", "internal"]], ["quantity", "reserved_quantity"], ["product_id"])
 onhand = {}
 for r in quants:
@@ -269,32 +275,92 @@ for r in quants:
     if p_: onhand[p_] = (r.get("quantity") or 0) - (r.get("reserved_quantity") or 0)
 pids = list(set(onhand) | set(sold)); PR = {}
 for i in range(0, len(pids), 1000):
-    for p_ in ox("product.product", "read", [pids[i:i + 1000]], {"fields": ["product_tmpl_id", "display_name", "default_code", "standard_price", "lst_price"]}):
+    for p_ in ox("product.product", "read", [pids[i:i + 1000]], {"fields": ["product_tmpl_id", "display_name", "default_code", "barcode", "standard_price", "lst_price"]}):
         PR[p_["id"]] = p_
+
+# webstore photo + link: goplaymore.com's public product feed, matched by variant SKU (= Odoo barcode or
+# internal reference) and, failing that, by the style number the handle starts with.
+SKU, STYLE = {}, {}
+for pg in range(1, 12):
+    try:
+        req = urllib.request.Request("https://goplaymore.com/products.json?limit=250&page=%d" % pg, headers={"User-Agent": "Mozilla/5.0"})
+        prods = json.load(urllib.request.urlopen(req, timeout=60)).get("products", [])
+    except Exception as e:
+        log("shop feed page", pg, "failed", str(e)[:80]); time.sleep(3); continue
+    if not prods: break
+    for pr in prods:
+        img = (pr.get("images") or [{}])[0].get("src", "")
+        info = {"url": "https://goplaymore.com/products/" + pr["handle"], "img": img, "live": any(v.get("available") for v in pr.get("variants", []))}
+        for v in pr.get("variants", []):
+            if v.get("sku"): SKU[str(v["sku"]).strip()] = info
+        m = re.match(r"(\d{4,6})", pr["handle"])
+        if m: STYLE.setdefault(m.group(1), info)
+
+def season_of(code, name):
+    m = re.search(r"\b([WS])(\d{2})\b", "%s %s" % (code or "", name or "")) or re.search(r"-([WS])(\d{2})-", code or "")
+    return (m.group(1) + m.group(2)) if m else ""
+yy = TODAY.year % 100
+CUR = ("W%02d" % yy) if TODAY.month >= 9 else ("W%02d" % (yy - 1)) if TODAY.month <= 2 else ("S%02d" % yy)
+NEXT = ("S%02d" % (yy + 1)) if CUR.startswith("W") else ("W%02d" % yy)
+
 tm = {}
 for p_, info in PR.items():
     t = (info.get("product_tmpl_id") or [0, info.get("display_name")])
-    e = tm.setdefault(t[0], {"name": t[1], "code": info.get("default_code") or "", "onhand": 0.0, "web": 0.0, "ourkids": 0.0, "other": 0.0,
-                             "value": 0.0, "retail": 0.0, "sizes": 0, "sizesOut": 0, "price": info.get("lst_price") or 0})
+    e = tm.setdefault(t[0], {"id": t[0], "name": t[1], "code": info.get("default_code") or "", "onhand": 0.0, "web": 0.0, "ourkids": 0.0, "other": 0.0,
+                             "web90": 0.0, "all90": 0.0, "all180": 0.0, "last": "", "value": 0.0, "retail": 0.0, "sizes": 0, "sizesOut": 0,
+                             "price": info.get("lst_price") or 0, "shop": None})
     oh = max(onhand.get(p_, 0), 0); sd = sold.get(p_, {})
     e["onhand"] += oh; e["value"] += oh * (info.get("standard_price") or 0); e["retail"] += oh * (info.get("lst_price") or 0)
-    for c in ("web", "ourkids", "other"): e[c] += sd.get(c, 0)
+    for c in ("web", "ourkids", "other", "web90", "all90", "all180"): e[c] += sd.get(c, 0)
+    e["last"] = max(e["last"], sd.get("last", ""))
     if oh > 0 or sd: e["sizes"] += 1; e["sizesOut"] += 1 if oh <= 0 else 0
+    if not e["shop"]:
+        e["shop"] = SKU.get(str(info.get("barcode") or "").strip()) or SKU.get(str(info.get("default_code") or "").strip())
+for e in tm.values():
+    if not e["shop"]:
+        m = re.search(r"\b(\d{5})\b", e["name"] or "")
+        if m: e["shop"] = STYLE.get(m.group(1))
+
+def advise(i):
+    """One call per product, with the reason. Thresholds: 14 days = time to remake/reorder; 180 days = half a year of stock."""
+    oh, out30, out90, d = i["onhand"], i["web"] + i["ourkids"] + i["other"], i["all90"], i["dor"]
+    sea, old = i["season"], (i["season"] not in ("", CUR, NEXT))
+    if oh <= 0 and out30 > 0:
+        return "reorder", "Sold out and still selling: %d units in 30 days." % out30
+    if d is not None and d < 14 and oh > 0:
+        return "reorder", "Runs out in about %d days at %.1f units a day." % (d, i["perDay"])
+    if oh <= 0:
+        return "", ""
+    if out90 == 0 and (old or not sea):
+        return "liquidate", "No sale in 90 days%s: clear it (sale or outlet) before it ages further." % ((" and it is last season's (" + sea + ")") if old else "")
+    if (d is None or d > 180) and i["ourkids"] == 0 and oh >= 20:
+        return "send", "%d units here and OurKids took none in 30 days: offer them to the shops." % oh
+    if (d is None or d > 180) and sea in (CUR, NEXT, ""):
+        return "push", "In season but slow (%s): feature it on the webstore / in ads before the season ends." % ("no sales in 30 days" if d is None else "%d days of stock" % d)
+    if d is None or d > 180:
+        return "liquidate", "Over half a year of stock at today's pace%s." % ((" and it is last season's (" + sea + ")") if old else "")
+    return "keep", "%d days of stock at today's pace." % d
+
 items = []
 for t, e in tm.items():
     out = e["web"] + e["ourkids"] + e["other"]
     if e["onhand"] <= 0 and out <= 0: continue
     perday = out / WIN
-    items.append({"name": e["name"], "code": e["code"], "onhand": round(e["onhand"]), "web": round(e["web"]), "ourkids": round(e["ourkids"]),
-                  "other": round(e["other"]), "perDay": round(perday, 2), "dor": round(e["onhand"] / perday) if perday > 0 else None,
-                  "value": round(e["value"]), "retail": round(e["retail"]), "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"])})
+    i = {"id": e["id"], "name": e["name"], "code": e["code"], "onhand": round(e["onhand"]), "web": round(e["web"]), "ourkids": round(e["ourkids"]),
+         "other": round(e["other"]), "web90": round(e["web90"]), "all90": round(e["all90"]), "last": e["last"], "perDay": round(perday, 2),
+         "dor": round(e["onhand"] / perday) if perday > 0 else None, "value": round(e["value"]), "retail": round(e["retail"]),
+         "sizes": e["sizes"], "sizesOut": e["sizesOut"], "price": round(e["price"]), "season": season_of(e["code"], e["name"]),
+         "url": (e["shop"] or {}).get("url", ""), "img": (e["shop"] or {}).get("img", ""), "live": (e["shop"] or {}).get("live")}
+    i["act"], i["why"] = advise(i)
+    items.append(i)
 tot_oh = sum(i["onhand"] for i in items); tot_out = sum(i["web"] + i["ourkids"] + i["other"] for i in items)
 web_out = sum(i["web"] for i in items)
-dor = {"asof": TODAY.isoformat(), "window": WIN, "units": tot_oh, "value": sum(i["value"] for i in items), "retail": sum(i["retail"] for i in items),
+dor = {"asof": TODAY.isoformat(), "window": WIN, "season": CUR, "units": tot_oh, "value": sum(i["value"] for i in items), "retail": sum(i["retail"] for i in items),
        "sold": {"web": web_out, "ourkids": sum(i["ourkids"] for i in items), "other": sum(i["other"] for i in items)},
        "dor": round(tot_oh / (tot_out / WIN)) if tot_out else None, "dorWeb": round(tot_oh / (web_out / WIN)) if web_out else None,
-       "items": sorted(items, key=lambda i: -i["value"])}
-log("dor: products", len(items), "units on hand", tot_oh, "cost value", dor["value"], "DOR all", dor["dor"], "DOR webstore only", dor["dorWeb"])
+       "odoo": URL + "/odoo/action-stock.product_template_action_product/", "items": sorted(items, key=lambda i: -i["value"])}
+log("dor: products", len(items), "units", tot_oh, "cost", dor["value"], "DOR", dor["dor"], "web-only", dor["dorWeb"],
+    "| matched to webstore", sum(1 for i in items if i["url"]), "| advice", {a: sum(1 for i in items if i["act"] == a) for a in ("reorder", "send", "push", "liquidate", "keep")})
 
 last_sale = max((d for d in DAYS if fin_d.get(d)), default=TODAY.isoformat())
 O = {"biz": "playmore", "cur": "EGP", "lastSync": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC",
